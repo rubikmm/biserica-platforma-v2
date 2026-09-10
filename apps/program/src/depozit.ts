@@ -1,8 +1,8 @@
 /**
- * Citirile si scrierile pe baza `xc-program-*`. Tot SQL-ul programului sta aici.
+ * Citirile pe baza `xc-program-*`. Tot SQL-ul programului sta aici.
  */
-import type { IntrareVocabular, Saptamana, Slujba, SlujbaDeScris, StareSaptamana } from '@xc/contracts'
-import { acum, batch, toate, unul } from '@xc/db'
+import type { IntrareVocabular, Saptamana, Slujba, StareSaptamana } from '@xc/contracts'
+import { toate, unul } from '@xc/db'
 import { adaugaZile, intervalLizibil, luneaSaptamanii } from '@xc/ui'
 
 export interface RandSaptamana {
@@ -106,9 +106,10 @@ export interface RezumatSaptamana {
   nr_slujbe: number
 }
 
+/** Saptamanile unui an: anul e cel al ZILEI DE LUNI (ca in V1) — nicio saptamana nu iese din anul ei, nici in arhiva, nici in `/v1/saptamani`. */
 export async function saptamanileAnului(db: D1Database, an?: number): Promise<RezumatSaptamana[]> {
-  const conditie = an ? `WHERE s.luni LIKE ? OR s.duminica LIKE ?` : ''
-  const legaturi = an ? [`${an}-%`, `${an}-%`] : []
+  const conditie = an ? `WHERE s.luni LIKE ?` : ''
+  const legaturi = an ? [`${an}-%`] : []
   return toate<RezumatSaptamana>(
     db,
     `SELECT s.luni, s.duminica, s.titlu, s.stare, s.sursa, COUNT(l.id) AS nr_slujbe
@@ -158,107 +159,8 @@ export async function urmatoareaSlujba(db: D1Database, data: string, ora: string
   )
 }
 
-// ---------------------------------------------------------------------------
-// Scrieri
-// ---------------------------------------------------------------------------
-
-function idSlujba(data: string, cod: string, folosite: Set<string>): string {
-  let id = `${data}-${cod}`
-  let n = 2
-  while (folosite.has(id)) id = `${data}-${cod}-${n++}`
-  folosite.add(id)
-  return id
-}
-
-/**
- * Scrie (sau rescrie) slujbele unei saptamani. Id-urile existente (aceeasi data + cod) se pastreaza
- * — de ele atarna sloturile de curatenie; ce nu mai e in lista se sterge.
- */
-export async function scrieSaptamana(
-  db: D1Database,
-  luni: string,
-  slujbe: SlujbaDeScris[],
-  vocabular: Map<string, IntrareVocabular>,
-  userId: string,
-  declaratiiInPlus: D1PreparedStatement[] = [],
-): Promise<{ stare: StareSaptamana; ids: string[] }> {
-  const duminica = adaugaZile(luni, 6)
-  const existenta = await saptamana(db, luni)
-  const existente = await slujbeleSaptamanii(db, luni)
-  const moment = acum()
-  const stare: StareSaptamana = existenta && existenta.stare !== 'propus' ? 'modificat_dupa_validare' : 'propus'
-  const declaratii: D1PreparedStatement[] = []
-
-  if (!existenta) {
-    declaratii.push(
-      db
-        .prepare(`INSERT INTO saptamani (luni, duminica, stare, titlu, sursa, creat, modificat) VALUES (?, ?, 'propus', ?, 'manual', ?, ?)`)
-        .bind(luni, duminica, intervalLizibil(luni, duminica), moment, moment),
-    )
-  } else {
-    declaratii.push(db.prepare(`UPDATE saptamani SET stare = ?, modificat = ? WHERE luni = ?`).bind(stare, moment, luni))
-  }
-
-  // potrivim slujbele noi cu cele existente dupa (data, cod), in ordine
-  const ramase = new Map<string, RandSlujba[]>()
-  for (const e of existente) {
-    const lista = ramase.get(`${e.data}|${e.cod_nume}`) ?? []
-    lista.push(e)
-    ramase.set(`${e.data}|${e.cod_nume}`, lista)
-  }
-  const folosite = new Set(existente.map((e) => e.id))
-  const ids: string[] = []
-  const peZi = new Map<string, number>()
-  const sortate = [...slujbe].sort((a, b) => (a.data === b.data ? a.ora.localeCompare(b.ora) : a.data.localeCompare(b.data)))
-  for (const s of sortate) {
-    const ordine = peZi.get(s.data) ?? 0
-    peZi.set(s.data, ordine + 1)
-    const cheie = `${s.data}|${s.cod_nume}`
-    const vechi = ramase.get(cheie)?.shift()
-    const id = vechi?.id ?? idSlujba(s.data, s.cod_nume, folosite)
-    ids.push(id)
-    const nume = s.nume?.trim() || vocabular.get(s.cod_nume)?.nume || s.cod_nume
-    if (vechi) {
-      declaratii.push(
-        db
-          .prepare(`UPDATE slujbe SET ora = ?, nume = ?, slujitor = ?, loc = ?, detalii = ?, observatii = ?, curatenie = ?, transmisie = ?, ordine = ?, modificat = ? WHERE id = ?`)
-          .bind(s.ora, nume, s.slujitor || null, s.loc, JSON.stringify(s.detalii), s.observatii || null, s.curatenie ? 1 : 0, s.transmisie ? 1 : 0, ordine, moment, id),
-      )
-    } else {
-      declaratii.push(
-        db
-          .prepare(
-            `INSERT INTO slujbe (id, luni, data, ora, nume, cod_nume, slujitor, loc, detalii, observatii, curatenie, transmisie, ordine, creat, modificat)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          )
-          .bind(id, luni, s.data, s.ora, nume, s.cod_nume, s.slujitor || null, s.loc, JSON.stringify(s.detalii), s.observatii || null, s.curatenie ? 1 : 0, s.transmisie ? 1 : 0, ordine, moment, moment),
-      )
-    }
-  }
-  for (const lista of ramase.values()) {
-    for (const e of lista) {
-      declaratii.push(db.prepare(`DELETE FROM slujbe WHERE id = ?`).bind(e.id))
-      declaratii.push(db.prepare(`INSERT INTO istoric (moment, user_id, ce, luni, slujba_id, detalii) VALUES (?, ?, 'sters', ?, ?, ?)`).bind(moment, userId, luni, e.id, `${e.data} ${e.ora} ${e.nume}`))
-    }
-  }
-  declaratii.push(
-    db.prepare(`INSERT INTO istoric (moment, user_id, ce, luni, slujba_id, detalii) VALUES (?, ?, ?, ?, NULL, ?)`).bind(moment, userId, existenta ? 'schimbat' : 'scris', luni, `${slujbe.length} slujbe`),
-  )
-  await batch(db, [...declaratii, ...declaratiiInPlus])
-  return { stare, ids }
-}
-
-export async function valideazaSaptamana(db: D1Database, luni: string, userId: string, versiuneCalendar: string | null, declaratiiInPlus: D1PreparedStatement[] = []): Promise<void> {
-  const moment = acum()
-  await batch(db, [
-    db.prepare(`UPDATE saptamani SET stare = 'validat', validat_de = ?, validat_la = ?, versiune_calendar = ?, modificat = ? WHERE luni = ?`).bind(userId, moment, versiuneCalendar, moment, luni),
-    db.prepare(`INSERT INTO istoric (moment, user_id, ce, luni, slujba_id, detalii) VALUES (?, ?, 'validat', ?, NULL, ?)`).bind(moment, userId, luni, versiuneCalendar ?? ''),
-    ...declaratiiInPlus,
-  ])
-}
-
-export async function istoriculSaptamanii(db: D1Database, luni: string): Promise<Array<{ moment: string; user_id: string | null; ce: string; detalii: string | null }>> {
-  return toate(db, `SELECT moment, user_id, ce, detalii FROM istoric WHERE luni = ? ORDER BY moment DESC LIMIT 30`, [luni])
-}
+// Scrierea si validarea manuala a saptamanii (scrieSaptamana, valideazaSaptamana, istoriculSaptamanii)
+// au fost scoase la cererea userului (10.09.2026: „nu vreau să fac nimic manual"). Baza ramane doar
+// citita de aplicatie; se umple prin import (infrastructure/import) si prin propunerea automata.
 
 export { luneaSaptamanii }

@@ -44,6 +44,14 @@ Etape:
 2. ✅ **Staging** — publicat pe `*.staging.sfantul-ilie.ro`, email real prin Cloudflare Email Service.
 3. ⏳ **Portarea aplicațiilor**: ✅ calendar (A1), ✅ program (A2), ⏳ curățenie (A6), apoi
    A9/A10 → A3/A8 → A12 → A7 → A5 → A4 → A13 se stinge.
+
+**Programul (A2) = afișarea V1, verbatim** (user, 10.09.2026, 16:30): stilul local, markup-ul și
+textele sunt cele din `biserica-program` (V1, 9 sept.) — abonarea în rândul de unelte + „Informații
+utile", navigarea în cutia atârnată sub linia antetului, Arhiva doar iconiță, „Sfinții zilei" la
+dreapta duminicii, starea la dreapta titlului. Singura abatere, cerută de structura V2: abonarea
+n-are câmp de e-mail (adresa e a contului). **Fără scriere manuală**: pagina `/admin` (scrierea și
+validarea săptămânii) a fost scoasă cu totul — „nu vreau să fac nimic manual" (user, 16:36).
+Programul are săptămânile importate din V1 și propunerea automată, ca în V1.
 4. ⏳ **Curățenia finală** — se șterge tot ce NU are prefix `xc-`.
 
 ## NEXT
@@ -58,6 +66,9 @@ Etape:
 4. **Pornire automată în container** — `pnpm dev` se lansează manual; de pus în `app-init.sh`.
 5. Comunicare reală (`LIVRARE_REALA=da`) abia când A7 se portează — nu înainte.
 6. Vocabularul de nume al subdomeniilor V2 (lista de 15) — de confirmat cu utilizatorul.
+7. **Titlul zilei din calendar** (`titlu_html`, văzut în program la „Afișează calendarul"): V2 îl
+   reface din segmente, fără `<strong>`/`<em>` din sursa Patriarhiei; V1 le păstra (sfinții cu
+   cruce, bold). De lămurit cu utilizatorul dacă vrea bold-ul înapoi — se schimbă în calendar, nu în program.
 
 ## Aplicațiile de pe staging
 
@@ -146,3 +157,8 @@ Etape:
   A13 îl folosește deja din 8.09 (binding `send_email`, expeditor `posta.sfantul-ilie.ro`).
 - Staging publicat (10 workeri). Descoperit după primul deploy că toți aveau adrese publice
   `workers.dev` → închise cu `workers_dev: false` și republicat.
+- Programul adus la afișarea V1 verbatim (16:30–16:50): stil, markup, texte din `stil.ts` +
+  `pagini.ts` ale V1; verificat prin diff de HTML V1 live ↔ V2 local (antet, navigare, zile,
+  arhivă: identice; diferă doar `titlu_html` din calendar). Scoasă scrierea manuală (`/admin`),
+  la cererea userului. Arhiva grupează acum după anul zilei de luni, ca V1 (înainte, o săptămână
+  călare pe 31 dec. apărea în ambii ani).

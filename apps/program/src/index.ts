@@ -1,9 +1,21 @@
-import { z } from 'zod'
-import { SCOPE_GLOBAL, SESIUNE_ANONIMA, SlujbaDeScris, type IntrareVocabular, type Slujba } from '@xc/contracts'
-import { ClientAutorizare, EroareAutorizare } from '@xc/authorization'
-import { NUME_COOKIE_CSRF, citesteCookie, construiesteCookie, principalDin, sesiuneCurenta, verificaCsrf, verificaTokenCsrf } from '@xc/auth'
+/**
+ * A2 · Programul liturgic — pe platforma V2.
+ *
+ * Rute:
+ *   /v1/…, /health            API-ul contractului, deschis (jos, `api`)
+ *   /                         saptamana curenta                       ┐ pagini de om, DESCHISE:
+ *   /saptamana/<data>         saptamana care contine data: programul  │ programul scris (importat
+ *                             scris, iar daca nu e — PROPUNEREA ei    │ din V1) sau propunerea
+ *   /arhiva                   toate saptamanile, un an pe ecran       ┘ automata, aceeasi afisare
+ *   /abonare · /dezabonare    POST: audienta `program-abonati` a comunicarii (cere cont)
+ *
+ * Scrierea si validarea manuala (/admin) au fost scoase la cererea userului (10.09.2026:
+ * „nu vreau să fac nimic manual").
+ */
+import { SCOPE_GLOBAL, SESIUNE_ANONIMA, type IntrareVocabular, type Slujba } from '@xc/contracts'
+import { principalDin, sesiuneCurenta, verificaCsrf } from '@xc/auth'
 import { citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
-import { construiesteEnvelope, declaratieOutbox, golesteOutbox } from '@xc/events'
+import { golesteOutbox } from '@xc/events'
 import { Logger, correlationId } from '@xc/observability'
 import { adaugaZile, aziBucuresti, dataVersiunii, eDataValida, eroareApi, html, intervalLizibil, json, jsonCuEtag, luneaSaptamanii, oraBucuresti, zileIntre } from '@xc/ui'
 import pkg from '../package.json'
@@ -11,25 +23,22 @@ import { calendarulIntervalului, texteleZilei, ziuaCalendarului } from './calend
 import {
   acoperire,
   aniiArhivei,
-  istoriculSaptamanii,
   istoriculSlujbelor,
   saptamana,
   saptamanaDin,
   saptamanileAnului,
   saptamaniInterval,
-  scrieSaptamana,
   slujbaDin,
   slujbeInterval,
   slujbeleSaptamanii,
   urmatoareaSlujba,
-  valideazaSaptamana,
   vecinele,
   vocabularul,
   type RandSaptamana,
 } from './depozit.js'
 import { foaieHtml, hartieDinCache, jpgDin, pdfDin, sfintiiHtml, titluSaptamanii } from './foaie.js'
 import { propune } from './propunere.js'
-import { type Ctx, type RandDeEditat, paginaAdmin, paginaArhiva, paginaMesaj, paginaSaptamana } from './pagini.js'
+import { type Ctx, type Meniu, paginaArhiva, paginaMesaj, paginaSaptamana } from './pagini.js'
 
 export interface Env {
   DB: D1Database
@@ -54,18 +63,6 @@ const CACHE_PAGINI = 'public, max-age=300'
 
 function redirect(catre: string, antete: Record<string, string> = {}): Response {
   return new Response(null, { status: 303, headers: { location: catre, ...antete } })
-}
-function jetonCsrfNou(): string {
-  const octeti = crypto.getRandomValues(new Uint8Array(24))
-  let binar = ''
-  for (const o of octeti) binar += String.fromCharCode(o)
-  return btoa(binar).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '')
-}
-function asiguraCsrf(req: Request, domeniu: string): { jeton: string; setCookie?: string } {
-  const existent = citesteCookie(req, NUME_COOKIE_CSRF)
-  if (existent) return { jeton: existent }
-  const jeton = jetonCsrfNou()
-  return { jeton, setCookie: construiesteCookie(NUME_COOKIE_CSRF, jeton, { maxAge: 4 * 60 * 60, domeniu }) }
 }
 async function scrieAudit(env: Env, i: { action: string; target: string; outcome: 'success' | 'failure' | 'denied'; correlationId: string; actorId?: string; summary?: Record<string, unknown> }): Promise<void> {
   try {
@@ -149,23 +146,23 @@ export default {
       }
     }
 
+    // Meniul paginilor care nu tin de o saptamana anume (arhiva, adresele gresite): navigarea din jurul zilei de azi.
+    const meniuAzi = (rest: Partial<Meniu> = {}): Meniu => ({ vecini: veciniLui(luneaSaptamanii(azi), azi), foaie: null, azi, ...rest })
+
     if (req.method === 'POST') {
       const problema = verificaCsrf(req, [cfg.ORIGINE_PUBLICA])
       if (problema) {
-        const ctxMinim: Ctx = { prefix, nav, utilizator: null, eAdmin: false, poateScrie: false, versiune: pkg.version, modificata: dataVersiunii(env.VERSIUNE) }
-        return html(paginaMesaj(ctxMinim, 'Verificare de securitate', problema, 'rea'), 403)
+        const ctxMinim: Ctx = { prefix, nav, utilizator: null, eAdmin: false, versiune: pkg.version, modificata: dataVersiunii(env.VERSIUNE) }
+        return html(paginaMesaj(ctxMinim, 'Verificare de securitate', problema, 'rea', meniuAzi()), 403)
       }
     }
     const sesiune = await sesiuneCurenta(env.IDENTITATE, req).catch(() => SESIUNE_ANONIMA)
     const principal = principalDin(sesiune)
-    const authz = new ClientAutorizare(env.AUTORIZARE, cid)
-    const poateScrie = principal ? (await authz.can(principal, 'program.write', SCOPE_GLOBAL)).allowed : false
     const ctx: Ctx = {
       prefix,
       nav,
       utilizator: sesiune.user?.displayName ?? sesiune.user?.email ?? null,
       eAdmin: sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin'),
-      poateScrie,
       versiune: pkg.version,
       modificata: dataVersiunii(env.VERSIUNE),
       veziCa: sesiune.veziCa,
@@ -174,20 +171,27 @@ export default {
     }
 
     try {
-      const { lista, harta } = await vocabularHarta(env)
+      const { harta } = await vocabularHarta(env)
       const cachePagina = { 'cache-control': ctx.utilizator ? 'private, no-store' : CACHE_PAGINI }
+      // ce se stie despre abonare, pentru randul de sus al antetului (ca in V1: pe toate paginile de om)
+      const abonat = principal ? await eAbonat(env, principal.userId) : false
       const semn = url.searchParams.get('abonat')
-      const mesajAbonare = semn === '1' ? 'Gata, te-am trecut pe listă.' : semn === '0' ? 'Nu am putut face abonarea; încearcă din nou.' : semn === '2' ? 'Te-am scos de pe listă.' : undefined
+      const veste: Meniu['veste'] =
+        semn === '1' ? { text: 'Gata, te-am trecut pe listă.', fel: 'bine' }
+        : semn === '2' ? { text: 'Te-am scos de pe listă.', fel: 'bine' }
+        : semn === '0' ? { text: 'Nu am putut face abonarea; încearcă din nou.', fel: 'rau' }
+        : null
+      const antet = { abonat, veste, spre: `${prefix}${cale}` }
 
       // ---------------------------------------------------------- saptamana
       const mSapt = /^\/saptamana\/([^/]+)$/.exec(cale)
       if ((cale === '/' || mSapt) && req.method === 'GET') {
         const cerut = mSapt ? dataDin(mSapt[1]!, azi) : azi
-        if (!cerut) return html(paginaMesaj(ctx, 'Dată greșită', 'Adresa e /saptamana/AAAA-LL-ZZ.', 'rea'), 404)
+        if (!cerut) return html(paginaMesaj(ctx, 'Dată greșită', 'Adresa e /saptamana/AAAA-LL-ZZ.', 'rea', meniuAzi(antet)), 404)
         const luni = luneaSaptamanii(cerut)
         const s = await saptamanaOriPropunere(env, luni, harta)
+        // foaia A4 de pe usa exista doar pentru saptamanile validate; din propunere iese ciorna ei
         const foaie = s.rand ? (s.rand.stare === 'validat' ? `/v1/foaie/${luni}` : null) : `/v1/propunere/${luni}`
-        const abonat = principal ? await eAbonat(env, principal.userId) : false
         return html(
           paginaSaptamana({
             ctx,
@@ -198,14 +202,9 @@ export default {
             vocabular: harta,
             cal: s.cal,
             dinCalendar: s.dinCalendar,
-            vecini: veciniLui(luni, azi),
-            foaie,
             azi,
-            cale: `${prefix}${cale}`,
-            abonat,
-            mesaj: mesajAbonare,
+            meniu: { vecini: veciniLui(luni, azi), foaie, azi, ...antet },
             nelamuriri: s.propunere?.nelamuriri,
-            validatLa: s.rand?.validat_la ?? null,
           }),
           200,
           cachePagina,
@@ -219,7 +218,8 @@ export default {
         const an = ani.includes(cerut) ? cerut : (ani[0] ?? Number(azi.slice(0, 4)))
         const saptamani = await saptamanileAnului(env.DB, an)
         const ac = await acoperire(env.DB)
-        return html(paginaArhiva({ ctx, an, ani, saptamani, total: ac.saptamani, deLa: ac.de_la }), 200, cachePagina)
+        // PDF si JPG stinse: pe Arhiva nu e nicio saptamana in context (`meniuAzi` le lasa `foaie: null`)
+        return html(paginaArhiva({ ctx, an, ani, saptamani, total: ac.saptamani, deLa: ac.de_la, meniu: meniuAzi(antet) }), 200, cachePagina)
       }
 
       // ------------------------------------------------------------ abonare
@@ -237,129 +237,11 @@ export default {
         return redirect(`${spreSigur}?abonat=${!r ? 0 : inscrie ? 1 : 2}`)
       }
 
-      // -------------------------------------------------------- administrare
-      if (cale === '/admin' && req.method === 'GET') {
-        if (!principal) return redirect(`${nav.cont}/auth/login`)
-        await authz.require(principal, 'program.write', SCOPE_GLOBAL)
-        const luni = luneaSaptamanii(dataDin(url.searchParams.get('luni') ?? 'azi', azi) ?? azi)
-        const dinPropunere = url.searchParams.get('din') === 'propunere'
-        const rand = await saptamana(env.DB, luni)
-        let randuri: RandDeEditat[] = []
-        if (rand && !dinPropunere) {
-          randuri = (await slujbeleSaptamanii(env.DB, luni)).map((s) => {
-            const sl = slujbaDin(s)
-            return { data: sl.data, ora: sl.ora, cod_nume: sl.cod_nume, slujitor: sl.slujitor ?? '', detalii: sl.detalii.join('\n'), curatenie: sl.curatenie, transmisie: sl.transmisie }
-          })
-        } else {
-          const cal = await calendarulIntervalului(env.CALENDAR, luni, adaugaZile(luni, 7))
-          const p = propune(luni, await istoriculSlujbelor(env.DB, luni), harta, cal)
-          randuri = p.zile.flatMap((zi) => zi.slujbe.map((s) => ({ data: s.data, ora: s.ora, cod_nume: s.cod_nume, slujitor: '', detalii: s.detalii.join('\n'), curatenie: true, transmisie: true })))
-        }
-        const cal = await calendarulIntervalului(env.CALENDAR, luni, luni)
-        const csrf = asiguraCsrf(req, cfg.DOMENIU_COOKIE)
-        return html(
-          paginaAdmin({
-            ctx,
-            luni,
-            titlu: rand?.titlu || titluSaptamanii(luni),
-            stare: rand?.stare ?? 'propunere',
-            randuri,
-            vocabular: lista.filter((v) => v.activ),
-            csrf: csrf.jeton,
-            existaSaptamana: !!rand,
-            dinPropunere,
-            versiuneCalendar: cal?.versiune ?? null,
-            istoric: await istoriculSaptamanii(env.DB, luni),
-            mesaj: url.searchParams.get('ok') ?? undefined,
-            eroare: url.searchParams.get('eroare') ?? undefined,
-          }),
-          200,
-          csrf.setCookie ? { 'set-cookie': csrf.setCookie } : {},
-        )
-      }
-
-      if (cale === '/admin/scrie' && req.method === 'POST') {
-        if (!principal) return redirect(`${nav.cont}/auth/login`)
-        const formular = await req.formData()
-        const problemaCsrf = verificaTokenCsrf(req, String(formular.get('csrf') ?? ''))
-        if (problemaCsrf) return html(paginaMesaj(ctx, 'Verificare de securitate', problemaCsrf, 'rea'), 403)
-        await authz.require(principal, 'program.write', SCOPE_GLOBAL)
-        const luni = luneaSaptamanii(z.string().refine(eDataValida).parse(formular.get('luni')))
-        const date = formular.getAll('data').map(String)
-        const ore = formular.getAll('ora').map(String)
-        const coduri = formular.getAll('cod_nume').map(String)
-        const slujitori = formular.getAll('slujitor').map(String)
-        const detalii = formular.getAll('detalii').map(String)
-        const curatenie = new Set(formular.getAll('curatenie').map(String))
-        const transmisie = new Set(formular.getAll('transmisie').map(String))
-        const slujbe = coduri
-          .map((cod, i) => ({ cod, i }))
-          .filter(({ cod, i }) => cod && ore[i])
-          .map(({ cod, i }) =>
-            SlujbaDeScris.parse({
-              data: date[i],
-              ora: ore[i],
-              cod_nume: cod,
-              slujitor: slujitori[i] || undefined,
-              detalii: (detalii[i] ?? '').split('\n').map((r) => r.trim()).filter(Boolean),
-              curatenie: curatenie.has(String(i)),
-              transmisie: transmisie.has(String(i)),
-            }),
-          )
-        const inAfara = slujbe.find((s) => s.data < luni || s.data > adaugaZile(luni, 6))
-        if (inAfara) return redirect(`${prefix}/admin?luni=${luni}&eroare=${encodeURIComponent('O slujbă are o zi din afara săptămânii.')}`)
-
-        const rezultat = await scrieSaptamana(env.DB, luni, slujbe, harta, principal.userId)
-        if (rezultat.stare === 'modificat_dupa_validare') {
-          const envelope = construiesteEnvelope({
-            type: 'program.week.changed.v1',
-            producer: SERVICIU,
-            actor: { type: 'user', id: principal.userId },
-            correlationId: cid,
-            idempotencyKey: `schimbat:${luni}:${Date.now()}`,
-            payload: { luni, duminica: adaugaZile(luni, 6), stare: rezultat.stare, titlu: titluSaptamanii(luni), versiuneCalendar: null, slujbe: slujbe.length },
-          })
-          await declaratieOutbox(env.DB, envelope).run()
-          ctxExec.waitUntil(golesteOutbox(env.DB, env.EVENIMENTE))
-        }
-        await scrieAudit(env, { action: 'program.week.written', target: luni, outcome: 'success', correlationId: cid, actorId: principal.userId, summary: { slujbe: slujbe.length, stare: rezultat.stare } })
-        return redirect(`${prefix}/admin?luni=${luni}&ok=${encodeURIComponent(`Săptămâna a fost scrisă: ${slujbe.length} slujbe.`)}`)
-      }
-
-      if (cale === '/admin/valideaza' && req.method === 'POST') {
-        if (!principal) return redirect(`${nav.cont}/auth/login`)
-        const formular = await req.formData()
-        const problemaCsrf = verificaTokenCsrf(req, String(formular.get('csrf') ?? ''))
-        if (problemaCsrf) return html(paginaMesaj(ctx, 'Verificare de securitate', problemaCsrf, 'rea'), 403)
-        await authz.require(principal, 'program.publish', SCOPE_GLOBAL)
-        const luni = luneaSaptamanii(z.string().refine(eDataValida).parse(formular.get('luni')))
-        const rand = await saptamana(env.DB, luni)
-        if (!rand) return redirect(`${prefix}/admin?luni=${luni}&eroare=${encodeURIComponent('Săptămâna nu e scrisă încă.')}`)
-        const cal = await calendarulIntervalului(env.CALENDAR, luni, adaugaZile(luni, 6))
-        const slujbe = await slujbeleSaptamanii(env.DB, luni)
-        const envelope = construiesteEnvelope({
-          type: 'program.week.validated.v1',
-          producer: SERVICIU,
-          actor: { type: 'user', id: principal.userId },
-          correlationId: cid,
-          idempotencyKey: `validat:${luni}`,
-          payload: { luni, duminica: adaugaZile(luni, 6), stare: 'validat', titlu: rand.titlu || titluSaptamanii(luni), versiuneCalendar: cal?.versiune ?? null, slujbe: slujbe.length },
-        })
-        await valideazaSaptamana(env.DB, luni, principal.userId, cal?.versiune ?? null, [declaratieOutbox(env.DB, envelope)])
-        await scrieAudit(env, { action: 'program.week.validated', target: luni, outcome: 'success', correlationId: cid, actorId: principal.userId, summary: { versiuneCalendar: cal?.versiune ?? null } })
-        ctxExec.waitUntil(golesteOutbox(env.DB, env.EVENIMENTE))
-        return redirect(`${prefix}/admin?luni=${luni}&ok=${encodeURIComponent('Săptămâna e validată. Foaia A4 se poate tipări.')}`)
-      }
-
-      return html(paginaMesaj(ctx, 'Nu există pagina', 'Adresele programului: /, /saptamana/2026-09-07, /arhiva.'), 404)
+      // ca in V1: titlul si cele doua linkuri, sub antetul intreg
+      return html(paginaMesaj(ctx, 'Nu există pagina', '', 'info', meniuAzi(antet)), 404)
     } catch (e) {
-      if (e instanceof EroareAutorizare) {
-        await scrieAudit(env, { action: 'program.permission.denied', target: e.permission, outcome: 'denied', correlationId: cid, actorId: principal?.userId, summary: { motiv: e.reason } })
-        return html(paginaMesaj(ctx, 'Acces refuzat', 'Nu ai permisiunea necesară.', 'rea'), 403)
-      }
-      if (e instanceof z.ZodError) return html(paginaMesaj(ctx, 'Date invalide', e.issues[0]?.message ?? 'Date invalide.', 'rea'), 400)
       log.error('eroare neasteptata', { eroare: e instanceof Error ? e.message : String(e), stack: e instanceof Error ? e.stack : undefined })
-      return html(paginaMesaj(ctx, 'Eroare', 'A apărut o eroare neașteptată.', 'rea'), 500)
+      return html(paginaMesaj(ctx, 'Eroare', 'A apărut o eroare neașteptată.', 'rea', meniuAzi()), 500)
     }
   },
 
