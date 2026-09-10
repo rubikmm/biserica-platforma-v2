@@ -350,7 +350,7 @@ export function subsol(versiune = '0.1.0', modificata = ''): string {
   return `<hr class="subsol-linie">
 <p class="versiune">
   <button id="btn-tema" type="button" class="buton-tema" aria-label="Schimbă tema" hidden></button>
-  <span>v${esc(versiune)}${modificata ? ` · ${esc(modificata)}` : ''}</span>
+  <span>Versiunea: ${esc(versiune)}${modificata ? ` / ${esc(modificata)}` : ''}</span>
 </p>
 <footer class="subsol">
   <p class="copyright">${new Date().getFullYear()} © Biserica Sfântul Ilie - Hanul Colței</p>
@@ -411,8 +411,8 @@ export function alerta(fel: 'rea' | 'buna' | 'info' | 'atentie', mesaj: string):
 }
 
 /**
- * „1 sep. 2026, 14:35" — data SI ora publicarii, din binding-ul `version_metadata`
- * (ora la Bucuresti; cerere user, 10.09.2026: ora langa data e utila cand se publica des).
+ * „10.09.2026 - 13:40" — data SI ora publicarii, la Bucuresti, din binding-ul `version_metadata`.
+ * Modelul e cel cerut de user (10.09.2026): `Versiunea: 0.2.0 / 10.09.2026 - 13:40`.
  */
 export function dataVersiunii(meta?: { timestamp?: string }): string {
   const t = meta?.timestamp
@@ -421,8 +421,7 @@ export function dataVersiunii(meta?: { timestamp?: string }): string {
   if (Number.isNaN(d.getTime())) return ''
   const zi = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Bucharest' }).format(d)
   const [a, l, z] = zi.split('-').map(Number) as [number, number, number]
-  const LUNI_MIC = ['ian', 'feb', 'mar', 'apr', 'mai', 'iun', 'iul', 'aug', 'sep', 'oct', 'noi', 'dec']
-  return `${z} ${LUNI_MIC[l - 1]}. ${a}, ${oraBucuresti(d)}`
+  return `${String(z).padStart(2, '0')}.${String(l).padStart(2, '0')}.${a} - ${oraBucuresti(d)}`
 }
 
 // ---------------------------------------------------------------------------

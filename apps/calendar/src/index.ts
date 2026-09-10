@@ -35,7 +35,7 @@ import { extrageZi, faraTaguri, dataDinAcf, type RandZiExtras } from './extrager
 import { duminica, glasSiVoscreasna, perioadaOficiala, randuialaMesei, repereContract, sambataMortilor, ziLibera } from './pascalia.js'
 import { canonizeazaReferinta } from './titluri.js'
 import { type RandZi, desfaRandul, ziLiturgica } from './traducere.js'
-import { type Ctx, type TexteZilei, paginaAdmin, paginaLuna, paginaMesaj, paginaPericope, paginaSarbatori, paginaSinaxar, paginaZi } from './pagini.js'
+import { type Ctx, type FelCruce, type Parte, type TexteZilei, paginaAdmin, paginaLuna, paginaMesaj, paginaSarbatori, paginaZi, texteFereastra } from './pagini.js'
 
 export interface Env {
   DB: D1Database
@@ -213,8 +213,8 @@ export default {
     if (req.method === 'POST') {
       const problema = verificaCsrf(req, [cfg.ORIGINE_PUBLICA])
       if (problema) {
-        const ctxMinim: Ctx = { prefix, nav, utilizator: null, eAdmin: false, versiune: pkg.version, modificata: dataVersiunii(env.VERSIUNE) }
-        return html(paginaMesaj(ctxMinim, 'Verificare de securitate', problema, 'rea'), 403)
+        const ctxMinim: Ctx = { prefix, nav, utilizator: null, eAdmin: false, versiune: pkg.version, modificata: dataVersiunii(env.VERSIUNE), anCurent: Number(azi.slice(0, 4)) }
+        return html(paginaMesaj(ctxMinim, 'Verificare de securitate', problema), 403)
       }
     }
     const sesiune = await sesiuneCurenta(env.IDENTITATE, req).catch(() => SESIUNE_ANONIMA)
@@ -226,6 +226,7 @@ export default {
       eAdmin: sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin'),
       versiune: pkg.version,
       modificata: dataVersiunii(env.VERSIUNE),
+      anCurent: Number(azi.slice(0, 4)),
     }
     const authz = new ClientAutorizare(env.AUTORIZARE, cid)
 
@@ -252,39 +253,48 @@ export default {
         const semn = url.searchParams.get('abonat')
         const mesajAbonare = semn === '1' ? 'Gata, te-am trecut pe listă.' : semn === '0' ? 'Nu am putut face abonarea; încearcă din nou.' : semn === '2' ? 'Te-am scos de pe listă.' : undefined
         const abonat = principal ? await eAbonat(env, principal.userId) : false
-        return html(paginaLuna({ ctx, an, luna, randuri: lista, aniDisponibili, calculat, azi, cale: `${prefix}${cale}`, mesajAbonare, abonat }), 200, cachePagina)
+        return html(paginaLuna({ ctx, an, luna, randuri: lista, calculat, azi, cale: `${prefix}${cale}`, mesajAbonare, abonat }), 200, cachePagina)
       }
 
-      // ziua si partile ei
+      // ziua si partile ei — aceleasi adrese pe care le foloseste si fereastra din lista
       const mZi = /^\/zi\/(\d{4}-\d{2}-\d{2})(?:\/(sinaxar|apostolul-evanghelia))?$/.exec(cale)
       if (mZi && req.method === 'GET') {
         const data = mZi[1]!
-        if (!eDataValida(data)) return html(paginaMesaj(ctx, 'Dată greșită', 'Adresa e /zi/AAAA-LL-ZZ.', 'rea'), 400)
+        const parte = mZi[2] as Parte | undefined
+        if (!eDataValida(data)) return html(paginaMesaj(ctx, 'Dată greșită', 'Adresa e /zi/AAAA-LL-ZZ.'), 400)
         const z = await ziuaCompleta(env, data, ani, versiune)
-        if (!z) return html(paginaMesaj(ctx, 'Zi în afara calendarului', `Ziua ${data} nu e în anii preluați sau calculați (${aniDisponibili.join(', ')}).`), 404)
-        if (mZi[2] === 'sinaxar') {
-          const sinaxar = z.r.calculat ? null : await textulZilei(env.DB, data)
-          return html(paginaSinaxar({ ctx, ...z, sinaxar }), 200, cachePagina)
-        }
+        if (!z) return html(paginaMesaj(ctx, `Ziua ${data} nu e preluată`, 'Alege o lună din șirul de sus.'), 404)
         const t = await textele(env, z.r, z.zi, z.d)
-        if (mZi[2] === 'apostolul-evanghelia') return html(paginaPericope({ ctx, ...z, texte: t }), 200, cachePagina)
-        return html(paginaZi({ ctx, ...z, texte: t, ieri: adaugaZile(data, -1), maine: adaugaZile(data, 1) }), 200, cachePagina)
+        const abonat = principal ? await eAbonat(env, principal.userId) : false
+        return html(
+          paginaZi({ ctx, ...z, texte: t, ...(parte ? { parte } : {}), ieri: adaugaZile(data, -1), maine: adaugaZile(data, 1), abonat, cale: `${prefix}${cale}` }),
+          200,
+          cachePagina,
+        )
       }
 
-      // listele de sarbatori
+      // listele de sarbatori din „Informații utile"
       const mSarb = /^\/sarbatori\/cruce-(rosie|neagra)(?:\/(\d{4})(?:-(\d{2}))?)?$/.exec(cale)
       if (mSarb && req.method === 'GET') {
-        const cruce = mSarb[1] as 'rosie' | 'neagra'
-        const an = mSarb[2] ? Number(mSarb[2]) : Number(azi.slice(0, 4))
-        const luna = mSarb[3] ? Number(mSarb[3]) : null
+        const fel = mSarb[1] as FelCruce
+        const an = mSarb[2] ? Number(mSarb[2]) : ctx.anCurent
+        const luna = mSarb[3] ? Number(mSarb[3]) : undefined
         let randuri: RandZi[]
-        if (ani.includes(an)) randuri = await zileleCuCruce(env.DB, an, cruce)
-        else if (sePoateCalcula(an, ani)) randuri = (await zileleAnuluiCalculat(env.DB, an)).filter((r) => r.cruce === cruce)
-        else return html(paginaMesaj(ctx, 'Anul nu e preluat', `Nu am calendarul pentru ${an}.`), 404)
-        const peLuni = Array.from({ length: 12 }, (_, i) => randuri.filter((r) => r.luna === i + 1).length)
+        let calculat = false
+        if (ani.includes(an)) randuri = await zileleCuCruce(env.DB, an, fel)
+        else if (sePoateCalcula(an, ani)) {
+          randuri = (await zileleAnuluiCalculat(env.DB, an)).filter((r) => r.cruce === fel)
+          calculat = true
+        } else return html(paginaMesaj(ctx, `${an} nu e preluat`, ani.length ? `Anii preluați până acum: ${ani.join(', ')}.` : 'Încă nu s-a preluat niciun an.'), 404)
+        const cuZile = new Set(randuri.map((r) => r.luna))
         const alese = luna ? randuri.filter((r) => r.luna === luna) : randuri
         const lista = alese.map((r) => ({ r, d: desfaRandul(r), zi: ziLiturgica(r, versiune) }))
-        return html(paginaSarbatori({ ctx, cruce, an, luna, randuri: lista, peLuni, azi }), 200, cachePagina)
+        const abonat = principal ? await eAbonat(env, principal.userId) : false
+        return html(
+          paginaSarbatori({ ctx, fel, an, ...(luna ? { luna } : {}), randuri: lista, cuZile, calculat, azi, cale: `${prefix}${cale}`, abonat }),
+          200,
+          cachePagina,
+        )
       }
 
       // abonarea: cu adresa contului, in audienta serviciului de comunicare
@@ -308,7 +318,7 @@ export default {
         const decizie = await authz.can(principal, 'calendar.manage', SCOPE_GLOBAL)
         if (!decizie.allowed) {
           await scrieAudit(env, { action: 'calendar.admin.open', target: 'calendar', outcome: 'denied', correlationId: cid, actorId: principal.userId, summary: { motiv: decizie.reason } })
-          return html(paginaMesaj(ctx, 'Acces refuzat', 'Nu ai permisiunea de a administra calendarul.', 'rea'), 403)
+          return html(paginaMesaj(ctx, 'Acces refuzat', 'Nu ai permisiunea de a administra calendarul.'), 403)
         }
         const csrf = asiguraCsrf(req, cfg.DOMENIU_COOKIE)
         const [importuri, versiuni, corecturi, membri] = await Promise.all([
@@ -329,7 +339,7 @@ export default {
         if (!principal) return redirect(`${nav.cont}/auth/login`)
         const formular = await req.formData()
         const problemaCsrf = verificaTokenCsrf(req, String(formular.get('csrf') ?? ''))
-        if (problemaCsrf) return html(paginaMesaj(ctx, 'Verificare de securitate', problemaCsrf, 'rea'), 403)
+        if (problemaCsrf) return html(paginaMesaj(ctx, 'Verificare de securitate', problemaCsrf), 403)
         await authz.require(principal, 'calendar.manage', SCOPE_GLOBAL)
         const an = z.coerce.number().int().min(2024).max(2099).parse(formular.get('an'))
         try {
@@ -347,7 +357,7 @@ export default {
         if (!principal) return redirect(`${nav.cont}/auth/login`)
         const formular = await req.formData()
         const problemaCsrf = verificaTokenCsrf(req, String(formular.get('csrf') ?? ''))
-        if (problemaCsrf) return html(paginaMesaj(ctx, 'Verificare de securitate', problemaCsrf, 'rea'), 403)
+        if (problemaCsrf) return html(paginaMesaj(ctx, 'Verificare de securitate', problemaCsrf), 403)
         await authz.require(principal, 'calendar.manage', SCOPE_GLOBAL)
         const date = z
           .object({
@@ -376,11 +386,11 @@ export default {
     } catch (e) {
       if (e instanceof EroareAutorizare) {
         await scrieAudit(env, { action: 'calendar.permission.denied', target: e.permission, outcome: 'denied', correlationId: cid, actorId: principal?.userId, summary: { motiv: e.reason } })
-        return html(paginaMesaj(ctx, 'Acces refuzat', 'Nu ai permisiunea necesară.', 'rea'), 403)
+        return html(paginaMesaj(ctx, 'Acces refuzat', 'Nu ai permisiunea necesară.'), 403)
       }
-      if (e instanceof z.ZodError) return html(paginaMesaj(ctx, 'Date invalide', e.issues[0]?.message ?? 'Date invalide.', 'rea'), 400)
+      if (e instanceof z.ZodError) return html(paginaMesaj(ctx, 'Date invalide', e.issues[0]?.message ?? 'Date invalide.'), 400)
       log.error('eroare neasteptata', { eroare: e instanceof Error ? e.message : String(e), stack: e instanceof Error ? e.stack : undefined })
-      return html(paginaMesaj(ctx, 'Eroare', 'A apărut o eroare neașteptată.', 'rea'), 500)
+      return html(paginaMesaj(ctx, 'Eroare', 'A apărut o eroare neașteptată.'), 500)
     }
   },
 
@@ -472,14 +482,16 @@ async function api(req: Request, env: Env, cale: string, url: URL, azi: string):
     return jsonCuEtag(req, { q, an: an ?? null, gasite: rezultate.length, zile: rezultate.map((r) => ziLiturgica(r, versiune)) }, cache)
   }
 
+  // Textele zilei, in forma pe care o citeste fereastra din lista (aceeasi ca in V1).
   const mTexte = /^\/v1\/texte\/(\d{4}-\d{2}-\d{2})$/.exec(cale)
   if (mTexte) {
     const data = mTexte[1]!
-    const r = await randulZilei(env.DB, data)
-    if (!r) return eroareApi(404, 'zi_inexistenta', 'Ziua nu e preluată (textele există doar pe anii oficiali).')
+    const r = await randulOriCalculat(env.DB, data, ani)
+    if (!r) return eroareApi(404, 'zi_inexistenta', 'Data cerută e în afara intervalului acoperit.')
+    const d = desfaRandul(r)
     const zi = ziLiturgica(r, versiune)
-    const sinaxar = await textulZilei(env.DB, data)
-    return jsonCuEtag(req, { data, titlu: zi.titlu, titlu_html: zi.titlu_html, sinaxar, apostol: zi.pericope.apostol, evanghelie: zi.pericope.evanghelie }, cache)
+    const texte = await textele(env, r, zi, d)
+    return jsonCuEtag(req, texteFereastra({ r, d, zi, texte }), cache)
   }
 
   const mSursaZi = /^\/v1\/sursa\/zi\/(\d{4}-\d{2}-\d{2})$/.exec(cale)
