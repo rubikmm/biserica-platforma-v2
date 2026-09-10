@@ -1,7 +1,7 @@
 import { SCOPE_GLOBAL, SESIUNE_ANONIMA, type Principal, type SesiuneCurenta } from '@xc/contracts'
 import { ClientAutorizare } from '@xc/authorization'
 import { sesiuneCurenta } from '@xc/auth'
-import { citesteConfig } from '@xc/config'
+import { citesteConfig, navigatieDin } from '@xc/config'
 import { Logger, correlationId } from '@xc/observability'
 import { alerta, esc, html, pagina } from '@xc/ui'
 
@@ -70,7 +70,8 @@ function tabelLivrari(livrari: LivrareRand[]): string {
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
-    citesteConfig(env)
+    const cfg = citesteConfig(env)
+    const nav = navigatieDin(cfg)
     const cid = correlationId(req)
     const log = new Logger({ service: 'app-admin', correlationId: cid })
 
@@ -78,7 +79,7 @@ export default {
     const principal = principalDin(sesiune)
 
     if (!principal) {
-      return new Response(null, { status: 303, headers: { location: '/auth/login' } })
+      return new Response(null, { status: 303, headers: { location: `${nav.cont}/auth/login` } })
     }
 
     const authz = new ClientAutorizare(env.AUTORIZARE, cid)
@@ -89,7 +90,8 @@ export default {
         pagina({
           titlu: 'Administrare',
           utilizator: principal.email,
-          activ: '/admin',
+          activ: 'admin',
+          navigatie: nav,
           continut: `<div class="carte ingust">
             <h1>Administrare</h1>
             ${alerta('rea', 'Nu ai permisiunea <code>audit.read</code>.')}
@@ -134,7 +136,8 @@ export default {
         pagina({
           titlu: 'Administrare',
           utilizator: principal.email,
-          activ: '/admin',
+          activ: 'admin',
+          navigatie: nav,
           continut: `
 <div class="carte">
   <h1>Administrare</h1>
@@ -160,6 +163,8 @@ export default {
         pagina({
           titlu: 'Administrare',
           utilizator: principal.email,
+          activ: 'admin',
+          navigatie: nav,
           continut: `<div class="carte">${alerta('rea', 'Nu am putut citi datele panoului.')}</div>`,
         }),
         500,

@@ -26,7 +26,10 @@
         "MEDIU": "staging",
         "ORIGINE_PUBLICA": "https://cont.staging.sfantul-ilie.ro",
         "DOMENIU_COOKIE": ".staging.sfantul-ilie.ro",
-        "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
+        "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
+        "URL_CONT": "https://cont.staging.sfantul-ilie.ro",
+        "URL_CALENDAR": "https://calendar.staging.sfantul-ilie.ro",
+        "URL_ADMIN": "https://admin.staging.sfantul-ilie.ro"
       },
       "services": [{ "binding": "IDENTITATE", "service": "xc-identity-staging" }],
       // Subdomeniu NOU sub `staging.` — nu atinge nicio inregistrare DNS a V1.
@@ -38,7 +41,10 @@
         "MEDIU": "production",
         "ORIGINE_PUBLICA": "https://cont.sfantul-ilie.ro",
         "DOMENIU_COOKIE": ".sfantul-ilie.ro",
-        "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
+        "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
+        "URL_CONT": "https://cont.sfantul-ilie.ro",
+        "URL_CALENDAR": "https://calendar.sfantul-ilie.ro",
+        "URL_ADMIN": "https://admin.sfantul-ilie.ro"
       },
       "services": [{ "binding": "IDENTITATE", "service": "xc-identity-production" }]
       // Ruta de productie se adauga DOAR la cutover-ul explicit al lui A13:

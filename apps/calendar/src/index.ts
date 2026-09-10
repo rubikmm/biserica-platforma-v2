@@ -16,7 +16,7 @@ import {
   verificaCsrf,
   verificaTokenCsrf,
 } from '@xc/auth'
-import { citesteConfig } from '@xc/config'
+import { citesteConfig, navigatieDin } from '@xc/config'
 import { acum, batch, id, ruleaza, toate, unul } from '@xc/db'
 import { construiesteEnvelope, declaratieOutbox, golesteOutbox } from '@xc/events'
 import { Logger, correlationId } from '@xc/observability'
@@ -133,11 +133,18 @@ export default {
     const cid = correlationId(req)
     const log = new Logger({ service: 'app-calendar', correlationId: cid })
     const url = new URL(req.url)
-    const cale = url.pathname
+
+    // Prin gateway-ul de preview aplicatia e montata la `/calendar`; pe subdomeniul propriu e la
+    // radacina. Taiem prefixul o singura data, aici, si il purtam mai departe pentru linkuri.
+    const areprefix = url.pathname === '/calendar' || url.pathname.startsWith('/calendar/')
+    const prefix = areprefix ? '/calendar' : ''
+    const cale = areprefix ? url.pathname.slice('/calendar'.length) || '/' : url.pathname
+    const nav = navigatieDin(cfg)
+    const ctx = { prefix, nav }
 
     if (req.method === 'POST') {
       const problema = verificaCsrf(req, [cfg.ORIGINE_PUBLICA])
-      if (problema) return html(paginaRefuz(`Verificare de securitate: ${problema}.`), 403)
+      if (problema) return html(paginaRefuz(ctx, `Verificare de securitate: ${problema}.`), 403)
     }
 
     const sesiune = await sesiuneCurenta(env.IDENTITATE, req).catch(() => SESIUNE_ANONIMA)
@@ -146,13 +153,14 @@ export default {
 
     try {
       // ------------------------------------------------------------ public
-      if (cale === '/calendar' && req.method === 'GET') {
+      if (cale === '/' && req.method === 'GET') {
         const randuri = await toate<RandEveniment>(
           env.DB,
           `SELECT * FROM events WHERE status = 'published' ORDER BY starts_at ASC LIMIT 100`,
         )
         return html(
           paginaPublica({
+            ctx,
             evenimente: randuri.map(catreEveniment),
             utilizator: sesiune.user?.email ?? null,
           }),
@@ -160,8 +168,8 @@ export default {
       }
 
       // ----------------------------------------------------- administrare
-      if (cale === '/calendar/admin' && req.method === 'GET') {
-        if (!principal) return redirect('/auth/login')
+      if (cale === '/admin' && req.method === 'GET') {
+        if (!principal) return redirect(`${nav.cont}/auth/login`)
 
         const decizie = await authz.can(principal, 'calendar.write', SCOPE_GLOBAL)
         if (!decizie.allowed) {
@@ -174,7 +182,7 @@ export default {
             summary: { motiv: decizie.reason },
           })
           return html(
-            paginaRefuz('Nu ai permisiunea de a administra calendarul.', sesiune.user?.email),
+            paginaRefuz(ctx, 'Nu ai permisiunea de a administra calendarul.', sesiune.user?.email),
             403,
           )
         }
@@ -186,6 +194,7 @@ export default {
         const csrf = asiguraCsrf(req, cfg.DOMENIU_COOKIE)
         return html(
           paginaAdministrare({
+            ctx,
             evenimente: randuri.map(catreEveniment),
             csrf: csrf.jeton,
             utilizator: sesiune.user?.email ?? '',
@@ -197,16 +206,16 @@ export default {
       }
 
       // ---------------------------------------------------------- creare
-      if (cale === '/calendar/creeaza' && req.method === 'POST') {
-        if (!principal) return redirect('/auth/login')
+      if (cale === '/creeaza' && req.method === 'POST') {
+        if (!principal) return redirect(`${nav.cont}/auth/login`)
         const formular = await req.formData()
         const problemaCsrf = verificaTokenCsrf(req, String(formular.get('csrf') ?? ''))
-        if (problemaCsrf) return html(paginaRefuz(problemaCsrf), 403)
+        if (problemaCsrf) return html(paginaRefuz(ctx, problemaCsrf), 403)
 
         await authz.require(principal, 'calendar.write', SCOPE_GLOBAL)
 
         const inceput = dinInputLocal(String(formular.get('inceput') ?? ''))
-        if (!inceput) return html(paginaRefuz('Data de început nu e validă.'), 400)
+        if (!inceput) return html(paginaRefuz(ctx, 'Data de început nu e validă.'), 400)
 
         const date = CerereCreareEveniment.parse({
           title: String(formular.get('titlu') ?? ''),
@@ -263,15 +272,15 @@ export default {
         })
 
         await golesteOutbox(env.DB, env.EVENIMENTE)
-        return redirect('/calendar/admin?ok=Ciorna+a+fost+salvata')
+        return redirect(`${prefix}/admin?ok=Ciorna+a+fost+salvata`)
       }
 
       // -------------------------------------------------------- publicare
-      if (cale === '/calendar/publica' && req.method === 'POST') {
-        if (!principal) return redirect('/auth/login')
+      if (cale === '/publica' && req.method === 'POST') {
+        if (!principal) return redirect(`${nav.cont}/auth/login`)
         const formular = await req.formData()
         const problemaCsrf = verificaTokenCsrf(req, String(formular.get('csrf') ?? ''))
-        if (problemaCsrf) return html(paginaRefuz(problemaCsrf), 403)
+        if (problemaCsrf) return html(paginaRefuz(ctx, problemaCsrf), 403)
 
         await authz.require(principal, 'calendar.publish', SCOPE_GLOBAL)
 
@@ -279,7 +288,7 @@ export default {
         const existent = await unul<RandEveniment>(env.DB, `SELECT * FROM events WHERE id = ?`, [
           eventId,
         ])
-        if (!existent) return html(paginaRefuz('Evenimentul nu există.'), 404)
+        if (!existent) return html(paginaRefuz(ctx, 'Evenimentul nu există.'), 404)
 
         const envelope = construiesteEnvelope({
           type: 'calendar.event.published.v1',
@@ -315,15 +324,15 @@ export default {
         const rezultat = await golesteOutbox(env.DB, env.EVENIMENTE)
         log.info('eveniment publicat', { eventId, outbox: rezultat })
 
-        return redirect('/calendar/admin?ok=Evenimentul+a+fost+publicat')
+        return redirect(`${prefix}/admin?ok=Evenimentul+a+fost+publicat`)
       }
 
       // ------------------------------------------------------- arhivare
-      if (cale === '/calendar/arhiveaza' && req.method === 'POST') {
-        if (!principal) return redirect('/auth/login')
+      if (cale === '/arhiveaza' && req.method === 'POST') {
+        if (!principal) return redirect(`${nav.cont}/auth/login`)
         const formular = await req.formData()
         const problemaCsrf = verificaTokenCsrf(req, String(formular.get('csrf') ?? ''))
-        if (problemaCsrf) return html(paginaRefuz(problemaCsrf), 403)
+        if (problemaCsrf) return html(paginaRefuz(ctx, problemaCsrf), 403)
 
         await authz.require(principal, 'calendar.publish', SCOPE_GLOBAL)
         const eventId = z.string().min(1).parse(String(formular.get('id') ?? ''))
@@ -341,10 +350,10 @@ export default {
           actorId: principal.userId,
         })
 
-        return redirect('/calendar/admin?ok=Evenimentul+a+fost+arhivat')
+        return redirect(`${prefix}/admin?ok=Evenimentul+a+fost+arhivat`)
       }
 
-      return html(paginaRefuz('Pagina nu există.', sesiune.user?.email), 404)
+      return html(paginaRefuz(ctx, 'Pagina nu există.', sesiune.user?.email), 404)
     } catch (e) {
       if (e instanceof EroareAutorizare) {
         await scrieAudit(env, {
@@ -355,13 +364,13 @@ export default {
           actorId: principal?.userId,
           summary: { motiv: e.reason },
         })
-        return html(paginaRefuz('Nu ai permisiunea necesară.', sesiune.user?.email), 403)
+        return html(paginaRefuz(ctx, 'Nu ai permisiunea necesară.', sesiune.user?.email), 403)
       }
       if (e instanceof z.ZodError) {
-        return html(paginaRefuz(e.issues[0]?.message ?? 'Date invalide.'), 400)
+        return html(paginaRefuz(ctx, e.issues[0]?.message ?? 'Date invalide.'), 400)
       }
       log.error('eroare neasteptata', { eroare: e instanceof Error ? e.message : String(e) })
-      return html(paginaRefuz('A apărut o eroare neașteptată.'), 500)
+      return html(paginaRefuz(ctx, 'A apărut o eroare neașteptată.'), 500)
     }
   },
 

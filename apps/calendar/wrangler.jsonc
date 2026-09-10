@@ -47,7 +47,10 @@
         "MEDIU": "staging",
         "ORIGINE_PUBLICA": "https://calendar.staging.sfantul-ilie.ro",
         "DOMENIU_COOKIE": ".staging.sfantul-ilie.ro",
-        "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
+        "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
+        "URL_CONT": "https://cont.staging.sfantul-ilie.ro",
+        "URL_CALENDAR": "https://calendar.staging.sfantul-ilie.ro",
+        "URL_ADMIN": "https://admin.staging.sfantul-ilie.ro"
       },
       "d1_databases": [
         {
@@ -74,7 +77,10 @@
         "MEDIU": "production",
         "ORIGINE_PUBLICA": "https://calendar.sfantul-ilie.ro",
         "DOMENIU_COOKIE": ".sfantul-ilie.ro",
-        "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
+        "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
+        "URL_CONT": "https://cont.sfantul-ilie.ro",
+        "URL_CALENDAR": "https://calendar.sfantul-ilie.ro",
+        "URL_ADMIN": "https://admin.sfantul-ilie.ro"
       }
       // Ruta de productie (`calendar.sfantul-ilie.ro`) e a lui A1 pana la cutover-ul explicit.
     }

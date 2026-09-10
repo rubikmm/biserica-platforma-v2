@@ -1,7 +1,8 @@
-import { alerta, esc, pagina } from '@xc/ui'
+import { alerta, esc, pagina, type Navigatie } from '@xc/ui'
 import type { SesiuneCurenta } from '@xc/contracts'
 
 export function paginaIntrare(o: {
+  nav: Navigatie
   csrf: string
   mesaj?: string
   eroare?: string
@@ -9,7 +10,8 @@ export function paginaIntrare(o: {
 }): string {
   return pagina({
     titlu: 'Intrare',
-    activ: '/',
+    activ: 'cont',
+    navigatie: o.nav,
     continut: `
 <div class="carte ingust">
   <h1>Intră cu emailul</h1>
@@ -28,10 +30,17 @@ export function paginaIntrare(o: {
   })
 }
 
-export function paginaContNou(o: { csrf: string; eroare?: string; email?: string; nume?: string }): string {
+export function paginaContNou(o: {
+  nav: Navigatie
+  csrf: string
+  eroare?: string
+  email?: string
+  nume?: string
+}): string {
   return pagina({
     titlu: 'Cont nou',
-    activ: '/',
+    activ: 'cont',
+    navigatie: o.nav,
     continut: `
 <div class="carte ingust">
   <h1>Cont nou</h1>
@@ -54,7 +63,11 @@ export function paginaContNou(o: { csrf: string; eroare?: string; email?: string
 }
 
 /** Ecranul de dupa cererea linkului. In dev arata linkul, ca fluxul sa fie testabil fara email real. */
-export function paginaAsteptareLink(o: { email: string; linkDebug?: string | null }): string {
+export function paginaAsteptareLink(o: {
+  nav: Navigatie
+  email: string
+  linkDebug?: string | null
+}): string {
   const cutieDebug = o.linkDebug
     ? alerta(
         'info',
@@ -65,7 +78,8 @@ export function paginaAsteptareLink(o: { email: string; linkDebug?: string | nul
 
   return pagina({
     titlu: 'Verifică-ți emailul',
-    activ: '/',
+    activ: 'cont',
+    navigatie: o.nav,
     continut: `
 <div class="carte ingust">
   <h1>Verifică-ți emailul</h1>
@@ -78,12 +92,13 @@ export function paginaAsteptareLink(o: { email: string; linkDebug?: string | nul
 }
 
 export function paginaProfil(o: {
+  nav: Navigatie
   sesiune: SesiuneCurenta
   csrf: string
   mesaj?: string
 }): string {
   const u = o.sesiune.user
-  if (!u) return paginaIntrare({ csrf: o.csrf })
+  if (!u) return paginaIntrare({ nav: o.nav, csrf: o.csrf })
 
   const roluri = o.sesiune.roles.length
     ? o.sesiune.roles.map((r) => `<span class="eticheta">${esc(r.role)} · ${esc(r.scope)}</span>`).join(' ')
@@ -92,7 +107,8 @@ export function paginaProfil(o: {
   return pagina({
     titlu: 'Contul meu',
     utilizator: u.email,
-    activ: '/',
+    activ: 'cont',
+    navigatie: o.nav,
     continut: `
 ${o.mesaj ? alerta('buna', esc(o.mesaj)) : ''}
 <div class="carte">
@@ -126,9 +142,16 @@ ${o.mesaj ? alerta('buna', esc(o.mesaj)) : ''}
   })
 }
 
-export function paginaMesaj(o: { titlu: string; fel: 'rea' | 'buna'; text: string }): string {
+export function paginaMesaj(o: {
+  nav: Navigatie
+  titlu: string
+  fel: 'rea' | 'buna'
+  text: string
+}): string {
   return pagina({
     titlu: o.titlu,
+    activ: 'cont',
+    navigatie: o.nav,
     continut: `
 <div class="carte ingust">
   <h1>${esc(o.titlu)}</h1>

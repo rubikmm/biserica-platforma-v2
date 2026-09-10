@@ -78,30 +78,43 @@ th { color: var(--sters); font-weight: 550; font-size: .82rem; text-transform: u
 .randuri form button { margin-top: 0; }
 `
 
+/** Adresele celorlalte aplicatii. In dev sunt cai pe acelasi host; in staging, origini absolute. */
+export interface Navigatie {
+  cont: string
+  calendar: string
+  admin: string
+}
+
+const NAVIGATIE_DEV: Navigatie = { cont: '', calendar: '/calendar', admin: '/admin' }
+
 export interface OptiuniPagina {
   titlu: string
   /** Emailul celui logat, daca e cineva — apare in antet, cu logout. */
   utilizator?: string | null
-  activ?: string
+  /** Care intrare din antet e cea curenta: 'cont' | 'calendar' | 'admin'. */
+  activ?: keyof Navigatie
+  navigatie?: Navigatie
   continut: string
 }
 
-const NAVIGATIE = [
-  { cale: '/', eticheta: 'Cont' },
-  { cale: '/calendar', eticheta: 'Calendar' },
-  { cale: '/admin', eticheta: 'Administrare' },
-]
-
 export function pagina(o: OptiuniPagina): string {
-  const legaturi = NAVIGATIE.map((n) => {
-    const curent = o.activ === n.cale ? ' aria-current="page"' : ''
-    return `<a href="${n.cale}"${curent}>${esc(n.eticheta)}</a>`
-  }).join('')
+  const nav = o.navigatie ?? NAVIGATIE_DEV
+  const intrari: Array<[keyof Navigatie, string, string]> = [
+    ['cont', `${nav.cont}/`, 'Cont'],
+    ['calendar', `${nav.calendar}/`, 'Calendar'],
+    ['admin', `${nav.admin}/`, 'Administrare'],
+  ]
+  const legaturi = intrari
+    .map(([cheie, href, eticheta]) => {
+      const curent = o.activ === cheie ? ' aria-current="page"' : ''
+      return `<a href="${esc(href)}"${curent}>${esc(eticheta)}</a>`
+    })
+    .join('')
 
   const zonaUtilizator = o.utilizator
     ? `<span style="font-size:.88rem;color:var(--sters)">${esc(o.utilizator)}</span>
-       <a href="/auth/logout">Ieșire</a>`
-    : `<a href="/auth/login">Autentificare</a>`
+       <a href="${esc(nav.cont)}/auth/logout">Ieșire</a>`
+    : `<a href="${esc(nav.cont)}/auth/login">Intră</a>`
 
   return `<!doctype html>
 <html lang="ro">

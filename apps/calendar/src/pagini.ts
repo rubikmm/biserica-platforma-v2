@@ -1,5 +1,15 @@
-import { alerta, esc, pagina } from '@xc/ui'
+import { alerta, esc, pagina, type Navigatie } from '@xc/ui'
 import type { EvenimentCalendar } from '@xc/contracts'
+
+/**
+ * Contextul de adresare al aplicatiei: `prefix` e `/calendar` cand cererea vine prin gateway-ul
+ * de preview (un singur host) si gol pe subdomeniul propriu; `nav` sunt adresele celorlalte
+ * aplicatii, pentru antet si pentru trimiterea la intrare.
+ */
+export interface Ctx {
+  prefix: string
+  nav: Navigatie
+}
 
 function dataLizibila(iso: string): string {
   const d = new Date(iso)
@@ -14,6 +24,7 @@ function dataLizibila(iso: string): string {
 }
 
 export function paginaPublica(o: {
+  ctx: Ctx
   evenimente: EvenimentCalendar[]
   utilizator?: string | null
 }): string {
@@ -28,7 +39,8 @@ export function paginaPublica(o: {
 
   return pagina({
     titlu: 'Calendar',
-    activ: '/calendar',
+    activ: 'calendar',
+    navigatie: o.ctx.nav,
     utilizator: o.utilizator ?? null,
     continut: `
 <div class="carte">
@@ -39,17 +51,20 @@ export function paginaPublica(o: {
       ? `<table><thead><tr><th>Eveniment</th><th>Când</th></tr></thead><tbody>${randuri}</tbody></table>`
       : '<p class="gol">Niciun eveniment publicat încă.</p>'
   }
+  ${o.utilizator ? `<p class="sub"><a href="${esc(o.ctx.prefix)}/admin">Administrare</a></p>` : ''}
 </div>`,
   })
 }
 
 export function paginaAdministrare(o: {
+  ctx: Ctx
   evenimente: EvenimentCalendar[]
   csrf: string
   utilizator: string
   mesaj?: string
   eroare?: string
 }): string {
+  const p = esc(o.ctx.prefix)
   const randuri = o.evenimente
     .map(
       (e) => `<tr>
@@ -60,7 +75,7 @@ export function paginaAdministrare(o: {
           <div class="randuri">
           ${
             e.status === 'draft'
-              ? `<form method="post" action="/calendar/publica">
+              ? `<form method="post" action="${p}/publica">
                    <input type="hidden" name="csrf" value="${esc(o.csrf)}">
                    <input type="hidden" name="id" value="${esc(e.id)}">
                    <button type="submit">Publică</button>
@@ -69,7 +84,7 @@ export function paginaAdministrare(o: {
           }
           ${
             e.status !== 'archived'
-              ? `<form method="post" action="/calendar/arhiveaza">
+              ? `<form method="post" action="${p}/arhiveaza">
                    <input type="hidden" name="csrf" value="${esc(o.csrf)}">
                    <input type="hidden" name="id" value="${esc(e.id)}">
                    <button type="submit" class="secundar">Arhivează</button>
@@ -84,7 +99,8 @@ export function paginaAdministrare(o: {
 
   return pagina({
     titlu: 'Calendar — administrare',
-    activ: '/calendar',
+    activ: 'calendar',
+    navigatie: o.ctx.nav,
     utilizator: o.utilizator,
     continut: `
 ${o.mesaj ? alerta('buna', esc(o.mesaj)) : ''}
@@ -101,7 +117,7 @@ ${o.eroare ? alerta('rea', esc(o.eroare)) : ''}
 </div>
 <div class="carte">
   <h2>Eveniment nou</h2>
-  <form method="post" action="/calendar/creeaza">
+  <form method="post" action="${p}/creeaza">
     <input type="hidden" name="csrf" value="${esc(o.csrf)}">
     <label for="titlu">Titlu</label>
     <input id="titlu" name="titlu" type="text" required maxlength="200">
@@ -117,16 +133,17 @@ ${o.eroare ? alerta('rea', esc(o.eroare)) : ''}
   })
 }
 
-export function paginaRefuz(motiv: string, utilizator?: string | null): string {
+export function paginaRefuz(ctx: Ctx, motiv: string, utilizator?: string | null): string {
   return pagina({
     titlu: 'Acces refuzat',
-    activ: '/calendar',
+    activ: 'calendar',
+    navigatie: ctx.nav,
     utilizator: utilizator ?? null,
     continut: `
 <div class="carte ingust">
   <h1>Acces refuzat</h1>
   ${alerta('rea', esc(motiv))}
-  <p class="sub"><a href="/calendar">Înapoi la calendar</a></p>
+  <p class="sub"><a href="${esc(ctx.prefix)}/">Înapoi la calendar</a></p>
 </div>`,
   })
 }

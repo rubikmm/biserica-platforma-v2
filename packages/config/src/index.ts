@@ -9,15 +9,23 @@ export type Mediu = z.infer<typeof Mediu>
  */
 export const VariabileComune = z.object({
   MEDIU: Mediu,
-  /** Originea publica a platformei in mediul curent, ex. `https://rubik:8474`. */
+  /** Originea publica a aplicatiei curente in mediul curent, ex. `https://rubik:8474`. */
   ORIGINE_PUBLICA: z.string().min(1),
   /**
    * Domeniul cookie-ului. Gol = cookie host-only (cazul dev-ului pe `rubik`, unde un hostname
    * fara punct nu accepta atribut Domain). In staging: `.staging.sfantul-ilie.ro`.
    */
   DOMENIU_COOKIE: z.string().default(''),
-  /** Emailul care primeste automat rolul `super-admin` la inregistrare. */
+  /** Emailul care primeste automat rolul `super-admin` la deschiderea contului. */
   EMAIL_SUPERADMIN: z.string().default(''),
+  /**
+   * Unde stau celelalte aplicatii, pentru antet si redirecturi. In dev (un singur host, prin
+   * gateway) sunt cai: `/`, `/calendar`, `/admin`. In staging/productie sunt origini absolute,
+   * cate un subdomeniu de aplicatie. Goale = caile de dev.
+   */
+  URL_CONT: z.string().default(''),
+  URL_CALENDAR: z.string().default(''),
+  URL_ADMIN: z.string().default(''),
 })
 export type VariabileComune = z.infer<typeof VariabileComune>
 
@@ -31,13 +39,28 @@ export function citesteConfig(env: unknown): VariabileComune {
   return rezultat.data
 }
 
+/** Adresele celorlalte aplicatii, cu implicitul de dev (cai pe acelasi host). */
+export interface Navigatie {
+  cont: string
+  calendar: string
+  admin: string
+}
+
+export function navigatieDin(cfg: VariabileComune): Navigatie {
+  return {
+    cont: cfg.URL_CONT || '',
+    calendar: cfg.URL_CALENDAR || '/calendar',
+    admin: cfg.URL_ADMIN || '/admin',
+  }
+}
+
 export function eProductie(cfg: VariabileComune): boolean {
   return cfg.MEDIU === 'production'
 }
 
 /**
- * Linkul de debug (challenge-ul de login afisat in interfata in loc sa plece pe email)
- * e permis DOAR in afara productiei. E singurul loc care decide asta.
+ * Linkul de debug (linkul de intrare afisat in interfata in loc sa plece pe email)
+ * e permis DOAR in dev. E singurul loc care decide asta.
  */
 export function permiteLinkDebug(cfg: VariabileComune): boolean {
   return cfg.MEDIU === 'dev'
