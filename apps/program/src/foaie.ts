@@ -264,14 +264,21 @@ td.slujba .nume.dimineata { color: var(--rosu); }
 .det.per::before { content: ""; }
 .det.bold { font-weight: 700; }
 .det.rosu { color: var(--rosu); font-weight: 700; }
+/* jumatatea de zi fara slujba: o banda de 5 mm, NETAIATA — linia dintre ora si slujba se opreste aici
+   (V1). Ramane doar linia groasa dinspre slujba de care se lipeste. */
 tr.banda td.goala { height: calc(5mm * var(--f) * var(--f)); background: var(--gri-deschis); padding: 0; }
+tr.banda td.ora.goala { border-right: 0; }
 tr.banda.sus td.slujba.goala { border-bottom: 1.5pt solid #000; }
 tr.banda.jos td.slujba.goala { border-top: 1.5pt solid #000; }
 /* piciorul zilei: punctat cand slujbele se tin lant peste noapte, plin in rest (V1) */
 tr.jos-lipit > td.ora, tr.jos-lipit > td.slujba { border-bottom: .5pt dashed #000; }
 tr.jos-plin > td.ora, tr.jos-plin > td.slujba { border-bottom: .5pt solid #000; }
-/* sirul rupt de zile fara slujbe: o singura banda, fara linii in lateral */
-tr.lipsa td { height: calc(5mm * var(--f) * var(--f)); background: var(--gri-banda); border: 0; padding: 0; }
+/* Sirul rupt de zile fara slujbe: o singura banda, gri mai inchis, cu o linie subtire sus si jos.
+   Chenarele groase din stanga si din dreapta se INTRERUP aici — asa se vede ca s-a rupt sirul zilelor
+   (preferinta userului in V1, peste Word); hidden bate orice alta bordura la border-collapse. */
+tr.lipsa td { height: calc(5mm * var(--f) * var(--f)); background: var(--gri-banda); padding: 0;
+              border: 0; border-left: hidden; border-right: hidden;
+              border-top: .5pt solid #000; border-bottom: .5pt solid #000; }
 /* duminica: linia groasa doar peste celula zilei — pe coloanele orei si slujbei ramane legatura
    punctata cu sambata seara, ca in V1 */
 tr.dum td.zi { border-left: 3pt solid #fff; vertical-align: top; border-top: 1.5pt solid #000; }
