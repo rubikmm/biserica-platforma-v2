@@ -1,0 +1,43 @@
+{
+  // Singurul serviciu care VA avea vreodata dreptul sa livreze email/WhatsApp.
+  // In faza asta ambele adaptoare sunt sandbox: nu pleaca nimic in exterior.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "xc-communication",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  "vars": {
+    "MEDIU": "dev",
+    "LIVRARE_REALA": "nu"
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "xc-communication-staging",
+      "database_id": "2419c275-1134-472a-beba-5404eeabd2b4",
+      "migrations_dir": "../../infrastructure/migrations/communication"
+    }
+  ],
+
+  "env": {
+    "staging": {
+      "name": "xc-communication-staging",
+      "vars": { "MEDIU": "staging", "LIVRARE_REALA": "nu" },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "xc-communication-staging",
+          "database_id": "2419c275-1134-472a-beba-5404eeabd2b4",
+          "migrations_dir": "../../infrastructure/migrations/communication"
+        }
+      ]
+    },
+    "production": {
+      "name": "xc-communication-production",
+      "vars": { "MEDIU": "production", "LIVRARE_REALA": "nu" }
+    }
+  }
+}

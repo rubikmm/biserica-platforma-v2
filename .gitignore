@@ -1,9 +1,11 @@
 node_modules/
+# fara slash: in container `.wrangler` e un symlink catre /data/wrangler, iar `.wrangler/`
+# nu prinde symlink-uri — asa ajungea starea locala (inclusiv bazele D1) in repo
 .wrangler
-.wrangler/
+dist/
+.turbo/
+*.log
+
+# Secrete locale — nu ajung niciodata in repo
 .dev.vars
 .env
-.env.*
-*.log
-.DS_Store
-dist/

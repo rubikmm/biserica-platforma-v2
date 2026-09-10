@@ -1,0 +1,79 @@
+{
+  // Aplicatia pilot. Proprietara datelor ei (`xc-calendar-*`) — nicio alta aplicatie nu are
+  // binding catre baza asta.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "xc-calendar",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  "vars": {
+    "MEDIU": "dev",
+    "ORIGINE_PUBLICA": "https://rubik:8474",
+    "DOMENIU_COOKIE": "",
+    "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "xc-calendar-staging",
+      "database_id": "c26bb69e-f157-4922-9fbc-77a267f8a99d",
+      "migrations_dir": "../../infrastructure/migrations/calendar"
+    }
+  ],
+
+  "services": [
+    { "binding": "IDENTITATE", "service": "xc-identity" },
+    { "binding": "AUTORIZARE", "service": "xc-authz" },
+    { "binding": "AUDIT", "service": "xc-audit" }
+  ],
+
+  "queues": {
+    "producers": [{ "binding": "EVENIMENTE", "queue": "xc-events-staging" }]
+  },
+
+  "triggers": {
+    // Trecere periodica prin outbox, pentru randurile ramase nepublicate.
+    "crons": ["*/5 * * * *"]
+  },
+
+  "env": {
+    "staging": {
+      "name": "xc-calendar-staging",
+      "vars": {
+        "MEDIU": "staging",
+        "ORIGINE_PUBLICA": "https://calendar.staging.sfantul-ilie.ro",
+        "DOMENIU_COOKIE": ".staging.sfantul-ilie.ro",
+        "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "xc-calendar-staging",
+          "database_id": "c26bb69e-f157-4922-9fbc-77a267f8a99d",
+          "migrations_dir": "../../infrastructure/migrations/calendar"
+        }
+      ],
+      "services": [
+        { "binding": "IDENTITATE", "service": "xc-identity-staging" },
+        { "binding": "AUTORIZARE", "service": "xc-authz-staging" },
+        { "binding": "AUDIT", "service": "xc-audit-staging" }
+      ],
+      "queues": {
+        "producers": [{ "binding": "EVENIMENTE", "queue": "xc-events-staging" }]
+      },
+      "triggers": { "crons": ["*/5 * * * *"] }
+    },
+    "production": {
+      "name": "xc-calendar-production",
+      "vars": {
+        "MEDIU": "production",
+        "ORIGINE_PUBLICA": "https://calendar.sfantul-ilie.ro",
+        "DOMENIU_COOKIE": ".sfantul-ilie.ro",
+        "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
+      }
+    }
+  }
+}

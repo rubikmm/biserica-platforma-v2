@@ -1,0 +1,73 @@
+{
+  // Serviciul de identitate. NU e expus public: aplicatiile il apeleaza prin Service Binding.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "xc-identity",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  "vars": {
+    "MEDIU": "dev",
+    "ORIGINE_PUBLICA": "https://rubik:8474",
+    "DOMENIU_COOKIE": "",
+    "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
+    "ADAPTOR_EMAIL": "sandbox"
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "xc-identity-staging",
+      "database_id": "a8ef90fa-28a7-4574-9ee8-ff8d3dc6be45",
+      "migrations_dir": "../../infrastructure/migrations/identity"
+    }
+  ],
+
+  "services": [
+    { "binding": "AUTORIZARE", "service": "xc-authz" },
+    { "binding": "AUDIT", "service": "xc-audit" }
+  ],
+
+  "env": {
+    "staging": {
+      "name": "xc-identity-staging",
+      "vars": {
+        "MEDIU": "staging",
+        "ORIGINE_PUBLICA": "https://cont.staging.sfantul-ilie.ro",
+        "DOMENIU_COOKIE": ".staging.sfantul-ilie.ro",
+        "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
+        "ADAPTOR_EMAIL": "sandbox"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "xc-identity-staging",
+          "database_id": "a8ef90fa-28a7-4574-9ee8-ff8d3dc6be45",
+          "migrations_dir": "../../infrastructure/migrations/identity"
+        }
+      ],
+      "services": [
+        { "binding": "AUTORIZARE", "service": "xc-authz-staging" },
+        { "binding": "AUDIT", "service": "xc-audit-staging" }
+      ]
+    },
+
+    // Pregatit configurational, dar fara resurse create si fara ruta: productia nu se atinge
+    // in aceasta faza. Bazele `xc-*-production` se creeaza abia la un cutover explicit.
+    "production": {
+      "name": "xc-identity-production",
+      "vars": {
+        "MEDIU": "production",
+        "ORIGINE_PUBLICA": "https://cont.sfantul-ilie.ro",
+        "DOMENIU_COOKIE": ".sfantul-ilie.ro",
+        "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
+        "ADAPTOR_EMAIL": "http"
+      },
+      "services": [
+        { "binding": "AUTORIZARE", "service": "xc-authz-production" },
+        { "binding": "AUDIT", "service": "xc-audit-production" }
+      ]
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@xc/media-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "lint": "tsc --noEmit",
+    "deploy:staging": "wrangler deploy --env staging"
+  },
+  "dependencies": {
+    "@xc/contracts": "workspace:*",
+    "@xc/observability": "workspace:*",
+    "zod": "^4.1.5"
+  }
+}

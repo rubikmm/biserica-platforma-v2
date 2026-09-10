@@ -1,0 +1,25 @@
+{
+  // Contractul de fisiere: singurul care atinge R2. Aplicatiile nu primesc binding de bucket.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "xc-media",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  "vars": { "MEDIU": "dev" },
+
+  "r2_buckets": [{ "binding": "FISIERE", "bucket_name": "xc-media-staging" }],
+
+  "env": {
+    "staging": {
+      "name": "xc-media-staging",
+      "vars": { "MEDIU": "staging" },
+      "r2_buckets": [{ "binding": "FISIERE", "bucket_name": "xc-media-staging" }]
+    },
+    "production": {
+      "name": "xc-media-production",
+      "vars": { "MEDIU": "production" }
+    }
+  }
+}

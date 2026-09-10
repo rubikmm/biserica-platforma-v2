@@ -1,0 +1,14 @@
+{
+  "name": "@xc/app-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@xc/observability": "workspace:*"
+  }
+}

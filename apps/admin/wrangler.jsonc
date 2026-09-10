@@ -1,0 +1,53 @@
+{
+  // A doua aplicatie-client. Rostul ei aici: sa dovedeasca faptul ca aceeasi sesiune SSO
+  // functioneaza pe o alta aplicatie, fara reautentificare.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "xc-admin",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  "vars": {
+    "MEDIU": "dev",
+    "ORIGINE_PUBLICA": "https://rubik:8474",
+    "DOMENIU_COOKIE": "",
+    "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
+  },
+
+  "services": [
+    { "binding": "IDENTITATE", "service": "xc-identity" },
+    { "binding": "AUTORIZARE", "service": "xc-authz" },
+    { "binding": "AUDIT", "service": "xc-audit" },
+    { "binding": "AUTOMATIZARE", "service": "xc-automation" },
+    { "binding": "COMUNICARE", "service": "xc-communication" }
+  ],
+
+  "env": {
+    "staging": {
+      "name": "xc-admin-staging",
+      "vars": {
+        "MEDIU": "staging",
+        "ORIGINE_PUBLICA": "https://admin.staging.sfantul-ilie.ro",
+        "DOMENIU_COOKIE": ".staging.sfantul-ilie.ro",
+        "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
+      },
+      "services": [
+        { "binding": "IDENTITATE", "service": "xc-identity-staging" },
+        { "binding": "AUTORIZARE", "service": "xc-authz-staging" },
+        { "binding": "AUDIT", "service": "xc-audit-staging" },
+        { "binding": "AUTOMATIZARE", "service": "xc-automation-staging" },
+        { "binding": "COMUNICARE", "service": "xc-communication-staging" }
+      ]
+    },
+    "production": {
+      "name": "xc-admin-production",
+      "vars": {
+        "MEDIU": "production",
+        "ORIGINE_PUBLICA": "https://admin.sfantul-ilie.ro",
+        "DOMENIU_COOKIE": ".sfantul-ilie.ro",
+        "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
+      }
+    }
+  }
+}

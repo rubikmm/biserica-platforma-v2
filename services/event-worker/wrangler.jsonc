@@ -1,0 +1,64 @@
+{
+  // Consumatorul cozii de evenimente. Valideaza envelope-ul si il duce mai departe;
+  // nu contine logica de domeniu.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "xc-events",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  "vars": { "MEDIU": "dev" },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "xc-audit-staging",
+      "database_id": "215c1d5a-9d97-46bc-bc46-b4d190782203"
+    }
+  ],
+
+  "services": [{ "binding": "AUTOMATIZARE", "service": "xc-automation" }],
+
+  "queues": {
+    "consumers": [
+      {
+        "queue": "xc-events-staging",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "dead_letter_queue": "xc-events-dlq-staging"
+      }
+    ]
+  },
+
+  "env": {
+    "staging": {
+      "name": "xc-events-staging",
+      "vars": { "MEDIU": "staging" },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "xc-audit-staging",
+          "database_id": "215c1d5a-9d97-46bc-bc46-b4d190782203"
+        }
+      ],
+      "services": [{ "binding": "AUTOMATIZARE", "service": "xc-automation-staging" }],
+      "queues": {
+        "consumers": [
+          {
+            "queue": "xc-events-staging",
+            "max_batch_size": 10,
+            "max_batch_timeout": 5,
+            "max_retries": 5,
+            "dead_letter_queue": "xc-events-dlq-staging"
+          }
+        ]
+      }
+    },
+    "production": {
+      "name": "xc-events-production",
+      "vars": { "MEDIU": "production" }
+    }
+  }
+}

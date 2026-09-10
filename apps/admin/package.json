@@ -1,0 +1,21 @@
+{
+  "name": "@xc/app-admin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "lint": "tsc --noEmit",
+    "deploy:staging": "wrangler deploy --env staging"
+  },
+  "dependencies": {
+    "@xc/auth": "workspace:*",
+    "@xc/authorization": "workspace:*",
+    "@xc/config": "workspace:*",
+    "@xc/contracts": "workspace:*",
+    "@xc/observability": "workspace:*",
+    "@xc/ui": "workspace:*",
+    "zod": "^4.1.5"
+  }
+}

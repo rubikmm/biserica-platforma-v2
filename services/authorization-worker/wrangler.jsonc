@@ -1,0 +1,54 @@
+{
+  // Autorizarea centrala: roluri, scope-uri, decizii de politica. Numai apeluri interne.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "xc-authz",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  "vars": {
+    "MEDIU": "dev",
+    "ORIGINE_PUBLICA": "https://rubik:8474",
+    "DOMENIU_COOKIE": "",
+    "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "xc-authz-staging",
+      "database_id": "82fae023-48cc-4ca4-aab6-b2fd03cfcb37",
+      "migrations_dir": "../../infrastructure/migrations/authz"
+    }
+  ],
+
+  "env": {
+    "staging": {
+      "name": "xc-authz-staging",
+      "vars": {
+        "MEDIU": "staging",
+        "ORIGINE_PUBLICA": "https://cont.staging.sfantul-ilie.ro",
+        "DOMENIU_COOKIE": ".staging.sfantul-ilie.ro",
+        "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "xc-authz-staging",
+          "database_id": "82fae023-48cc-4ca4-aab6-b2fd03cfcb37",
+          "migrations_dir": "../../infrastructure/migrations/authz"
+        }
+      ]
+    },
+    "production": {
+      "name": "xc-authz-production",
+      "vars": {
+        "MEDIU": "production",
+        "ORIGINE_PUBLICA": "https://cont.sfantul-ilie.ro",
+        "DOMENIU_COOKIE": ".sfantul-ilie.ro",
+        "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
+      }
+    }
+  }
+}

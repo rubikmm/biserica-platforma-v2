@@ -1,0 +1,24 @@
+{
+  // Gateway DOAR pentru preview local.
+  //
+  // In containerul de test exista un singur port public (Apache -> 8787), dar arhitectura are
+  // cate o aplicatie per subdomeniu. Gateway-ul face maparea cale -> aplicatie, ca fluxul sa
+  // poata fi incercat cap-coada pe `https://rubik:8474`.
+  //
+  // In staging si productie NU se foloseste: acolo fiecare aplicatie are domeniul ei si
+  // cookie-ul e comun pe domeniul parinte. Vezi docs/adr/0006-gateway-doar-pentru-preview.md
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "xc-gateway",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  "vars": { "MEDIU": "dev" },
+
+  "services": [
+    { "binding": "CONT", "service": "xc-account" },
+    { "binding": "CALENDAR", "service": "xc-calendar" },
+    { "binding": "ADMIN", "service": "xc-admin" }
+  ]
+}

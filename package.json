@@ -1,0 +1,31 @@
+{
+  "name": "biserica-platforma-v2",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.3.4",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "wrangler dev -c apps/gateway/wrangler.jsonc -c apps/account/wrangler.jsonc -c apps/admin/wrangler.jsonc -c apps/calendar/wrangler.jsonc -c services/identity-worker/wrangler.jsonc -c services/authorization-worker/wrangler.jsonc -c services/audit-worker/wrangler.jsonc -c services/event-worker/wrangler.jsonc -c services/automation-worker/wrangler.jsonc -c services/communication-worker/wrangler.jsonc -c services/media-worker/wrangler.jsonc --ip 127.0.0.1 --port 8787 --persist-to .wrangler/state",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "vitest run",
+    "build": "turbo run build",
+    "migreaza": "node infrastructure/migrations/ruleaza.mjs --local",
+    "migreaza:staging": "node infrastructure/migrations/ruleaza.mjs --remote --env staging",
+    "seed": "node infrastructure/migrations/seed.mjs --local",
+    "seed:staging": "node infrastructure/migrations/seed.mjs --remote --env staging",
+    "resurse:staging": "node infrastructure/wrangler/creeaza-resurse.mjs --env staging",
+    "deploy:staging": "turbo run deploy:staging"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.9.0",
+    "@cloudflare/workers-types": "^5.20260826.1",
+    "turbo": "^2.5.0",
+    "typescript": "^7.0.2",
+    "vitest": "^3.2.0",
+    "wrangler": "^4.130.0"
+  }
+}

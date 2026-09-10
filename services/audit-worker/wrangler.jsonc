@@ -1,0 +1,39 @@
+{
+  // Auditul: append-only. Nu expune update sau delete, nici prin ruta interna.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "xc-audit",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  "vars": { "MEDIU": "dev" },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "xc-audit-staging",
+      "database_id": "215c1d5a-9d97-46bc-bc46-b4d190782203",
+      "migrations_dir": "../../infrastructure/migrations/audit"
+    }
+  ],
+
+  "env": {
+    "staging": {
+      "name": "xc-audit-staging",
+      "vars": { "MEDIU": "staging" },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "xc-audit-staging",
+          "database_id": "215c1d5a-9d97-46bc-bc46-b4d190782203",
+          "migrations_dir": "../../infrastructure/migrations/audit"
+        }
+      ]
+    },
+    "production": {
+      "name": "xc-audit-production",
+      "vars": { "MEDIU": "production" }
+    }
+  }
+}

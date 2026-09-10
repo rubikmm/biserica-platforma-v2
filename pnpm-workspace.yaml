@@ -1,0 +1,11 @@
+packages:
+  - "packages/*"
+  - "services/*"
+  - "apps/*"
+
+# pnpm 12 cere aprobare explicita pentru pachetele cu scripturi de build.
+# `workerd` si `esbuild` sunt motorul lui wrangler — fara ele nu porneste nimic local.
+allowBuilds:
+  esbuild: true
+  sharp: true
+  workerd: true
