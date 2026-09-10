@@ -7,6 +7,8 @@
   "compatibility_date": "2026-08-25",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  // Fara adresa *.workers.dev: cookie-ul si CSRF-ul sunt legate de domeniul propriu.
+  "workers_dev": false,
 
   "vars": {
     "MEDIU": "dev",
@@ -26,9 +28,9 @@
         "DOMENIU_COOKIE": ".staging.sfantul-ilie.ro",
         "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
       },
-      "services": [{ "binding": "IDENTITATE", "service": "xc-identity-staging" }]
-      // Ruta se adauga abia cand utilizatorul cere deploy pe staging:
-      // "routes": [{ "pattern": "cont.staging.sfantul-ilie.ro", "custom_domain": true }]
+      "services": [{ "binding": "IDENTITATE", "service": "xc-identity-staging" }],
+      // Subdomeniu NOU sub `staging.` — nu atinge nicio inregistrare DNS a V1.
+      "routes": [{ "pattern": "cont.staging.sfantul-ilie.ro", "custom_domain": true }]
     },
     "production": {
       "name": "xc-account-production",
@@ -39,6 +41,8 @@
         "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
       },
       "services": [{ "binding": "IDENTITATE", "service": "xc-identity-production" }]
+      // Ruta de productie se adauga DOAR la cutover-ul explicit al lui A13:
+      // "routes": [{ "pattern": "cont.sfantul-ilie.ro", "custom_domain": true }]
     }
   }
 }

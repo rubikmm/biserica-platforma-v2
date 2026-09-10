@@ -7,6 +7,7 @@
   "compatibility_date": "2026-08-25",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  "workers_dev": false,
 
   "vars": {
     "MEDIU": "dev",
@@ -38,7 +39,8 @@
         { "binding": "AUDIT", "service": "xc-audit-staging" },
         { "binding": "AUTOMATIZARE", "service": "xc-automation-staging" },
         { "binding": "COMUNICARE", "service": "xc-communication-staging" }
-      ]
+      ],
+      "routes": [{ "pattern": "admin.staging.sfantul-ilie.ro", "custom_domain": true }]
     },
     "production": {
       "name": "xc-admin-production",
