@@ -1,4 +1,4 @@
-import { SESIUNE_ANONIMA, SesiuneCurenta } from '@xc/contracts'
+import { SESIUNE_ANONIMA, SesiuneCurenta, type Principal } from '@xc/contracts'
 
 export const NUME_COOKIE_SESIUNE = 'xc_sesiune'
 export const NUME_COOKIE_CSRF = 'xc_csrf'
@@ -42,16 +42,45 @@ export async function sesiuneCurenta(
 }
 
 /**
+ * Principalul pentru autorizare, din sesiunea curenta. Sta AICI, o data, si nu in fiecare
+ * aplicatie: masca „vezi ca" trebuie sa ajunga la serviciul de politici la fiecare intrebare,
+ * iar o aplicatie care si-l scrie singur ar putea s-o uite si ar da drepturi peste masca.
+ */
+export function principalDin(sesiune: SesiuneCurenta): Principal | null {
+  if (!sesiune.authenticated || !sesiune.user) return null
+  return {
+    userId: sesiune.user.id,
+    email: sesiune.user.email,
+    ...(sesiune.veziCa ? { veziCa: sesiune.veziCa } : {}),
+  }
+}
+
+/**
  * Verificare CSRF pentru orice metoda care schimba date. Doua bariere independente:
  * originea cererii si tokenul din formular pereche cu cookie-ul.
+ *
+ * Adresele permise se taie la ORIGINE inainte de comparatie. Antetul `Origin` e intotdeauna
+ * numai `schema://gazda:port`, pe cand `ORIGINE_PUBLICA` poarta in dev si prefixul gateway-ului
+ * (`https://rubik:8474/cont`) — comparate ca siruri, cele doua nu se potrivesc niciodata si
+ * fiecare POST local ajungea respins.
  */
-export function verificaCsrf(req: Request, originiPermise: string[]): string | null {
+export function verificaCsrf(req: Request, adresePermise: string[]): string | null {
   const metoda = req.method.toUpperCase()
   if (metoda === 'GET' || metoda === 'HEAD' || metoda === 'OPTIONS') return null
 
   const origine = req.headers.get('origin')
   if (!origine) return 'lipseste antetul Origin'
-  if (!originiPermise.includes(origine)) return 'origine neacceptata'
+
+  const permise = new Set(
+    adresePermise.map((a) => {
+      try {
+        return new URL(a).origin
+      } catch {
+        return a
+      }
+    }),
+  )
+  if (!permise.has(origine)) return 'origine neacceptata'
 
   return null
 }

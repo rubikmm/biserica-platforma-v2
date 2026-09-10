@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
+  Cod,
+  MASTI,
+  NIVEL_ROL,
   PERMISIUNI_IMPLICITE,
+  nivelMasca,
+  numeMasca,
   parseEveniment,
   redacteaza,
   scopeAcopera,
+  treaptaCeaMaiInalta,
   Scope,
   Email,
 } from '../packages/contracts/src/index.js'
@@ -116,5 +122,55 @@ describe('evenimente', () => {
   it('respinge un envelope fără correlationId', () => {
     const { correlationId, ...fara } = valid
     expect(() => parseEveniment(fara)).toThrow()
+  })
+})
+
+describe('codul de intrare (contract)', () => {
+  it('acceptă cele șase cifre scrise una câte una', () => {
+    expect(Cod.parse('123456')).toBe('123456')
+  })
+
+  it('acceptă codul lipit din scrisoare, cu spațiul de la mijloc', () => {
+    expect(Cod.parse('123 456')).toBe('123456')
+    expect(Cod.parse(' 123-456 ')).toBe('123456')
+  })
+
+  it('refuză ce nu face șase cifre', () => {
+    expect(Cod.safeParse('12345').success).toBe(false)
+    expect(Cod.safeParse('1234567').success).toBe(false)
+    expect(Cod.safeParse('abcdef').success).toBe(false)
+  })
+})
+
+describe('„vezi ca" — treptele măștii', () => {
+  it('are exact cele trei măști din V1', () => {
+    expect([...MASTI]).toEqual(['user', 'admin', 'anonim'])
+  })
+
+  it('masca merge doar SUB treapta ta', () => {
+    const super_ = NIVEL_ROL['super-admin']
+    expect(nivelMasca('admin')).toBeLessThan(super_)
+    expect(nivelMasca('user')).toBeLessThan(nivelMasca('admin'))
+    expect(nivelMasca('anonim')).toBe(0)
+    // Un admin nu se poate masca drept admin: nu coboară.
+    expect(nivelMasca('admin')).toBeGreaterThanOrEqual(NIVEL_ROL.admin)
+  })
+
+  it('treapta cea mai înaltă e a rolului cel mai mare deținut', () => {
+    expect(treaptaCeaMaiInalta([{ role: 'user' }, { role: 'super-admin' }])).toBe(NIVEL_ROL['super-admin'])
+    expect(treaptaCeaMaiInalta([{ role: 'user' }])).toBe(NIVEL_ROL.user)
+    expect(treaptaCeaMaiInalta([])).toBe(0)
+  })
+
+  it('sub mască, permisiunile sunt exact ale rolului împrumutat', () => {
+    expect(PERMISIUNI_IMPLICITE.user).not.toContain('calendar.manage')
+    expect(PERMISIUNI_IMPLICITE.admin).toContain('calendar.manage')
+    expect(PERMISIUNI_IMPLICITE.admin).not.toContain('roles.manage')
+  })
+
+  it('numele măștii e cel arătat omului', () => {
+    expect(numeMasca('anonim')).toBe('neautentificat')
+    expect(numeMasca('admin')).toBe('administrator')
+    expect(numeMasca('user')).toBe('utilizator')
   })
 })

@@ -1,24 +1,31 @@
 import { z } from 'zod'
 import {
+  CerereConfirmareCod,
   CerereIntrare,
+  Masca,
+  NIVEL_ROL,
+  SCOPE_GLOBAL,
   SESIUNE_ANONIMA,
   NumeAfisat,
+  nivelMasca,
+  treaptaCeaMaiInalta,
   type AtribuireRol,
   type SesiuneCurenta,
   redacteaza,
 } from '@xc/contracts'
-import { citesteConfig, permiteLinkDebug } from '@xc/config'
+import { citesteConfig, permiteSecretDebug } from '@xc/config'
 import { toate } from '@xc/db'
 import { Logger, correlationId } from '@xc/observability'
-import { DURATA_LINK_SEC, DURATA_SESIUNE_SEC } from './jetoane.js'
+import { DURATA_COD_SEC, DURATA_SESIUNE_SEC } from './jetoane.js'
 import {
   actualizeazaNume,
   catreUtilizator,
-  consumaLinkDeIntrare,
+  confirmaCodDeIntrare,
   creeazaSesiune,
   creeazaUtilizatorConfirmat,
   emailuriDeDebug,
-  emiteLinkDeIntrare,
+  emiteCodDeIntrare,
+  puneMasca,
   revocaSesiune,
   revocaToateSesiunile,
   sesiuneDupaJeton,
@@ -28,7 +35,7 @@ import {
 import {
   EmailCloudflare,
   EmailSandbox,
-  scrisoareaDeIntrare,
+  scrisoareaCodului,
   type AdaptorEmail,
 } from './email.js'
 import {
@@ -139,13 +146,18 @@ async function roluriUtilizator(env: Env, userId: string): Promise<AtribuireRol[
 
 // ---------------------------------------------------------------------------
 
-const CerereConsum = z.object({
-  token: z.string().min(1),
+const CerereConsum = CerereConfirmareCod.extend({
   ip: z.string().default('necunoscut'),
   userAgent: z.string().default(''),
 })
 
 const CerereJeton = z.object({ token: z.string().min(1) })
+
+const CerereMasca = z.object({
+  token: z.string().min(1),
+  /** `null` = scoate masca si revino la tine. */
+  masca: Masca.nullable(),
+})
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
@@ -161,7 +173,7 @@ export default {
     try {
       switch (cale) {
         // -------------------------------------------------------------------
-        // Intrarea (si nasterea contului, daca adresa nu are unul): trimite linkul.
+        // Intrarea (si nasterea contului, daca adresa nu are unul): trimite CODUL.
         // Raspunsul e identic indiferent daca adresa are cont sau nu.
         case '/intrare': {
           const brut = (await req.json()) as Record<string, unknown>
@@ -173,13 +185,13 @@ export default {
             (await eBlocat(env.DB, ip, 'ip', LIMITA_LOGIN_IP))
           ) {
             await scrieAudit(env, log, {
-              action: 'identity.link.requested',
+              action: 'identity.cod.requested',
               target: date.email,
               outcome: 'denied',
               correlationId: cid,
               summary: { motiv: 'limita de incercari atinsa' },
             })
-            return json({ challengeSent: true, debugLink: null, limitat: true }, 429)
+            return json({ challengeSent: true, debugCod: null, limitat: true }, 429)
           }
 
           await inregistreazaIncercare(env.DB, date.email, 'email')
@@ -190,38 +202,37 @@ export default {
           if (existent?.disabled_at) {
             // Cont inchis: nu trimitem nimic, dar nici nu spunem asta browserului.
             await scrieAudit(env, log, {
-              action: 'identity.link.requested',
+              action: 'identity.cod.requested',
               target: existent.id,
               outcome: 'failure',
               correlationId: cid,
               summary: { motiv: 'cont dezactivat' },
             })
-            return json({ challengeSent: true, debugLink: null })
+            return json({ challengeSent: true, debugCod: null })
           }
 
-          const jeton = await emiteLinkDeIntrare(
+          const cod = await emiteCodDeIntrare(
             env.DB,
             date.email,
             existent?.id ?? null,
             date.displayName ?? null,
-            DURATA_LINK_SEC,
+            DURATA_COD_SEC,
           )
-          const link = `${cfg.ORIGINE_PUBLICA}/auth/confirma?jeton=${encodeURIComponent(jeton)}`
           const contNou = !existent
-          const scrisoare = scrisoareaDeIntrare(link, contNou)
+          const scrisoare = scrisoareaCodului(date.email, cod, contNou)
 
           const email = alegeAdaptorEmail(env, log)
           const trimitere = await email.trimite({
             catre: date.email,
-            subiect: contNou ? 'Deschide-ți contul' : 'Intră în platforma parohiei',
+            subiect: scrisoare.subiect,
             text: scrisoare.text,
             html: scrisoare.html,
-            link,
+            secret: cod,
             correlationId: cid,
           })
 
           await scrieAudit(env, log, {
-            action: 'identity.link.requested',
+            action: 'identity.cod.requested',
             target: existent?.id ?? date.email,
             outcome: trimitere.livrat || email.nume === 'sandbox' ? 'success' : 'failure',
             correlationId: cid,
@@ -229,29 +240,30 @@ export default {
             summary: { contNou, adaptor: email.nume, livrat: trimitere.livrat, detaliu: trimitere.detaliu },
           })
 
-          log.info('link de intrare emis', { contNou, adaptor: email.nume, livrat: trimitere.livrat })
+          log.info('cod de intrare emis', { contNou, adaptor: email.nume, livrat: trimitere.livrat })
 
           return json({
             challengeSent: true,
-            debugLink: permiteLinkDebug(cfg) ? link : null,
+            debugCod: permiteSecretDebug(cfg) ? cod : null,
           })
         }
 
         // -------------------------------------------------------------------
-        // Linkul deschis: aici se naste sesiunea (si contul, la prima confirmare).
-        case '/confirma': {
+        // Codul scris: aici se naste sesiunea (si contul, la prima confirmare).
+        case '/confirma-cod': {
           const date = CerereConsum.parse(await req.json())
-          const rezultat = await consumaLinkDeIntrare(env.DB, date.token)
+          const rezultat = await confirmaCodDeIntrare(env.DB, date.email, date.cod)
 
           if (!rezultat.ok) {
+            await inregistreazaIncercare(env.DB, date.email, 'email')
             await scrieAudit(env, log, {
-              action: 'identity.link.confirmed',
-              target: 'jeton',
+              action: 'identity.cod.confirmed',
+              target: date.email,
               outcome: 'failure',
               correlationId: cid,
               summary: { motiv: rezultat.motiv },
             })
-            return json({ ok: false, motiv: rezultat.motiv }, 400)
+            return json({ ok: false, motiv: rezultat.motiv, ramase: rezultat.ramase ?? null }, 400)
           }
 
           let utilizator = rezultat.userId ? await utilizatorDupaId(env.DB, rezultat.userId) : null
@@ -301,7 +313,7 @@ export default {
           await resetIncercari(env.DB, utilizator.email, 'email')
 
           await scrieAudit(env, log, {
-            action: 'identity.link.confirmed',
+            action: 'identity.cod.confirmed',
             target: utilizator.id,
             outcome: 'success',
             correlationId: cid,
@@ -321,6 +333,9 @@ export default {
         }
 
         // -------------------------------------------------------------------
+        // Cine e pe sesiune — cu rolurile EFECTIVE. Daca sesiunea poarta o masca „vezi ca",
+        // aplicatia primeste masca in loc de rolurile adevarate si nu trebuie sa stie nimic
+        // despre mascarada ca sa se poarte corect.
         case '/sesiune': {
           const date = CerereJeton.parse(await req.json())
           const sesiune = await sesiuneDupaJeton(env.DB, date.token)
@@ -329,14 +344,73 @@ export default {
           const utilizator = await utilizatorDupaId(env.DB, sesiune.user_id)
           if (!utilizator || utilizator.disabled_at) return json(SESIUNE_ANONIMA)
 
+          const masca = Masca.safeParse(sesiune.vezi_ca)
+          const veziCa = masca.success ? masca.data : null
+          const roluriReale = await roluriUtilizator(env, utilizator.id)
+          // Grupul „Vezi ca" din meniu: pentru super-admin, si — ca sa existe drum de
+          // intoarcere — pentru oricine poarta deja o masca.
+          const poateVedeaCa =
+            veziCa !== null || treaptaCeaMaiInalta(roluriReale) >= NIVEL_ROL['super-admin']
+
+          // Masca „neautentificat": de aici incolo platforma se poarta ca si cum n-ar
+          // cunoaste pe nimeni. Singurul semn ramas e banda de jos, care il si scoate.
+          if (veziCa === 'anonim') {
+            return json({ ...SESIUNE_ANONIMA, veziCa, poateVedeaCa })
+          }
+
           const raspuns: SesiuneCurenta = {
             authenticated: true,
             user: catreUtilizator(utilizator),
-            roles: await roluriUtilizator(env, utilizator.id),
+            roles: veziCa ? [{ role: veziCa, scope: SCOPE_GLOBAL }] : roluriReale,
             sessionId: sesiune.id,
             expiresAt: sesiune.expires_at,
+            veziCa,
+            poateVedeaCa,
           }
           return json(raspuns)
+        }
+
+        // -------------------------------------------------------------------
+        // „Vezi ca": pune sau scoate masca de pe sesiune. Rolul se citeste ADEVARAT, din
+        // atribuiri — altfel un super-admin coborat la `user` n-ar mai putea nici sa revina,
+        // nici sa se mascheze mai jos. Masca merge doar SUB treapta ta, niciodata peste.
+        case '/vezi-ca': {
+          const date = CerereMasca.parse(await req.json())
+          const sesiune = await sesiuneDupaJeton(env.DB, date.token)
+          if (!sesiune) return json({ ok: false, motiv: 'fara sesiune' }, 401)
+
+          const treapta = treaptaCeaMaiInalta(await roluriUtilizator(env, sesiune.user_id))
+          const refuz =
+            treapta < NIVEL_ROL['super-admin']
+              ? 'numai super administratorii'
+              : date.masca && nivelMasca(date.masca) >= treapta
+                ? 'masca trebuie sa fie sub treapta ta'
+                : null
+
+          if (refuz) {
+            await scrieAudit(env, log, {
+              action: 'identity.vezi_ca.denied',
+              target: date.masca ?? 'real',
+              outcome: 'denied',
+              correlationId: cid,
+              actorId: sesiune.user_id,
+              summary: { motiv: refuz },
+            })
+            return json({ ok: false, motiv: refuz }, 403)
+          }
+
+          const pusa = await puneMasca(env.DB, date.token, date.masca)
+          if (!pusa) return json({ ok: false, motiv: 'fara sesiune' }, 401)
+
+          await scrieAudit(env, log, {
+            action: date.masca ? 'identity.vezi_ca.set' : 'identity.vezi_ca.cleared',
+            target: date.masca ?? 'real',
+            outcome: 'success',
+            correlationId: cid,
+            actorId: sesiune.user_id,
+          })
+          log.info('masca schimbata', { masca: date.masca })
+          return json({ ok: true, masca: date.masca })
         }
 
         // -------------------------------------------------------------------
@@ -425,9 +499,9 @@ export default {
         }
 
         // -------------------------------------------------------------------
-        // Doar in dev: ultimele linkuri „trimise" catre o adresa.
+        // Doar in dev: ultimele coduri „trimise" catre o adresa.
         case '/emailuri-debug': {
-          if (!permiteLinkDebug(cfg)) return json({ eroare: 'indisponibil' }, 404)
+          if (!permiteSecretDebug(cfg)) return json({ eroare: 'indisponibil' }, 404)
           const date = z.object({ email: z.string() }).parse(await req.json())
           return json({ emailuri: await emailuriDeDebug(env.DB, date.email.toLowerCase()) })
         }

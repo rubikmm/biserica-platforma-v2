@@ -21,6 +21,10 @@ export interface Ctx {
   modificata: string
   /** Anul curent la Bucuresti: sirul lunilor nu iese din el (afara de ianuarie anul viitor). */
   anCurent: number
+  /** „Vezi ca" — vin din sesiune, gata calculate de identitate; doar pentru meniu si banda. */
+  veziCa?: string | null
+  poateVedeaCa?: boolean
+  spre?: string
 }
 
 export const NOTA_GENERAT = 'Calendar generat automat'
@@ -34,7 +38,16 @@ const IC_INFO = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" str
 // ---------------------------------------------------------------------------
 
 function contDin(ctx: Ctx) {
-  return { intrat: !!ctx.utilizator, nume: ctx.utilizator ?? 'Cont', admin: ctx.eAdmin, urlCont: ctx.nav.cont, urlAdmin: ctx.nav.admin }
+  return {
+    intrat: !!ctx.utilizator,
+    nume: ctx.utilizator ?? 'Cont',
+    admin: ctx.eAdmin,
+    urlCont: ctx.nav.cont,
+    urlAdmin: ctx.nav.admin,
+    poateVedeaCa: ctx.poateVedeaCa ?? false,
+    veziCa: ctx.veziCa ?? null,
+    spre: ctx.spre ?? '',
+  }
 }
 
 /**

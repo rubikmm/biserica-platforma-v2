@@ -3,9 +3,11 @@ import {
   CerereAutorizare,
   PERMISIUNI_IMPLICITE,
   Rol,
+  SCOPE_GLOBAL,
   Scope,
   type AtribuireRol,
   type Decizie,
+  type Masca,
   type Permisiune,
   scopeAcopera,
 } from '@xc/contracts'
@@ -60,12 +62,43 @@ async function granturi(db: D1Database, userId: string): Promise<RandGrant[]> {
   )
 }
 
+/**
+ * Decizia. Cand principalul poarta o masca „vezi ca", NU se mai uita nici la rolurile lui
+ * adevarate, nici la granturile lui personale: conteaza exact ce poate rolul imprumutat, si
+ * atat. Altfel previzualizarea ar minti — un super-admin „mascat ca utilizator" ar putea in
+ * continuare sa publice, iar intrebarea „ce vede un utilizator?" ar ramane fara raspuns.
+ *
+ * Masca `anonim` nu ajunge niciodata pana aici (identitatea intoarce sesiune anonima, deci
+ * aplicatia n-are principal de trimis); daca totusi ajunge, e refuz.
+ */
 async function decide(
   db: D1Database,
   userId: string,
   permission: Permisiune,
   resourceScope: string,
+  veziCa?: Masca,
 ): Promise<Decizie> {
+  if (veziCa) {
+    if (veziCa === 'anonim') {
+      return { allowed: false, reason: 'te uiti ca neautentificat', matchedScopes: [] }
+    }
+    if (!scopeAcopera(SCOPE_GLOBAL, resourceScope)) {
+      return { allowed: false, reason: `masca ${veziCa} nu acopera ${resourceScope}`, matchedScopes: [] }
+    }
+    if (!PERMISIUNI_IMPLICITE[veziCa].includes(permission)) {
+      return {
+        allowed: false,
+        reason: `te uiti ca ${veziCa}, iar rolul acesta nu are ${permission}`,
+        matchedScopes: [],
+      }
+    }
+    return {
+      allowed: true,
+      reason: `acordat de masca ${veziCa}`,
+      matchedScopes: [SCOPE_GLOBAL],
+    }
+  }
+
   const potrivite: string[] = []
 
   for (const atribuire of await roluri(db, userId)) {
@@ -128,6 +161,7 @@ export default {
             date.principal.userId,
             date.permission,
             date.resourceScope,
+            date.principal.veziCa,
           )
           return json(decizie)
         }

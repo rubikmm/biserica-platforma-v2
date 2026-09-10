@@ -1,6 +1,14 @@
 import { acum, eIncalcareUnicitate, id, ruleaza, toate, unul } from '@xc/db'
-import type { Utilizator } from '@xc/contracts'
-import { aExpirat, hashJeton, jetonNou, peste } from './jetoane.js'
+import type { Masca, Utilizator } from '@xc/contracts'
+import {
+  INCERCARI_COD,
+  aExpirat,
+  codDeSaseCifre,
+  hashCod,
+  hashJeton,
+  jetonNou,
+  peste,
+} from './jetoane.js'
 
 export interface RandUtilizator {
   id: string
@@ -41,8 +49,8 @@ export type RezultatCreare =
   | { fel: 'exista'; utilizator: RandUtilizator }
 
 /**
- * Se cheama DOAR la consumul unui link de intrare: contul se naste cu adresa deja confirmata.
- * Daca intre timp a aparut acelasi email (doua linkuri deschise aproape simultan), il intoarcem
+ * Se cheama DOAR la confirmarea unui cod de intrare: contul se naste cu adresa deja confirmata.
+ * Daca intre timp a aparut acelasi email (doua coduri confirmate aproape simultan), il intoarcem
  * pe cel existent — nu e o eroare, e aceeasi persoana.
  */
 export async function creeazaUtilizatorConfirmat(
@@ -73,70 +81,95 @@ export async function creeazaUtilizatorConfirmat(
 }
 
 // ---------------------------------------------------------------------------
-// Linkul de intrare (jeton cu un singur consum)
+// Codul de intrare (sase cifre, un singur consum)
 // ---------------------------------------------------------------------------
 
-export async function emiteLinkDeIntrare(
+/**
+ * Naste un cod pentru adresa data si il intoarce IN CLAR — o singura data, cat sa incapa in
+ * scrisoare. In baza ramane doar amprenta lui `email:cod`.
+ */
+export async function emiteCodDeIntrare(
   db: D1Database,
   email: string,
   userId: string | null,
   displayName: string | null,
   durataSec: number,
 ): Promise<string> {
-  // Un link nou le inchide pe cele vechi ale aceleiasi adrese: doar ultimul e bun.
+  // Un cod nou le stinge pe cele vechi ale aceleiasi adrese: doar ultimul e bun.
   await ruleaza(
     db,
-    `UPDATE login_challenges SET consumed_at = ? WHERE email = ? AND consumed_at IS NULL`,
+    `UPDATE coduri_intrare SET consumed_at = ? WHERE email = ? AND consumed_at IS NULL`,
     [acum(), email],
   )
-  const jeton = jetonNou()
+  const cod = codDeSaseCifre()
   await ruleaza(
     db,
-    `INSERT INTO login_challenges (id, email, user_id, display_name, token_hash, created_at, expires_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [id(), email, userId, displayName, await hashJeton(jeton), acum(), peste(durataSec)],
+    `INSERT INTO coduri_intrare (id, email, user_id, display_name, cod_hash, incercari, created_at, expires_at)
+     VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
+    [id(), email, userId, displayName, await hashCod(email, cod), acum(), peste(durataSec)],
   )
-  return jeton
+  return cod
 }
 
-interface RandChallenge {
+interface RandCod {
   id: string
   email: string
   user_id: string | null
   display_name: string | null
+  cod_hash: string
+  incercari: number
   expires_at: string
   consumed_at: string | null
 }
 
 export type RezultatConsum =
   | { ok: true; email: string; userId: string | null; displayName: string | null }
-  | { ok: false; motiv: 'jeton inexistent' | 'jeton deja folosit' | 'jeton expirat' }
+  | { ok: false; motiv: 'cod inexistent' | 'cod deja folosit' | 'cod expirat' | 'cod gresit'; ramase?: number }
 
 /**
- * Consuma linkul daca e valid. Consumul e atomic (`UPDATE ... WHERE consumed_at IS NULL`),
- * deci doua apasari simultane pe acelasi link produc o singura sesiune.
+ * Confirma codul, daca e bun. Doua griji:
+ *
+ * 1. Numarul de incercari creste INAINTE de comparatie — o intrerupere de retea la mijloc nu
+ *    trebuie sa ofere o incercare gratis (V1, aceeasi regula).
+ * 2. Consumul e atomic (`UPDATE ... WHERE consumed_at IS NULL`), deci doua trimiteri simultane
+ *    ale aceluiasi cod produc o singura sesiune.
+ *
+ * Cautarea e dupa email, nu dupa amprenta: altfel n-am putea numara greselile pe codul in curs.
  */
-export async function consumaLinkDeIntrare(
+export async function confirmaCodDeIntrare(
   db: D1Database,
-  jeton: string,
+  email: string,
+  cod: string,
 ): Promise<RezultatConsum> {
-  const rand = await unul<RandChallenge>(
+  const rand = await unul<RandCod>(
     db,
-    `SELECT id, email, user_id, display_name, expires_at, consumed_at
-     FROM login_challenges WHERE token_hash = ?`,
-    [await hashJeton(jeton)],
+    `SELECT id, email, user_id, display_name, cod_hash, incercari, expires_at, consumed_at
+     FROM coduri_intrare WHERE email = ? AND consumed_at IS NULL
+     ORDER BY created_at DESC LIMIT 1`,
+    [email],
   )
 
-  if (!rand) return { ok: false, motiv: 'jeton inexistent' }
-  if (rand.consumed_at) return { ok: false, motiv: 'jeton deja folosit' }
-  if (aExpirat(rand.expires_at)) return { ok: false, motiv: 'jeton expirat' }
+  if (!rand) return { ok: false, motiv: 'cod inexistent' }
+  if (aExpirat(rand.expires_at)) return { ok: false, motiv: 'cod expirat' }
+
+  // Prea multe greseli: codul se stinge aici, nu se mai poate incerca pe el.
+  if (rand.incercari >= INCERCARI_COD) {
+    await ruleaza(db, `UPDATE coduri_intrare SET consumed_at = ? WHERE id = ?`, [acum(), rand.id])
+    return { ok: false, motiv: 'cod expirat' }
+  }
+
+  await ruleaza(db, `UPDATE coduri_intrare SET incercari = incercari + 1 WHERE id = ?`, [rand.id])
+
+  if ((await hashCod(email, cod)) !== rand.cod_hash) {
+    return { ok: false, motiv: 'cod gresit', ramase: INCERCARI_COD - rand.incercari - 1 }
+  }
 
   const rezultat = await ruleaza(
     db,
-    `UPDATE login_challenges SET consumed_at = ? WHERE id = ? AND consumed_at IS NULL`,
+    `UPDATE coduri_intrare SET consumed_at = ? WHERE id = ? AND consumed_at IS NULL`,
     [acum(), rand.id],
   )
-  if ((rezultat.meta.changes ?? 0) === 0) return { ok: false, motiv: 'jeton deja folosit' }
+  if ((rezultat.meta.changes ?? 0) === 0) return { ok: false, motiv: 'cod deja folosit' }
 
   return { ok: true, email: rand.email, userId: rand.user_id, displayName: rand.display_name }
 }
@@ -150,6 +183,9 @@ export interface RandSesiune {
   user_id: string
   expires_at: string
   revoked_at: string | null
+  /** Masca „vezi ca", daca sesiunea poarta una. Sta AICI, nu intr-un cookie: cine schimba
+   *  cookie-ul nu-si schimba drepturile, iar masca il urmeaza pe om in toate aplicatiile. */
+  vezi_ca: string | null
 }
 
 export async function creeazaSesiune(
@@ -176,13 +212,30 @@ export async function sesiuneDupaJeton(
 ): Promise<RandSesiune | null> {
   const rand = await unul<RandSesiune>(
     db,
-    `SELECT id, user_id, expires_at, revoked_at FROM sessions WHERE token_hash = ?`,
+    `SELECT id, user_id, expires_at, revoked_at, vezi_ca FROM sessions WHERE token_hash = ?`,
     [await hashJeton(jeton)],
   )
   if (!rand) return null
   if (rand.revoked_at) return null
   if (aExpirat(rand.expires_at)) return null
   return rand
+}
+
+/**
+ * Pune (sau scoate, cu `null`) masca „vezi ca" pe sesiunea data. Nu verifica nimic despre
+ * drepturi — cine cheama a verificat deja rolul ADEVARAT, mai sus, in `/vezi-ca`.
+ */
+export async function puneMasca(
+  db: D1Database,
+  jeton: string,
+  masca: Masca | null,
+): Promise<boolean> {
+  const rezultat = await ruleaza(
+    db,
+    `UPDATE sessions SET vezi_ca = ? WHERE token_hash = ? AND revoked_at IS NULL`,
+    [masca, await hashJeton(jeton)],
+  )
+  return (rezultat.meta.changes ?? 0) > 0
 }
 
 export async function revocaSesiune(db: D1Database, jeton: string): Promise<void> {
@@ -219,10 +272,10 @@ export async function emailuriDeDebug(
   db: D1Database,
   catre: string,
   limita = 5,
-): Promise<Array<{ subiect: string; link: string | null; adaptor: string; created_at: string }>> {
+): Promise<Array<{ subiect: string; secret: string | null; adaptor: string; created_at: string }>> {
   return toate(
     db,
-    `SELECT subiect, link, adaptor, created_at FROM emails_iesire WHERE catre = ?
+    `SELECT subiect, secret_debug AS secret, adaptor, created_at FROM emails_iesire WHERE catre = ?
      ORDER BY created_at DESC LIMIT ?`,
     [catre, limita],
   )

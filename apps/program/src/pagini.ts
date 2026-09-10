@@ -17,6 +17,10 @@ export interface Ctx {
   poateScrie: boolean
   versiune: string
   modificata: string
+  /** „Vezi ca" — vin din sesiune, gata calculate de identitate; doar pentru meniu si banda. */
+  veziCa?: string | null
+  poateVedeaCa?: boolean
+  spre?: string
 }
 
 export const STIL = `
@@ -92,7 +96,16 @@ export const SCRIPT = `
 // ---------------------------------------------------------------------------
 
 function contDin(ctx: Ctx) {
-  return { intrat: !!ctx.utilizator, nume: ctx.utilizator ?? 'Cont', admin: ctx.eAdmin, urlCont: ctx.nav.cont, urlAdmin: ctx.nav.admin }
+  return {
+    intrat: !!ctx.utilizator,
+    nume: ctx.utilizator ?? 'Cont',
+    admin: ctx.eAdmin,
+    urlCont: ctx.nav.cont,
+    urlAdmin: ctx.nav.admin,
+    poateVedeaCa: ctx.poateVedeaCa ?? false,
+    veziCa: ctx.veziCa ?? null,
+    spre: ctx.spre ?? '',
+  }
 }
 
 function comune(ctx: Ctx) {

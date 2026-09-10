@@ -1,13 +1,25 @@
 import { describe, expect, it } from 'vitest'
-import { hashJeton, jetonNou, aExpirat, peste, DURATA_LINK_SEC, DURATA_SESIUNE_SEC } from '../services/identity-worker/src/jetoane.js'
+import {
+  hashJeton,
+  hashCod,
+  jetonNou,
+  codDeSaseCifre,
+  aExpirat,
+  peste,
+  DURATA_COD_SEC,
+  DURATA_SESIUNE_SEC,
+  INCERCARI_COD,
+} from '../services/identity-worker/src/jetoane.js'
 import {
   construiesteCookie,
   cookieSters,
   citesteCookie,
   egaleInTimpConstant,
+  principalDin,
   verificaCsrf,
 } from '../packages/auth/src/index.js'
-import { scrisoareaDeIntrare } from '../services/identity-worker/src/email.js'
+import { codFrumos, scrisoareaCodului } from '../services/identity-worker/src/email.js'
+import { SESIUNE_ANONIMA, type SesiuneCurenta } from '../packages/contracts/src/index.js'
 
 describe('jetoane', () => {
   it('generează jetoane unice', () => {
@@ -29,23 +41,97 @@ describe('jetoane', () => {
     expect(aExpirat(peste(-1))).toBe(true)
   })
 
-  it('linkul e scurt, sesiunea e lungă (fără parolă, linkul e singurul gest de intrare)', () => {
-    expect(DURATA_LINK_SEC).toBe(15 * 60)
+  it('codul e scurt, sesiunea e lungă (fără parolă, codul e singurul gest de intrare)', () => {
+    expect(DURATA_COD_SEC).toBe(10 * 60)
     expect(DURATA_SESIUNE_SEC).toBeGreaterThanOrEqual(7 * 24 * 60 * 60)
   })
 })
 
-describe('scrisoarea de intrare', () => {
-  it('conține linkul, atât în text cât și în HTML, și nu îl deformează', () => {
-    const link = 'https://rubik:8474/auth/confirma?jeton=abc_DEF-123'
-    const s = scrisoareaDeIntrare(link, false)
-    expect(s.text).toContain(link)
-    expect(s.html).toContain(`href="${link}"`)
+describe('codul de intrare', () => {
+  it('are șase cifre, mereu', () => {
+    for (let i = 0; i < 500; i++) expect(codDeSaseCifre()).toMatch(/^\d{6}$/)
+  })
+
+  it('folosește toate cele zece cifre (fără înclinare din modulo)', () => {
+    const vazute = new Set<string>()
+    for (let i = 0; i < 500; i++) for (const c of codDeSaseCifre()) vazute.add(c)
+    expect(vazute.size).toBe(10)
+  })
+
+  it('nu se repetă în serie', () => {
+    const set = new Set(Array.from({ length: 200 }, () => codDeSaseCifre()))
+    expect(set.size).toBeGreaterThan(190)
+  })
+
+  it('amprenta leagă codul de adresă: același cod, alt email, alt hash', async () => {
+    const a = await hashCod('ana@exemplu.ro', '123456')
+    const b = await hashCod('bogdan@exemplu.ro', '123456')
+    expect(a).not.toBe(b)
+    expect(a).toBe(await hashCod('ana@exemplu.ro', '123456'))
+    expect(a).not.toContain('123456')
+  })
+
+  it('lasă cinci greșeli, ca în V1', () => {
+    expect(INCERCARI_COD).toBe(5)
+  })
+})
+
+describe('scrisoarea cu codul', () => {
+  it('taie codul 3-3, la fel ca cele șase căsuțe din pagină', () => {
+    expect(codFrumos('123456')).toBe('123 456')
+  })
+
+  it('poartă codul în subiect, în text și în HTML — și niciun link de intrare', () => {
+    const s = scrisoareaCodului('ana@exemplu.ro', '123456', false)
+    expect(s.subiect).toContain('123 456')
+    expect(s.text).toContain('123 456')
+    expect(s.html).toContain('123 456')
+    expect(s.text).not.toMatch(/https?:\/\//)
+    expect(s.html).not.toContain('<a href')
   })
 
   it('spune altceva la cont nou față de intrare', () => {
-    expect(scrisoareaDeIntrare('https://x/y', true).text).toContain('Bine ai venit')
-    expect(scrisoareaDeIntrare('https://x/y', false).text).not.toContain('Bine ai venit')
+    expect(scrisoareaCodului('a@b.ro', '111222', true).text).toContain('cont nou')
+    expect(scrisoareaCodului('a@b.ro', '111222', false).text).not.toContain('cont nou')
+  })
+
+  it('scapă adresa în HTML (nu se scrie ce vine de la om nemestecat)', () => {
+    const s = scrisoareaCodului('a<b>@x.ro', '111222', false)
+    expect(s.html).not.toContain('<b>')
+    expect(s.html).toContain('&lt;b&gt;')
+  })
+})
+
+describe('„vezi ca" — masca ajunge la autorizare', () => {
+  const cuMasca = (veziCa: SesiuneCurenta['veziCa']): SesiuneCurenta => ({
+    ...SESIUNE_ANONIMA,
+    authenticated: true,
+    user: {
+      id: 'u1',
+      email: 'sef@exemplu.ro',
+      displayName: 'Șeful',
+      emailVerifiedAt: null,
+      disabledAt: null,
+      createdAt: new Date().toISOString(),
+    },
+    roles: [{ role: 'user', scope: 'global' }],
+    sessionId: 's1',
+    expiresAt: null,
+    veziCa,
+    poateVedeaCa: true,
+  })
+
+  it('principalul poartă masca, ca decizia să se ia sub ea', () => {
+    expect(principalDin(cuMasca('user'))?.veziCa).toBe('user')
+    expect(principalDin(cuMasca('admin'))?.veziCa).toBe('admin')
+  })
+
+  it('fără mască, principalul nu inventează una', () => {
+    expect(principalDin(cuMasca(null))).toEqual({ userId: 'u1', email: 'sef@exemplu.ro' })
+  })
+
+  it('sesiunea anonimă nu dă principal (masca „neautentificat" ajunge aici)', () => {
+    expect(principalDin(SESIUNE_ANONIMA)).toBeNull()
   })
 })
 

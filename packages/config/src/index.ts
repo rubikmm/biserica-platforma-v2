@@ -80,9 +80,9 @@ export function eProductie(cfg: VariabileComune): boolean {
 }
 
 /**
- * Linkul de debug (linkul de intrare afisat in interfata in loc sa plece pe email)
- * e permis DOAR in dev. E singurul loc care decide asta.
+ * Secretul de debug (codul de intrare aratat in pagina in loc sa plece pe email) e permis
+ * DOAR in dev. E singurul loc care decide asta.
  */
-export function permiteLinkDebug(cfg: VariabileComune): boolean {
+export function permiteSecretDebug(cfg: VariabileComune): boolean {
   return cfg.MEDIU === 'dev'
 }

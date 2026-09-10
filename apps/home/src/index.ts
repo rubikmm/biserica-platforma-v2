@@ -83,7 +83,16 @@ export default {
       local: LOCAL,
       versiune: pkg.version,
       modificata: dataVersiunii(env.VERSIUNE),
-      cont: { intrat: !!utilizator, nume: utilizator ?? 'Cont', admin: eAdmin, urlCont: nav.cont, urlAdmin: nav.admin },
+      cont: {
+        intrat: !!utilizator,
+        nume: utilizator ?? 'Cont',
+        admin: eAdmin,
+        urlCont: nav.cont,
+        urlAdmin: nav.admin,
+        poateVedeaCa: sesiune.poateVedeaCa,
+        veziCa: sesiune.veziCa,
+        spre: url.toString(),
+      },
     }
 
     if (url.pathname !== '/' && url.pathname !== '') {

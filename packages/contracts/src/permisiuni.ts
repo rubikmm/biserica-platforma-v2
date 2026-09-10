@@ -63,10 +63,46 @@ export const PERMISIUNI_IMPLICITE: Record<Rol, readonly Permisiune[]> = {
   'super-admin': [...CHEI_PERMISIUNI],
 }
 
+// ---------------------------------------------------------------------------
+// „Vezi ca" — pielea imprumutata
+// ---------------------------------------------------------------------------
+
+/**
+ * Masca sub care un super-admin se uita la platforma cu ochii altui rol (adusa din V1,
+ * cerere user 10.09.2026). NU e un rol: rolul adevarat din `role_assignments` ramane neatins.
+ * Masca sta pe SESIUNE, la identitate, si coboara si ce vezi, si ce poti face — decizia o ia
+ * tot autorizarea centrala (user, 10.09.2026), altfel previzualizarea ar fi doar un desen.
+ */
+export const MASTI = ['user', 'admin', 'anonim'] as const
+export const Masca = z.enum(MASTI)
+export type Masca = z.infer<typeof Masca>
+
+/** Numele mastii pentru om, in romana — pentru meniu si pentru banda de jos. */
+export function numeMasca(m: Masca): string {
+  return m === 'anonim' ? 'neautentificat' : m === 'admin' ? 'administrator' : 'utilizator'
+}
+
+/** Treapta rolului. O masca se imprumuta doar SUB treapta ta; `anonim` e sub oricare. */
+export const NIVEL_ROL: Record<Rol, number> = { user: 1, admin: 2, 'super-admin': 3 }
+
+export function nivelMasca(m: Masca): number {
+  return m === 'anonim' ? 0 : NIVEL_ROL[m]
+}
+
+/** Cea mai inalta treapta pe care o are omul, dupa atribuirile lui. */
+export function treaptaCeaMaiInalta(roluri: readonly { role: Rol }[]): number {
+  return roluri.reduce((max, r) => Math.max(max, NIVEL_ROL[r.role]), 0)
+}
+
 /** Principalul care cere o decizie de autorizare. */
 export const Principal = z.object({
   userId: z.string().min(1),
   email: z.email(),
+  /**
+   * Masca purtata pe sesiune, daca exista. Autorizarea decide sub ea, nu sub rolurile reale:
+   * un super-admin mascat ca `user` primeste exact refuzurile unui utilizator obisnuit.
+   */
+  veziCa: Masca.optional(),
 })
 export type Principal = z.infer<typeof Principal>
 

@@ -5,8 +5,8 @@ export interface EmailDeTrimis {
   subiect: string
   text: string
   html?: string
-  /** Linkul continut in mesaj — se pastreaza in jurnal DOAR pe adaptorul sandbox (dev). */
-  link: string
+  /** Secretul din mesaj (azi: codul de sase cifre) — se pastreaza in jurnal DOAR pe sandbox (dev). */
+  secret: string
   correlationId: string
 }
 
@@ -22,8 +22,8 @@ export interface AdaptorEmail {
 }
 
 /**
- * Adaptorul de dezvoltare: NU trimite nimic in exterior. Scrie scrisoarea (cu link cu tot) in
- * `emails_iesire`, de unde interfata o poate arata. Singurul adaptor in care linkul ajunge
+ * Adaptorul de dezvoltare: NU trimite nimic in exterior. Scrie scrisoarea (cu cod cu tot) in
+ * `emails_iesire`, de unde interfata o poate arata. Singurul adaptor in care codul ajunge
  * in baza de date.
  */
 export class EmailSandbox implements AdaptorEmail {
@@ -33,7 +33,7 @@ export class EmailSandbox implements AdaptorEmail {
 
   async trimite(mesaj: EmailDeTrimis): Promise<RezultatTrimitere> {
     const rezultat = { livrat: false, detaliu: 'inregistrat in sandbox, nu a plecat nimic in exterior' }
-    await jurnalizeaza(this.db, mesaj, this.nume, rezultat, mesaj.link)
+    await jurnalizeaza(this.db, mesaj, this.nume, rezultat, mesaj.secret)
     return rezultat
   }
 }
@@ -79,7 +79,7 @@ export class EmailCloudflare implements AdaptorEmail {
         detaliu: `cloudflare: ${cod ? `${cod} — ` : ''}${e instanceof Error ? e.message : String(e)}`,
       }
     }
-    // Linkul NU se scrie in jurnal pe drumul real — ar fi o a doua copie a secretului.
+    // Codul NU se scrie in jurnal pe drumul real — ar fi o a doua copie a secretului.
     await jurnalizeaza(this.db, mesaj, this.nume, rezultat, null)
     return rezultat
   }
@@ -90,17 +90,17 @@ async function jurnalizeaza(
   mesaj: EmailDeTrimis,
   adaptor: string,
   rezultat: RezultatTrimitere,
-  link: string | null,
+  secret: string | null,
 ): Promise<void> {
   await ruleaza(
     db,
-    `INSERT INTO emails_iesire (id, catre, subiect, link, adaptor, livrat, detaliu, correlation_id, created_at)
+    `INSERT INTO emails_iesire (id, catre, subiect, secret_debug, adaptor, livrat, detaliu, correlation_id, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id(),
       mesaj.catre,
       mesaj.subiect,
-      link,
+      secret,
       adaptor,
       rezultat.livrat ? 1 : 0,
       rezultat.detaliu.slice(0, 500),
@@ -111,44 +111,69 @@ async function jurnalizeaza(
 }
 
 // ---------------------------------------------------------------------------
-// Scrisoarea de intrare
+// Scrisoarea cu codul de intrare
 // ---------------------------------------------------------------------------
 
-export function scrisoareaDeIntrare(link: string, contNou: boolean): { text: string; html: string } {
-  const titlu = contNou ? 'Bine ai venit' : 'Bună'
+/** Cum se scrie codul pentru ochi: `123 456`. Aceeasi taietura 3-3 ca in cele sase casute. */
+export function codFrumos(cod: string): string {
+  return `${cod.slice(0, 3)} ${cod.slice(3)}`
+}
+
+/**
+ * Scrisoarea cu cele sase cifre — textele si forma din V1 (subiectul incepe cu codul, ca sa se
+ * vada in lista de mesaje fara sa deschizi scrisoarea; cifrele mari, la mijloc; „Detalii" si
+ * „De ce primesc acest email?"). Niciun link: nu mai exista drum de intrare prin apasare.
+ */
+export function scrisoareaCodului(
+  catre: string,
+  cod: string,
+  contNou: boolean,
+): { subiect: string; text: string; html: string } {
+  const frumos = codFrumos(cod)
+  const subiect = `${frumos} — codul tău de intrare`
   const rost = contNou
-    ? 'Ca să-ți deschidem contul în platforma parohiei, confirmă adresa apăsând linkul de mai jos:'
-    : 'Cineva a cerut intrarea în platforma parohiei cu adresa aceasta. Dacă tu ai fost, apasă linkul:'
+    ? `Ai cerut să-ți deschizi un cont în platforma parohiei cu adresa ${catre}. Scrie codul de mai jos ca să continui:`
+    : `Ai cerut să intri în cont cu adresa ${catre}. Scrie codul de mai jos ca să continui:`
 
   const text = [
-    `${titlu},`,
+    contNou ? 'Codul tău de intrare — cont nou' : 'Codul tău de intrare',
     '',
     rost,
     '',
-    link,
+    `    ${frumos}`,
     '',
-    'Linkul e valabil 15 minute și poate fi folosit o singură dată.',
-    'Dacă nu ai cerut tu intrarea, ignoră mesajul — fără această confirmare nu se întâmplă nimic.',
+    'Codul este bun zece minute și se folosește o singură dată.',
+    '',
+    'De ce primesc acest email?',
+    `Cineva a cerut un cod de intrare pentru adresa ${catre}. Dacă nu ai fost tu, nu trebuie`,
+    'să faci nimic: fără cod nu intră nimeni în contul tău.',
+    '',
+    '— Biserica Sfântul Ilie – Hanul Colței',
   ].join('\n')
 
   // Tabele si `color-scheme: light only`: ce s-a invatat in V1 despre cum se randeaza o
   // scrisoare pe telefoane si in clientii cu tema intunecata.
   const html = `<!doctype html>
 <html lang="ro"><head><meta charset="utf-8"><meta name="color-scheme" content="light only">
-<title>${titlu}</title></head>
+<title>${esc(subiect)}</title></head>
 <body style="margin:0;background:#f6f5f3;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#23201c">
+<span style="display:none;max-height:0;overflow:hidden;opacity:0">Codul tău: ${esc(frumos)}. Este bun zece minute.</span>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#fff;border:1px solid #e3ded7;border-radius:12px">
-<tr><td style="padding:28px 28px 8px;font-size:20px;font-weight:600">${titlu},</td></tr>
-<tr><td style="padding:0 28px 20px;font-size:16px;line-height:1.55">${rost}</td></tr>
-<tr><td style="padding:0 28px 24px" align="center">
-<a href="${link}" style="display:inline-block;background:#7a5c3e;color:#fff;text-decoration:none;font-weight:600;padding:12px 24px;border-radius:8px">${contNou ? 'Deschide contul' : 'Intră în platformă'}</a>
-</td></tr>
-<tr><td style="padding:0 28px 28px;font-size:13px;line-height:1.5;color:#6b645c">Linkul e valabil 15 minute și poate fi folosit o singură dată.<br>Dacă nu ai cerut tu intrarea, ignoră mesajul — fără această confirmare nu se întâmplă nimic.</td></tr>
+<tr><td style="padding:28px 28px 8px;font-size:20px;font-weight:600">Codul tău de intrare</td></tr>
+<tr><td style="padding:0 28px 4px;font-size:16px;line-height:1.55">${esc(rost)}</td></tr>
+<tr><td align="center" style="padding:16px 28px;font-size:32px;line-height:40px;font-weight:600;letter-spacing:4px;color:#000">${esc(frumos)}</td></tr>
+<tr><td style="padding:0 28px 24px;font-size:13px;line-height:1.5;color:#6b645c">Codul este bun zece minute și se folosește o singură dată.</td></tr>
+<tr><td style="padding:0 28px 28px;font-size:13px;line-height:1.5;color:#6b645c"><b style="color:#23201c">De ce primesc acest email?</b><br>Cineva a cerut un cod de intrare pentru adresa ${esc(catre)}. Dacă nu ai fost tu, nu trebuie să faci nimic: fără cod nu intră nimeni în contul tău.</td></tr>
 </table>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px"><tr><td style="padding:16px 8px;font-size:12px;color:#6b645c;text-align:center">Biserica Sfântul Ilie – Hanul Colței</td></tr></table>
 </td></tr></table>
 </body></html>`
 
-  return { text, html }
+  return { subiect, text, html }
+}
+
+/** Scapare minima pentru HTML-ul scrisorii — adresa vine de la om. */
+function esc(s: string): string {
+  return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] as string)
 }

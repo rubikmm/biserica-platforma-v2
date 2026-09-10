@@ -1,7 +1,7 @@
 import { z } from 'zod'
-import { SCOPE_GLOBAL, SESIUNE_ANONIMA, type Principal, type SesiuneCurenta, type ZiLiturgica } from '@xc/contracts'
+import { SCOPE_GLOBAL, SESIUNE_ANONIMA, type ZiLiturgica } from '@xc/contracts'
 import { ClientAutorizare, EroareAutorizare } from '@xc/authorization'
-import { NUME_COOKIE_CSRF, citesteCookie, construiesteCookie, sesiuneCurenta, verificaCsrf, verificaTokenCsrf } from '@xc/auth'
+import { NUME_COOKIE_CSRF, citesteCookie, construiesteCookie, principalDin, sesiuneCurenta, verificaCsrf, verificaTokenCsrf } from '@xc/auth'
 import { citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
 import { construiesteEnvelope, declaratieOutbox, golesteOutbox } from '@xc/events'
 import { Logger, correlationId } from '@xc/observability'
@@ -73,11 +73,6 @@ async function eAbonat(env: Env, userId: string): Promise<boolean> {
 }
 const CACHE_PAGINI = 'public, max-age=300'
 const CACHE_API = 'public, max-age=600'
-
-function principalDin(sesiune: SesiuneCurenta): Principal | null {
-  if (!sesiune.authenticated || !sesiune.user) return null
-  return { userId: sesiune.user.id, email: sesiune.user.email }
-}
 
 function redirect(catre: string, antete: Record<string, string> = {}): Response {
   return new Response(null, { status: 303, headers: { location: catre, ...antete } })
@@ -227,6 +222,9 @@ export default {
       versiune: pkg.version,
       modificata: dataVersiunii(env.VERSIUNE),
       anCurent: Number(azi.slice(0, 4)),
+      veziCa: sesiune.veziCa,
+      poateVedeaCa: sesiune.poateVedeaCa,
+      spre: url.toString(),
     }
     const authz = new ClientAutorizare(env.AUTORIZARE, cid)
 

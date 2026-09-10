@@ -1,6 +1,6 @@
-import { SCOPE_GLOBAL, SESIUNE_ANONIMA, type Principal, type SesiuneCurenta } from '@xc/contracts'
+import { SCOPE_GLOBAL, SESIUNE_ANONIMA, type SesiuneCurenta } from '@xc/contracts'
 import { ClientAutorizare } from '@xc/authorization'
-import { sesiuneCurenta } from '@xc/auth'
+import { principalDin, sesiuneCurenta } from '@xc/auth'
 import { citesteConfig, navigatieDin } from '@xc/config'
 import { Logger, correlationId } from '@xc/observability'
 import { alerta, dataVersiunii, esc, html, pagina } from '@xc/ui'
@@ -34,11 +34,6 @@ interface LivrareRand {
   provider: string
   template_id: string
   created_at: string
-}
-
-function principalDin(sesiune: SesiuneCurenta): Principal | null {
-  if (!sesiune.authenticated || !sesiune.user) return null
-  return { userId: sesiune.user.id, email: sesiune.user.email }
 }
 
 function tabelAudit(intrari: IntrareAuditRand[]): string {
@@ -76,6 +71,7 @@ export default {
     const nav = navigatieDin(cfg)
     const cid = correlationId(req)
     const log = new Logger({ service: 'app-admin', correlationId: cid })
+    const url = new URL(req.url)
 
     const sesiune = await sesiuneCurenta(env.IDENTITATE, req).catch(() => SESIUNE_ANONIMA)
     const principal = principalDin(sesiune)
@@ -91,7 +87,7 @@ export default {
     if (!decizie.allowed) {
       return html(
         pagina({
-          ...comune(env, nav, principal.email, eAdmin),
+          ...comune(env, nav, principal.email, eAdmin, sesiune, url.toString()),
           corp: `<h2>Administrare</h2>
             ${alerta('rea', 'Nu ai permisiunea <code>audit.read</code>.')}
             <p class="ajutor">Ești autentificat ca ${esc(principal.email)}, dar fără drepturile necesare.
@@ -132,7 +128,7 @@ export default {
 
       return html(
         pagina({
-          ...comune(env, nav, principal.email, eAdmin),
+          ...comune(env, nav, principal.email, eAdmin, sesiune, url.toString()),
           corp: `
 <h2>Administrare</h2>
   <p>Ești autentificat ca <strong>${esc(principal.email)}</strong> — fără să te fi
@@ -152,7 +148,7 @@ export default {
       log.error('eroare la citirea panoului', { eroare: e instanceof Error ? e.message : String(e) })
       return html(
         pagina({
-          ...comune(env, nav, principal.email, eAdmin),
+          ...comune(env, nav, principal.email, eAdmin, sesiune, url.toString()),
           corp: `${alerta("rea", "Nu am putut citi datele panoului.")}`,
         }),
         500,
@@ -162,7 +158,14 @@ export default {
 }
 
 /** Carcasa comuna a paginilor de administrare. */
-function comune(env: Env, nav: ReturnType<typeof navigatieDin>, email: string, eAdmin: boolean) {
+function comune(
+  env: Env,
+  nav: ReturnType<typeof navigatieDin>,
+  email: string,
+  eAdmin: boolean,
+  sesiune: SesiuneCurenta,
+  spre: string,
+) {
   return {
     nume: 'ADMINISTRARE',
     titlu: 'Administrarea platformei',
@@ -171,7 +174,16 @@ function comune(env: Env, nav: ReturnType<typeof navigatieDin>, email: string, e
     local: STIL,
     versiune: pkg.version,
     modificata: dataVersiunii(env.VERSIUNE),
-    cont: { intrat: true, nume: email, admin: eAdmin, urlCont: nav.cont, urlAdmin: nav.admin },
+    cont: {
+      intrat: true,
+      nume: email,
+      admin: eAdmin,
+      urlCont: nav.cont,
+      urlAdmin: nav.admin,
+      poateVedeaCa: sesiune.poateVedeaCa,
+      veziCa: sesiune.veziCa,
+      spre,
+    },
   }
 }
 

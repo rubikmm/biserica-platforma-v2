@@ -76,6 +76,19 @@ h1 + .eyebrow, .titlu + .eyebrow { margin:4px 0 16px }
                 font:14px/1.2 ui-sans-serif,system-ui }
 .cont-lista a:hover { background:var(--tinta); color:var(--rosu) }
 .cont-desparte { border:0; border-top:1px solid var(--rule); margin:6px 0 }
+.cont-acum { display:block; padding:9px 16px; color:var(--rosu);
+             font:600 14px/1.2 ui-sans-serif,system-ui }
+.cont-lista a.cont-revino { color:var(--rosu); font-weight:600 }
+/* Banda „vezi ca": singurul semn ca omul nu se uita cu ochii lui. Sta jos, peste tot,
+   si il scoate de sub masca dintr-un click — inclusiv cand masca e „neautentificat",
+   unde antetul n-are niciun meniu din care sa se poata iesi. */
+.banda-vezica { position:fixed; left:0; right:0; bottom:0; z-index:90;
+                display:flex; align-items:center; justify-content:center; gap:14px;
+                flex-wrap:wrap; padding:10px 16px; background:var(--rosu); color:#fff;
+                font:13px/1.4 ui-sans-serif,system-ui; text-align:center;
+                padding-bottom:calc(10px + env(safe-area-inset-bottom)) }
+.banda-vezica a { color:#fff; font-weight:600 }
+body:has(.banda-vezica) { padding-bottom:64px }
 h1 { font-size:36px; font-weight:400; letter-spacing:-.02em; margin:0 0 10px }
 h1 .cod { color:var(--rosu) }
 h2 { font-size:25px; font-weight:400; letter-spacing:-.01em; margin:34px 0 10px }
@@ -292,6 +305,45 @@ export interface Cont {
   /** Adresa profilului si a iesirii — aplicatia de cont. */
   urlCont?: string
   urlAdmin?: string
+  /** `true` pentru super-admin (si pentru cine poarta deja o masca): apare grupul „Vezi ca". */
+  poateVedeaCa?: boolean
+  /** Masca purtata acum, daca exista: `user`, `admin` sau `anonim`. */
+  veziCa?: string | null
+  /** Pagina de acum, ca intoarcerea de la comutator sa cada exact aici. */
+  spre?: string
+}
+
+/** Numele mastii pentru om — acelasi cuvant in meniu si pe banda. */
+function numeleMastii(m: string): string {
+  return m === 'anonim' ? 'neautentificat' : m === 'admin' ? 'administrator' : 'utilizator'
+}
+
+function comutatorVeziCa(urlCont: string, ca: string, spre: string): string {
+  return `${esc(urlCont)}/vezi-ca?ca=${esc(ca)}${spre ? `&spre=${encodeURIComponent(spre)}` : ''}`
+}
+
+/**
+ * Grupul „Vezi ca" din meniu — adus din V1 (user, 10.09.2026): super-adminul se uita la
+ * platforma cu ochii unui utilizator, ai unui administrator sau ai unui om neintrat, fara sa
+ * se atinga de contul lui. Comutarea se cere la aplicatia de cont, fiindca acolo sta sesiunea
+ * pe care se scrie masca; ea il trimite pe om inapoi exact unde era (`spre`).
+ */
+function veziCa(c: Cont): string {
+  if (!c.poateVedeaCa) return ''
+  const urlCont = c.urlCont ?? ''
+  const spre = c.spre ?? ''
+  const cere = (ca: string, text: string, clasa = '') =>
+    c.veziCa === ca
+      ? `\n          <span class="cont-acum">Te uiți ca ${esc(numeleMastii(ca))}</span>`
+      : `\n          <a${clasa ? ` class="${clasa}"` : ''} href="${comutatorVeziCa(urlCont, ca, spre)}">${text}</a>`
+  return (
+    `\n          <hr class="cont-desparte">` +
+    cere('user', 'Vezi ca utilizator') +
+    cere('admin', 'Vezi ca administrator') +
+    cere('anonim', 'Vezi ca neautentificat') +
+    (c.veziCa ? cere('real', 'Revino la super admin', 'cont-revino') : '') +
+    `\n          <hr class="cont-desparte">`
+  )
 }
 
 function contul(c: Cont): string {
@@ -304,10 +356,26 @@ function contul(c: Cont): string {
         <summary class="cont">${ICOANE.om}<span>${esc(nume)}</span></summary>
         <nav class="cont-lista">
           <a href="${esc(urlCont)}/">Profil</a>${c.admin ? `
-          <a href="${esc(c.urlAdmin ?? '')}/">Administrare</a>` : ''}
+          <a href="${esc(c.urlAdmin ?? '')}/">Administrare</a>` : ''}${veziCa(c)}
           <a href="${esc(urlCont)}/auth/logout">Ieșire</a>
         </nav>
       </details>`
+}
+
+/**
+ * Banda de jos, cat timp masca e pusa. Se deseneaza pe server, din sesiune — nu dintr-un
+ * cookie citit de JS, ca in V1: aici masca sta pe sesiune, deci pagina stie singura ce sa
+ * arate, si banda apare si cu JS-ul oprit.
+ */
+function bandaVeziCa(c: Cont | null | undefined): string {
+  if (!c?.veziCa) return ''
+  return `\n<div class="banda-vezica" role="status"><span>Te uiți ca <b>${esc(
+    numeleMastii(c.veziCa),
+  )}</b> — contul tău a rămas neatins.</span><a href="${comutatorVeziCa(
+    c.urlCont ?? '',
+    'real',
+    c.spre ?? '',
+  )}">Revino la super admin</a></div>`
 }
 
 // ---------------------------------------------------------------------------
@@ -388,7 +456,7 @@ ${antet(p)}
 <div class="${w}">
 <main>${p.corp}</main>
 ${subsol(p.versiune, p.modificata)}
-</div>
+</div>${bandaVeziCa(p.cont)}
 <script>${JS_JOS}</script>${p.scripturi ? `\n<script>${p.scripturi}</script>` : ''}
 </body></html>`
 }
