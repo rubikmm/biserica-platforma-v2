@@ -54,12 +54,15 @@ schimb, a fost refăcută la cererea userului pe 10.09.2026, seara, și NU mai e
   destinație socotită față de ziua de azi, treapta curentă marcată roșu și apăsabilă) și, după o
   liniuță, **întrerupătorul „Calendar"** (on/off), care a luat locul meniului „Informații utile";
 - **abonarea a ieșit momentan** din interfață (rutele și audiența rămân);
-- sub antet, doar **hârtiile — Arhiva, PDF, JPG — și numai pentru admini**; de aici urmează că
-  istoricul e accesibil doar adminilor, navigarea nefiind un istoric;
+- sub antet, doar **hârtiile — Arhiva, PDF, JPG**, pe două trepte: adminul le are pe săptămâna de acum
+  și pe cea următoare, super-adminul pe tot istoricul; de aici urmează că istoricul e al adminilor,
+  navigarea nefiind un istoric;
+- lângă întrerupător, butonul cu **săgeată în jos** deschide poza săptămânii, făcută de calendar;
 - **calendarul aprins = a doua coloană**, în dreapta programului: titlul zilei, apoi sfinții unul
   sub altul cu săgeată, fără pericope și fără glas. Ține exact cât navigarea (cele trei săptămâni);
 - în stânga, zilele fără slujbe rămân goale (fără titlu); eticheta de stare se scrie doar când NU e
-  „validat" (adică practic doar „propunere", la săptămâna următoare).
+  „validat" (adică practic doar „propunere", la săptămâna următoare). Pe telefon, în zilele roșii cu
+  slujbe, calendarul nu se mai scrie: sărbătoarea și sfinții sunt deja pe rândurile slujbei.
 
 **Fără scriere manuală**: pagina `/admin` (scrierea și validarea săptămânii) a fost scoasă cu totul —
 „nu vreau să fac nimic manual" (user, 16:36). Programul are săptămânile importate din V1 și
@@ -70,7 +73,7 @@ propunerea automată, ca în V1.
 
 1. ⚠️ **De șters la cererea userului: modul de probă din `program`** (pus 10.09.2026, 18:06, ca să se
    poată vedea local ce vede un admin — autentificarea nu se poate proba local). Banner cu trei
-   butoane (neautentificat / utilizator / admin), alegerea într-un cookie `proba_rol`, ruta
+   butoane, apoi patru (neautentificat / utilizator / admin / super-admin), alegerea în cookie-ul `proba_rol`, ruta
    `GET /proba/<rol>`. **Merge doar în dev**; pe staging și în producție e inert. Tot ce ține de el
    poartă marcajul `⚠️ TEMPORAR` în `apps/program/src/{index,pagini}.ts`.
 2. **Curățenia (A6)** — schema, sloturile din slujbele programului (`curatenie: true`), rapoartele
@@ -192,3 +195,23 @@ propunerea automată, ca în V1.
   Reparat, plus: numele zilei cu majusculă pe foaie, intervalul din casetă calculat mereu (titlurile
   importate au cratimă în loc de linie de dialog), iar „Sfinții zilei" nu mai repetă titlul zilei
   (`titlu_html` ține la un loc sfinții, pericopele și glasul — se vedeau de două ori).
+- Liniile foii, runda a doua (19:15–19:25), tot din codul V1, unde erau explicate: chenarele groase
+  laterale se **întrerup** la banda zilelor fără slujbe („așa se vede că s-a rupt șirul"), jumătatea de
+  zi fără slujbă nu se taie pe verticală, caseta cu intervalul are chenar subțire și umbră dură (nu
+  difuză), iar tabelul n-are chenar la stânga și jos: bara groasă o poartă celulele zilei și se oprește
+  la duminică, unde colțul din stânga-jos rămâne deschis.
+- **Hârtiile pe două trepte de rol** (19:39): adminul vede Arhiva|PDF|JPG doar pe săptămâna de acum și
+  pe cea următoare, super-adminul pe tot istoricul. Pe telefon, în zilele roșii cu slujbe, coloana
+  calendarului nu se mai scrie — sărbătoarea și sfinții sunt deja pe rândurile slujbei.
+- **Cinci diacritice stricate la exportul din V1** (19:52), descoperite de user într-o poză de pe
+  telefon: o literă cu diacritice ajunsese două semne de înlocuire („Înainte-pr??znuirea"). V1 era
+  curat, deci exportul le-a stricat. Reparate în D1 (local + staging): numele slujbelor luate înapoi
+  din vocabular, detaliile cu `REPLACE`. `insereazaLoturi` strigă acum la orice import.
+- **Poza săptămânii** (20:28–21:00), adusă din V1 și așezată la CALENDAR, nu la program: ruta
+  `GET /v1/poza/saptamana/<zi>` compune antetul (CALENDAR, parohia, intervalul) și cele șapte zile, le
+  trece prin Browser Rendering și le ține în cache-ul de muchie. Lată cât un telefon (450 px CSS), pe
+  temă închisă. În V1 pozele se generau dinainte, pentru tot anul, cu un script, și stăteau în R2 —
+  aici nu mai e nimic de întreținut la preluarea unui an. Programul o deschide cu un buton (săgeată în
+  jos) din antet, lângă întrerupătorul Calendar. Ca să n-ajungem la tiparul V1 cu cod copiat între
+  aplicații, PDF-ul/JPG-ul/PNG-ul și cache-ul lor au urcat în `@xc/ui` (`packages/ui/src/hartie.ts`),
+  iar calendarul a căpătat binding-ul `BROWSER` (dev + staging).
