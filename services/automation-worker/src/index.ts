@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { Envelope, PayloadEvenimentProgram, redacteaza } from '@xc/contracts'
+import { Envelope, PayloadSaptamanaProgram, redacteaza } from '@xc/contracts'
 import { acum, id, ruleaza, toate, unul } from '@xc/db'
 import { Logger, correlationId } from '@xc/observability'
 
@@ -32,9 +32,9 @@ export interface Regula {
 
 const REGULI_IMPLICITE: Regula[] = [
   {
-    id: 'notificare-eveniment-publicat',
-    nume: 'Anunță audiența când un eveniment de program e publicat',
-    declansator: 'program.event.published.v1',
+    id: 'notificare-program-validat',
+    nume: 'Anunță audiența când programul unei săptămâni e validat',
+    declansator: 'program.week.validated.v1',
     risc: 'low',
     proprietar: 'program',
     activa: true,
@@ -137,7 +137,7 @@ export default {
 
           // Actiunea propriu-zisa: o CERERE de comunicare. Automatizarea nu trimite ea nimic
           // si nu atinge liste de destinatari — asta e treaba serviciului de comunicare.
-          const payload = PayloadEvenimentProgram.safeParse(envelope.payload)
+          const payload = PayloadSaptamanaProgram.safeParse(envelope.payload)
           if (!payload.success) continue
 
           const raspuns = await env.COMUNICARE.fetch('https://comunicare.intern/cerere', {
@@ -145,11 +145,12 @@ export default {
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
               audienceId: 'toti-enoriasii',
-              templateId: 'eveniment-publicat',
+              templateId: 'program-validat',
               channel: 'email',
               variables: {
-                titlu: payload.data.title,
-                inceput: payload.data.startsAt,
+                saptamana: payload.data.titlu,
+                de_la: payload.data.luni,
+                pana_la: payload.data.duminica,
               },
               idempotencyKey: `${cheieIdempotenta}:${regula.id}`,
               correlationId: envelope.correlationId,

@@ -1,49 +1,25 @@
 import { z } from 'zod'
-import { CerereComunicare, type MesajDeLivrat } from '@xc/contracts'
+import { CerereComunicare } from '@xc/contracts'
 import { acum, id, ruleaza, toate, unul } from '@xc/db'
 import { Logger, correlationId } from '@xc/observability'
+import { alegePostasul, textDinHtml, type MediuPosta } from '@xc/posta'
 
-export interface Env {
+/**
+ * Singurul serviciu care livreaza email (si, mai tarziu, WhatsApp). Doua feluri de cereri:
+ *  - `/cerere`: campanie pe audienta + sablon (automatizarile);
+ *  - `/trimite`: scrisoare compusa de o aplicatie (rapoartele curateniei, foaia programului),
+ *    catre destinatari numiti — arhivata AICI, o singura data, cu livrarea fiecaruia.
+ * Audientele (abonarile) se tin tot aici: aplicatiile inscriu/scot membri, nu tin liste proprii.
+ * Cat timp `LIVRARE_REALA` nu e „da", totul merge in sandbox: se inregistreaza, nu pleaca.
+ */
+export interface Env extends MediuPosta {
   DB: D1Database
   MEDIU: string
-  /** Comutator explicit. Cat timp nu e „da", niciun adaptor real nu poate fi ales. */
   LIVRARE_REALA: string
 }
 
 function json(date: unknown, status = 200): Response {
-  return new Response(JSON.stringify(date), {
-    status,
-    headers: { 'content-type': 'application/json; charset=utf-8' },
-  })
-}
-
-interface AdaptorCanal {
-  nume: string
-  livreaza(mesaj: MesajDeLivrat): Promise<{ status: 'simulated' | 'sent' | 'failed'; detaliu: string }>
-}
-
-/** Adaptoarele sandbox: inregistreaza, nu trimit. Singurele active in aceasta faza. */
-const ADAPTOR_EMAIL_SANDBOX: AdaptorCanal = {
-  nume: 'email-sandbox',
-  async livreaza(mesaj) {
-    return { status: 'simulated', detaliu: `email simulat catre ${mesaj.recipient}` }
-  },
-}
-
-const ADAPTOR_WHATSAPP_SANDBOX: AdaptorCanal = {
-  nume: 'whatsapp-sandbox',
-  async livreaza(mesaj) {
-    return { status: 'simulated', detaliu: `whatsapp simulat catre ${mesaj.recipient}` }
-  },
-}
-
-function alegeAdaptor(env: Env, canal: 'email' | 'whatsapp'): AdaptorCanal {
-  if (env.LIVRARE_REALA === 'da') {
-    // Aici s-ar lega adaptoarele reale. Deliberat neimplementat: nu exista furnizor configurat,
-    // iar activarea trebuie sa fie o decizie explicita a utilizatorului, nu un efect secundar.
-    throw new Error('livrarea reala nu are inca niciun adaptor configurat')
-  }
-  return canal === 'email' ? ADAPTOR_EMAIL_SANDBOX : ADAPTOR_WHATSAPP_SANDBOX
+  return new Response(JSON.stringify(date), { status, headers: { 'content-type': 'application/json; charset=utf-8' } })
 }
 
 interface RandDestinatar {
@@ -52,11 +28,7 @@ interface RandDestinatar {
   opted_out: number
 }
 
-async function destinatari(
-  db: D1Database,
-  audienceId: string,
-  canal: string,
-): Promise<RandDestinatar[]> {
+async function destinatari(db: D1Database, audienceId: string, canal: string): Promise<RandDestinatar[]> {
   return toate<RandDestinatar>(
     db,
     `SELECT m.user_id, m.adresa, COALESCE(p.opted_out, 0) AS opted_out
@@ -67,136 +39,182 @@ async function destinatari(
   )
 }
 
-async function sablon(
-  db: D1Database,
-  templateId: string,
-  canal: string,
-): Promise<{ subject: string | null; body: string } | null> {
-  return unul(
-    db,
-    `SELECT subject, body FROM templates WHERE id = ? AND channel = ?
-     ORDER BY version DESC LIMIT 1`,
-    [templateId, canal],
-  )
+async function sablon(db: D1Database, templateId: string, canal: string): Promise<{ subject: string | null; body: string } | null> {
+  return unul(db, `SELECT subject, body FROM templates WHERE id = ? AND channel = ? ORDER BY version DESC LIMIT 1`, [templateId, canal])
 }
 
 function completeaza(text: string, variabile: Record<string, string>): string {
   return text.replaceAll(/\{\{(\w+)\}\}/g, (_, cheie: string) => variabile[cheie] ?? '')
 }
 
+async function eOprit(db: D1Database, userId: string | null, canal: string): Promise<boolean> {
+  if (!userId) return false
+  const p = await unul<{ opted_out: number }>(db, `SELECT opted_out FROM preferences WHERE user_id = ? AND channel = ?`, [userId, canal])
+  return p?.opted_out === 1
+}
+
+const Destinatar = z.object({ userId: z.string().min(1).nullable().default(null), adresa: z.email() })
+
+const CerereTrimitere = z.object({
+  sursa: z.string().min(1).max(40),
+  destinatari: z.array(Destinatar).min(1).max(500),
+  subiect: z.string().min(1).max(300),
+  html: z.string().min(1),
+  text: z.string().optional(),
+  raspundeLa: z.email().optional(),
+  idempotencyKey: z.string().min(1),
+  correlationId: z.string().min(1),
+  test: z.boolean().default(false),
+  meta: z.record(z.string(), z.unknown()).default({}),
+})
+
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const cid = correlationId(req)
     const log = new Logger({ service: 'communication-worker', correlationId: cid })
     const cale = new URL(req.url).pathname
+    const livrareReala = env.LIVRARE_REALA === 'da'
 
     if (req.method !== 'POST') return json({ eroare: 'doar POST' }, 405)
 
     try {
+      // ------------------------------------------------------------ campanii pe audienta
       if (cale === '/cerere') {
         const date = CerereComunicare.parse(await req.json())
-
-        // Idempotenta la nivel de cerere: acelasi `idempotencyKey` nu produce a doua campanie.
-        const existent = await unul<{ id: string }>(
-          env.DB,
-          `SELECT id FROM requests WHERE idempotency_key = ?`,
-          [date.idempotencyKey],
-        )
-        if (existent) {
-          return json({ ok: true, requestId: existent.id, reluat: true })
-        }
+        const existent = await unul<{ id: string }>(env.DB, `SELECT id FROM requests WHERE idempotency_key = ?`, [date.idempotencyKey])
+        if (existent) return json({ ok: true, requestId: existent.id, reluat: true })
 
         const requestId = id()
         await ruleaza(
           env.DB,
-          `INSERT INTO requests (id, audience_id, template_id, channel, idempotency_key, correlation_id, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [
-            requestId,
-            date.audienceId,
-            date.templateId,
-            date.channel,
-            date.idempotencyKey,
-            date.correlationId,
-            acum(),
-          ],
+          `INSERT INTO requests (id, audience_id, template_id, channel, idempotency_key, correlation_id, created_at, sursa)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'automatizare')`,
+          [requestId, date.audienceId, date.templateId, date.channel, date.idempotencyKey, date.correlationId, acum()],
         )
-
         const model = await sablon(env.DB, date.templateId, date.channel)
-        if (!model) {
-          return json({ ok: false, motiv: 'sablon inexistent', requestId }, 400)
-        }
+        if (!model) return json({ ok: false, motiv: 'sablon inexistent', requestId }, 400)
+        if (date.channel !== 'email') return json({ ok: false, motiv: 'canalul whatsapp nu are inca adaptor', requestId }, 501)
 
-        const adaptor = alegeAdaptor(env, date.channel)
+        const postas = alegePostasul(env, livrareReala, (m) => log.warn(m))
         const lista = await destinatari(env.DB, date.audienceId, date.channel)
         let inregistrate = 0
         let suprimate = 0
-
-        for (const destinatar of lista) {
-          if (destinatar.opted_out === 1) {
-            await ruleaza(
-              env.DB,
-              `INSERT INTO deliveries (id, request_id, channel, recipient, status, provider, created_at)
-               VALUES (?, ?, ?, ?, 'suppressed', ?, ?)`,
-              [id(), requestId, date.channel, destinatar.adresa, adaptor.nume, acum()],
-            )
+        for (const d of lista) {
+          if (d.opted_out === 1) {
+            await ruleaza(env.DB, `INSERT INTO deliveries (id, request_id, channel, recipient, status, provider, created_at, user_id) VALUES (?, ?, 'email', ?, 'suppressed', ?, ?, ?)`, [id(), requestId, d.adresa, postas.nume, acum(), d.user_id])
             suprimate++
             continue
           }
-
-          const rezultat = await adaptor.livreaza({
-            channel: date.channel,
-            recipient: destinatar.adresa,
-            subject: model.subject ? completeaza(model.subject, date.variables) : null,
-            body: completeaza(model.body, date.variables),
+          const corp = completeaza(model.body, date.variables)
+          const rezultat = await postas.trimite({
+            catre: d.adresa,
+            subiect: model.subject ? completeaza(model.subject, date.variables) : '(fără subiect)',
+            text: corp,
             correlationId: date.correlationId,
           })
-
-          await ruleaza(
-            env.DB,
-            `INSERT INTO deliveries (id, request_id, channel, recipient, status, provider, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [id(), requestId, date.channel, destinatar.adresa, rezultat.status, adaptor.nume, acum()],
-          )
+          await ruleaza(env.DB, `INSERT INTO deliveries (id, request_id, channel, recipient, status, provider, created_at, user_id, detaliu) VALUES (?, ?, 'email', ?, ?, ?, ?, ?, ?)`, [id(), requestId, d.adresa, rezultat.stare, postas.nume, acum(), d.user_id, rezultat.detaliu.slice(0, 300)])
           inregistrate++
         }
+        log.info('cerere de comunicare procesata', { requestId, inregistrate, suprimate, adaptor: postas.nume })
+        return json({ ok: true, requestId, inregistrate, suprimate, adaptor: postas.nume })
+      }
 
-        log.info('cerere de comunicare procesata', {
-          requestId,
-          inregistrate,
-          suprimate,
-          adaptor: adaptor.nume,
-        })
+      // ------------------------------------------------------------ scrisoare compusa de o aplicatie
+      if (cale === '/trimite') {
+        const date = CerereTrimitere.parse(await req.json())
+        const existent = await unul<{ id: string }>(env.DB, `SELECT id FROM requests WHERE idempotency_key = ?`, [date.idempotencyKey])
+        if (existent) return json({ ok: true, requestId: existent.id, reluat: true })
 
-        return json({ ok: true, requestId, inregistrate, suprimate, adaptor: adaptor.nume })
+        const requestId = id()
+        await ruleaza(
+          env.DB,
+          `INSERT INTO requests (id, audience_id, template_id, channel, idempotency_key, correlation_id, created_at, sursa, subject, body_html, test, meta_json)
+           VALUES (?, ?, ?, 'email', ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [requestId, `direct:${date.sursa}`, date.sursa, date.idempotencyKey, date.correlationId, acum(), date.sursa, date.subiect, date.html, date.test ? 1 : 0, JSON.stringify(date.meta)],
+        )
+        const postas = alegePostasul(env, livrareReala, (m) => log.warn(m))
+        const text = date.text ?? textDinHtml(date.html)
+        const livrari: Array<{ userId: string | null; adresa: string; stare: string }> = []
+        for (const d of date.destinatari) {
+          if (await eOprit(env.DB, d.userId, 'email')) {
+            await ruleaza(env.DB, `INSERT INTO deliveries (id, request_id, channel, recipient, status, provider, created_at, user_id) VALUES (?, ?, 'email', ?, 'suppressed', ?, ?, ?)`, [id(), requestId, d.adresa, postas.nume, acum(), d.userId])
+            livrari.push({ userId: d.userId, adresa: d.adresa, stare: 'suppressed' })
+            continue
+          }
+          const rezultat = await postas.trimite({ catre: d.adresa, subiect: date.subiect, text, html: date.html, raspundeLa: date.raspundeLa, correlationId: date.correlationId })
+          await ruleaza(env.DB, `INSERT INTO deliveries (id, request_id, channel, recipient, status, provider, created_at, user_id, detaliu) VALUES (?, ?, 'email', ?, ?, ?, ?, ?, ?)`, [id(), requestId, d.adresa, rezultat.stare, postas.nume, acum(), d.userId, rezultat.detaliu.slice(0, 300)])
+          livrari.push({ userId: d.userId, adresa: d.adresa, stare: rezultat.stare })
+        }
+        log.info('scrisoare trimisa', { requestId, sursa: date.sursa, destinatari: livrari.length, adaptor: postas.nume })
+        return json({ ok: true, requestId, adaptor: postas.nume, livrari })
+      }
+
+      // ------------------------------------------------------------ audiente (abonari)
+      if (cale === '/audiente/inscrie') {
+        const date = z
+          .object({ audienceId: z.string().regex(/^[a-z0-9-]+$/), nume: z.string().min(1).max(120).optional(), userId: z.string().min(1), channel: z.enum(['email', 'whatsapp']).default('email'), adresa: z.string().min(3) })
+          .parse(await req.json())
+        await ruleaza(env.DB, `INSERT OR IGNORE INTO audiences (id, nume, descriere, created_at) VALUES (?, ?, NULL, ?)`, [date.audienceId, date.nume ?? date.audienceId, acum()])
+        await ruleaza(
+          env.DB,
+          `INSERT INTO audience_members (audience_id, user_id, channel, adresa, created_at) VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT (audience_id, user_id, channel) DO UPDATE SET adresa = excluded.adresa`,
+          [date.audienceId, date.userId, date.channel, date.adresa, acum()],
+        )
+        await ruleaza(env.DB, `INSERT INTO preferences (user_id, channel, opted_out, updated_at) VALUES (?, ?, 0, ?) ON CONFLICT (user_id, channel) DO UPDATE SET opted_out = 0, updated_at = excluded.updated_at`, [date.userId, date.channel, acum()])
+        return json({ ok: true })
+      }
+
+      if (cale === '/audiente/scoate') {
+        const date = z.object({ audienceId: z.string().min(1), userId: z.string().min(1), channel: z.enum(['email', 'whatsapp']).default('email') }).parse(await req.json())
+        await ruleaza(env.DB, `DELETE FROM audience_members WHERE audience_id = ? AND user_id = ? AND channel = ?`, [date.audienceId, date.userId, date.channel])
+        return json({ ok: true })
+      }
+
+      if (cale === '/audiente/membri') {
+        const date = z.object({ audienceId: z.string().min(1), userId: z.string().min(1).optional() }).parse(await req.json())
+        const membri = date.userId
+          ? await toate(env.DB, `SELECT user_id, channel, adresa, created_at FROM audience_members WHERE audience_id = ? AND user_id = ?`, [date.audienceId, date.userId])
+          : await toate(env.DB, `SELECT user_id, channel, adresa, created_at FROM audience_members WHERE audience_id = ? ORDER BY created_at DESC`, [date.audienceId])
+        return json({ membri })
+      }
+
+      // ------------------------------------------------------------ arhiva
+      if (cale === '/istoric') {
+        const date = z.object({ sursa: z.string().min(1), limita: z.number().int().min(1).max(200).default(50), id: z.string().optional() }).parse(await req.json())
+        if (date.id) {
+          const cerere = await unul(env.DB, `SELECT id, sursa, subject, body_html, test, meta_json, created_at FROM requests WHERE id = ? AND sursa = ?`, [date.id, date.sursa])
+          if (!cerere) return json({ eroare: 'inexistent' }, 404)
+          const livrari = await toate(env.DB, `SELECT user_id, recipient, status, provider, detaliu, created_at FROM deliveries WHERE request_id = ? ORDER BY created_at`, [date.id])
+          return json({ cerere, livrari })
+        }
+        const cereri = await toate(
+          env.DB,
+          `SELECT r.id, r.subject, r.test, r.meta_json, r.created_at,
+                  (SELECT count(*) FROM deliveries d WHERE d.request_id = r.id) AS destinatari,
+                  (SELECT count(*) FROM deliveries d WHERE d.request_id = r.id AND d.status = 'failed') AS esuate
+           FROM requests r WHERE r.sursa = ? ORDER BY r.created_at DESC LIMIT ?`,
+          [date.sursa, date.limita],
+        )
+        return json({ cereri })
       }
 
       if (cale === '/livrari') {
-        const date = z.object({ limita: z.number().int().min(1).max(200).default(50) })
-          .parse(await req.json().catch(() => ({})))
+        const date = z.object({ limita: z.number().int().min(1).max(200).default(50) }).parse(await req.json().catch(() => ({})))
         const randuri = await toate(
           env.DB,
           `SELECT d.channel, d.recipient, d.status, d.provider, d.created_at, r.template_id
-           FROM deliveries d JOIN requests r ON r.id = d.request_id
-           ORDER BY d.created_at DESC LIMIT ?`,
+           FROM deliveries d JOIN requests r ON r.id = d.request_id ORDER BY d.created_at DESC LIMIT ?`,
           [date.limita],
         )
         return json({ livrari: randuri })
       }
 
       if (cale === '/preferinte') {
-        const date = z
-          .object({
-            userId: z.string().min(1),
-            channel: z.enum(['email', 'whatsapp']),
-            optedOut: z.boolean(),
-          })
-          .parse(await req.json())
-
+        const date = z.object({ userId: z.string().min(1), channel: z.enum(['email', 'whatsapp']), optedOut: z.boolean() }).parse(await req.json())
         await ruleaza(
           env.DB,
-          `INSERT INTO preferences (user_id, channel, opted_out, updated_at)
-           VALUES (?, ?, ?, ?)
+          `INSERT INTO preferences (user_id, channel, opted_out, updated_at) VALUES (?, ?, ?, ?)
            ON CONFLICT (user_id, channel) DO UPDATE SET opted_out = excluded.opted_out, updated_at = excluded.updated_at`,
           [date.userId, date.channel, date.optedOut ? 1 : 0, acum()],
         )
@@ -205,9 +223,7 @@ export default {
 
       return json({ eroare: 'ruta necunoscuta' }, 404)
     } catch (e) {
-      if (e instanceof z.ZodError) {
-        return json({ eroare: 'date invalide', detalii: e.issues.map((i) => i.message) }, 400)
-      }
+      if (e instanceof z.ZodError) return json({ eroare: 'date invalide', detalii: e.issues.map((i) => i.message) }, 400)
       log.error('eroare neasteptata', { eroare: e instanceof Error ? e.message : String(e) })
       return json({ eroare: 'eroare interna' }, 500)
     }

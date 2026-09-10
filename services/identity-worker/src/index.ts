@@ -8,6 +8,7 @@ import {
   redacteaza,
 } from '@xc/contracts'
 import { citesteConfig, permiteLinkDebug } from '@xc/config'
+import { toate } from '@xc/db'
 import { Logger, correlationId } from '@xc/observability'
 import { DURATA_LINK_SEC, DURATA_SESIUNE_SEC } from './jetoane.js'
 import {
@@ -376,6 +377,51 @@ export default {
             .parse(await req.json())
           await actualizeazaNume(env.DB, date.userId, date.displayName)
           return json({ ok: true })
+        }
+
+        // -------------------------------------------------------------------
+        // Contul unei adrese, pentru o alta aplicatie a platformei (legatura de serviciu,
+        // niciodata din browser). Daca adresa n-are cont, i se face unul — e drumul prin care
+        // listele de persoane din V1 (ex. voluntarii de la curatenie) isi gasesc locul UNIC,
+        // aici, nu in bazele aplicatiilor. Omul intra apoi ca oricine: email -> link.
+        case '/utilizatori/asigura': {
+          const date = z
+            .object({ email: CerereIntrare.shape.email, displayName: NumeAfisat.optional(), sursa: z.string().min(1).default('import') })
+            .parse(await req.json())
+          const existent = await utilizatorDupaEmail(env.DB, date.email)
+          if (existent) {
+            if (date.displayName && !existent.display_name) await actualizeazaNume(env.DB, existent.id, date.displayName)
+            return json({ userId: existent.id, creat: false })
+          }
+          const creare = await creeazaUtilizatorConfirmat(env.DB, date.email, date.displayName ?? null)
+          if (creare.fel === 'creat') {
+            await atribuieRol(env, creare.utilizator.id, 'user', cid)
+            await scrieAudit(env, log, {
+              action: 'identity.import',
+              target: creare.utilizator.id,
+              outcome: 'success',
+              correlationId: cid,
+              summary: { sursa: date.sursa },
+            })
+          }
+          return json({ userId: creare.utilizator.id, creat: creare.fel === 'creat' })
+        }
+
+        // -------------------------------------------------------------------
+        // Cine sunt acesti utilizatori: id, email, nume afisat. Pentru aplicatiile care tin doar
+        // `user_id` si au nevoie de nume la afisare sau de adresa la trimitere.
+        case '/utilizatori/dupa-id': {
+          const date = z.object({ ids: z.array(z.string().min(1)).max(500) }).parse(await req.json())
+          if (!date.ids.length) return json({ utilizatori: [] })
+          const semne = date.ids.map(() => '?').join(', ')
+          const randuri = await toate<{ id: string; email: string; display_name: string | null; disabled_at: string | null }>(
+            env.DB,
+            `SELECT id, email, display_name, disabled_at FROM users WHERE id IN (${semne})`,
+            date.ids,
+          )
+          return json({
+            utilizatori: randuri.map((r) => ({ id: r.id, email: r.email, displayName: r.display_name, disabledAt: r.disabled_at })),
+          })
         }
 
         // -------------------------------------------------------------------

@@ -19,7 +19,9 @@ const BAZE = [
   { director: 'identity', config: 'services/identity-worker/wrangler.jsonc', binding: 'DB' },
   { director: 'authz', config: 'services/authorization-worker/wrangler.jsonc', binding: 'DB' },
   { director: 'audit', config: 'services/audit-worker/wrangler.jsonc', binding: 'DB' },
+  { director: 'calendar', config: 'apps/calendar/wrangler.jsonc', binding: 'DB' },
   { director: 'program', config: 'apps/program/wrangler.jsonc', binding: 'DB' },
+  { director: 'curatenie', config: 'apps/curatenie/wrangler.jsonc', binding: 'DB' },
   { director: 'communication', config: 'services/communication-worker/wrangler.jsonc', binding: 'DB' },
   { director: 'automation', config: 'services/automation-worker/wrangler.jsonc', binding: 'DB' },
 ]
@@ -29,6 +31,12 @@ const local = argumente.includes('--local')
 const remote = argumente.includes('--remote')
 const indexEnv = argumente.indexOf('--env')
 const mediu = indexEnv >= 0 ? argumente[indexEnv + 1] : null
+/**
+ * `--doar identity,calendar` — migreaza numai bazele numite. Pe remote conteaza: o migratie care
+ * schimba forma unei baze citite de un worker DEJA publicat il strica pana la publicarea celui nou.
+ */
+const indexDoar = argumente.indexOf('--doar')
+const doar = indexDoar >= 0 ? (argumente[indexDoar + 1] ?? '').split(',').map((s) => s.trim()).filter(Boolean) : null
 
 if (local === remote) {
   console.error('Alege exact una: --local sau --remote')
@@ -50,6 +58,7 @@ function numeBazaDin(director) {
 let totalFisiere = 0
 
 for (const baza of BAZE) {
+  if (doar && !doar.includes(baza.director)) continue
   const cale = join(RADACINA, 'infrastructure/migrations', baza.director)
   const fisiere = readdirSync(cale)
     .filter((f) => f.endsWith('.sql'))

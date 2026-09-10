@@ -86,17 +86,18 @@ describe('redactare', () => {
 describe('evenimente', () => {
   const valid = {
     id: crypto.randomUUID(),
-    type: 'program.event.published.v1',
+    type: 'program.week.validated.v1',
     occurredAt: new Date().toISOString(),
     producer: 'app-program',
     actor: { type: 'user', id: 'u1' },
     correlationId: 'c1',
     payload: {
-      eventId: 'e1',
-      title: 'Vecernie',
-      startsAt: new Date().toISOString(),
-      endsAt: null,
-      status: 'published',
+      luni: '2026-09-07',
+      duminica: '2026-09-13',
+      stare: 'validat',
+      titlu: '7 – 13 septembrie 2026',
+      versiuneCalendar: '2026-09-01.1',
+      slujbe: 5,
     },
   }
 

@@ -27,11 +27,11 @@ const SEED = [
 
       INSERT OR IGNORE INTO templates (id, version, channel, subject, body, created_at)
       VALUES (
-        'eveniment-publicat', 1, 'email',
-        'Un eveniment nou: {{titlu}}',
+        'program-validat', 1, 'email',
+        'Programul liturgic: {{saptamana}}',
         'Bună,
 
-În programul parohiei a fost publicat un eveniment nou: {{titlu}}, pe {{inceput}}.
+Programul liturgic al săptămânii {{saptamana}} a fost validat și se poate consulta pe platforma parohiei.
 
 Doamne ajută!',
         '${ACUM}'
@@ -39,8 +39,8 @@ Doamne ajută!',
 
       INSERT OR IGNORE INTO templates (id, version, channel, subject, body, created_at)
       VALUES (
-        'eveniment-publicat', 1, 'whatsapp', NULL,
-        'Eveniment nou în programul parohiei: {{titlu}}, pe {{inceput}}.',
+        'program-validat', 1, 'whatsapp', NULL,
+        'Programul liturgic al săptămânii {{saptamana}} a fost validat.',
         '${ACUM}'
       );
 
@@ -56,9 +56,9 @@ Doamne ajută!',
     sql: `
       INSERT OR IGNORE INTO rules (id, nume, declansator, risc, proprietar, activa, created_at)
       VALUES (
-        'notificare-eveniment-publicat',
-        'Anunță audiența când un eveniment de program e publicat',
-        'program.event.published.v1',
+        'notificare-program-validat',
+        'Anunță audiența când programul unei săptămâni e validat',
+        'program.week.validated.v1',
         'low', 'program', 1, '${ACUM}'
       );
     `,

@@ -1,15 +1,16 @@
 {
   "name": "@xc/app-program",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "lint": "tsc --noEmit",
     "deploy:staging": "wrangler deploy --env staging"
   },
   "dependencies": {
+    "@cloudflare/puppeteer": "^1.4.0",
     "@xc/auth": "workspace:*",
     "@xc/authorization": "workspace:*",
     "@xc/config": "workspace:*",

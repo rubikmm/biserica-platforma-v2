@@ -1,9 +1,8 @@
 {
-  // Programul liturgic (A2 din V1): ce se slujeste efectiv, la ce ora. A doua sursa de adevar a
-  // platformei; produce foaia A4 de pe usa. Proprietara datelor ei (`xc-program-*`).
-  // Ziua liturgica o cere de la calendar (legatura de serviciu), nu o tine.
+  // Calendarul ortodox (A1 din V1): ce zi liturgica e. Nucleul de citire al platformei —
+  // celelalte aplicatii intreaba aici. Proprietara datelor ei (`xc-calendar-*`).
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "xc-program",
+  "name": "xc-calendar",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-25",
   "compatibility_flags": ["nodejs_compat"],
@@ -14,15 +13,18 @@
     "MEDIU": "dev",
     "ORIGINE_PUBLICA": "https://rubik:8474",
     "DOMENIU_COOKIE": "",
-    "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
+    "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
+    // Textul pericopelor vine din Biblia platformei (A10), nu din calendar. Pana la portarea
+    // lui A10 in V2, adresa e cea a aplicatiei V1 — se citeste doar, nu se scrie nimic acolo.
+    "URL_BIBLIA": "https://biblia.sfantul-ilie.ro"
   },
 
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "xc-program-staging",
-      "database_id": "8a65cb26-a3c8-4b39-ba98-da0997509bbf",
-      "migrations_dir": "../../infrastructure/migrations/program"
+      "database_name": "xc-calendar-staging",
+      "database_id": "a51b9790-4255-4d60-853d-d2a3ad6ba5e9",
+      "migrations_dir": "../../infrastructure/migrations/calendar"
     }
   ],
 
@@ -30,16 +32,8 @@
     { "binding": "IDENTITATE", "service": "xc-identity" },
     { "binding": "AUTORIZARE", "service": "xc-authz" },
     { "binding": "AUDIT", "service": "xc-audit" },
-    { "binding": "CALENDAR", "service": "xc-calendar" },
     { "binding": "COMUNICARE", "service": "xc-communication" }
   ],
-
-  // Browser Rendering (Chrome pe Cloudflare) — foaia A4 ca PDF/JPG si foaia sfintilor zilei.
-  // Local, `wrangler dev` porneste un Chrome al lui (are nevoie de bibliotecile Chrome in container).
-  "browser": { "binding": "BROWSER" },
-
-  // Resursele foii A4 (resurse/: chenarul, crucea, fonturile) intra in Worker ca octeti.
-  "rules": [{ "type": "Data", "globs": ["**/*.png", "**/*.otf", "**/*.ttf"], "fallthrough": true }],
 
   "queues": {
     "producers": [{ "binding": "EVENIMENTE", "queue": "xc-events-staging" }]
@@ -51,55 +45,54 @@
 
   "env": {
     "staging": {
-      "name": "xc-program-staging",
+      "name": "xc-calendar-staging",
       "vars": {
         "MEDIU": "staging",
-        "ORIGINE_PUBLICA": "https://program.staging.sfantul-ilie.ro",
+        "ORIGINE_PUBLICA": "https://calendar.staging.sfantul-ilie.ro",
         "DOMENIU_COOKIE": ".staging.sfantul-ilie.ro",
         "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
         "URL_CONT": "https://cont.staging.sfantul-ilie.ro",
         "URL_CALENDAR": "https://calendar.staging.sfantul-ilie.ro",
         "URL_PROGRAM": "https://program.staging.sfantul-ilie.ro",
         "URL_CURATENIE": "https://curatenie.staging.sfantul-ilie.ro",
-        "URL_ADMIN": "https://admin.staging.sfantul-ilie.ro"
+        "URL_ADMIN": "https://admin.staging.sfantul-ilie.ro",
+        "URL_BIBLIA": "https://biblia.sfantul-ilie.ro"
       },
       "d1_databases": [
         {
           "binding": "DB",
-          "database_name": "xc-program-staging",
-          "database_id": "8a65cb26-a3c8-4b39-ba98-da0997509bbf",
-          "migrations_dir": "../../infrastructure/migrations/program"
+          "database_name": "xc-calendar-staging",
+          "database_id": "a51b9790-4255-4d60-853d-d2a3ad6ba5e9",
+          "migrations_dir": "../../infrastructure/migrations/calendar"
         }
       ],
       "services": [
         { "binding": "IDENTITATE", "service": "xc-identity-staging" },
         { "binding": "AUTORIZARE", "service": "xc-authz-staging" },
         { "binding": "AUDIT", "service": "xc-audit-staging" },
-        { "binding": "CALENDAR", "service": "xc-calendar-staging" },
         { "binding": "COMUNICARE", "service": "xc-communication-staging" }
       ],
-      "browser": { "binding": "BROWSER" },
       "queues": {
         "producers": [{ "binding": "EVENIMENTE", "queue": "xc-events-staging" }]
       },
       "triggers": { "crons": ["*/5 * * * *"] },
-      "routes": [{ "pattern": "program.staging.sfantul-ilie.ro", "custom_domain": true }]
+      "routes": [{ "pattern": "calendar.staging.sfantul-ilie.ro", "custom_domain": true }]
     },
     "production": {
-      "name": "xc-program-production",
+      "name": "xc-calendar-production",
       "vars": {
         "MEDIU": "production",
-        "ORIGINE_PUBLICA": "https://program.sfantul-ilie.ro",
+        "ORIGINE_PUBLICA": "https://calendar.sfantul-ilie.ro",
         "DOMENIU_COOKIE": ".sfantul-ilie.ro",
         "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
         "URL_CONT": "https://cont.sfantul-ilie.ro",
         "URL_CALENDAR": "https://calendar.sfantul-ilie.ro",
         "URL_PROGRAM": "https://program.sfantul-ilie.ro",
         "URL_CURATENIE": "https://curatenie.sfantul-ilie.ro",
-        "URL_ADMIN": "https://admin.sfantul-ilie.ro"
-      },
-      "browser": { "binding": "BROWSER" }
-      // Ruta de productie (`program.sfantul-ilie.ro`) e a lui A2 pana la cutover-ul explicit.
+        "URL_ADMIN": "https://admin.sfantul-ilie.ro",
+        "URL_BIBLIA": "https://biblia.sfantul-ilie.ro"
+      }
+      // Ruta de productie (`calendar.sfantul-ilie.ro`) e a lui A1 pana la cutover-ul explicit.
     }
   }
 }

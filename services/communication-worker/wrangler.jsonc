@@ -1,6 +1,7 @@
 {
   // Singurul serviciu care VA avea vreodata dreptul sa livreze email/WhatsApp.
-  // In faza asta ambele adaptoare sunt sandbox: nu pleaca nimic in exterior.
+  // Cat timp LIVRARE_REALA nu e „da", totul merge in sandbox: se inregistreaza, nu pleaca nimic.
+  // Cand se porneste, emailul merge prin Cloudflare Email Service (binding `send_email`), ca la identitate.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "xc-communication",
   "main": "src/index.ts",
@@ -27,7 +28,14 @@
   "env": {
     "staging": {
       "name": "xc-communication-staging",
-      "vars": { "MEDIU": "staging", "LIVRARE_REALA": "nu" },
+      "vars": {
+        "MEDIU": "staging",
+        // Ramane „nu" pana la portarea lui A7 (decizie: comunicarea reala abia atunci).
+        "LIVRARE_REALA": "nu",
+        "POSTA_DE_LA": "no-reply@posta.sfantul-ilie.ro",
+        "POSTA_NUME": "Biserica Sfântul Ilie – Hanul Colței"
+      },
+      "send_email": [{ "name": "POSTA" }],
       "d1_databases": [
         {
           "binding": "DB",
@@ -39,7 +47,13 @@
     },
     "production": {
       "name": "xc-communication-production",
-      "vars": { "MEDIU": "production", "LIVRARE_REALA": "nu" }
+      "vars": {
+        "MEDIU": "production",
+        "LIVRARE_REALA": "nu",
+        "POSTA_DE_LA": "no-reply@posta.sfantul-ilie.ro",
+        "POSTA_NUME": "Biserica Sfântul Ilie – Hanul Colței"
+      },
+      "send_email": [{ "name": "POSTA" }]
     }
   }
 }

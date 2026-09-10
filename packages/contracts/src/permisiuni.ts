@@ -7,6 +7,7 @@ import { z } from 'zod'
 export const CHEI_PERMISIUNI = [
   'identity.manage',
   'roles.manage',
+  'calendar.manage',
   'program.read',
   'program.write',
   'program.publish',
@@ -48,6 +49,7 @@ export const SCOPE_GLOBAL = 'global' satisfies Scope
 export const PERMISIUNI_IMPLICITE: Record<Rol, readonly Permisiune[]> = {
   user: ['program.read'],
   admin: [
+    'calendar.manage',
     'program.read',
     'program.write',
     'program.publish',

@@ -2,9 +2,10 @@ import { z } from 'zod'
 
 /** Tipurile de evenimente publicate in aceasta faza. Versionate explicit, cu `.vN` in nume. */
 export const TIPURI_EVENIMENTE = [
-  'program.event.created.v1',
-  'program.event.updated.v1',
-  'program.event.published.v1',
+  'calendar.corrected.v1',
+  'program.week.validated.v1',
+  'program.week.changed.v1',
+  'cleaning.assignment.changed.v1',
   'user.notification_preferences_changed.v1',
   'communication.delivery.requested.v1',
   'automation.action.proposed.v1',
@@ -40,12 +41,33 @@ export type Envelope = z.infer<typeof Envelope>
 // Payload-urile, per tip de eveniment
 // ---------------------------------------------------------------------------
 
-export const PayloadEvenimentProgram = z.object({
-  eventId: z.string().min(1),
-  title: z.string().min(1),
-  startsAt: z.iso.datetime(),
-  endsAt: z.iso.datetime().nullable(),
-  status: z.enum(['draft', 'published', 'archived']),
+const Data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+
+/** A1 a schimbat zile deja publicate: consumatorii recitesc intervalul, nu rescriu singuri. */
+export const PayloadCalendarCorectat = z.object({
+  deLa: Data,
+  panaLa: Data,
+  versiuneCalendar: z.string().min(1),
+  motiv: z.string().default(''),
+})
+
+/** O saptamana de program validata sau schimbata dupa validare. */
+export const PayloadSaptamanaProgram = z.object({
+  luni: Data,
+  duminica: Data,
+  stare: z.enum(['propus', 'validat', 'modificat_dupa_validare']),
+  titlu: z.string().min(1),
+  versiuneCalendar: z.string().nullable(),
+  slujbe: z.number().int().nonnegative(),
+})
+
+/** O programare la curatenie s-a schimbat (ocupat / eliberat / mutat). */
+export const PayloadProgramareCuratenie = z.object({
+  data: Data,
+  pozitie: z.number().int().positive(),
+  fel: z.enum(['ocupat', 'eliberat', 'mutat', 'atribuit_de_admin']),
+  voluntarId: z.number().int().positive(),
+  locuriLibere: z.number().int().nonnegative(),
 })
 
 export const PayloadPreferinteNotificare = z.object({
@@ -71,9 +93,10 @@ export const PayloadActiuneAutomata = z.object({
 })
 
 const SCHEME_PAYLOAD = {
-  'program.event.created.v1': PayloadEvenimentProgram,
-  'program.event.updated.v1': PayloadEvenimentProgram,
-  'program.event.published.v1': PayloadEvenimentProgram,
+  'calendar.corrected.v1': PayloadCalendarCorectat,
+  'program.week.validated.v1': PayloadSaptamanaProgram,
+  'program.week.changed.v1': PayloadSaptamanaProgram,
+  'cleaning.assignment.changed.v1': PayloadProgramareCuratenie,
   'user.notification_preferences_changed.v1': PayloadPreferinteNotificare,
   'communication.delivery.requested.v1': PayloadCerereLivrare,
   'automation.action.proposed.v1': PayloadActiuneAutomata,

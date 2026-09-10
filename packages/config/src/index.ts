@@ -20,11 +20,13 @@ export const VariabileComune = z.object({
   EMAIL_SUPERADMIN: z.string().default(''),
   /**
    * Unde stau celelalte aplicatii, pentru antet si redirecturi. In dev (un singur host, prin
-   * gateway) sunt cai: `/`, `/program`, `/admin`. In staging/productie sunt origini absolute,
-   * cate un subdomeniu de aplicatie. Goale = caile de dev.
+   * gateway) sunt cai: `/`, `/calendar`, `/program`, `/curatenie`, `/admin`. In
+   * staging/productie sunt origini absolute, cate un subdomeniu de aplicatie. Goale = caile de dev.
    */
   URL_CONT: z.string().default(''),
+  URL_CALENDAR: z.string().default(''),
   URL_PROGRAM: z.string().default(''),
+  URL_CURATENIE: z.string().default(''),
   URL_ADMIN: z.string().default(''),
 })
 export type VariabileComune = z.infer<typeof VariabileComune>
@@ -42,16 +44,31 @@ export function citesteConfig(env: unknown): VariabileComune {
 /** Adresele celorlalte aplicatii, cu implicitul de dev (cai pe acelasi host). */
 export interface Navigatie {
   cont: string
+  calendar: string
   program: string
+  curatenie: string
   admin: string
 }
 
 export function navigatieDin(cfg: VariabileComune): Navigatie {
   return {
     cont: cfg.URL_CONT || '',
+    calendar: cfg.URL_CALENDAR || '/calendar',
     program: cfg.URL_PROGRAM || '/program',
+    curatenie: cfg.URL_CURATENIE || '/curatenie',
     admin: cfg.URL_ADMIN || '/admin',
   }
+}
+
+/**
+ * Prefixul sub care e montata aplicatia in cererea curenta. Prin gateway-ul de preview fiecare
+ * aplicatie sta sub calea ei (`/calendar`, `/program`…); pe subdomeniul propriu e la radacina.
+ * Se taie o singura data, aici, si se poarta mai departe pentru linkuri.
+ */
+export function prefixSiCale(url: URL, montaj: string): { prefix: string; cale: string } {
+  const arePrefix = url.pathname === montaj || url.pathname.startsWith(`${montaj}/`)
+  if (!arePrefix) return { prefix: '', cale: url.pathname }
+  return { prefix: montaj, cale: url.pathname.slice(montaj.length) || '/' }
 }
 
 export function eProductie(cfg: VariabileComune): boolean {
