@@ -88,7 +88,30 @@ export function bazaStaging(databaseId) {
  */
 const OCTETI_PE_LOT = 400_000
 
+/**
+ * Semnul ca un text s-a stricat pe drum: U+FFFD, semnul de inlocuire. Apare cand o litera cu
+ * diacritice (doi octeti in UTF-8) e citita cu alta codificare ori taiata in doua — la exportul
+ * programului din V1, pe 10.09.2026, s-au stricat asa cinci texte („pr??znuirea" in loc de
+ * „prăznuirea"), si s-au vazut abia in pagina, dupa doua zile. De aceea se striga la import, nu dupa.
+ */
+function strigaTexteleStricate(tabela, coloane, randuri) {
+  const stricate = []
+  for (const r of randuri) {
+    for (const c of coloane) {
+      if (typeof r[c] === 'string' && r[c].includes('�')) stricate.push(`${c}: ${r[c].slice(0, 90)}`)
+    }
+  }
+  if (stricate.length) {
+    console.error(`\n⚠️  ${tabela}: ${stricate.length} texte au semnul de inlocuire (U+FFFD) — s-au stricat INAINTE de scriere:`)
+    for (const s of stricate.slice(0, 5)) console.error(`    ${s}`)
+    if (stricate.length > 5) console.error(`    … si inca ${stricate.length - 5}`)
+    console.error('    Repara exportul si reia — altfel diacriticele astea raman gresite in baza.\n')
+  }
+  return stricate.length
+}
+
 export async function insereazaLoturi(baza, tabela, coloane, randuri, randuriPeLot = null) {
+  strigaTexteleStricate(tabela, coloane, randuri)
   const maxRanduri = randuriPeLot ?? Math.max(1, Math.floor(100 / coloane.length))
   const sql = (n) => `INSERT OR REPLACE INTO ${tabela} (${coloane.join(', ')}) VALUES ${Array.from({ length: n }, () => `(${coloane.map(() => '?').join(', ')})`).join(', ')}`
   let scrise = 0
