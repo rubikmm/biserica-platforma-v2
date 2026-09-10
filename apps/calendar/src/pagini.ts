@@ -676,7 +676,9 @@ export function pozaSaptamaniiHtml(o: {
   randuri: Array<{ r: RandZi; d: RandDesfacut; zi: ZiLiturgica }>
   azi: string
 }): string {
-  const zile = o.randuri.map(({ r, d, zi }) => randZi(o.ctx, r, d, zi, r.data === o.azi)).join('')
+  // Ziua de azi NU se marcheaza in poza (user, 10.09.2026): poza pleaca pe WhatsApp si se uita la ea
+  // si peste trei zile — un semn „azi" ar minti. Pe pagina, unde se vede acum, marcajul ramane.
+  const zile = o.randuri.map(({ r, d, zi }) => randZi(o.ctx, r, d, zi, false)).join("")
   return `<!doctype html><html lang="ro" data-tema="dark"><head><meta charset="utf-8"><title>Calendarul săptămânii ${esc(o.eticheta)}</title>
 <style>${STIL_COMUN}${LOCAL}
 /* Poza iese pe temă închisă (cerere user, 10.09.2026): se trimite pe WhatsApp și se citește pe
