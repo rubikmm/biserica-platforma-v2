@@ -364,9 +364,10 @@ export function sfintiiHtml(o: { data: string; zi: ZiPeProgram; sinaxar: string 
   // marunt (semnalat de user, 10.09.2026, la comparatia cu foile V1).
   const titlu = o.zi.denumire ? `<h1>${esc(o.zi.denumire)}</h1>` : ''
   const sfinti = o.zi.sfinti.map((s) => `<li class="${s.rang === 'praznic_imparatesc' || s.rang === 'cruce_rosie' ? 'rosu' : s.rang === 'cruce_albastra' ? 'albastru' : ''}">${esc(`${s.semn ? `${s.semn} ` : ''}${s.nume}`)}</li>`).join('')
+  // Randul marunt de sub lista NU poarta pericopele: Apostolul si Evanghelia au fost scoase la cererea
+  // userului (10.09.2026) — foaia se citeste cu glas tare la sfarsitul Liturghiei, unde pericopele
+  // tocmai s-au citit. Raman glasul/voscreasna, postul si notele zilei.
   const rand: string[] = []
-  if (o.zi.pericope.apostol) rand.push(`Ap. ${esc(o.zi.pericope.apostol)}`)
-  if (o.zi.pericope.evanghelie) rand.push(`Ev. ${esc(o.zi.pericope.evanghelie)}`)
   if (o.zi.glas) rand.push(`glas ${o.zi.glas}${o.zi.evanghelia_invierii ? `, voscr. ${o.zi.evanghelia_invierii}` : ''}`)
   if (o.zi.post.este) rand.push(`post${o.zi.post.dezlegare !== 'niciuna' ? ` · ${o.zi.post.dezlegare.replaceAll('_', ' ')}` : ''}`)
   for (const n of o.zi.note) rand.push(esc(n))
@@ -383,15 +384,14 @@ ul { padding-left: 1.2em; margin: 0 0 6mm; } li { font-size: 15pt; line-height: 
 li.rosu { color: #c00000; } li.albastru { color: #1c58bb; }
 .rand { font-family: "Carlito", Calibri, sans-serif; font-size: 12pt; color: #333; }
 .text { margin-top: 8mm; font-size: 12pt; line-height: 1.45; } .text h3 { font-size: 13pt; margin: 6mm 0 2mm; } .text h4 { color:#7f7f7f; margin: 4mm 0 1mm; }
-.subsol { position: fixed; bottom: 6mm; left: 18mm; right: 18mm; display: flex; justify-content: space-between; font-family: "Carlito", sans-serif; font-size: 9pt; color: #7f7f7f; }
+/* Fara subsol: numele parohiei si adresa sitului au fost scoase la cererea userului (10.09.2026). */
 </style></head><body>
 <p class="parohia">${esc(PAROHIA)} · Sfinții zilei</p>
 <p class="cand">${esc(cand)}</p>
 ${titlu}
 <ul>${sfinti}</ul>
-<p class="rand">${rand.join(' · ')}</p>
+${rand.length ? `<p class="rand">${rand.join(' · ')}</p>` : ''}
 ${sinaxar}
-<div class="subsol"><span>${esc(PAROHIA)}</span><span>${SITE}</span></div>
 </body></html>`
 }
 // ---------------------------------------------------------------------------
