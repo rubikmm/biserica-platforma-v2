@@ -45,18 +45,35 @@ Etape:
 3. ⏳ **Portarea aplicațiilor**: ✅ calendar (A1), ✅ program (A2), ⏳ curățenie (A6), apoi
    A9/A10 → A3/A8 → A12 → A7 → A5 → A4 → A13 se stinge.
 
-**Programul (A2) = afișarea V1, verbatim** (user, 10.09.2026, 16:30): stilul local, markup-ul și
-textele sunt cele din `biserica-program` (V1, 9 sept.) — abonarea în rândul de unelte + „Informații
-utile", navigarea în cutia atârnată sub linia antetului, Arhiva doar iconiță, „Sfinții zilei" la
-dreapta duminicii, starea la dreapta titlului. Singura abatere, cerută de structura V2: abonarea
-n-are câmp de e-mail (adresa e a contului). **Fără scriere manuală**: pagina `/admin` (scrierea și
-validarea săptămânii) a fost scoasă cu totul — „nu vreau să fac nimic manual" (user, 16:36).
-Programul are săptămânile importate din V1 și propunerea automată, ca în V1.
+**Programul (A2)**: baza afișării e V1 (stilul local, markup-ul și textele din `biserica-program`,
+9 sept.), iar **hârtiile — foaia A4, JPG-ul, „Sfinții zilei" — trebuie să rămână identice cu V1**;
+se compară ușor, punând una lângă alta paginile `/v1/foaie/<luni>.html` din ambele. **Pagina**, în
+schimb, a fost refăcută la cererea userului pe 10.09.2026, seara, și NU mai e cea din V1:
+
+- în antet: **navigarea săptămânii** (trei trepte fixe — trecută · azi · următoare, fiecare o
+  destinație socotită față de ziua de azi, treapta curentă marcată roșu și apăsabilă) și, după o
+  liniuță, **întrerupătorul „Calendar"** (on/off), care a luat locul meniului „Informații utile";
+- **abonarea a ieșit momentan** din interfață (rutele și audiența rămân);
+- sub antet, doar **hârtiile — Arhiva, PDF, JPG — și numai pentru admini**; de aici urmează că
+  istoricul e accesibil doar adminilor, navigarea nefiind un istoric;
+- **calendarul aprins = a doua coloană**, în dreapta programului: titlul zilei, apoi sfinții unul
+  sub altul cu săgeată, fără pericope și fără glas. Ține exact cât navigarea (cele trei săptămâni);
+- în stânga, zilele fără slujbe rămân goale (fără titlu); eticheta de stare se scrie doar când NU e
+  „validat" (adică practic doar „propunere", la săptămâna următoare).
+
+**Fără scriere manuală**: pagina `/admin` (scrierea și validarea săptămânii) a fost scoasă cu totul —
+„nu vreau să fac nimic manual" (user, 16:36). Programul are săptămânile importate din V1 și
+propunerea automată, ca în V1.
 4. ⏳ **Curățenia finală** — se șterge tot ce NU are prefix `xc-`.
 
 ## NEXT
 
-1. **Curățenia (A6)** — schema, sloturile din slujbele programului (`curatenie: true`), rapoartele
+1. ⚠️ **De șters la cererea userului: modul de probă din `program`** (pus 10.09.2026, 18:06, ca să se
+   poată vedea local ce vede un admin — autentificarea nu se poate proba local). Banner cu trei
+   butoane (neautentificat / utilizator / admin), alegerea într-un cookie `proba_rol`, ruta
+   `GET /proba/<rol>`. **Merge doar în dev**; pe staging și în producție e inert. Tot ce ține de el
+   poartă marcajul `⚠️ TEMPORAR` în `apps/program/src/{index,pagini}.ts`.
+2. **Curățenia (A6)** — schema, sloturile din slujbele programului (`curatenie: true`), rapoartele
    prin serviciul de comunicare. Voluntarii devin conturi ale platformei: adresele lor din V1 se
    trec prin `identity /utilizatori/asigura`, iar aplicația ține doar `user_id`.
 2. **Testul real de email**, de către utilizator: `https://cont.staging.sfantul-ilie.ro` → cont nou
@@ -162,3 +179,16 @@ Programul are săptămânile importate din V1 și propunerea automată, ca în V
   arhivă: identice; diferă doar `titlu_html` din calendar). Scoasă scrierea manuală (`/admin`),
   la cererea userului. Arhiva grupează acum după anul zilei de luni, ca V1 (înainte, o săptămână
   călare pe 31 dec. apărea în ambii ani).
+- Seara (17:00–19:00) pagina programului a fost **refăcută**, într-un șir de cereri mărunte ale
+  userului (vezi PLAN): navigarea a urcat în antet ca trei trepte fixe, „Informații utile" a devenit
+  întrerupătorul „Calendar", abonarea a ieșit, hârtiile au rămas doar pentru admini, iar calendarul
+  aprins deschide a doua coloană, cu sfinții. Regula „afișarea = V1 verbatim" **rămâne valabilă doar
+  pentru hârtii**, nu și pentru pagină.
+- **Foaia A4 comparată cap la cap cu V1** (19:00), după ce userul a spus că „nu e la fel de detaliată":
+  textele erau identice, dar liniile tabelului nu. În V1 ziua e o CASETĂ — nicio linie între slujbele
+  aceleiași zile —, piciorul ei e punctat când slujbele se țin lanț peste noapte (Vecernie seara →
+  Liturghie dimineața) și plin în rest, iar șirul de zile fără slujbe se arată printr-o singură bandă
+  gri. V2 trăgea linie între toate rândurile, punea o bandă per zi goală și centra ora pe verticală.
+  Reparat, plus: numele zilei cu majusculă pe foaie, intervalul din casetă calculat mereu (titlurile
+  importate au cratimă în loc de linie de dialog), iar „Sfinții zilei" nu mai repetă titlul zilei
+  (`titlu_html` ține la un loc sfinții, pericopele și glasul — se vedeau de două ori).

@@ -105,6 +105,9 @@ export function randurileSlujbei(
 
 const ZILE_SCURT = ['Du', 'Lu', 'Ma', 'Mi', 'Jo', 'Vi', 'Sâ']
 
+/** „luni" → „Luni": zilele din vocabularul comun sunt cu litera mica, foaia le vrea cu majuscula. */
+const cuMajuscula = (t: string): string => (t ? `${t.charAt(0).toUpperCase()}${t.slice(1)}` : t)
+
 interface ZiFoaie {
   data: string
   eticheta: string
@@ -140,7 +143,9 @@ export function foaieHtml(o: OptiuniFoaie): string {
     const [, l, z] = data.split('-').map(Number) as [number, number, number]
     zile.push({
       data,
-      eticheta: ZILE_SAPTAMANA[zs] ?? '',
+      // numele zilei se scrie cu majuscula, ca in foaia V1 („Luni", nu „luni") — vocabularul comun il
+      // tine cu litera mica (semnalat de user, 10.09.2026, la comparatia PDF-urilor)
+      eticheta: cuMajuscula(ZILE_SAPTAMANA[zs] ?? ''),
       dataText: `${z} ${LUNI[l - 1] ?? ''}`,
       rosie: zs === 0 || (zi ? ziRosie(zi) : false),
       dimineata,
@@ -166,8 +171,18 @@ export function foaieHtml(o: OptiuniFoaie): string {
     return `<div class="nume${dimineata ? ' dimineata' : ''}">${esc(s.nume)}</div>${det}`
   }
 
+  /*
+   * Liniile tabelului, ca in foaia V1 (semnalat de user, 10.09.2026 — „sunt niște detalii de cum sunt
+   * liniile tabelului"). Regula, luata din Wordul parohiei:
+   *   - ziua e o CASETA: intre slujbele aceleiasi zile nu se trage nicio linie;
+   *   - la piciorul zilei linia e PUNCTATA cand slujbele se tin lant peste noapte (Vecernia de seara si
+   *     Liturghia de a doua zi dimineata) — asa se vede ca sunt legate — si PLINA in rest;
+   *   - zilele fara slujbe nu se scriu una cate una: sirul lor rupt se arata printr-o singura banda gri.
+   */
   const corp: string[] = []
-  for (const g of grupe) {
+  let ruptura = false
+  for (let gi = 0; gi < grupe.length; gi++) {
+    const g = grupe[gi]!
     const prima = g[0]!
     const ultima = g[g.length - 1]!
     const zi = o.calendar?.zile.get(prima.data)
@@ -176,9 +191,16 @@ export function foaieHtml(o: OptiuniFoaie): string {
     const eticheta = g.length > 1 ? `${ZILE_SCURT[ziuaSaptamanii(prima.data)]} – ${ZILE_SCURT[ziuaSaptamanii(ultima.data)]}` : prima.eticheta
     const dataText = g.length > 1 ? `${prima.dataText.split(' ')[0]} – ${ultima.dataText}` : prima.dataText
     if (prima.goala) {
-      corp.push(`<tr class="lipsa"><td colspan="3"></td></tr>`)
+      ruptura = true
       continue
     }
+    // o singura banda intre doua zile cu slujbe, oricate zile goale ar fi intre ele (V1: `tr.gol`)
+    if (ruptura && corp.length) corp.push(`<tr class="lipsa"><td colspan="3"></td></tr>`)
+    ruptura = false
+    // ziua urmatoare incepe cu slujba de dimineata, iar asta se termina cu una de seara? => lant
+    const urmatoarea = grupe[gi + 1]?.[0]
+    const seLeaga = !!urmatoarea && !urmatoarea.goala && adaugaZile(ultima.data, 1) === urmatoarea.data
+      && prima.seara.length > 0 && urmatoarea.dimineata.length > 0
     const randuri: string[] = []
     const jumatati: Array<{ slujbe: Slujba[]; dimineata: boolean }> = [
       { slujbe: prima.dimineata, dimineata: true },
@@ -192,12 +214,15 @@ export function foaieHtml(o: OptiuniFoaie): string {
         primulRand = false
         continue
       }
-      j.slujbe.forEach((s, i) => {
-        const lipit = !j.dimineata && i === 0 && prima.dimineata.length > 0 ? ' lipit' : ''
-        randuri.push(`<tr class="${j.dimineata ? 'dim' : 'sea'}${lipit}${eDuminica ? ' dum' : ''}">${primulRand ? `<td class="zi${prima.rosie ? ' rosie' : ''}${eDuminica ? ' dum' : ''}" rowspan="${nrRanduri}"><div class="numezi">${esc(eticheta)}</div><div class="datazi">${esc(dataText)}</div></td>` : ''}<td class="ora">${esc(s.ora)}</td><td class="slujba">${randSlujba(s, zi, maine, j.dimineata)}</td></tr>`)
+      j.slujbe.forEach((s) => {
+        // in interiorul zilei nu se trage nicio linie: dimineata si seara stau in aceeasi caseta alba (V1)
+        randuri.push(`<tr class="${j.dimineata ? 'dim' : 'sea'}${eDuminica ? ' dum' : ''}">${primulRand ? `<td class="zi${prima.rosie ? ' rosie' : ''}${eDuminica ? ' dum' : ''}" rowspan="${nrRanduri}"><div class="numezi">${esc(eticheta)}</div><div class="datazi">${esc(dataText)}</div></td>` : ''}<td class="ora">${esc(s.ora)}</td><td class="slujba">${randSlujba(s, zi, maine, j.dimineata)}</td></tr>`)
         primulRand = false
       })
     }
+    // piciorul zilei: punctat daca se leaga de dimineata urmatoare, plin altfel
+    const ultimulRand = randuri.length - 1
+    if (ultimulRand >= 0) randuri[ultimulRand] = randuri[ultimulRand]!.replace('<tr class="', `<tr class="${seLeaga ? 'jos-lipit' : 'jos-plin'} `)
     corp.push(randuri.join(''))
   }
 
@@ -222,8 +247,11 @@ body { font-family: "Caladea", Cambria, Georgia, serif; color: #000; }
 .caseta { display: inline-block; background: #e6e6e6; box-shadow: 0 .8mm 1.5mm rgba(0,0,0,.35); border-radius: 0 0 2mm 2mm; padding: 1.2mm 8mm; font-size: calc(14pt * var(--f)); font-weight: 700; margin-bottom: 4mm; }
 table.program { width: 175mm; margin: 0 auto; border-collapse: collapse; table-layout: fixed; border-left: 3pt solid #000; border-right: 3pt solid #000; border-top: 1.5pt solid #000; border-bottom: 1.5pt solid #000; }
 col.c-zi { width: 32.5mm; } col.c-ora { width: 20mm; } col.c-slujba { width: 122.5mm; }
-td { vertical-align: middle; padding: calc(1mm * var(--f)) calc(2mm * var(--f)); text-align: left; border-top: .5pt solid #000; }
-td.zi { text-align: center; border-right: .5pt solid #000; }
+/* Fara linie intre randuri: ziua e o caseta, iar liniile se pun doar la piciorul ei (jos-plin /
+   jos-lipit, mai jos) — ca in foaia V1. Continutul sta SUS in celula: ora trebuie sa fie in dreptul
+   numelui slujbei, nu la mijlocul detaliilor. */
+td { vertical-align: top; padding: calc(1mm * var(--f)) calc(2mm * var(--f)); text-align: left; }
+td.zi { text-align: center; vertical-align: middle; border-right: .5pt solid #000; border-bottom: .5pt solid #000; }
 td.zi .numezi { font-size: calc(18pt * var(--f)); font-weight: 700; line-height: 1.1; }
 td.zi.rosie .numezi { color: var(--rosu); }
 td.zi .datazi { font-style: italic; font-size: calc(11pt * var(--f)); color: var(--gri); }
@@ -237,12 +265,16 @@ td.slujba .nume.dimineata { color: var(--rosu); }
 .det.bold { font-weight: 700; }
 .det.rosu { color: var(--rosu); font-weight: 700; }
 tr.banda td.goala { height: calc(5mm * var(--f) * var(--f)); background: var(--gri-deschis); padding: 0; }
-tr.banda.sus td.goala { border-bottom: 1.5pt solid #000; }
+tr.banda.sus td.slujba.goala { border-bottom: 1.5pt solid #000; }
 tr.banda.jos td.slujba.goala { border-top: 1.5pt solid #000; }
-tr.lipit td.ora, tr.lipit td.slujba { border-top: .5pt dotted #000; }
-tr.lipsa td { height: 4mm; background: var(--gri-banda); border-top: .5pt solid #000; border-bottom: .5pt solid #000; padding: 0; }
-tr.dum td.zi { border-left: 3pt solid #fff; vertical-align: top; }
-tr.dum td { border-top: 1.5pt solid #000; }
+/* piciorul zilei: punctat cand slujbele se tin lant peste noapte, plin in rest (V1) */
+tr.jos-lipit > td.ora, tr.jos-lipit > td.slujba { border-bottom: .5pt dashed #000; }
+tr.jos-plin > td.ora, tr.jos-plin > td.slujba { border-bottom: .5pt solid #000; }
+/* sirul rupt de zile fara slujbe: o singura banda, fara linii in lateral */
+tr.lipsa td { height: calc(5mm * var(--f) * var(--f)); background: var(--gri-banda); border: 0; padding: 0; }
+/* duminica: linia groasa doar peste celula zilei — pe coloanele orei si slujbei ramane legatura
+   punctata cu sambata seara, ca in V1 */
+tr.dum td.zi { border-left: 3pt solid #fff; vertical-align: top; border-top: 1.5pt solid #000; }
 tr.dum:last-child td.zi { border-bottom: 1.5pt solid #fff; }
 .semnatura { text-align: right; font-size: calc(18pt * var(--f)); margin: 5mm 0 0; line-height: 1.15; }
 .semnatura b { display: block; }
@@ -311,6 +343,10 @@ const POTRIVESTE = `
 
 export function sfintiiHtml(o: { data: string; zi: ZiPeProgram; sinaxar: string | null; cuSinaxar: boolean }): string {
   const cand = `${ZILE_SAPTAMANA[ziuaSaptamanii(o.data)]}, ${dataLunga(o.data)}`
+  // Titlul e NUMELE zilei (duminica, praznicul), ca in V1 — nu `titlu_html`, care tine la un loc si
+  // sfintii, si pericopele, si glasul: puse acolo, se repetau imediat dedesubt, in lista si pe randul
+  // marunt (semnalat de user, 10.09.2026, la comparatia cu foile V1).
+  const titlu = o.zi.denumire ? `<h1>${esc(o.zi.denumire)}</h1>` : ''
   const sfinti = o.zi.sfinti.map((s) => `<li class="${s.rang === 'praznic_imparatesc' || s.rang === 'cruce_rosie' ? 'rosu' : s.rang === 'cruce_albastra' ? 'albastru' : ''}">${esc(`${s.semn ? `${s.semn} ` : ''}${s.nume}`)}</li>`).join('')
   const rand: string[] = []
   if (o.zi.pericope.apostol) rand.push(`Ap. ${esc(o.zi.pericope.apostol)}`)
@@ -335,7 +371,7 @@ li.rosu { color: #c00000; } li.albastru { color: #1c58bb; }
 </style></head><body>
 <p class="parohia">${esc(PAROHIA)} · Sfinții zilei</p>
 <p class="cand">${esc(cand)}</p>
-<h1>${o.zi.titlu_html || esc(o.zi.titlu)}</h1>
+${titlu}
 <ul>${sfinti}</ul>
 <p class="rand">${rand.join(' · ')}</p>
 ${sinaxar}

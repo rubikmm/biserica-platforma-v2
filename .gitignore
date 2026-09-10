@@ -9,3 +9,6 @@ dist/
 # Secrete locale — nu ajung niciodata in repo
 .dev.vars
 .env
+
+# cache-ul local pnpm (aparut la o instalare din container) — nu are ce cauta in repo
+.pnpm-store/

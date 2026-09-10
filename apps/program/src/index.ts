@@ -38,7 +38,7 @@ import {
 } from './depozit.js'
 import { foaieHtml, hartieDinCache, jpgDin, pdfDin, sfintiiHtml, titluSaptamanii } from './foaie.js'
 import { propune } from './propunere.js'
-import { type Ctx, type Meniu, paginaArhiva, paginaMesaj, paginaSaptamana } from './pagini.js'
+import { type Ctx, type Meniu, type RolProba, paginaArhiva, paginaMesaj, paginaSaptamana } from './pagini.js'
 
 export interface Env {
   DB: D1Database
@@ -84,10 +84,8 @@ async function comunicare<T = unknown>(env: Env, cale: string, corp: unknown): P
     return null
   }
 }
-async function eAbonat(env: Env, userId: string): Promise<boolean> {
-  const r = await comunicare<{ membri: unknown[] }>(env, '/audiente/membri', { audienceId: AUDIENTA, userId })
-  return !!r && r.membri.length > 0
-}
+// `eAbonat` (intrebarea „e omul pe lista?", pusa la fiecare pagina) a iesit odata cu butonul de abonare
+// din antet (user, 10.09.2026: „abonează-te iese de tot momentan"). Rutele de mai jos raman intacte.
 
 const eAdresaDeMasina = (cale: string) => /^\/(v1|intern|\.well-known|health)(\/|$)/.test(cale)
 
@@ -98,11 +96,9 @@ function dataDin(text: string, azi: string): string | null {
   return eDataValida(text) ? text : null
 }
 
-/** Inapoi sirul e deschis; inainte merge un SINGUR pas — pana la saptamana viitoare. */
-function veciniLui(luni: string, azi: string): { inainte: string; dupa: string | null } {
-  const limita = adaugaZile(luneaSaptamanii(azi), 7)
-  return { inainte: adaugaZile(luni, -7), dupa: luni < limita ? adaugaZile(luni, 7) : null }
-}
+// Navigarea nu mai are „vecini": cele trei trepte (saptamana trecuta, cea de azi, cea urmatoare) se
+// socotesc in pagina, din ziua de azi — „este o navigare, dar nu este un istoric" (user, 10.09.2026).
+// Antetul are nevoie doar de lunea saptamanii de pe ecran, ca sa stie pe care treapta se afla.
 
 async function vocabularHarta(env: Env): Promise<{ lista: IntrareVocabular[]; harta: Map<string, IntrareVocabular> }> {
   const lista = await vocabularul(env.DB)
@@ -134,6 +130,8 @@ export default {
     const { prefix, cale } = prefixSiCale(url, '/program')
     const nav = navigatieDin(cfg)
     const azi = aziBucuresti()
+    /** ⚠️ TEMPORAR — poarta modului de proba: tot ce tine de el se stinge singur in afara dev-ului. */
+    const eDev = env.MEDIU === 'dev'
 
     if (eAdresaDeMasina(cale)) {
       if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, HEAD, OPTIONS', 'access-control-allow-headers': 'if-none-match, content-type' } })
@@ -146,8 +144,17 @@ export default {
       }
     }
 
-    // Meniul paginilor care nu tin de o saptamana anume (arhiva, adresele gresite): navigarea din jurul zilei de azi.
-    const meniuAzi = (rest: Partial<Meniu> = {}): Meniu => ({ vecini: veciniLui(luneaSaptamanii(azi), azi), foaie: null, azi, ...rest })
+    // ⚠️ TEMPORAR (vezi „MODUL DE PROBA" mai jos): butoanele bannerului. Numai in dev.
+    const mProba = /^\/proba\/(anonim|user|admin)$/.exec(cale)
+    if (eDev && mProba && req.method === 'GET') {
+      const spre = url.searchParams.get('spre') ?? `${prefix}/`
+      const spreSigur = spre.startsWith('/') && !spre.startsWith('//') ? spre : `${prefix}/`
+      return redirect(spreSigur, { 'set-cookie': `proba_rol=${mProba[1]}; Path=/; Max-Age=86400; SameSite=Lax` })
+    }
+
+    // Meniul paginilor care nu tin de o saptamana anume (arhiva, adresele gresite): `luni: null`, deci
+    // navigarea le arata pe toate trei ca destinatii, niciuna marcata.
+    const meniuAzi = (rest: Partial<Meniu> = {}): Meniu => ({ luni: null, foaie: null, azi, ...rest })
 
     if (req.method === 'POST') {
       const problema = verificaCsrf(req, [cfg.ORIGINE_PUBLICA])
@@ -158,36 +165,44 @@ export default {
     }
     const sesiune = await sesiuneCurenta(env.IDENTITATE, req).catch(() => SESIUNE_ANONIMA)
     const principal = principalDin(sesiune)
+    const eAdminReal = sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin')
+    const utilizatorReal = sesiune.user?.displayName ?? sesiune.user?.email ?? null
+    // ⚠️ TEMPORAR — MODUL DE PROBA (user, 10.09.2026, 18:06: „nu se poate testa local autentificarea").
+    // Trei butoane in banner comuta afisarea intre neautentificat / utilizator / admin; alegerea sta
+    // intr-un cookie, ca sa tina de la o pagina la alta. Merge DOAR in dev — pe staging si in productie
+    // `rolProba` e mereu null, deci nimic din blocul asta nu poate deschide o portita. DE STERS la cerere:
+    // blocul de mai jos, ruta `/proba/<rol>`, campurile `proba`/`caleAcum` din Ctx si bannerul din pagini.ts.
+    const rolProba = eDev
+      ? (/(?:^|;\s*)proba_rol=(anonim|user|admin)(?:;|$)/.exec(req.headers.get('cookie') ?? '')?.[1] as RolProba | undefined)
+      : undefined
     const ctx: Ctx = {
       prefix,
       nav,
-      utilizator: sesiune.user?.displayName ?? sesiune.user?.email ?? null,
-      eAdmin: sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin'),
+      utilizator: rolProba === 'anonim' ? null
+        : rolProba === 'user' ? 'Utilizator de probă'
+        : rolProba === 'admin' ? 'Admin de probă'
+        : utilizatorReal,
+      eAdmin: rolProba ? rolProba === 'admin' : eAdminReal,
       versiune: pkg.version,
       modificata: dataVersiunii(env.VERSIUNE),
       veziCa: sesiune.veziCa,
       poateVedeaCa: sesiune.poateVedeaCa,
       spre: url.toString(),
+      proba: eDev ? (rolProba ?? (eAdminReal ? 'admin' : utilizatorReal ? 'user' : 'anonim')) : null,
+      caleAcum: `${prefix}${cale}`,
     }
 
     try {
       const { harta } = await vocabularHarta(env)
-      const cachePagina = { 'cache-control': ctx.utilizator ? 'private, no-store' : CACHE_PAGINI }
-      // ce se stie despre abonare, pentru randul de sus al antetului (ca in V1: pe toate paginile de om)
-      const abonat = principal ? await eAbonat(env, principal.userId) : false
-      const semn = url.searchParams.get('abonat')
-      const veste: Meniu['veste'] =
-        semn === '1' ? { text: 'Gata, te-am trecut pe listă.', fel: 'bine' }
-        : semn === '2' ? { text: 'Te-am scos de pe listă.', fel: 'bine' }
-        : semn === '0' ? { text: 'Nu am putut face abonarea; încearcă din nou.', fel: 'rau' }
-        : null
-      const antet = { abonat, veste, spre: `${prefix}${cale}` }
+      // In dev nu se tine cache: la o schimbare de afisare, pagina veche mai statea cinci minute in
+      // browser si parea ca n-am facut nimic (patit pe 10.09.2026). Pe staging si in productie ramane cum era.
+      const cachePagina = { 'cache-control': ctx.utilizator ? 'private, no-store' : eDev ? 'no-store' : CACHE_PAGINI }
 
       // ---------------------------------------------------------- saptamana
       const mSapt = /^\/saptamana\/([^/]+)$/.exec(cale)
       if ((cale === '/' || mSapt) && req.method === 'GET') {
         const cerut = mSapt ? dataDin(mSapt[1]!, azi) : azi
-        if (!cerut) return html(paginaMesaj(ctx, 'Dată greșită', 'Adresa e /saptamana/AAAA-LL-ZZ.', 'rea', meniuAzi(antet)), 404)
+        if (!cerut) return html(paginaMesaj(ctx, 'Dată greșită', 'Adresa e /saptamana/AAAA-LL-ZZ.', 'rea', meniuAzi()), 404)
         const luni = luneaSaptamanii(cerut)
         const s = await saptamanaOriPropunere(env, luni, harta)
         // foaia A4 de pe usa exista doar pentru saptamanile validate; din propunere iese ciorna ei
@@ -203,7 +218,7 @@ export default {
             cal: s.cal,
             dinCalendar: s.dinCalendar,
             azi,
-            meniu: { vecini: veciniLui(luni, azi), foaie, azi, ...antet },
+            meniu: { luni, foaie, azi },
             nelamuriri: s.propunere?.nelamuriri,
           }),
           200,
@@ -219,7 +234,7 @@ export default {
         const saptamani = await saptamanileAnului(env.DB, an)
         const ac = await acoperire(env.DB)
         // PDF si JPG stinse: pe Arhiva nu e nicio saptamana in context (`meniuAzi` le lasa `foaie: null`)
-        return html(paginaArhiva({ ctx, an, ani, saptamani, total: ac.saptamani, deLa: ac.de_la, meniu: meniuAzi(antet) }), 200, cachePagina)
+        return html(paginaArhiva({ ctx, an, ani, saptamani, total: ac.saptamani, deLa: ac.de_la, meniu: meniuAzi() }), 200, cachePagina)
       }
 
       // ------------------------------------------------------------ abonare
@@ -238,7 +253,7 @@ export default {
       }
 
       // ca in V1: titlul si cele doua linkuri, sub antetul intreg
-      return html(paginaMesaj(ctx, 'Nu există pagina', '', 'info', meniuAzi(antet)), 404)
+      return html(paginaMesaj(ctx, 'Nu există pagina', '', 'info', meniuAzi()), 404)
     } catch (e) {
       log.error('eroare neasteptata', { eroare: e instanceof Error ? e.message : String(e), stack: e instanceof Error ? e.stack : undefined })
       return html(paginaMesaj(ctx, 'Eroare', 'A apărut o eroare neașteptată.', 'rea', meniuAzi()), 500)
@@ -351,7 +366,10 @@ async function api(req: Request, env: Env, ctxExec: ExecutionContext, cale: stri
       if (!rand) return eroareApi(404, 'saptamana_inexistenta', 'Săptămâna nu e în bază.', { de_la: luni, pana_la: adaugaZile(luni, 6), vecine: await vecinele(env.DB, luni) })
       if (rand.stare !== 'validat') return eroareApi(409, 'saptamana_nevalidata', 'Foaia se tipărește numai din săptămâni validate.', { de_la: luni, pana_la: rand.duminica, stare: rand.stare })
       slujbe = (await slujbeleSaptamanii(env.DB, luni)).map(slujbaDin)
-      titlu = rand.titlu || titluSaptamanii(luni)
+      // Pe HARTIE intervalul se scrie mereu la fel, calculat („7 – 13 septembrie 2026"), ca in V1 —
+      // titlurile importate din V1 au cratima in loc de linie de dialog, si se vedea in caseta foii.
+      // In pagina ramane titlul din baza, asa cum a fost scris.
+      titlu = titluSaptamanii(luni)
       dinCalendar = rand.sursa === 'manual' || rand.sursa === 'propunere'
     } else {
       const p = propune(luni, await istoriculSlujbelor(env.DB, luni), harta, await calendarulIntervalului(env.CALENDAR, luni, adaugaZile(luni, 7)))
