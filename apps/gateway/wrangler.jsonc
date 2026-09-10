@@ -21,7 +21,9 @@
   // PROGRAM si CURATENIE se adauga aici cand aplicatiile lor sunt gata: in `wrangler dev` un
   // binding catre un worker care nu ruleaza in aceeasi sesiune opreste toata sesiunea.
   "services": [
+    { "binding": "HOME", "service": "xc-home" },
     { "binding": "CONT", "service": "xc-account" },
+    { "binding": "PROGRAM", "service": "xc-program" },
     { "binding": "CALENDAR", "service": "xc-calendar" },
     { "binding": "ADMIN", "service": "xc-admin" }
   ]

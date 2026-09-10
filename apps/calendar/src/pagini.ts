@@ -1,9 +1,12 @@
 /**
- * Paginile calendarului: lista lunii, ziua, sinaxarul, Apostolul si Evanghelia, listele de
- * sarbatori, administrarea. Toate pe carcasa comuna (@xc/ui).
+ * Paginile calendarului, pe carcasa comuna (grafica V1): lista lunii, ziua, sinaxarul,
+ * Apostolul si Evanghelia, listele de sarbatori, administrarea.
+ *
+ * Aplicatia nu scrie antetul si subsolul — le da doar ce pune in sloturi.
  */
 import type { ZiLiturgica } from '@xc/contracts'
-import { LUNI, LUNI_SCURT, ZILE_SAPTAMANA, alerta, dataLunga, esc, momentLizibil, pagina, type Navigatie } from '@xc/ui'
+import type { Navigatie } from '@xc/config'
+import { ICOANE, LUNI, LUNI_SCURT, ZILE_SAPTAMANA, alerta, dataLunga, esc, momentLizibil, pagina } from '@xc/ui'
 import type { PericopaCuText } from './biblia.js'
 import type { Import, Versiune } from './depozit.js'
 import { type RandDesfacut, type RandZi, clasaRang } from './traducere.js'
@@ -12,78 +15,88 @@ export interface Ctx {
   prefix: string
   nav: Navigatie
   utilizator: string | null
+  eAdmin: boolean
+  versiune: string
+  modificata: string
 }
 
 export const STIL = `
-.luna-cap { display:flex; align-items:baseline; gap:.8rem; flex-wrap:wrap; margin: 0 0 .6rem; }
-.luna-cap h1 { margin:0; }
-.calculat { border:1px dashed var(--margine-tare); border-radius:10px; padding:.5rem .8rem; color:var(--sters); font-size:.9rem; margin-bottom:1rem; }
-.zi { display:grid; grid-template-columns: 3.1rem 1fr; gap:.6rem; padding:.55rem 0; border-bottom:1px solid var(--margine); scroll-margin-top: 6rem; }
-.zi:last-child { border-bottom:0; }
-.zi.duminica { background: color-mix(in srgb, var(--accent) 7%, transparent); margin:0 -.6rem; padding:.7rem .6rem; border-radius:8px; }
-.zi.azi { box-shadow: inset 3px 0 0 #3ea75d; background: color-mix(in srgb, #3ea75d 8%, transparent); margin:0 -.6rem; padding:.7rem .6rem; border-radius:8px; }
-.zi .cand { text-align:center; text-decoration:none; color:inherit; line-height:1; }
-.zi .cand b { display:block; font-size:1.45rem; font-weight:650; }
-.zi .cand small { color:var(--sters); font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; }
-.zi.duminica .cand b { color:var(--rosu); }
-.zi.azi .cand b { color:#2e8a4a; }
-.zi .ce { min-width:0; }
-.zi .titlu-zi { text-decoration:none; color:inherit; }
-.zi .titlu-zi:hover { text-decoration:underline; }
-.zi .denumire { color:var(--rosu); font-weight:600; display:block; }
-.zi .sfinti { display:block; font-size:.95rem; }
-.zi .sfinti span + span::before { content:"; "; color:var(--sters); }
-.zi .sub { color:var(--sters); font-size:.86rem; margin:.15rem 0 0; text-align:left; }
-.masa { float:right; margin:0 0 .3rem .6rem; display:flex; flex-direction:column; gap:.25rem; align-items:flex-end; max-width:45%; }
-.chip { display:inline-block; font-size:.74rem; padding:.08rem .5rem; border-radius:999px; border:1px solid var(--margine-tare); color:var(--sters); white-space:nowrap; }
-.chip.post { border-color: #b8860b; color:#8a5a00; }
-.chip.libera { border-color: var(--rosu); color: var(--rosu); }
-.chip.slujba, .chip.morti { border-style:dashed; }
-.chip.perioada { background: color-mix(in srgb, var(--accent) 10%, transparent); }
-@media (prefers-color-scheme: dark) { .chip.post { color:#f1cf86; border-color:#a67c2e; } }
-.etichete { display:flex; gap:.3rem; flex-wrap:wrap; margin-top:.25rem; }
-.pericope { font-size:.84rem; color:var(--sters); margin-top:.2rem; }
-.pericope a { color:var(--sters); }
-.pericope a:hover { color:var(--text); }
-.pericope .glas { margin-left:.5rem; white-space:nowrap; }
-.zi-cap .supra { color:var(--sters); font-size:.88rem; }
-.zi-cap .supra a { color:inherit; }
-.zi-cap h1 { font-size:2rem; margin:.1rem 0 0; }
-.zi-cap .cand { color:var(--sters); margin:0 0 .8rem; }
-.zi-cap .titlu { font-size:1.15rem; line-height:1.45; }
-.text h3 { margin-top:1.4rem; }
-.text h4 { margin:1rem 0 .3rem; color:var(--sters); font-weight:600; }
-.text p { margin:.6rem 0; }
-.text blockquote { margin:.8rem 0; padding:.4rem .9rem; border-left:3px solid var(--margine-tare); color:var(--sters); }
-.versete p { margin:.35rem 0; }
-.versete .nr { color:var(--sters); font-size:.75rem; vertical-align:super; margin-right:.2rem; }
-.treapta { border-top:1px solid var(--margine); padding-top:1rem; margin-top:1.4rem; }
-.treapta:first-child { border-top:0; margin-top:0; padding-top:0; }
-.treapta .ce { color:var(--rosu); font-size:.8rem; text-transform:uppercase; letter-spacing:.06em; font-weight:600; }
-.treapta h2 { margin:.2rem 0 .6rem; }
-.ref-lipsa { color:var(--sters); font-style:italic; }
-.nav-zile { display:flex; justify-content:space-between; gap:1rem; margin-top:1.6rem; font-size:.92rem; }
-.luni-grila { display:grid; grid-template-columns: repeat(6, 1fr); gap:.35rem; margin:.6rem 0 1.2rem; }
-.luni-grila a, .luni-grila span { text-align:center; padding:.35rem .2rem; border:1px solid var(--margine); border-radius:8px; text-decoration:none; color:var(--text); font-size:.86rem; background:var(--carte); }
-.luni-grila a[aria-current="page"] { background:var(--accent); color:var(--accent-text); border-color:var(--accent); }
-.luni-grila .gol { opacity:.35; }
-.inapoi { display:inline-block; margin-bottom:.6rem; font-size:.9rem; }
-.abonare { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
-.abonare input { width:auto; flex:1; min-width:12rem; font-size:16px; }
-.abonare button { width:auto; margin:0; padding:.55rem .9rem; }
-.contor { color:var(--sters); font-size:.88rem; margin:0 0 .6rem; }
-.nesigur { color:#8a5a00; font-size:.8rem; }
+.zi { display:grid; grid-template-columns:46px 1fr; gap:12px; padding:10px 0;
+      border-bottom:1px solid var(--rule); scroll-margin-top:170px }
+.zi:last-child { border-bottom:0 }
+.zi.duminica { background:var(--tinta); margin:0 -10px; padding:10px; border-radius:8px }
+.zi.azi { background:var(--azi-fund); box-shadow:inset 3px 0 0 var(--azi); margin:0 -10px; padding:10px; border-radius:8px }
+.zi .cand { text-align:center; text-decoration:none; color:inherit; line-height:1 }
+.zi .cand b { display:block; font:400 27px/1 "Palatino Linotype",Palatino,Georgia,serif }
+.zi .cand small { font:600 10px/1.4 ui-sans-serif,system-ui; letter-spacing:.08em;
+                  text-transform:uppercase; color:var(--faint) }
+.zi.duminica .cand b { color:var(--rosu) }
+.zi.azi .cand b { color:#0B9E4E }
+.zi .ce { min-width:0 }
+.zi .titlu-zi { text-decoration:none; color:inherit; display:block }
+.zi .titlu-zi:hover { color:var(--rosu) }
+.zi .denumire { color:var(--rosu); display:block }
+.zi .sfinti span + span::before { content:"; "; color:var(--faint) }
+.zi .sub { font:13px/1.5 ui-sans-serif,system-ui; color:var(--faint); margin:2px 0 0 }
+.masa { float:right; margin:0 0 4px 10px; display:flex; flex-direction:column; gap:4px;
+        align-items:flex-end; max-width:45% }
+.chip { display:inline-block; font:11px/1.5 ui-sans-serif,system-ui; padding:1px 8px;
+        border:1px solid var(--rule); border-radius:999px; color:var(--soft); white-space:nowrap }
+.chip.post { border-color:#B8860B; color:#8A5A00 }
+.chip.libera { border-color:var(--rosu); color:var(--rosu) }
+.chip.slujba, .chip.morti { border-style:dashed }
+.chip.perioada { background:var(--tinta) }
+.etichete { display:flex; gap:5px; flex-wrap:wrap; margin:4px 0 0 }
+.pericope { font:13px/1.5 ui-sans-serif,system-ui; color:var(--faint); margin:3px 0 0 }
+.pericope a { color:var(--faint) }
+.pericope a:hover { color:var(--rosu) }
+.pericope .glas { margin-left:8px; white-space:nowrap }
+.calculat { border:1px dashed var(--rule); border-radius:10px; padding:10px 14px;
+            color:var(--soft); font:14px/1.5 ui-sans-serif,system-ui; margin:0 0 18px }
+.zi-cap .cand { color:var(--faint); font:14px/1.5 ui-sans-serif,system-ui; margin:0 0 14px }
+.zi-cap .titlu-mare { font-size:19px; line-height:1.45 }
+.text h3 { margin-top:24px } .text h4 { margin:16px 0 4px; color:var(--faint); font-weight:600 }
+.text blockquote { margin:14px 0; padding:4px 14px; border-left:3px solid var(--rule); color:var(--soft) }
+.treapta { border-top:1px solid var(--rule); padding-top:16px; margin-top:24px }
+.treapta:first-child { border-top:0; margin-top:0; padding-top:0 }
+.treapta .ce { font:600 10.5px/1.3 ui-sans-serif,system-ui; letter-spacing:.1em;
+               text-transform:uppercase; color:var(--rosu) }
+.treapta h2 { margin:4px 0 10px; font-size:20px }
+.versete p { margin:6px 0 }
+.versete .nr { color:var(--faint); font:11px ui-sans-serif,system-ui; vertical-align:super; margin-right:3px }
+.ref-lipsa { color:var(--faint); font-style:italic }
+.nav-zile { display:flex; justify-content:space-between; gap:14px; margin-top:28px;
+            font:14px ui-sans-serif,system-ui }
+.contor { color:var(--faint); font:13px ui-sans-serif,system-ui; margin:0 0 10px }
+.nesigur { color:#8A5A00; font:12px ui-sans-serif,system-ui }
+.an-vecin { border-style:dashed !important }
+.abonare { display:flex; gap:8px; align-items:center; margin:0 }
+.abonare button { margin:0 }
 `
+
+export const SCRIPT = `
+(function(){
+  var b=document.getElementById('bt-info'), p=document.getElementById('panou-info');
+  if(!b||!p) return;
+  b.addEventListener('click', function(){
+    var deschis = p.hasAttribute('hidden');
+    if(deschis) p.removeAttribute('hidden'); else p.setAttribute('hidden','');
+    b.setAttribute('aria-expanded', deschis ? 'true' : 'false');
+  });
+})();`
 
 // ---------------------------------------------------------------------------
 // Bucati comune
 // ---------------------------------------------------------------------------
 
+function contDin(ctx: Ctx) {
+  return { intrat: !!ctx.utilizator, nume: ctx.utilizator ?? 'Cont', admin: ctx.eAdmin, urlCont: ctx.nav.cont, urlAdmin: ctx.nav.admin }
+}
+
 function chip(text: string, fel: string): string {
   return `<span class="chip ${esc(fel)}">${esc(text)}</span>`
 }
 
-/** Etichetele de masa (post + zi libera) la dreapta; restul (perioada, slujba, morti) sub titlu. */
 function etichete(d: RandDesfacut): { masa: string; rest: string } {
   const masa = d.etichete.filter((e) => e.fel === 'post' || e.fel === 'libera' || e.fel === 'aliturgica')
   const rest = d.etichete.filter((e) => !masa.includes(e))
@@ -104,7 +117,6 @@ function sfintiiHtml(zi: ZiLiturgica): string {
     .join('')}</span>`
 }
 
-/** Titlul unei zile, asa cum se vede in lista si in capul paginii de zi. */
 export function titlulZilei(d: RandDesfacut, zi: ZiLiturgica): string {
   if (d.eDuminica || (d.denumire && !d.sfinti.length)) {
     const denumire = d.denumire ? `<span class="denumire">${esc(d.denumire)}</span>` : ''
@@ -123,7 +135,6 @@ function pericopeHtml(ctx: Ctx, zi: ZiLiturgica, d: RandDesfacut): string {
   return `<div class="pericope">${link}${d.eDuminica || !parti.length ? glas : ''}</div>`
 }
 
-/** Randul unei zile in lista — acelasi in lista lunii si in listele de sarbatori. */
 export function randZi(ctx: Ctx, r: RandZi, d: RandDesfacut, zi: ZiLiturgica, azi: string): string {
   const clase = ['zi']
   if (d.eDuminica) clase.push('duminica')
@@ -145,53 +156,57 @@ export function randZi(ctx: Ctx, r: RandZi, d: RandDesfacut, zi: ZiLiturgica, az
 </article>`
 }
 
-function navLuni(ctx: Ctx, an: number, luna: number | null, aniDisponibili: number[], azi: string): string {
+/** Randul de unelte al antetului: abonarea, „Informații utile", AZI. */
+function unelte(ctx: Ctx, azi: string, abonat: boolean, cale: string): string {
   const p = esc(ctx.prefix)
   const [anAzi, lunaAzi] = azi.split('-').map(Number) as [number, number]
-  const anPrec = aniDisponibili.includes(an - 1) ? `<a href="${p}/${an - 1}-12" class="an-vecin">‹ ${an - 1}</a>` : ''
-  const anUrm = aniDisponibili.includes(an + 1) ? `<a href="${p}/${an + 1}-01" class="an-vecin">${an + 1} ›</a>` : ''
+  const aziLink = `<a class="btn" href="${p}/${anAzi}-${String(lunaAzi).padStart(2, '0')}#z${azi}">AZI</a>`
+  const info = `<button class="btn" type="button" id="bt-info" aria-expanded="false" aria-controls="panou-info">Informații utile</button>`
+  const abonare = !ctx.utilizator
+    ? `<a class="btn" href="${esc(ctx.nav.cont)}/auth/login">Abonează-te</a>`
+    : `<form class="abonare" method="post" action="${p}/${abonat ? 'dezabonare' : 'abonare'}"><input type="hidden" name="spre" value="${esc(cale)}"><button class="btn" type="submit">${abonat ? 'Dezabonează-te' : 'Abonează-te'}</button></form>`
+  return `${aziLink}${info}${abonare}`
+}
+
+function panouInfo(ctx: Ctx, an: number): string {
+  const p = esc(ctx.prefix)
+  return `<div id="panou-info" hidden>
+    <nav class="capitole">
+      <a href="${p}/sarbatori/cruce-rosie/${an}">Sărbătorile cu cruce roșie</a>
+      <a href="${p}/sarbatori/cruce-neagra/${an}">Sărbătorile cu cruce neagră</a>
+      <a href="${p}/v1/an/${an}/repere">Reperele anului</a>
+    </nav>
+  </div>`
+}
+
+function navLuni(ctx: Ctx, an: number, luna: number | null, aniDisponibili: number[]): string {
+  const p = esc(ctx.prefix)
+  const anPrec = aniDisponibili.includes(an - 1) ? `<a class="an-vecin" href="${p}/${an - 1}-12">‹ ${an - 1}</a>` : ''
+  const anUrm = aniDisponibili.includes(an + 1) ? `<a class="an-vecin" href="${p}/${an + 1}-01">${an + 1} ›</a>` : ''
   const luni = LUNI_SCURT.map((l, i) => {
     const m = i + 1
-    const curent = m === luna ? ' aria-current="page"' : ''
-    return `<a href="${p}/${an}-${String(m).padStart(2, '0')}"${curent}>${esc(l.replace('.', '').toUpperCase())}</a>`
+    const eticheta = esc(l.replace('.', '').toUpperCase())
+    return m === luna ? `<b class="acum">${eticheta}</b>` : `<a href="${p}/${an}-${String(m).padStart(2, '0')}">${eticheta}</a>`
   }).join('')
-  const aziLink = `<a href="${p}/${anAzi}-${String(lunaAzi).padStart(2, '0')}#z${azi}" title="ziua de azi" style="border-color:var(--rosu);color:var(--rosu)">AZI</a>`
-  return `<nav class="nav-bara">${aziLink}${anPrec}${luni}${anUrm}</nav>`
-}
-
-/** Abonarea se face cu adresa contului — un singur buton; aplicatia nu cere si nu tine adrese. */
-function abonareHtml(ctx: Ctx, cale: string, mesaj?: string, abonat = false, email: string | null = null): string {
-  const p = esc(ctx.prefix)
-  const veste = mesaj ? `<span class="mic-text sters">${esc(mesaj)}</span>` : ''
-  if (!ctx.utilizator) {
-    return `<div class="abonare fara-tipar"><a class="buton mic secundar" href="${esc(ctx.nav.cont)}/auth/login">Abonează-te</a><span class="mic-text sters">Ca să primești calendarul pe e-mail îți trebuie cont.</span>${veste}</div>`
-  }
-  if (abonat) {
-    return `<form class="abonare fara-tipar" method="post" action="${p}/dezabonare">
-      <span class="mic-text sters">Primești calendarul pe ${esc(email ?? 'adresa contului')}.</span>
-      <input type="hidden" name="spre" value="${esc(cale)}">
-      <button type="submit" class="mic secundar">Dezabonează-te</button>${veste}
-    </form>`
-  }
-  return `<form class="abonare fara-tipar" method="post" action="${p}/abonare">
-    <input type="hidden" name="spre" value="${esc(cale)}">
-    <button type="submit" class="mic">Abonează-te${email ? ` (${esc(email)})` : ''}</button>${veste}
-  </form>`
-}
-
-function informatiiUtile(ctx: Ctx, an: number): string {
-  const p = esc(ctx.prefix)
-  return `<details class="fara-tipar" style="margin:.4rem 0 1rem"><summary class="mic-text sters" style="cursor:pointer">Informații utile</summary>
-  <div class="randuri" style="margin-top:.4rem">
-    <a class="buton mic secundar" href="${p}/sarbatori/cruce-rosie/${an}">Sărbătorile cu cruce roșie</a>
-    <a class="buton mic secundar" href="${p}/sarbatori/cruce-neagra/${an}">Sărbătorile cu cruce neagră</a>
-    <a class="buton mic secundar" href="${p}/v1/an/${an}/repere">Reperele anului (Pascalia)</a>
-  </div></details>`
+  return `<nav class="capitole">${anPrec}${luni}${anUrm}</nav>`
 }
 
 // ---------------------------------------------------------------------------
 // Paginile
 // ---------------------------------------------------------------------------
+
+function comune(ctx: Ctx) {
+  return {
+    nume: 'CALENDAR',
+    titlu: 'Calendarul ortodox',
+    acasa: `${ctx.prefix}/`,
+    urlPlatforma: ctx.nav.home || '/',
+    local: STIL,
+    cont: contDin(ctx),
+    versiune: ctx.versiune,
+    modificata: ctx.modificata,
+  }
+}
 
 export function paginaLuna(o: {
   ctx: Ctx
@@ -203,27 +218,22 @@ export function paginaLuna(o: {
   azi: string
   cale: string
   mesajAbonare?: string
-  abonat?: boolean
-  email?: string | null
+  abonat: boolean
 }): string {
   const titlu = `${LUNI[o.luna - 1]} ${o.an}`
   const lista = o.randuri.map(({ r, d, zi }) => randZi(o.ctx, r, d, zi, o.azi)).join('\n')
   return pagina({
-    titlu: `Calendar · ${titlu}`,
-    activ: 'calendar',
-    navigatie: o.ctx.nav,
-    utilizator: o.ctx.utilizator,
-    stil: STIL,
+    ...comune(o.ctx),
+    titluPagina: titlu,
     indexabil: true,
-    continut: `
-${abonareHtml(o.ctx, o.cale, o.mesajAbonare, o.abonat ?? false, o.email ?? null)}
-${informatiiUtile(o.ctx, o.an)}
-${navLuni(o.ctx, o.an, o.luna, o.aniDisponibili, o.azi)}
-<div class="carte">
-  <div class="luna-cap"><h1>${esc(titlu)}</h1><span class="sters mic-text">calendar ortodox</span></div>
-  ${o.calculat ? '<div class="calculat">Calendar generat automat — calendarul oficial al acestui an nu a apărut încă; sfinții sunt cei de pe dată, iar sărbătorile mobile vin din Pascalie.</div>' : ''}
-  ${lista || '<p class="gol">Luna asta nu e preluată.</p>'}
-</div>`,
+    unelte: unelte(o.ctx, o.azi, o.abonat, o.cale),
+    subantet: `${panouInfo(o.ctx, o.an)}${navLuni(o.ctx, o.an, o.luna, o.aniDisponibili)}`,
+    scripturi: SCRIPT,
+    corp: `
+${o.mesajAbonare ? alerta('buna', esc(o.mesajAbonare)) : ''}
+<h2>${esc(titlu)}</h2>
+${o.calculat ? '<div class="calculat">Calendar generat automat — calendarul oficial al acestui an nu a apărut încă; sfinții sunt cei de pe dată, iar sărbătorile mobile vin din Pascalie.</div>' : ''}
+${lista || '<p class="gol">Luna asta nu e preluată.</p>'}`,
   })
 }
 
@@ -232,14 +242,13 @@ function capulZilei(ctx: Ctx, r: RandZi, d: RandDesfacut, zi: ZiLiturgica): stri
   const et = etichete(d)
   const canonic = r.calculat
     ? ''
-    : `<p class="sub" style="text-align:left">${zi.canonic.nunti ? 'Se fac nunți' : 'Nu se fac nunți'} · ${zi.canonic.parastase ? 'se fac parastase' : 'nu se fac parastase'}</p>`
+    : `<p class="sub">${zi.canonic.nunti ? 'Se fac nunți' : 'Nu se fac nunți'} · ${zi.canonic.parastase ? 'se fac parastase' : 'nu se fac parastase'}</p>`
   return `<div class="zi-cap">
-  <div class="supra"><a href="${p}/${r.an}-${String(r.luna).padStart(2, '0')}">${esc(LUNI[r.luna - 1] ?? '')} ${r.an}</a></div>
-  <h1>${r.zi} ${esc(LUNI[r.luna - 1] ?? '')}</h1>
-  <p class="cand">${esc(ZILE_SAPTAMANA[r.zi_saptamana] ?? '')}${r.faza_lunii ? ` · ${esc(r.faza_lunii.toLowerCase())}` : ''}</p>
+  <h2>${r.zi} ${esc(LUNI[r.luna - 1] ?? '')} ${r.an}</h2>
+  <p class="cand">${esc(ZILE_SAPTAMANA[r.zi_saptamana] ?? '')}${r.faza_lunii ? ` · ${esc(r.faza_lunii.toLowerCase())}` : ''} · <a href="${p}/${r.an}-${String(r.luna).padStart(2, '0')}">${esc(LUNI[r.luna - 1] ?? '')} ${r.an}</a></p>
   ${et.masa}
-  <div class="titlu">${titlulZilei(d, zi)}</div>
-  ${r.subtitlu ? `<p class="sub" style="text-align:left">${esc(r.subtitlu)}</p>` : ''}
+  <div class="titlu-mare">${titlulZilei(d, zi)}</div>
+  ${r.subtitlu ? `<p class="sub">${esc(r.subtitlu)}</p>` : ''}
   ${et.rest}
   ${canonic}
   ${pericopeHtml(ctx, zi, d)}
@@ -251,7 +260,7 @@ function verseteHtml(pericopa: PericopaCuText | null, lipsa: string): string {
   if (!pericopa) return `<p class="ref-lipsa">${esc(lipsa)}</p>`
   return pericopa.bucati
     .map((b) => {
-      const cap = `<p class="sters mic-text"><a href="${esc(b.adresa)}" target="_blank" rel="noopener">${esc(b.referinta)}</a></p>`
+      const cap = `<p class="mic-text sters"><a href="${esc(b.adresa)}" target="_blank" rel="noopener">${esc(b.referinta)}</a></p>`
       if (!b.versete) return `${cap}<p class="ref-lipsa">Textul acestei pericope nu a putut fi adus din Biblia platformei${b.nota ? ` (${esc(b.nota)})` : ''}.</p>`
       return `${cap}<div class="versete">${b.versete.map((v) => `<p><span class="nr">${v.numar}</span>${esc(v.text)}</p>`).join('')}</div>`
     })
@@ -285,19 +294,14 @@ export function paginaZi(o: { ctx: Ctx; r: RandZi; d: RandDesfacut; zi: ZiLiturg
     ? `<section class="treapta text"><div class="ce">Sinaxar</div>${o.texte.sinaxar}</section>`
     : `<section class="treapta"><div class="ce">Sinaxar</div><p class="ref-lipsa">${o.r.calculat ? 'Sinaxarul vine odată cu calendarul oficial al anului.' : 'Sinaxarul acestei zile nu e disponibil.'}</p></section>`
   return pagina({
-    titlu: `${o.r.zi} ${LUNI[o.r.luna - 1]} ${o.r.an} · Calendar`,
-    activ: 'calendar',
-    navigatie: o.ctx.nav,
-    utilizator: o.ctx.utilizator,
-    stil: STIL,
+    ...comune(o.ctx),
+    titluPagina: `${o.r.zi} ${LUNI[o.r.luna - 1]} ${o.r.an}`,
     indexabil: true,
-    continut: `
-<div class="carte">
-  ${capulZilei(o.ctx, o.r, o.d, o.zi)}
-  ${o.r.calculat ? '<div class="calculat">Zi generată automat din Pascalie și din sfinții de pe dată — calendarul oficial nu a apărut încă.</div>' : ''}
-</div>
-<div class="carte">${pericopeleHtml(o.zi, o.texte)}</div>
-<div class="carte">${sinaxar}</div>
+    corp: `
+${capulZilei(o.ctx, o.r, o.d, o.zi)}
+${o.r.calculat ? '<div class="calculat">Zi generată automat din Pascalie și din sfinții de pe dată — calendarul oficial nu a apărut încă.</div>' : ''}
+${pericopeleHtml(o.zi, o.texte)}
+${sinaxar}
 <nav class="nav-zile fara-tipar">
   <a href="${p}/zi/${o.ieri}">← ziua dinainte</a>
   <a href="${p}/${o.r.an}-${String(o.r.luna).padStart(2, '0')}">${esc(LUNI[o.r.luna - 1] ?? '')} ${o.r.an}</a>
@@ -310,47 +314,37 @@ function capFereastra(ctx: Ctx, ce: string, r: RandZi, d: RandDesfacut, zi: ZiLi
   const p = esc(ctx.prefix)
   const titlu = linkTitlu ? `<a href="${p}/zi/${r.data}/sinaxar" style="color:inherit">${titlulZilei(d, zi)}</a>` : titlulZilei(d, zi)
   return `<div class="zi-cap">
-  <div class="ce" style="color:var(--rosu);font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;font-weight:600">${esc(ce)}</div>
-  <div class="titlu">${titlu}</div>
-  <p class="cand"><a href="${p}/zi/${r.data}" style="color:inherit">${esc(ZILE_SAPTAMANA[r.zi_saptamana] ?? '')}, ${esc(dataLunga(r.data))}</a></p>
+  <div class="ce" style="font:600 10.5px/1.3 ui-sans-serif,system-ui;letter-spacing:.1em;text-transform:uppercase;color:var(--rosu)">${esc(ce)}</div>
+  <div class="titlu-mare">${titlu}</div>
+  <p class="cand"><a href="${p}/zi/${r.data}">${esc(ZILE_SAPTAMANA[r.zi_saptamana] ?? '')}, ${esc(dataLunga(r.data))}</a></p>
 </div>`
 }
 
 export function paginaSinaxar(o: { ctx: Ctx; r: RandZi; d: RandDesfacut; zi: ZiLiturgica; sinaxar: string | null }): string {
   const p = esc(o.ctx.prefix)
   return pagina({
-    titlu: `Sinaxar · ${dataLunga(o.r.data)}`,
-    activ: 'calendar',
-    navigatie: o.ctx.nav,
-    utilizator: o.ctx.utilizator,
-    stil: STIL,
+    ...comune(o.ctx),
+    titluPagina: `Sinaxar · ${dataLunga(o.r.data)}`,
     indexabil: true,
-    continut: `
-<a class="inapoi fara-tipar" href="${p}/zi/${o.r.data}">← ziua</a>
-<div class="carte">
-  ${capFereastra(o.ctx, 'Sinaxar', o.r, o.d, o.zi, false)}
-  <hr style="border:0;border-top:1px solid var(--margine);margin:1rem 0">
-  ${o.sinaxar ? `<div class="text">${o.sinaxar}</div>` : '<p class="ref-lipsa">Sinaxarul acestei zile nu e disponibil în Calendar.</p>'}
-</div>`,
+    corp: `
+<p><a href="${p}/zi/${o.r.data}">← ziua</a></p>
+${capFereastra(o.ctx, 'Sinaxar', o.r, o.d, o.zi, false)}
+<hr>
+${o.sinaxar ? `<div class="text">${o.sinaxar}</div>` : '<p class="ref-lipsa">Sinaxarul acestei zile nu e disponibil în Calendar.</p>'}`,
   })
 }
 
 export function paginaPericope(o: { ctx: Ctx; r: RandZi; d: RandDesfacut; zi: ZiLiturgica; texte: TexteZilei }): string {
   const p = esc(o.ctx.prefix)
   return pagina({
-    titlu: `Apostolul și Evanghelia · ${dataLunga(o.r.data)}`,
-    activ: 'calendar',
-    navigatie: o.ctx.nav,
-    utilizator: o.ctx.utilizator,
-    stil: STIL,
+    ...comune(o.ctx),
+    titluPagina: `Apostolul și Evanghelia · ${dataLunga(o.r.data)}`,
     indexabil: true,
-    continut: `
-<a class="inapoi fara-tipar" href="${p}/zi/${o.r.data}">← ziua</a>
-<div class="carte">
-  ${capFereastra(o.ctx, 'Lectura zilei', o.r, o.d, o.zi, true)}
-  <hr style="border:0;border-top:1px solid var(--margine);margin:1rem 0">
-  ${pericopeleHtml(o.zi, o.texte)}
-</div>`,
+    corp: `
+<p><a href="${p}/zi/${o.r.data}">← ziua</a></p>
+${capFereastra(o.ctx, 'Lectura zilei', o.r, o.d, o.zi, true)}
+<hr>
+${pericopeleHtml(o.zi, o.texte)}`,
   })
 }
 
@@ -373,9 +367,9 @@ export function paginaSarbatori(o: {
   const baza = `${p}/sarbatori/cruce-${o.cruce}/${o.an}`
   const luni = LUNI_SCURT.map((l, i) => {
     const m = i + 1
-    const n = o.peLuni[i] ?? 0
-    if (!n) return `<span class="gol">${esc(l.replace('.', '').toUpperCase())}</span>`
-    return `<a href="${baza}-${String(m).padStart(2, '0')}"${o.luna === m ? ' aria-current="page"' : ''}>${esc(l.replace('.', '').toUpperCase())}</a>`
+    const eticheta = esc(l.replace('.', '').toUpperCase())
+    if (!(o.peLuni[i] ?? 0)) return `<b class="acum" style="opacity:.35;border-color:var(--rule);color:var(--faint)">${eticheta}</b>`
+    return o.luna === m ? `<b class="acum">${eticheta}</b>` : `<a href="${baza}-${String(m).padStart(2, '0')}">${eticheta}</a>`
   }).join('')
   const grupate = new Map<number, string[]>()
   for (const x of o.randuri) {
@@ -384,36 +378,28 @@ export function paginaSarbatori(o: {
     grupate.set(x.r.luna, lista)
   }
   const corp = [...grupate.entries()].map(([l, lista]) => `<h3>${esc(LUNI[l - 1] ?? '')}</h3>${lista.join('')}`).join('')
-  const inapoi = `<a class="inapoi fara-tipar" href="${p}/${o.an}">← Înapoi</a>`
   return pagina({
-    titlu: `${titlu} · ${o.an}`,
-    activ: 'calendar',
-    navigatie: o.ctx.nav,
-    utilizator: o.ctx.utilizator,
-    stil: STIL,
+    ...comune(o.ctx),
+    titluPagina: `${titlu} · ${o.an}`,
     indexabil: true,
-    continut: `
-${inapoi}
-<div class="carte">
-  <h1>${esc(titlu)}</h1>
-  <p class="contor">${esc(cate)}</p>
-  <p class="ajutor">${esc(lamurire)}</p>
-  <nav class="nav-bara" style="justify-content:flex-start"><a href="${baza}"${o.luna ? '' : ' aria-current="page"'}>toate lunile</a></nav>
-  <nav class="luni-grila">${luni}</nav>
-  ${corp || '<p class="gol">Nicio zi.</p>'}
-</div>
-${inapoi} · <a class="mic-text" href="${p}/sarbatori/cruce-${rosie ? 'neagra' : 'rosie'}/${o.an}">${rosie ? 'crucea neagră' : 'crucea roșie'}</a>`,
+    corp: `
+<p><a href="${p}/${o.an}">← Înapoi</a></p>
+<h2>${esc(titlu)}</h2>
+<p class="contor">${esc(cate)}</p>
+<p>${esc(lamurire)}</p>
+<nav class="capitole"><a href="${baza}"${o.luna ? '' : ' style="border-color:var(--rosu);color:var(--rosu)"'}>toate lunile</a></nav>
+<nav class="capitole">${luni}</nav>
+${corp || '<p class="gol">Nicio zi.</p>'}
+<hr>
+<p><a href="${p}/${o.an}">← Înapoi</a> · <a href="${p}/sarbatori/cruce-${rosie ? 'neagra' : 'rosie'}/${o.an}">${rosie ? 'crucea neagră' : 'crucea roșie'}</a></p>`,
   })
 }
 
 export function paginaMesaj(ctx: Ctx, titlu: string, mesaj: string, fel: 'rea' | 'buna' | 'info' = 'info'): string {
   return pagina({
-    titlu,
-    activ: 'calendar',
-    navigatie: ctx.nav,
-    utilizator: ctx.utilizator,
-    stil: STIL,
-    continut: `<div class="carte ingust"><h1>${esc(titlu)}</h1>${alerta(fel, esc(mesaj))}<p class="sub"><a href="${esc(ctx.prefix)}/">Înapoi la calendar</a></p></div>`,
+    ...comune(ctx),
+    titluPagina: titlu,
+    corp: `<h2>${esc(titlu)}</h2>${alerta(fel, esc(mesaj))}<p><a href="${esc(ctx.prefix)}/">Înapoi la calendar</a></p>`,
   })
 }
 
@@ -423,7 +409,7 @@ export function paginaAdmin(o: {
   versiuni: Versiune[]
   corecturi: Array<{ data: string; camp: string; valoare_veche: string | null; valoare_noua: string | null; motiv: string; autor: string | null; moment: string }>
   abonati: Array<{ user_id: string; adresa: string; created_at: string }>
-  versiune: string
+  versiuneCalendar: string
   aniCalculati: number[]
   csrf: string
   mesaj?: string
@@ -453,42 +439,43 @@ export function paginaAdmin(o: {
         .join('')}</tbody></table>`
     : '<p class="gol">Niciun abonat.</p>'
   return pagina({
-    titlu: 'Calendar — administrare',
-    activ: 'calendar',
-    navigatie: o.ctx.nav,
-    utilizator: o.ctx.utilizator,
-    stil: STIL,
-    continut: `
+    ...comune(o.ctx),
+    titluPagina: 'Administrare',
+    corp: `
 ${o.mesaj ? alerta('buna', esc(o.mesaj)) : ''}
 ${o.eroare ? alerta('rea', esc(o.eroare)) : ''}
-<div class="carte">
-  <h1>Administrare calendar</h1>
-  <p class="ajutor">Versiunea calendarului: <strong>${esc(o.versiune)}</strong>. Anii calculați din Pascalie: ${o.aniCalculati.join(', ') || '—'}.</p>
-  <h2>Anii preluați de la Patriarhie</h2>
-  ${importuri}
-  <form method="post" action="${p}/admin/preia" style="margin-top:1rem">
-    <input type="hidden" name="csrf" value="${esc(o.csrf)}">
-    <label for="an">Preia un an de la calendar.patriarhia.ro</label>
-    <div class="randuri"><input id="an" name="an" type="number" min="2024" max="2099" value="${anUrmator}" style="width:8rem"><button type="submit" class="mic">Preia anul</button></div>
-    <p class="mic-text sters">Preluarea e idempotentă: anul se rescrie complet. Anul următor apare la sursă abia în decembrie.</p>
-  </form>
-</div>
-<div class="carte">
-  <h2>Corectură scrisă de mână</h2>
-  <p class="ajutor">Peste sursă, cu valoarea veche păstrată. Se deschide o versiune nouă și se anunță consumatorii (calendar.corrected).</p>
-  <form method="post" action="${p}/admin/corecteaza">
-    <input type="hidden" name="csrf" value="${esc(o.csrf)}">
-    <label for="data">Ziua</label><input id="data" name="data" type="date" required>
-    <label for="camp">Câmpul</label>
-    <select id="camp" name="camp">${['titlu', 'titlu_html', 'subtitlu', 'cruce', 'cruce_text', 'post', 'perioada', 'evanghelia', 'apostolul', 'zi_libera', 'nunti', 'parastase'].map((c) => `<option>${c}</option>`).join('')}</select>
-    <label for="valoare">Valoarea nouă</label><input id="valoare" name="valoare" type="text" maxlength="2000">
-    <label for="motiv">Motivul</label><input id="motiv" name="motiv" type="text" required maxlength="300">
-    <button type="submit">Scrie corectura</button>
-  </form>
-  <h3>Corecturile de până acum</h3>
-  ${corecturi}
-</div>
-<div class="carte"><h2>Versiuni</h2>${versiuni}</div>
-<div class="carte"><h2>Abonați</h2><p class="ajutor">Audiența „calendar-abonati" a serviciului de comunicare; adresele sunt cele ale conturilor.</p>${abonati}</div>`,
+<h2>Administrare calendar</h2>
+<p>Versiunea calendarului: <b>${esc(o.versiuneCalendar)}</b>. Anii calculați din Pascalie: ${o.aniCalculati.join(', ') || '—'}.</p>
+
+<h3>Anii preluați de la Patriarhie</h3>
+${importuri}
+<form method="post" action="${p}/admin/preia">
+  <input type="hidden" name="csrf" value="${esc(o.csrf)}">
+  <input name="an" type="number" min="2024" max="2099" value="${anUrmator}" style="width:8rem" aria-label="anul de preluat">
+  <button type="submit">Preia anul</button>
+</form>
+<p><small>Preluarea e idempotentă: anul se rescrie complet. Anul următor apare la sursă abia în decembrie.</small></p>
+
+<h3>Corectură scrisă de mână</h3>
+<p><small>Peste sursă, cu valoarea veche păstrată. Se deschide o versiune nouă și se anunță consumatorii.</small></p>
+<form method="post" action="${p}/admin/corecteaza" style="display:block">
+  <input type="hidden" name="csrf" value="${esc(o.csrf)}">
+  <label for="data">Ziua</label><input id="data" name="data" type="date" required>
+  <label for="camp">Câmpul</label>
+  <select id="camp" name="camp">${['titlu', 'titlu_html', 'subtitlu', 'cruce', 'cruce_text', 'post', 'perioada', 'evanghelia', 'apostolul', 'zi_libera', 'nunti', 'parastase'].map((c) => `<option>${c}</option>`).join('')}</select>
+  <label for="valoare">Valoarea nouă</label><input id="valoare" name="valoare" type="text" maxlength="2000" style="width:100%">
+  <label for="motiv">Motivul</label><input id="motiv" name="motiv" type="text" required maxlength="300" style="width:100%">
+  <button type="submit">Scrie corectura</button>
+</form>
+${corecturi}
+
+<h3>Versiuni</h3>
+${versiuni}
+
+<h3>Abonați</h3>
+<p><small>Audiența „calendar-abonati" a serviciului de comunicare; adresele sunt cele ale conturilor.</small></p>
+${abonati}`,
   })
 }
+
+export { ICOANE }

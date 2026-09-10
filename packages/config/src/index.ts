@@ -23,6 +23,8 @@ export const VariabileComune = z.object({
    * gateway) sunt cai: `/`, `/calendar`, `/program`, `/curatenie`, `/admin`. In
    * staging/productie sunt origini absolute, cate un subdomeniu de aplicatie. Goale = caile de dev.
    */
+  /** Home-ul platformei: `staging.sfantul-ilie.ro` (in dev, radacina gateway-ului). */
+  URL_HOME: z.string().default(''),
   URL_CONT: z.string().default(''),
   URL_CALENDAR: z.string().default(''),
   URL_PROGRAM: z.string().default(''),
@@ -43,6 +45,7 @@ export function citesteConfig(env: unknown): VariabileComune {
 
 /** Adresele celorlalte aplicatii, cu implicitul de dev (cai pe acelasi host). */
 export interface Navigatie {
+  home: string
   cont: string
   calendar: string
   program: string
@@ -52,7 +55,8 @@ export interface Navigatie {
 
 export function navigatieDin(cfg: VariabileComune): Navigatie {
   return {
-    cont: cfg.URL_CONT || '',
+    home: cfg.URL_HOME || '',
+    cont: cfg.URL_CONT || '/cont',
     calendar: cfg.URL_CALENDAR || '/calendar',
     program: cfg.URL_PROGRAM || '/program',
     curatenie: cfg.URL_CURATENIE || '/curatenie',

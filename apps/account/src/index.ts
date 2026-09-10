@@ -8,10 +8,11 @@ import {
   verificaCsrf,
   verificaTokenCsrf,
 } from '@xc/auth'
-import { citesteConfig, navigatieDin } from '@xc/config'
+import { citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
 import { SESIUNE_ANONIMA } from '@xc/contracts'
 import { Logger, correlationId } from '@xc/observability'
-import { html } from '@xc/ui'
+import { dataVersiunii, html } from '@xc/ui'
+import pkg from '../package.json'
 import {
   paginaAsteptareLink,
   paginaContNou,
@@ -26,6 +27,7 @@ export interface Env {
   ORIGINE_PUBLICA: string
   DOMENIU_COOKIE: string
   EMAIL_SUPERADMIN: string
+  VERSIUNE?: { timestamp?: string }
 }
 
 const DURATA_CSRF_SEC = 60 * 60 * 4
@@ -87,9 +89,10 @@ export default {
     const cid = correlationId(req)
     const log = new Logger({ service: 'app-account', correlationId: cid })
     const url = new URL(req.url)
-    const cale = url.pathname
+    const { prefix, cale } = prefixSiCale(url, '/cont')
     const domeniu = cfg.DOMENIU_COOKIE
     const nav = navigatieDin(cfg)
+    const ctx = { prefix, nav, versiune: pkg.version, modificata: dataVersiunii(env.VERSIUNE) }
 
     // Bariera CSRF pentru orice metoda care schimba date.
     if (req.method === 'POST') {
@@ -97,7 +100,7 @@ export default {
       if (problema) {
         log.warn('cerere respinsa de verificarea de origine', { problema })
         return html(
-          paginaMesaj({ nav,titlu: 'Cerere respinsă', fel: 'rea', text: `Verificare de securitate: ${problema}.` }),
+          paginaMesaj({ ctx,titlu: 'Cerere respinsă', fel: 'rea', text: `Verificare de securitate: ${problema}.` }),
           403,
         )
       }
@@ -108,7 +111,7 @@ export default {
       if (cale === '/auth/login' && req.method === 'GET') {
         const csrf = asiguraCsrf(req, domeniu)
         return html(
-          paginaIntrare({ nav,csrf: csrf.jeton }),
+          paginaIntrare({ ctx,csrf: csrf.jeton }),
           200,
           csrf.setCookie ? { 'set-cookie': csrf.setCookie } : {},
         )
@@ -117,7 +120,7 @@ export default {
       if (cale === '/auth/login' && req.method === 'POST') {
         const formular = await req.formData()
         const problema = verificaTokenCsrf(req, String(formular.get('csrf') ?? ''))
-        if (problema) return html(paginaMesaj({ nav,titlu: 'Cerere respinsă', fel: 'rea', text: problema }), 403)
+        if (problema) return html(paginaMesaj({ ctx,titlu: 'Cerere respinsă', fel: 'rea', text: problema }), 403)
 
         const email = String(formular.get('email') ?? '').trim().toLowerCase()
         const r = await cereLink(env, req, cid, email, null)
@@ -125,22 +128,22 @@ export default {
         if (r.status === 429) {
           const csrf = asiguraCsrf(req, domeniu)
           return html(
-            paginaIntrare({ nav,csrf: csrf.jeton, email, eroare: 'Prea multe cereri. Așteaptă câteva minute și reia.' }),
+            paginaIntrare({ ctx,csrf: csrf.jeton, email, eroare: 'Prea multe cereri. Așteaptă câteva minute și reia.' }),
             429,
           )
         }
         if (r.status >= 400) {
           const csrf = asiguraCsrf(req, domeniu)
-          return html(paginaIntrare({ nav,csrf: csrf.jeton, email, eroare: 'Adresa nu pare validă.' }), 400)
+          return html(paginaIntrare({ ctx,csrf: csrf.jeton, email, eroare: 'Adresa nu pare validă.' }), 400)
         }
-        return html(paginaAsteptareLink({ nav,email, linkDebug: r.debugLink }))
+        return html(paginaAsteptareLink({ ctx,email, linkDebug: r.debugLink }))
       }
 
       // ---------------------------------------------------------------- cont nou
       if (cale === '/auth/inregistrare' && req.method === 'GET') {
         const csrf = asiguraCsrf(req, domeniu)
         return html(
-          paginaContNou({ nav,csrf: csrf.jeton }),
+          paginaContNou({ ctx,csrf: csrf.jeton }),
           200,
           csrf.setCookie ? { 'set-cookie': csrf.setCookie } : {},
         )
@@ -149,29 +152,29 @@ export default {
       if (cale === '/auth/inregistrare' && req.method === 'POST') {
         const formular = await req.formData()
         const problema = verificaTokenCsrf(req, String(formular.get('csrf') ?? ''))
-        if (problema) return html(paginaMesaj({ nav,titlu: 'Cerere respinsă', fel: 'rea', text: problema }), 403)
+        if (problema) return html(paginaMesaj({ ctx,titlu: 'Cerere respinsă', fel: 'rea', text: problema }), 403)
 
         const email = String(formular.get('email') ?? '').trim().toLowerCase()
         const nume = String(formular.get('nume') ?? '').trim()
 
         if (!nume) {
           const csrf = asiguraCsrf(req, domeniu)
-          return html(paginaContNou({ nav,csrf: csrf.jeton, email, eroare: 'Spune-ne cum te cheamă.' }), 400)
+          return html(paginaContNou({ ctx,csrf: csrf.jeton, email, eroare: 'Spune-ne cum te cheamă.' }), 400)
         }
 
         const r = await cereLink(env, req, cid, email, nume)
         if (r.status === 429) {
           const csrf = asiguraCsrf(req, domeniu)
           return html(
-            paginaContNou({ nav,csrf: csrf.jeton, email, nume, eroare: 'Prea multe cereri. Așteaptă câteva minute și reia.' }),
+            paginaContNou({ ctx,csrf: csrf.jeton, email, nume, eroare: 'Prea multe cereri. Așteaptă câteva minute și reia.' }),
             429,
           )
         }
         if (r.status >= 400) {
           const csrf = asiguraCsrf(req, domeniu)
-          return html(paginaContNou({ nav,csrf: csrf.jeton, email, nume, eroare: 'Adresa nu pare validă.' }), 400)
+          return html(paginaContNou({ ctx,csrf: csrf.jeton, email, nume, eroare: 'Adresa nu pare validă.' }), 400)
         }
-        return html(paginaAsteptareLink({ nav,email, linkDebug: r.debugLink }))
+        return html(paginaAsteptareLink({ ctx,email, linkDebug: r.debugLink }))
       }
 
       // ------------------------------------------------- linkul din email
@@ -179,7 +182,7 @@ export default {
         const jeton = url.searchParams.get('jeton')
         if (!jeton) {
           return html(
-            paginaMesaj({ nav,titlu: 'Link incomplet', fel: 'rea', text: 'Linkul nu conține jetonul de confirmare.' }),
+            paginaMesaj({ ctx,titlu: 'Link incomplet', fel: 'rea', text: 'Linkul nu conține jetonul de confirmare.' }),
             400,
           )
         }
@@ -198,7 +201,7 @@ export default {
         if (!raspuns.ok) {
           const date = (await raspuns.json().catch(() => ({}))) as { motiv?: string }
           return html(
-            paginaMesaj({ nav,
+            paginaMesaj({ ctx,
               titlu: 'Link neutilizabil',
               fel: 'rea',
               text:
@@ -224,7 +227,7 @@ export default {
       if (cale === '/auth/logout') {
         const jeton = citesteCookie(req, NUME_COOKIE_SESIUNE)
         if (jeton) await apelIdentitate(env, '/logout', { token: jeton }, cid)
-        return redirect('/auth/login', { 'set-cookie': cookieSters(NUME_COOKIE_SESIUNE, domeniu) })
+        return redirect(`${prefix}/auth/login`, { 'set-cookie': cookieSters(NUME_COOKIE_SESIUNE, domeniu) })
       }
 
       // --------------------------------------------------------- profil + sesiuni
@@ -233,26 +236,26 @@ export default {
       if (cale === '/auth/revoca-tot' && req.method === 'POST') {
         const formular = await req.formData()
         const problema = verificaTokenCsrf(req, String(formular.get('csrf') ?? ''))
-        if (problema) return html(paginaMesaj({ nav,titlu: 'Cerere respinsă', fel: 'rea', text: problema }), 403)
-        if (!sesiune.authenticated || !sesiune.user) return redirect('/auth/login')
+        if (problema) return html(paginaMesaj({ ctx,titlu: 'Cerere respinsă', fel: 'rea', text: problema }), 403)
+        if (!sesiune.authenticated || !sesiune.user) return redirect(`${prefix}/auth/login`)
 
         await apelIdentitate(env, '/revoca-toate', { userId: sesiune.user.id }, cid)
-        return redirect('/auth/login', { 'set-cookie': cookieSters(NUME_COOKIE_SESIUNE, domeniu) })
+        return redirect(`${prefix}/auth/login`, { 'set-cookie': cookieSters(NUME_COOKIE_SESIUNE, domeniu) })
       }
 
       if (cale === '/auth/nume' && req.method === 'POST') {
         const formular = await req.formData()
         const problema = verificaTokenCsrf(req, String(formular.get('csrf') ?? ''))
-        if (problema) return html(paginaMesaj({ nav,titlu: 'Cerere respinsă', fel: 'rea', text: problema }), 403)
-        if (!sesiune.authenticated || !sesiune.user) return redirect('/auth/login')
+        if (problema) return html(paginaMesaj({ ctx,titlu: 'Cerere respinsă', fel: 'rea', text: problema }), 403)
+        if (!sesiune.authenticated || !sesiune.user) return redirect(`${prefix}/auth/login`)
 
         const nume = String(formular.get('nume') ?? '').trim().slice(0, 120)
         if (nume) await apelIdentitate(env, '/nume', { userId: sesiune.user.id, displayName: nume }, cid)
-        return redirect('/?salvat=1')
+        return redirect(`${prefix}/?salvat=1`)
       }
 
       if (cale === '/' || cale === '/profil') {
-        if (!sesiune.authenticated) return redirect('/auth/login')
+        if (!sesiune.authenticated) return redirect(`${prefix}/auth/login`)
         const csrf = asiguraCsrf(req, domeniu)
         const mesaj = url.searchParams.has('bun-venit')
           ? 'Bine ai venit! Contul tău e deschis.'
@@ -260,16 +263,16 @@ export default {
             ? 'Numele a fost salvat.'
             : undefined
         return html(
-          paginaProfil({ nav,sesiune, csrf: csrf.jeton, ...(mesaj ? { mesaj } : {}) }),
+          paginaProfil({ ctx, sesiune, csrf: csrf.jeton, ...(mesaj ? { mesaj } : {}) }),
           200,
           csrf.setCookie ? { 'set-cookie': csrf.setCookie } : {},
         )
       }
 
-      return html(paginaMesaj({ nav,titlu: 'Pagină inexistentă', fel: 'rea', text: 'Ruta nu există.' }), 404)
+      return html(paginaMesaj({ ctx,titlu: 'Pagină inexistentă', fel: 'rea', text: 'Ruta nu există.' }), 404)
     } catch (e) {
       log.error('eroare neasteptata', { eroare: e instanceof Error ? e.message : String(e) })
-      return html(paginaMesaj({ nav,titlu: 'Eroare', fel: 'rea', text: 'A apărut o eroare neașteptată.' }), 500)
+      return html(paginaMesaj({ ctx,titlu: 'Eroare', fel: 'rea', text: 'A apărut o eroare neașteptată.' }), 500)
     }
   },
 }

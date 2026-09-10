@@ -377,7 +377,8 @@ async function incarca(browser: Browser, html: string) {
   const page = await browser.newPage()
   await page.setContent(html, { waitUntil: 'load', timeout: 20000 })
   if (html.includes('data-potrivire')) {
-    await page.waitForFunction(() => document.documentElement.getAttribute('data-potrivit') === 'da', { timeout: 8000 }).catch(() => undefined)
+    // Expresia se evalueaza in browser, nu in worker — de aceea e sir, nu functie.
+    await page.waitForFunction("document.documentElement.getAttribute('data-potrivit') === 'da'", { timeout: 8000 }).catch(() => undefined)
   }
   return page
 }

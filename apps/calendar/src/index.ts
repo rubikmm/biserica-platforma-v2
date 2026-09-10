@@ -5,7 +5,8 @@ import { NUME_COOKIE_CSRF, citesteCookie, construiesteCookie, sesiuneCurenta, ve
 import { citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
 import { construiesteEnvelope, declaratieOutbox, golesteOutbox } from '@xc/events'
 import { Logger, correlationId } from '@xc/observability'
-import { adaugaZile, aziBucuresti, eDataValida, eroareApi, html, json, jsonCuEtag, zileIntre } from '@xc/ui'
+import { adaugaZile, aziBucuresti, dataVersiunii, eDataValida, eroareApi, html, json, jsonCuEtag, zileIntre } from '@xc/ui'
+import pkg from '../package.json'
 import { VOSCRESNE, textulPericopei, type PericopaCuText } from './biblia.js'
 import {
   aniPreluati,
@@ -48,6 +49,8 @@ export interface Env {
   DOMENIU_COOKIE: string
   EMAIL_SUPERADMIN: string
   URL_BIBLIA: string
+  /** Data publicarii, pentru subsol — binding-ul `version_metadata`. */
+  VERSIUNE?: { timestamp?: string }
 }
 
 const SERVICIU = 'app-calendar'
@@ -209,11 +212,21 @@ export default {
     // ------------------------------------------------------------------ oameni
     if (req.method === 'POST') {
       const problema = verificaCsrf(req, [cfg.ORIGINE_PUBLICA])
-      if (problema) return html(paginaMesaj({ prefix, nav, utilizator: null }, 'Verificare de securitate', problema, 'rea'), 403)
+      if (problema) {
+        const ctxMinim: Ctx = { prefix, nav, utilizator: null, eAdmin: false, versiune: pkg.version, modificata: dataVersiunii(env.VERSIUNE) }
+        return html(paginaMesaj(ctxMinim, 'Verificare de securitate', problema, 'rea'), 403)
+      }
     }
     const sesiune = await sesiuneCurenta(env.IDENTITATE, req).catch(() => SESIUNE_ANONIMA)
     const principal = principalDin(sesiune)
-    const ctx: Ctx = { prefix, nav, utilizator: sesiune.user?.displayName ?? sesiune.user?.email ?? null }
+    const ctx: Ctx = {
+      prefix,
+      nav,
+      utilizator: sesiune.user?.displayName ?? sesiune.user?.email ?? null,
+      eAdmin: sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin'),
+      versiune: pkg.version,
+      modificata: dataVersiunii(env.VERSIUNE),
+    }
     const authz = new ClientAutorizare(env.AUTORIZARE, cid)
 
     try {
@@ -239,7 +252,7 @@ export default {
         const semn = url.searchParams.get('abonat')
         const mesajAbonare = semn === '1' ? 'Gata, te-am trecut pe listă.' : semn === '0' ? 'Nu am putut face abonarea; încearcă din nou.' : semn === '2' ? 'Te-am scos de pe listă.' : undefined
         const abonat = principal ? await eAbonat(env, principal.userId) : false
-        return html(paginaLuna({ ctx, an, luna, randuri: lista, aniDisponibili, calculat, azi, cale: `${prefix}${cale}`, mesajAbonare, abonat, email: principal?.email ?? null }), 200, cachePagina)
+        return html(paginaLuna({ ctx, an, luna, randuri: lista, aniDisponibili, calculat, azi, cale: `${prefix}${cale}`, mesajAbonare, abonat }), 200, cachePagina)
       }
 
       // ziua si partile ei
@@ -306,7 +319,7 @@ export default {
         ])
         const abonati = membri?.membri ?? []
         return html(
-          paginaAdmin({ ctx, importuri, versiuni, corecturi, abonati, versiune, aniCalculati, csrf: csrf.jeton, mesaj: url.searchParams.get('ok') ?? undefined, eroare: url.searchParams.get('eroare') ?? undefined }),
+          paginaAdmin({ ctx, importuri, versiuni, corecturi, abonati, versiuneCalendar: versiune, aniCalculati, csrf: csrf.jeton, mesaj: url.searchParams.get('ok') ?? undefined, eroare: url.searchParams.get('eroare') ?? undefined }),
           200,
           csrf.setCookie ? { 'set-cookie': csrf.setCookie } : {},
         )
@@ -388,7 +401,7 @@ async function api(req: Request, env: Env, cale: string, url: URL, azi: string):
   const cache = { 'cache-control': CACHE_API }
 
   if (cale === '/health') {
-    return json({ ok: true, app: 'calendar', cod: 'A1', ani_preluati: ani, ani_calculati: aniCalculati, versiune_calendar: versiune, mediu: env.MEDIU, ora: new Date().toISOString() }, 200, { 'cache-control': 'no-store' })
+    return json({ ok: true, app: 'calendar', cod: 'A1', ani_preluati: ani, ani_calculati: aniCalculati, versiune_calendar: versiune, mediu: env.MEDIU, versiune: pkg.version, publicat: env.VERSIUNE?.timestamp ?? null, ora: new Date().toISOString() }, 200, { 'cache-control': 'no-store' })
   }
 
   if (cale === '/v1' || cale === '/v1/') {

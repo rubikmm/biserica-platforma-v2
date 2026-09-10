@@ -1,6 +1,7 @@
 import { correlationId } from '@xc/observability'
 
 export interface Env {
+  HOME: Fetcher
   CONT: Fetcher
   CALENDAR: Fetcher
   /** Se leaga pe masura ce aplicatiile sunt gata; in dev, un binding fara worker pornit opreste totul. */
@@ -11,15 +12,17 @@ export interface Env {
 }
 
 /**
- * Maparea cale -> aplicatie pentru preview. Ordinea conteaza: prima potrivire castiga,
- * iar `/` cade pe aplicatia de cont.
+ * Maparea cale -> aplicatie pentru preview. In staging si productie fiecare aplicatie are
+ * subdomeniul ei; aici, unde containerul are un singur port, fiecare sta sub calea ei, iar
+ * radacina e home-ul platformei — la fel ca pe `staging.sfantul-ilie.ro`.
  */
 function alegeAplicatia(env: Env, cale: string): Fetcher | null {
+  if (cale === '/cont' || cale.startsWith('/cont/')) return env.CONT
   if (cale === '/calendar' || cale.startsWith('/calendar/')) return env.CALENDAR
   if (cale === '/program' || cale.startsWith('/program/')) return env.PROGRAM ?? null
   if (cale === '/curatenie' || cale.startsWith('/curatenie/')) return env.CURATENIE ?? null
   if (cale === '/admin' || cale.startsWith('/admin/')) return env.ADMIN
-  return env.CONT
+  return env.HOME
 }
 
 export default {

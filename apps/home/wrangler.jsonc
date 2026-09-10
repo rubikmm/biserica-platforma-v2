@@ -1,18 +1,19 @@
 {
-  // Aplicatia de cont: BFF pentru identitate. Browserul vorbeste doar cu ea; ea vorbeste
-  // cu `xc-identity` prin Service Binding.
+  // Home-ul platformei: radacina domeniului (`staging.sfantul-ilie.ro`). Listeaza aplicatiile.
+  // Nu are baza si nu tine date; cere identitatii doar cine e, ca sa arate contul in antet.
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "xc-account",
+  "name": "xc-home",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-25",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
-  // Fara adresa *.workers.dev: cookie-ul si CSRF-ul sunt legate de domeniul propriu.
   "workers_dev": false,
+  // Data publicarii, pentru randul de versiune din subsol.
+  "version_metadata": { "binding": "VERSIUNE" },
 
   "vars": {
     "MEDIU": "dev",
-    "ORIGINE_PUBLICA": "https://rubik:8474/cont",
+    "ORIGINE_PUBLICA": "https://rubik:8474",
     "DOMENIU_COOKIE": "",
     "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
   },
@@ -21,38 +22,40 @@
 
   "env": {
     "staging": {
-      "name": "xc-account-staging",
+      "name": "xc-home-staging",
       "version_metadata": { "binding": "VERSIUNE" },
       "vars": {
         "MEDIU": "staging",
-        "ORIGINE_PUBLICA": "https://cont.staging.sfantul-ilie.ro",
+        "ORIGINE_PUBLICA": "https://staging.sfantul-ilie.ro",
         "DOMENIU_COOKIE": ".staging.sfantul-ilie.ro",
         "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
         "URL_HOME": "https://staging.sfantul-ilie.ro",
         "URL_CONT": "https://cont.staging.sfantul-ilie.ro",
+        "URL_CALENDAR": "https://calendar.staging.sfantul-ilie.ro",
         "URL_PROGRAM": "https://program.staging.sfantul-ilie.ro",
+        "URL_CURATENIE": "https://curatenie.staging.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.staging.sfantul-ilie.ro"
       },
       "services": [{ "binding": "IDENTITATE", "service": "xc-identity-staging" }],
-      // Subdomeniu NOU sub `staging.` — nu atinge nicio inregistrare DNS a V1.
-      "routes": [{ "pattern": "cont.staging.sfantul-ilie.ro", "custom_domain": true }]
+      // Subdomeniul `staging.` — nou, nu atinge nicio inregistrare DNS a V1.
+      "routes": [{ "pattern": "staging.sfantul-ilie.ro", "custom_domain": true }]
     },
     "production": {
-      "name": "xc-account-production",
+      "name": "xc-home-production",
       "version_metadata": { "binding": "VERSIUNE" },
       "vars": {
         "MEDIU": "production",
-        "ORIGINE_PUBLICA": "https://cont.sfantul-ilie.ro",
+        "ORIGINE_PUBLICA": "https://sfantul-ilie.ro",
         "DOMENIU_COOKIE": ".sfantul-ilie.ro",
         "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
         "URL_HOME": "https://sfantul-ilie.ro",
         "URL_CONT": "https://cont.sfantul-ilie.ro",
+        "URL_CALENDAR": "https://calendar.sfantul-ilie.ro",
         "URL_PROGRAM": "https://program.sfantul-ilie.ro",
+        "URL_CURATENIE": "https://curatenie.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.sfantul-ilie.ro"
-      },
-      "services": [{ "binding": "IDENTITATE", "service": "xc-identity-production" }]
-      // Ruta de productie se adauga DOAR la cutover-ul explicit al lui A13:
-      // "routes": [{ "pattern": "cont.sfantul-ilie.ro", "custom_domain": true }]
+      }
+      // Apexul productiei e al WordPress-ului V1 pana la o decizie explicita.
     }
   }
 }

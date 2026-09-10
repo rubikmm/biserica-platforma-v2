@@ -8,7 +8,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "wrangler dev -c apps/gateway/wrangler.jsonc -c apps/account/wrangler.jsonc -c apps/admin/wrangler.jsonc -c apps/calendar/wrangler.jsonc -c services/identity-worker/wrangler.jsonc -c services/authorization-worker/wrangler.jsonc -c services/audit-worker/wrangler.jsonc -c services/event-worker/wrangler.jsonc -c services/automation-worker/wrangler.jsonc -c services/communication-worker/wrangler.jsonc -c services/media-worker/wrangler.jsonc --ip 127.0.0.1 --port 8787 --persist-to .wrangler/state",
+    "dev": "wrangler dev -c apps/gateway/wrangler.jsonc -c apps/home/wrangler.jsonc -c apps/account/wrangler.jsonc -c apps/program/wrangler.jsonc -c apps/admin/wrangler.jsonc -c apps/calendar/wrangler.jsonc -c services/identity-worker/wrangler.jsonc -c services/authorization-worker/wrangler.jsonc -c services/audit-worker/wrangler.jsonc -c services/event-worker/wrangler.jsonc -c services/automation-worker/wrangler.jsonc -c services/communication-worker/wrangler.jsonc -c services/media-worker/wrangler.jsonc --ip 127.0.0.1 --port 8787 --persist-to .wrangler/state",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "vitest run",

@@ -1,212 +1,396 @@
 /**
- * Carcasa comuna a interfetelor. Un singur loc pentru antet, stil si mesaje —
- * exact ce lipsea in V1, unde fiecare aplicatie avea copia ei.
+ * CARCASA · structura si stilul tuturor aplicatiilor platformei.
  *
- * Fiecare aplicatie isi aduce stilul propriu prin `stil` si scriptul prin `script`; antetul,
- * paleta si formele de baza raman aici, o singura data.
+ * Grafica e cea din V1, mutata aici neschimbata (cerere user, 10.09.2026: „să avem la fel
+ * footerul și antetul; nu vreau altă variantă grafică acum"). Deosebirea fata de V1 e ca acolo
+ * fisierul se raspandea prin copiere in fiecare aplicatie; aici e un singur pachet, importat.
+ *
+ * Aplicatia nu scrie niciodata <html>, antetul sau subsolul. Da doar ce pune in sloturi:
+ *   .titlu     NUMELE aplicatiei (link spre radacina ei) + contul        [nume, cont]
+ *   .eyebrow   sfantul-ilie.ro — usa platformei
+ *   .btns      randul de unelte al aplicatiei                            [unelte]
+ *   (sub ele)  panouri care se deschid din unelte                        [subantet]
+ *   .cine      randul personal, ultimul din antet                        [personal]
+ *   <main>     continutul                                                [corp]
+ *   subsol     tema + versiunea + copyright, la fel peste tot
  */
 
 export function esc(text: unknown): string {
-  return String(text ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
+  return String(text ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
 }
 
-const STIL = `
+// ---------------------------------------------------------------------------
+// Stilul global (V1: src/comun/stil-comun.ts)
+// ---------------------------------------------------------------------------
+
+export const STIL_COMUN = `
 :root {
-  --fundal: #f6f5f3; --carte: #fff; --text: #23201c; --sters: #6b645c;
-  --accent: #7a5c3e; --accent-text: #fff; --margine: #e3ded7; --margine-tare: #cfc7bd;
-  --eroare-fundal: #fdeceb; --eroare-text: #8c261d;
-  --bine-fundal: #eaf5ec; --bine-text: #1f6b33;
-  --atentie-fundal: #fff4e0; --atentie-text: #8a5a00;
-  --rosu: #b3261e; --albastru: #1c58bb; --auriu: #a67c2e;
+  --ink:#14181F; --paper:#FCFCFB; --soft:#4A5261; --faint:#808A9B;
+  --rule:#DCDFE6; --rosu:#C62234; --albastru:#1C58BB; --tinta:#F4F5F7;
+  --azi:#12D96A; --azi-fund:rgba(18,217,106,.10);
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --fundal: #171512; --carte: #211e1a; --text: #ece7df; --sters: #a39a8e;
-    --accent: #c9a577; --accent-text: #1b1612; --margine: #37322c; --margine-tare: #4a433b;
-    --eroare-fundal: #3a1e1c; --eroare-text: #f3b4ad;
-    --bine-fundal: #1d3122; --bine-text: #a8dcb2;
-    --atentie-fundal: #3a2d12; --atentie-text: #f1cf86;
-    --rosu: #f0665c; --albastru: #7ea6ee; --auriu: #d8b36a;
-  }
+@media (prefers-color-scheme: dark) { :root:not([data-tema="light"]) {
+  --ink:#E7EAEF; --paper:#0E1116; --soft:#A7B0BE; --faint:#75808F;
+  --rule:#262D37; --rosu:#F0616F; --albastru:#7FA6F0; --tinta:#161B22;
+  --azi:#3BFF9E; --azi-fund:rgba(59,255,158,.09);
+} }
+:root[data-tema="dark"] {
+  --ink:#E7EAEF; --paper:#0E1116; --soft:#A7B0BE; --faint:#75808F;
+  --rule:#262D37; --rosu:#F0616F; --albastru:#7FA6F0; --tinta:#161B22;
+  --azi:#3BFF9E; --azi-fund:rgba(59,255,158,.09);
 }
-* { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
-body {
-  margin: 0; background: var(--fundal); color: var(--text);
-  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-}
-a { color: var(--accent); }
-.antet {
-  background: var(--carte); border-bottom: 1px solid var(--margine);
-  padding: 0 1rem; position: sticky; top: 0; z-index: 20;
-}
-.antet-interior {
-  max-width: 62rem; margin: 0 auto; display: flex; align-items: center;
-  gap: 1.1rem; min-height: 3.5rem; flex-wrap: wrap;
-}
-.larg .antet-interior, .larg main { max-width: 78rem; }
-.marca { font-weight: 650; letter-spacing: -0.01em; margin-right: auto; color: var(--text); text-decoration: none; }
-.antet a { color: var(--sters); text-decoration: none; font-size: .94rem; }
-.antet a:hover, .antet a[aria-current="page"] { color: var(--text); }
-.antet a[aria-current="page"] { font-weight: 600; border-bottom: 2px solid var(--accent); padding-bottom: .1rem; }
-main { max-width: 62rem; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
-.carte {
-  background: var(--carte); border: 1px solid var(--margine);
-  border-radius: 12px; padding: 1.5rem; margin-bottom: 1.25rem;
-}
-.ingust { max-width: 27rem; margin: 3rem auto; }
-h1 { font-size: 1.5rem; margin: 0 0 .35rem; letter-spacing: -0.02em; }
-h2 { font-size: 1.15rem; margin: 0 0 .75rem; }
-h3 { font-size: 1rem; margin: 1.2rem 0 .4rem; }
-p.ajutor { color: var(--sters); margin: 0 0 1.35rem; font-size: .94rem; }
-label { display: block; font-size: .88rem; font-weight: 550; margin: .9rem 0 .3rem; }
-input[type=text], input[type=email], input[type=password], input[type=datetime-local],
-input[type=date], input[type=time], input[type=number], input[type=tel], select, textarea {
-  width: 100%; padding: .6rem .7rem; border: 1px solid var(--margine);
-  border-radius: 8px; font: inherit; background: var(--carte); color: inherit;
-}
-input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-button, .buton {
-  margin-top: 1.15rem; width: 100%; padding: .65rem 1rem; border: 0; border-radius: 8px;
-  background: var(--accent); color: var(--accent-text); font: inherit; font-weight: 550;
-  cursor: pointer; text-decoration: none; display: inline-block; text-align: center;
-}
-button:hover, .buton:hover { filter: brightness(1.08); }
-button.secundar, .buton.secundar { background: transparent; color: var(--sters); border: 1px solid var(--margine); }
-button.mic, .buton.mic { width: auto; margin: 0; padding: .35rem .7rem; font-size: .88rem; }
-button.pericol { background: var(--rosu); color: #fff; }
-button[disabled], .buton[aria-disabled="true"] { opacity: .45; cursor: default; filter: none; }
-.alerta { padding: .7rem .85rem; border-radius: 8px; font-size: .93rem; margin-bottom: 1rem; }
-.alerta.rea { background: var(--eroare-fundal); color: var(--eroare-text); }
-.alerta.buna { background: var(--bine-fundal); color: var(--bine-text); }
-.alerta.info { background: #eef2f7; color: #2c4460; }
-.alerta.atentie { background: var(--atentie-fundal); color: var(--atentie-text); }
-@media (prefers-color-scheme: dark) { .alerta.info { background: #1f2a38; color: #c5d5ea; } }
-.alerta a { color: inherit; font-weight: 600; word-break: break-all; }
-.sub { color: var(--sters); font-size: .88rem; margin-top: 1.1rem; text-align: center; }
-.sub a { color: var(--accent); }
-table { width: 100%; border-collapse: collapse; font-size: .94rem; }
-th, td { text-align: left; padding: .55rem .5rem; border-bottom: 1px solid var(--margine); vertical-align: top; }
-th { color: var(--sters); font-weight: 550; font-size: .82rem; text-transform: uppercase; letter-spacing: .04em; }
-.eticheta {
-  display: inline-block; padding: .12rem .5rem; border-radius: 999px;
-  font-size: .78rem; background: #eee9e2; color: var(--sters); white-space: nowrap;
-}
-@media (prefers-color-scheme: dark) { .eticheta { background: #2e2923; } }
-.eticheta.publicat, .eticheta.validat, .eticheta.buna { background: var(--bine-fundal); color: var(--bine-text); }
-.eticheta.atentie, .eticheta.propus { background: var(--atentie-fundal); color: var(--atentie-text); }
-.eticheta.rea { background: var(--eroare-fundal); color: var(--eroare-text); }
-.gol { color: var(--sters); text-align: center; padding: 2rem 0; }
-.randuri { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
-.randuri button, .randuri form, .randuri .buton { margin: 0; width: auto; }
-.randuri form button { margin-top: 0; }
-.c-rosu { color: var(--rosu); }
-.c-albastru { color: var(--albastru); }
-.sters { color: var(--sters); }
-.mic-text { font-size: .86rem; }
-.nav-bara {
-  display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; justify-content: center;
-  margin: 0 0 1.2rem;
-}
-.nav-bara a, .nav-bara span.acum {
-  padding: .35rem .75rem; border: 1px solid var(--margine); border-radius: 999px;
-  text-decoration: none; color: var(--text); font-size: .9rem; background: var(--carte);
-}
-.nav-bara a[aria-current="page"], .nav-bara span.acum { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
-.nav-bara a.stins { opacity: .4; pointer-events: none; }
-.tiparit { display: none; }
+* { box-sizing:border-box }
+html { scroll-behavior:smooth; scroll-padding-top:170px;
+       overflow-y:scroll; scrollbar-gutter:stable }
+body { margin:0; padding:0 20px 80px; background:var(--paper); color:var(--ink);
+       font:17px/1.55 "Palatino Linotype","Book Antiqua",Palatino,Georgia,serif;
+       -webkit-text-size-adjust:100%; touch-action:manipulation;
+       -webkit-tap-highlight-color:transparent }
+.w { max-width:680px; margin:0 auto }
+.w.lat { max-width:900px }
+a { color:var(--rosu); text-decoration-thickness:1px; text-underline-offset:2px }
+.eyebrow { font:600 11px/1 ui-sans-serif,system-ui; letter-spacing:.16em;
+           text-transform:uppercase; color:var(--faint); margin:44px 0 12px }
+.eyebrow a { color:var(--faint); text-decoration:none }
+h1:first-child { margin-top:48px }
+h1 a { color:inherit; text-decoration:none }
+h1 + .eyebrow, .titlu + .eyebrow { margin:4px 0 16px }
+.titlu { display:flex; align-items:baseline; justify-content:space-between; gap:12px }
+.titlu h1 { letter-spacing:.06em }
+.cont { display:inline-flex; align-items:center; gap:7px; color:var(--soft);
+        text-decoration:none; font:13px/1 ui-sans-serif,system-ui;
+        white-space:nowrap; max-width:45% }
+.cont span { overflow:hidden; text-overflow:ellipsis }
+.cont svg { flex:none }
+.cont:hover { color:var(--rosu) }
+.cont-meniu { position:relative; max-width:45%; display:flex;
+              border:0; border-radius:0; padding:0; margin:0 }
+.cont-meniu .cont { max-width:100% }
+.cont-meniu summary { cursor:pointer; list-style:none; user-select:none }
+.cont-meniu summary::-webkit-details-marker { display:none }
+.cont-meniu[open] summary { color:var(--rosu); margin-bottom:0 }
+.cont-lista { position:absolute; right:0; top:calc(100% + 8px); min-width:170px;
+              background:var(--paper); border:1px solid var(--rule); border-radius:10px;
+              padding:6px 0; box-shadow:0 8px 24px rgba(0,0,0,.10); z-index:60 }
+.cont-lista a { display:block; padding:9px 16px; color:var(--ink); text-decoration:none;
+                font:14px/1.2 ui-sans-serif,system-ui }
+.cont-lista a:hover { background:var(--tinta); color:var(--rosu) }
+.cont-desparte { border:0; border-top:1px solid var(--rule); margin:6px 0 }
+h1 { font-size:36px; font-weight:400; letter-spacing:-.02em; margin:0 0 10px }
+h1 .cod { color:var(--rosu) }
+h2 { font-size:25px; font-weight:400; letter-spacing:-.01em; margin:34px 0 10px }
+h3 { font-size:17px; font-weight:600; margin:26px 0 8px }
+p { margin:10px 0 }
+small { color:var(--faint) }
+code { font:14px ui-monospace,SFMono-Regular,Menlo,monospace; background:var(--tinta);
+       padding:1px 5px; border-radius:5px }
+hr { border:0; border-top:1px solid var(--rule); margin:26px 0 }
+ul, ol { padding-left:22px } li { margin:3px 0 }
+table { border-collapse:collapse; width:100%; font-size:15.5px }
+th { text-align:left; font:600 10.5px/1.3 ui-sans-serif,system-ui; letter-spacing:.1em;
+     text-transform:uppercase; color:var(--faint); padding:8px 8px 6px;
+     border-bottom:1px solid var(--rule) }
+td { padding:7px 8px; border-bottom:1px solid var(--rule); vertical-align:top }
+tr:last-child td { border-bottom:0 }
+input, select, textarea, button { font:16px ui-sans-serif,system-ui; padding:8px 12px;
+                border:1px solid var(--rule); border-radius:8px;
+                background:var(--tinta); color:var(--ink) }
+button { cursor:pointer }
+form { display:flex; gap:8px; flex-wrap:wrap; margin:14px 0 }
+form[hidden] { display:none }
+form input[type=search] { flex:1; min-width:200px }
+label { display:block; font:600 12px/1.4 ui-sans-serif,system-ui; color:var(--faint);
+        letter-spacing:.04em; margin:10px 0 3px }
+nav.rand a { margin-right:14px }
+header nav.rand { margin:12px 0 }
+footer { color:var(--faint); font-size:14px }
+footer a { color:var(--faint) }
+details { border:1px solid var(--rule); border-radius:10px; padding:10px 14px; margin:14px 0 }
+summary { cursor:pointer; color:var(--soft) }
+details[open] summary { margin-bottom:8px }
+.sus { position:sticky; top:0; z-index:6; background:var(--paper); margin:0 -20px;
+       padding:8px 20px 10px; border-bottom:1px solid var(--rule) }
+.sus h1 { margin:12px 0 0; transition:font-size .15s ease }
+.sus .eyebrow { margin:2px 0 10px; transition:font-size .15s ease }
+.sus.mic h1 { font-size:19px; margin-top:6px }
+.sus.mic .eyebrow { font-size:8.5px; margin-bottom:8px }
+.btns { display:flex; gap:10px; margin:0 0 4px; flex-wrap:wrap }
+.btn { flex:1; text-align:center; padding:9px 6px; border:1px solid var(--rule);
+       border-radius:10px; background:var(--tinta); color:var(--ink);
+       font:15px ui-sans-serif,system-ui; text-decoration:none; cursor:pointer }
+.btn[aria-expanded="true"], .btn.activ { border-color:var(--rosu); color:var(--rosu) }
+.btn svg { vertical-align:-4px }
+.btn.intreg { flex:none; display:inline-block; padding:11px 20px }
+.btn.gol { opacity:.4; pointer-events:none }
+.capitole { display:flex; flex-wrap:wrap; gap:8px; margin:14px 0 }
+.capitole a, .capitole b.acum { min-width:42px; padding:8px 2px; text-align:center;
+  border:1px solid var(--rule); border-radius:8px; text-decoration:none;
+  font:15px ui-sans-serif,system-ui; color:var(--ink); font-weight:400 }
+.capitole b.acum { border-color:var(--rosu); color:var(--rosu); font-weight:600 }
+.cine { margin:2px 0 6px; text-align:right; font:12px/1.6 ui-sans-serif,system-ui;
+        color:var(--faint) }
+.cine a { color:var(--soft); text-decoration:none }
+.cine a:hover { color:var(--rosu); text-decoration:underline }
+.sus.mic .cine { display:none }
+.subsol-linie { border:0; border-top:1px solid var(--rule); margin:40px 0 0 }
+.versiune { margin:16px 0 0; display:flex; align-items:center; justify-content:center; gap:10px;
+            font:11px/1 ui-sans-serif,system-ui; letter-spacing:.08em; color:var(--faint) }
+.buton-tema { font:11px/1 ui-sans-serif,system-ui; letter-spacing:.08em; color:var(--faint);
+              background:none; border:1px solid var(--rule); border-radius:3px;
+              padding:5px 9px; cursor:pointer }
+.buton-tema:hover { color:var(--ink); border-color:var(--soft) }
+.subsol { margin-top:12px; font:13px/1.55 ui-sans-serif,system-ui; color:var(--faint) }
+.subsol p { margin:0 0 8px }
+.copyright { text-align:center }
+.alerta { padding:10px 14px; border:1px solid var(--rule); border-radius:10px;
+          font:15px/1.45 ui-sans-serif,system-ui; margin:14px 0 }
+.alerta.rea { border-color:var(--rosu); color:var(--rosu) }
+.alerta.buna { border-color:#2E8A4A; color:#2E8A4A }
+.alerta.atentie { border-color:#B8860B; color:#8A5A00 }
+.gol { color:var(--faint); font-style:italic }
+.c-rosu { color:var(--rosu) }
+.c-albastru { color:var(--albastru) }
+.sters { color:var(--faint) }
+.mic-text { font:13px/1.5 ui-sans-serif,system-ui }
 @media print {
-  .antet, .nav-bara, .fara-tipar { display: none !important; }
-  body { background: #fff; color: #000; }
-  .carte { border: 0; padding: 0; }
-  .tiparit { display: initial; }
+  .sus, .btns, .cine, .subsol-linie, .versiune, .subsol, .fara-tipar { display:none !important }
+  body { padding:0; background:#fff; color:#000 }
 }
 `
 
-/** Adresele celorlalte aplicatii. In dev sunt cai pe acelasi host; in staging, origini absolute. */
-export interface Navigatie {
-  cont: string
-  calendar: string
-  program: string
-  curatenie: string
-  admin: string
+// ---------------------------------------------------------------------------
+// JS-ul global (V1: src/comun/js-comun.ts) — tema dupa soare + antetul care se strange
+// ---------------------------------------------------------------------------
+
+export const JS_CAP = `
+(function () {
+  var radacina = document.documentElement;
+  radacina.className += ' cu-js';
+  var LAT=44.4268, LON=26.1025, RAD=Math.PI/180, ORA=3600e3;
+  function soare(d){
+    var an=d.getFullYear();
+    var n=Math.floor((d-new Date(an,0,1))/864e5)+1;
+    var B=RAD*360/365*(n-81);
+    var eot=9.87*Math.sin(2*B)-7.53*Math.cos(B)-1.5*Math.sin(B);
+    var decl=23.45*Math.sin(B)*RAD;
+    var cosH=(Math.sin(-0.833*RAD)-Math.sin(LAT*RAD)*Math.sin(decl))/(Math.cos(LAT*RAD)*Math.cos(decl));
+    if(cosH<-1||cosH>1) return null;
+    var H=Math.acos(cosH)/RAD;
+    var amiaza=720-4*LON-eot;
+    function laMin(m){ var t=new Date(Date.UTC(an,d.getMonth(),d.getDate())); t.setUTCMinutes(Math.round(m)); return t; }
+    return { rasarit:laMin(amiaza-4*H), apus:laMin(amiaza+4*H) };
+  }
+  function faza(acum){
+    var s=soare(acum); if(!s) return "zi";
+    var ziDeLa=+s.rasarit+ORA, noapteDeLa=+s.apus+ORA;
+    return (+acum>=ziDeLa && +acum<noapteDeLa) ? "zi" : "noapte";
+  }
+  function aleasa(){
+    var m=document.cookie.match(/(?:^|; )tema=(dark|light)/);
+    if(m) return m[1];
+    try{ var v=localStorage.getItem("tema"); if(v==="dark"||v==="light") return v; }catch(e){}
+    return null;
+  }
+  function tineMinte(t){
+    var d=/(^|\\.)sfantul-ilie\\.ro$/.test(location.hostname) ? ";domain=.sfantul-ilie.ro" : "";
+    document.cookie="tema="+t+";path=/;max-age=31536000;SameSite=Lax"+d;
+    try{ localStorage.setItem("tema", t); }catch(e){}
+  }
+  function aplica(){
+    var manual=aleasa();
+    var tema = manual || (faza(new Date(Date.now()))==="noapte" ? "dark" : "light");
+    radacina.setAttribute("data-tema", tema);
+    var mc=document.querySelector('meta[name="theme-color"]');
+    if(mc) mc.setAttribute("content", tema==="dark" ? "#0E1116" : "#FCFCFB");
+    var b=document.getElementById("btn-tema");
+    if(b){ b.hidden=false; b.textContent = tema==="dark" ? "\\u2600 zi" : "\\u263D noapte"; }
+  }
+  aplica();
+  addEventListener("DOMContentLoaded", function () {
+    aplica();
+    var b=document.getElementById("btn-tema");
+    if(b) b.addEventListener("click", function(){
+      var tema = radacina.getAttribute("data-tema")==="dark" ? "light" : "dark";
+      tineMinte(tema);
+      aplica();
+    });
+  });
+  setInterval(aplica, 60e3);
+  document.addEventListener("gesturestart", function(e){ e.preventDefault(); });
+})();
+`
+
+export const JS_JOS = `
+(function(){
+  var cap=document.getElementById("cap");
+  if(!cap) return;
+  var de=document.documentElement;
+  var PRAG_LASA=8, PRAG_MIN=30, MARJA=8;
+  var stransa=false, pierdut=-1;
+  function pierdere(){
+    if(pierdut>=0) return pierdut;
+    var st=document.createElement("style");
+    st.textContent="#cap,#cap *{transition:none!important}";
+    document.head.appendChild(st);
+    var era=cap.classList.contains("mic");
+    cap.classList.add("mic");    var mic=cap.offsetHeight;
+    cap.classList.remove("mic"); var mare=cap.offsetHeight;
+    cap.classList.toggle("mic",era);
+    st.remove();
+    pierdut=Math.max(0,mare-mic);
+    return pierdut;
+  }
+  function laDerulare(){
+    var y=window.pageYOffset||de.scrollTop;
+    var acum;
+    if(stransa) acum = y>PRAG_LASA;
+    else {
+      var p=pierdere();
+      acum = y>Math.max(PRAG_MIN,p+PRAG_LASA+MARJA)
+          && (de.scrollHeight-window.innerHeight-p)>PRAG_LASA;
+    }
+    if(acum===stransa) return;
+    stransa=acum;
+    cap.classList.toggle("mic",stransa);
+  }
+  addEventListener("scroll",laDerulare,{passive:true});
+  addEventListener("resize",function(){ pierdut=-1; laDerulare(); });
+  laDerulare();
+})();
+(function(){
+  document.addEventListener("click", function(e){
+    var deschise=document.querySelectorAll("details.cont-meniu[open]");
+    for (var i=0;i<deschise.length;i++){
+      if(!deschise[i].contains(e.target)) deschise[i].removeAttribute("open");
+    }
+  });
+})();
+`
+
+// ---------------------------------------------------------------------------
+// Iconitele platformei
+// ---------------------------------------------------------------------------
+
+export const ICOANE = {
+  om: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.8-3.6 4.7-5.1 8-5.1s6.2 1.5 8 5.1"/></svg>`,
+  lupa: `<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20.5 20.5-4.6-4.6"/></svg>`,
+  calendar: `<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg>`,
+  foaie: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>`,
+  arhiva: `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/></svg>`,
 }
 
-const NAVIGATIE_DEV: Navigatie = {
-  cont: '',
-  calendar: '/calendar',
-  program: '/program',
-  curatenie: '/curatenie',
-  admin: '/admin',
+// ---------------------------------------------------------------------------
+// Contul din antet
+// ---------------------------------------------------------------------------
+
+export interface Cont {
+  /** Unde duce cand nu e nimeni intrat. */
+  href?: string
+  nume?: string
+  intrat?: boolean
+  admin?: boolean
+  /** Adresa profilului si a iesirii — aplicatia de cont. */
+  urlCont?: string
+  urlAdmin?: string
 }
+
+function contul(c: Cont): string {
+  const urlCont = c.urlCont ?? ''
+  const nume = c.nume ?? 'Cont'
+  if (!c.intrat) {
+    return `<a class="cont" href="${esc(c.href ?? `${urlCont}/auth/login`)}">${ICOANE.om}<span>${esc(nume)}</span></a>`
+  }
+  return `<details class="cont-meniu">
+        <summary class="cont">${ICOANE.om}<span>${esc(nume)}</span></summary>
+        <nav class="cont-lista">
+          <a href="${esc(urlCont)}/">Profil</a>${c.admin ? `
+          <a href="${esc(c.urlAdmin ?? '')}/">Administrare</a>` : ''}
+          <a href="${esc(urlCont)}/auth/logout">Ieșire</a>
+        </nav>
+      </details>`
+}
+
+// ---------------------------------------------------------------------------
+// Pagina
+// ---------------------------------------------------------------------------
 
 export interface OptiuniPagina {
+  /** NUMELE din antet — un cuvant, cu majuscule: CALENDAR, PROGRAMUL, CURĂȚENIE. */
+  nume: string
+  /** Numele intreg al aplicatiei, pentru <title>. */
   titlu: string
-  /** Emailul sau numele celui logat, daca e cineva — apare in antet, cu logout. */
-  utilizator?: string | null
-  /** Care intrare din antet e cea curenta. */
-  activ?: keyof Navigatie
-  navigatie?: Navigatie
-  continut: string
-  /** CSS propriu aplicatiei, pus dupa cel comun. */
-  stil?: string
-  /** JavaScript propriu aplicatiei, pus la sfarsitul paginii. */
-  script?: string
-  /** Continut suplimentar in <head> (meta, link-uri). */
-  cap?: string
-  /** Pagina ocupa latimea mare (calendare, tabele late). */
-  larg?: boolean
-  /** Paginile publice pot fi indexate; implicit nu. */
+  /** Ce scrie in <title> inaintea numelui bisericii. Implicit: `titlu`. */
+  titluPagina?: string
+  /** Unde duce numele din antet (radacina aplicatiei). */
+  acasa?: string
+  /** Unde duce `sfantul-ilie.ro` de sub titlu: home-ul platformei. */
+  urlPlatforma?: string
+  /** Stilul aplicatiei — se lipeste DUPA cel global si il suprascrie. */
+  local?: string
+  cont?: Cont | null
+  /** Randul de unelte din antet. */
+  unelte?: string
+  /** Ce sta in antet sub unelte. */
+  subantet?: string
+  /** Randul personal — ultimul din antet. */
+  personal?: string
+  corp: string
+  /** Data publicarii, pentru subsol. */
+  modificata?: string
+  versiune?: string
+  metaExtra?: string
+  scripturi?: string
+  clasaCorp?: string
+  /** Pagina ocupa latimea mare (arhive, tabele late). */
+  lat?: boolean
   indexabil?: boolean
-  /** Ce se intampla la „Ieșire": implicit logout-ul contului. */
-  linkIesire?: string
 }
 
-const ETICHETE: Array<[keyof Navigatie, string]> = [
-  ['cont', 'Cont'],
-  ['calendar', 'Calendar'],
-  ['program', 'Program'],
-  ['curatenie', 'Curățenie'],
-  ['admin', 'Administrare'],
-]
+export function subsol(versiune = '0.1.0', modificata = ''): string {
+  return `<hr class="subsol-linie">
+<p class="versiune">
+  <button id="btn-tema" type="button" class="buton-tema" aria-label="Schimbă tema" hidden></button>
+  <span>v${esc(versiune)}${modificata ? ` · ${esc(modificata)}` : ''}</span>
+</p>
+<footer class="subsol">
+  <p class="copyright">${new Date().getFullYear()} © Biserica Sfântul Ilie - Hanul Colței</p>
+</footer>`
+}
 
-export function pagina(o: OptiuniPagina): string {
-  const nav = o.navigatie ?? NAVIGATIE_DEV
-  const legaturi = ETICHETE.map(([cheie, eticheta]) => {
-    const curent = o.activ === cheie ? ' aria-current="page"' : ''
-    return `<a href="${esc(nav[cheie])}/"${curent}>${esc(eticheta)}</a>`
-  }).join('')
+function antet(p: OptiuniPagina): string {
+  const c = p.cont === null ? '' : contul(p.cont ?? {})
+  return `<header class="sus" id="cap">
+  <div class="w${p.lat ? ' lat' : ''}">
+    <div class="titlu">
+      <h1><a href="${esc(p.acasa ?? '/')}">${esc(p.nume)}</a></h1>
+      ${c}
+    </div>
+    <p class="eyebrow"><a href="${esc(p.urlPlatforma || '/')}">sfantul-ilie.ro</a></p>${p.unelte ? `\n    <nav class="btns">${p.unelte}</nav>` : ''}${p.subantet ? `\n    ${p.subantet}` : ''}${p.personal ? `\n    ${p.personal}` : ''}
+  </div>
+</header>`
+}
 
-  const zonaUtilizator = o.utilizator
-    ? `<span style="font-size:.88rem;color:var(--sters)">${esc(o.utilizator)}</span>
-       <a href="${esc(o.linkIesire ?? `${nav.cont}/auth/logout`)}">Ieșire</a>`
-    : `<a href="${esc(nav.cont)}/auth/login">Intră</a>`
-
+export function pagina(p: OptiuniPagina): string {
+  const w = `w${p.lat ? ' lat' : ''}`
   return `<!doctype html>
-<html lang="ro"${o.larg ? ' class="larg"' : ''}>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="${o.indexabil ? 'index, follow' : 'noindex, nofollow'}">
-<title>${esc(o.titlu)}</title>
-<style>${STIL}${o.stil ?? ''}</style>
-${o.cap ?? ''}
-</head>
-<body>
-<header class="antet"><div class="antet-interior">
-  <a class="marca" href="${esc(nav.cont)}/">Platforma parohiei</a>
-  ${legaturi}
-  ${zonaUtilizator}
-</div></header>
-<main>${o.continut}</main>
-${o.script ? `<script>${o.script}</script>` : ''}
-</body>
-</html>`
+<html lang="ro"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#FCFCFB">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="${esc(p.titlu)}">
+<meta name="robots" content="${p.indexabil ? 'index, follow' : 'noindex, nofollow'}">${p.metaExtra ? `\n${p.metaExtra}` : ''}
+<title>${esc(p.titluPagina ?? p.titlu)} · Sfântul Ilie — Hanul Colței</title>
+<style>${STIL_COMUN}${p.local ?? ''}</style>
+<script>${JS_CAP}</script>
+</head><body${p.clasaCorp ? ` class="${esc(p.clasaCorp)}"` : ''}>
+${antet(p)}
+<div class="${w}">
+<main>${p.corp}</main>
+${subsol(p.versiune, p.modificata)}
+</div>
+<script>${JS_JOS}</script>${p.scripturi ? `\n<script>${p.scripturi}</script>` : ''}
+</body></html>`
 }
 
 export function html(corp: string, status = 200, antete: Record<string, string> = {}): Response {
@@ -224,6 +408,21 @@ export function html(corp: string, status = 200, antete: Record<string, string> 
 
 export function alerta(fel: 'rea' | 'buna' | 'info' | 'atentie', mesaj: string): string {
   return `<div class="alerta ${fel}">${mesaj}</div>`
+}
+
+/**
+ * „1 sep. 2026, 14:35" — data SI ora publicarii, din binding-ul `version_metadata`
+ * (ora la Bucuresti; cerere user, 10.09.2026: ora langa data e utila cand se publica des).
+ */
+export function dataVersiunii(meta?: { timestamp?: string }): string {
+  const t = meta?.timestamp
+  if (!t) return ''
+  const d = new Date(t)
+  if (Number.isNaN(d.getTime())) return ''
+  const zi = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Bucharest' }).format(d)
+  const [a, l, z] = zi.split('-').map(Number) as [number, number, number]
+  const LUNI_MIC = ['ian', 'feb', 'mar', 'apr', 'mai', 'iun', 'iul', 'aug', 'sep', 'oct', 'noi', 'dec']
+  return `${z} ${LUNI_MIC[l - 1]}. ${a}, ${oraBucuresti(d)}`
 }
 
 // ---------------------------------------------------------------------------
@@ -268,23 +467,16 @@ export const LUNI = [
   'ianuarie', 'februarie', 'martie', 'aprilie', 'mai', 'iunie',
   'iulie', 'august', 'septembrie', 'octombrie', 'noiembrie', 'decembrie',
 ]
-export const LUNI_SCURT = ['ian.', 'feb.', 'mar.', 'apr.', 'mai', 'iun.', 'iul.', 'aug.', 'sept.', 'oct.', 'nov.', 'dec.']
+export const LUNI_SCURT = ['ian.', 'feb.', 'mart.', 'apr.', 'mai', 'iun.', 'iul.', 'aug.', 'sept.', 'oct.', 'noiem.', 'dec.']
 export const ZILE_SAPTAMANA = ['duminică', 'luni', 'marți', 'miercuri', 'joi', 'vineri', 'sâmbătă']
 export const ZILE_SAPTAMANA_COD = ['duminica', 'luni', 'marti', 'miercuri', 'joi', 'vineri', 'sambata'] as const
 
-/** Data de azi la Bucuresti, ca 'YYYY-MM-DD'. */
 export function aziBucuresti(acum: Date = new Date()): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Bucharest' }).format(acum)
 }
 
-/** Ora de perete la Bucuresti, ca 'HH:MM'. */
 export function oraBucuresti(acum: Date = new Date()): string {
-  return new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Europe/Bucharest',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(acum)
+  return new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Bucharest', hour: '2-digit', minute: '2-digit', hour12: false }).format(acum)
 }
 
 export function eDataValida(s: string): boolean {
@@ -293,7 +485,6 @@ export function eDataValida(s: string): boolean {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s
 }
 
-/** Aritmetica pe zile, in UTC — datele calendaristice nu au fus. */
 export function adaugaZile(data: string, zile: number): string {
   const d = new Date(`${data}T00:00:00Z`)
   d.setUTCDate(d.getUTCDate() + zile)
@@ -308,24 +499,20 @@ export function zileIntre(deLa: string, panaLa: string): number {
   return Math.round((Date.parse(`${panaLa}T00:00:00Z`) - Date.parse(`${deLa}T00:00:00Z`)) / 86400000)
 }
 
-/** Lunea saptamanii care contine data. */
 export function luneaSaptamanii(data: string): string {
   const zs = ziuaSaptamanii(data)
   return adaugaZile(data, zs === 0 ? -6 : 1 - zs)
 }
 
-/** „28 august 2026" */
 export function dataLunga(data: string): string {
   const [a, l, z] = data.split('-').map(Number) as [number, number, number]
   return `${z} ${LUNI[l - 1] ?? ''} ${a}`
 }
 
-/** „duminică, 30 august 2026" */
 export function dataCuZi(data: string): string {
   return `${ZILE_SAPTAMANA[ziuaSaptamanii(data)]}, ${dataLunga(data)}`
 }
 
-/** „7 – 13 septembrie 2026" sau „29 sept. – 5 oct. 2026" pentru intervale pe doua luni. */
 export function intervalLizibil(deLa: string, panaLa: string): string {
   const [a1, l1, z1] = deLa.split('-').map(Number) as [number, number, number]
   const [a2, l2, z2] = panaLa.split('-').map(Number) as [number, number, number]
@@ -334,7 +521,6 @@ export function intervalLizibil(deLa: string, panaLa: string): string {
   return `${z1} ${LUNI_SCURT[l1 - 1] ?? ''} ${a1} – ${z2} ${LUNI_SCURT[l2 - 1] ?? ''} ${a2}`
 }
 
-/** Un moment ISO adus la ora Bucurestiului, lizibil: „10 septembrie 2026, 11:26". */
 export function momentLizibil(iso: string): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
@@ -342,7 +528,6 @@ export function momentLizibil(iso: string): string {
   return `${dataLunga(zi)}, ${oraBucuresti(d)}`
 }
 
-/** Text fara diacritice si fara majuscule, pentru cautari si comparatii. */
 export function faraDiacritice(s: string): string {
   return s
     .normalize('NFD')

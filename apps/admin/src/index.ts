@@ -3,7 +3,8 @@ import { ClientAutorizare } from '@xc/authorization'
 import { sesiuneCurenta } from '@xc/auth'
 import { citesteConfig, navigatieDin } from '@xc/config'
 import { Logger, correlationId } from '@xc/observability'
-import { alerta, esc, html, pagina } from '@xc/ui'
+import { alerta, dataVersiunii, esc, html, pagina } from '@xc/ui'
+import pkg from '../package.json'
 
 export interface Env {
   IDENTITATE: Fetcher
@@ -15,6 +16,7 @@ export interface Env {
   ORIGINE_PUBLICA: string
   DOMENIU_COOKIE: string
   EMAIL_SUPERADMIN: string
+  VERSIUNE?: { timestamp?: string }
 }
 
 interface IntrareAuditRand {
@@ -82,22 +84,18 @@ export default {
       return new Response(null, { status: 303, headers: { location: `${nav.cont}/auth/login` } })
     }
 
+    const eAdmin = sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin')
     const authz = new ClientAutorizare(env.AUTORIZARE, cid)
     const decizie = await authz.can(principal, 'audit.read', SCOPE_GLOBAL)
 
     if (!decizie.allowed) {
       return html(
         pagina({
-          titlu: 'Administrare',
-          utilizator: principal.email,
-          activ: 'admin',
-          navigatie: nav,
-          continut: `<div class="carte ingust">
-            <h1>Administrare</h1>
+          ...comune(env, nav, principal.email, eAdmin),
+          corp: `<h2>Administrare</h2>
             ${alerta('rea', 'Nu ai permisiunea <code>audit.read</code>.')}
             <p class="ajutor">Ești autentificat ca ${esc(principal.email)}, dar fără drepturile necesare.
-            Asta confirmă totuși că sesiunea SSO funcționează și pe această aplicație.</p>
-          </div>`,
+            Asta confirmă totuși că sesiunea funcționează și pe această aplicație.</p>`,
         }),
         403,
       )
@@ -134,41 +132,51 @@ export default {
 
       return html(
         pagina({
-          titlu: 'Administrare',
-          utilizator: principal.email,
-          activ: 'admin',
-          navigatie: nav,
-          continut: `
-<div class="carte">
-  <h1>Administrare</h1>
-  <p class="ajutor">Ești autentificat ca <strong>${esc(principal.email)}</strong> — fără să te fi
+          ...comune(env, nav, principal.email, eAdmin),
+          corp: `
+<h2>Administrare</h2>
+  <p>Ești autentificat ca <strong>${esc(principal.email)}</strong> — fără să te fi
   autentificat din nou pe această aplicație. Rolurile tale: ${sesiune.roles
     .map((r) => `<span class="eticheta">${esc(r.role)}</span>`)
     .join(' ')}</p>
   ${alerta('info', `Automatizarea a produs <strong>${actiuni.length}</strong> acțiuni până acum. Nicio comunicare reală nu a plecat: toate adaptoarele sunt în sandbox.`)}
-</div>
-<div class="carte">
-  <h2>Audit — ultimele acțiuni</h2>
+
+<h3>Audit — ultimele acțiuni</h3>
   ${tabelAudit(audit)}
-</div>
-<div class="carte">
-  <h2>Comunicare — livrări înregistrate</h2>
-  ${tabelLivrari(livrari)}
-</div>`,
+
+<h3>Comunicare — livrări înregistrate</h3>
+  ${tabelLivrari(livrari)}`,
         }),
       )
     } catch (e) {
       log.error('eroare la citirea panoului', { eroare: e instanceof Error ? e.message : String(e) })
       return html(
         pagina({
-          titlu: 'Administrare',
-          utilizator: principal.email,
-          activ: 'admin',
-          navigatie: nav,
-          continut: `<div class="carte">${alerta('rea', 'Nu am putut citi datele panoului.')}</div>`,
+          ...comune(env, nav, principal.email, eAdmin),
+          corp: `${alerta("rea", "Nu am putut citi datele panoului.")}`,
         }),
         500,
       )
     }
   },
 }
+
+/** Carcasa comuna a paginilor de administrare. */
+function comune(env: Env, nav: ReturnType<typeof navigatieDin>, email: string, eAdmin: boolean) {
+  return {
+    nume: 'ADMINISTRARE',
+    titlu: 'Administrarea platformei',
+    acasa: `${nav.admin}/`,
+    urlPlatforma: nav.home || '/',
+    local: STIL,
+    versiune: pkg.version,
+    modificata: dataVersiunii(env.VERSIUNE),
+    cont: { intrat: true, nume: email, admin: eAdmin, urlCont: nav.cont, urlAdmin: nav.admin },
+  }
+}
+
+const STIL = `
+.eticheta { display:inline-block; border:1px solid var(--rule); border-radius:999px;
+            padding:1px 8px; font:12px ui-sans-serif,system-ui; color:var(--soft) }
+.eticheta.publicat { border-color:#2E8A4A; color:#2E8A4A }
+`

@@ -1,0 +1,19 @@
+{
+  "name": "@xc/app-home",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "lint": "tsc --noEmit",
+    "deploy:staging": "wrangler deploy --env staging"
+  },
+  "dependencies": {
+    "@xc/auth": "workspace:*",
+    "@xc/config": "workspace:*",
+    "@xc/contracts": "workspace:*",
+    "@xc/observability": "workspace:*",
+    "@xc/ui": "workspace:*"
+  }
+}

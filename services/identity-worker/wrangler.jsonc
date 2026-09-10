@@ -14,7 +14,7 @@
   // dev: `wrangler dev` nu trimite prin binding, deci ramanem pe sandbox si linkul apare in pagina.
   "vars": {
     "MEDIU": "dev",
-    "ORIGINE_PUBLICA": "https://rubik:8474",
+    "ORIGINE_PUBLICA": "https://rubik:8474/cont",
     "DOMENIU_COOKIE": "",
     "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
     "ADAPTOR_EMAIL": "sandbox"

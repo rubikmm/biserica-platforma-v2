@@ -209,6 +209,24 @@ importers:
         specifier: workspace:*
         version: link:../../packages/observability
 
+  apps/home:
+    dependencies:
+      '@xc/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@xc/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@xc/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@xc/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@xc/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+
   apps/program:
     dependencies:
       '@cloudflare/puppeteer':

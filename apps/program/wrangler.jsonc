@@ -9,6 +9,8 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
   "workers_dev": false,
+  // Data publicarii, pentru randul de versiune din subsol.
+  "version_metadata": { "binding": "VERSIUNE" },
 
   "vars": {
     "MEDIU": "dev",
@@ -52,11 +54,13 @@
   "env": {
     "staging": {
       "name": "xc-program-staging",
+      "version_metadata": { "binding": "VERSIUNE" },
       "vars": {
         "MEDIU": "staging",
         "ORIGINE_PUBLICA": "https://program.staging.sfantul-ilie.ro",
         "DOMENIU_COOKIE": ".staging.sfantul-ilie.ro",
         "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
+        "URL_HOME": "https://staging.sfantul-ilie.ro",
         "URL_CONT": "https://cont.staging.sfantul-ilie.ro",
         "URL_CALENDAR": "https://calendar.staging.sfantul-ilie.ro",
         "URL_PROGRAM": "https://program.staging.sfantul-ilie.ro",
@@ -87,11 +91,13 @@
     },
     "production": {
       "name": "xc-program-production",
+      "version_metadata": { "binding": "VERSIUNE" },
       "vars": {
         "MEDIU": "production",
         "ORIGINE_PUBLICA": "https://program.sfantul-ilie.ro",
         "DOMENIU_COOKIE": ".sfantul-ilie.ro",
         "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
+        "URL_HOME": "https://sfantul-ilie.ro",
         "URL_CONT": "https://cont.sfantul-ilie.ro",
         "URL_CALENDAR": "https://calendar.sfantul-ilie.ro",
         "URL_PROGRAM": "https://program.sfantul-ilie.ro",

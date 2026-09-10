@@ -11,29 +11,51 @@ Cloudflare noi cu prefix `xc-`. Nu se refolosește nimic din V1 — nici cod, ni
 nevoie de date existente, ele se copiază. Din V1 se preiau **funcțiile** (ce face fiecare
 aplicație), nu implementarea.
 
+**Structura mare, care nu se încalcă la nicio portare** (user, 10.09.2026):
+- **datele stau într-un loc** — aplicația ține doar ce e al domeniului ei; ce e al altcuiva se cere;
+- **autentificarea la fel** — un singur cont, la `identity`; nicio aplicație nu are identitate proprie,
+  listă de nume, parolă locală sau cookie de om;
+- **datele personale nu se copiază** — aplicațiile țin `user_id`, nu nume/email/telefon;
+- **abonările** sunt audiențe ale serviciului de comunicare, nu liste în aplicații;
+- **emailul** pleacă doar prin `communication-worker`, care ține și arhiva a ce a plecat.
+
+**Grafica**: carcasa V1 (antet, subsol, temă după soare) mutată în `@xc/ui`. Nu se inventează altă
+variantă grafică — se umblă la ea mai târziu, peste tot deodată (user, 10.09.2026).
+
+**Deocamdată totul e la liber**: nicio pagină de citit nu cere cont. Se închide mai târziu, după ce
+toate aplicațiile ajung la același nivel (user, 10.09.2026). Scrierea cere permisiune centrală.
+
 Etape:
 
 1. ✅ **Nucleul** — monorepo, identitate fără parolă (email → link), autorizare centrală,
-   contracte, evenimente, audit, automatizare, comunicare (sandbox), program pilot.
-2. ✅ **Staging** — 10 workeri publicați pe `xc-*-staging`, baze migrate, rute
-   `cont/calendar/admin.staging.sfantul-ilie.ro`, email real prin Cloudflare Email Service.
-3. ⏳ **Portarea aplicațiilor**, în ordinea din `docs/migration/v1-to-v2.md` (propunere în
-   canvasul canalului; așteaptă confirmarea utilizatorului): A1 calendar → A9/A10 → A2 →
-   A3/A8 → A12 → A7 → A6 → A5 → A4 → A13 se stinge.
+   contracte, evenimente, audit, automatizare, comunicare, home.
+2. ✅ **Staging** — publicat pe `*.staging.sfantul-ilie.ro`, email real prin Cloudflare Email Service.
+3. ⏳ **Portarea aplicațiilor**: ✅ calendar (A1), ✅ program (A2), ⏳ curățenie (A6), apoi
+   A9/A10 → A3/A8 → A12 → A7 → A5 → A4 → A13 se stinge.
 4. ⏳ **Curățenia finală** — se șterge tot ce NU are prefix `xc-`.
 
 ## NEXT
 
-1. **Testul real pe staging, de către utilizator**: `https://cont.staging.sfantul-ilie.ro` →
-   „Deschide un cont" cu `rubikmm@gmail.com` → linkul vine pe email real → super-admin automat.
-   Dacă scrisoarea nu vine: `wrangler tail xc-identity-staging --env staging` și tabela
-   `emails_iesire` (coloana `detaliu`) spun de ce.
-2. **Confirmarea ordinii de portare** (canvas) și a două decizii: abonații unificați în
-   `communication-worker`? WhatsApp prin pullerul de pe NAS sau direct la WAHA?
-3. **A1 calendar complet** — prima portare: pascalia, zilele Patriarhiei (import), pagina zilei
-   (sinaxar, Evanghelie, Apostol), abonați. Bază `xc-program-*`, date copiate din A1.
+1. **Curățenia (A6)** — schema, sloturile din slujbele programului (`curatenie: true`), rapoartele
+   prin serviciul de comunicare. Voluntarii devin conturi ale platformei: adresele lor din V1 se
+   trec prin `identity /utilizatori/asigura`, iar aplicația ține doar `user_id`.
+2. **Testul real de email**, de către utilizator: `https://cont.staging.sfantul-ilie.ro` → cont nou
+   cu `rubikmm@gmail.com` → linkul vine pe email → super-admin automat.
+3. **Foaia A4 local** — Browser Rendering merge pe staging; local are nevoie de bibliotecile Chrome
+   în container (cerere la #agent-server, 10.09).
 4. **Pornire automată în container** — `pnpm dev` se lansează manual; de pus în `app-init.sh`.
 5. Comunicare reală (`LIVRARE_REALA=da`) abia când A7 se portează — nu înainte.
+6. Vocabularul de nume al subdomeniilor V2 (lista de 15) — de confirmat cu utilizatorul.
+
+## Aplicațiile de pe staging
+
+| Aplicație | Adresă | Ce ține |
+|---|---|---|
+| home | `staging.sfantul-ilie.ro` | ușa platformei: lista aplicațiilor. Fără date |
+| cont | `cont.staging.sfantul-ilie.ro` | intrarea fără parolă; singurul loc cu date personale |
+| calendar | `calendar.staging.sfantul-ilie.ro` | 730 de zile oficiale (2025–2026) + anii calculați |
+| program | `program.staging.sfantul-ilie.ro` | 654 săptămâni / 2619 slujbe copiate din V1 |
+| admin | `admin.staging.sfantul-ilie.ro` | audit, livrări, automatizări |
 
 ## Stare tehnică
 
