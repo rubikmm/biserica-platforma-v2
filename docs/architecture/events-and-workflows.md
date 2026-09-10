@@ -7,7 +7,7 @@ consum** — un eveniment stricat nu ajunge niciodată în outbox:
 
 ```ts
 {
-  id, type: 'calendar.event.published.v1', occurredAt, producer,
+  id, type: 'program.event.published.v1', occurredAt, producer,
   actor: { type: 'user' | 'system' | 'ai', id? },
   correlationId, idempotencyKey?, payload
 }

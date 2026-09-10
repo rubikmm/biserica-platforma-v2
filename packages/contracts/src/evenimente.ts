@@ -2,9 +2,9 @@ import { z } from 'zod'
 
 /** Tipurile de evenimente publicate in aceasta faza. Versionate explicit, cu `.vN` in nume. */
 export const TIPURI_EVENIMENTE = [
-  'calendar.event.created.v1',
-  'calendar.event.updated.v1',
-  'calendar.event.published.v1',
+  'program.event.created.v1',
+  'program.event.updated.v1',
+  'program.event.published.v1',
   'user.notification_preferences_changed.v1',
   'communication.delivery.requested.v1',
   'automation.action.proposed.v1',
@@ -40,7 +40,7 @@ export type Envelope = z.infer<typeof Envelope>
 // Payload-urile, per tip de eveniment
 // ---------------------------------------------------------------------------
 
-export const PayloadEvenimentCalendar = z.object({
+export const PayloadEvenimentProgram = z.object({
   eventId: z.string().min(1),
   title: z.string().min(1),
   startsAt: z.iso.datetime(),
@@ -71,9 +71,9 @@ export const PayloadActiuneAutomata = z.object({
 })
 
 const SCHEME_PAYLOAD = {
-  'calendar.event.created.v1': PayloadEvenimentCalendar,
-  'calendar.event.updated.v1': PayloadEvenimentCalendar,
-  'calendar.event.published.v1': PayloadEvenimentCalendar,
+  'program.event.created.v1': PayloadEvenimentProgram,
+  'program.event.updated.v1': PayloadEvenimentProgram,
+  'program.event.published.v1': PayloadEvenimentProgram,
   'user.notification_preferences_changed.v1': PayloadPreferinteNotificare,
   'communication.delivery.requested.v1': PayloadCerereLivrare,
   'automation.action.proposed.v1': PayloadActiuneAutomata,

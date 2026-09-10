@@ -3,7 +3,7 @@ import { z } from 'zod'
 export const StareEveniment = z.enum(['draft', 'published', 'archived'])
 export type StareEveniment = z.infer<typeof StareEveniment>
 
-export const EvenimentCalendar = z.object({
+export const EvenimentProgram = z.object({
   id: z.string().min(1),
   title: z.string().trim().min(1).max(200),
   description: z.string().trim().max(5000).nullable(),
@@ -15,7 +15,7 @@ export const EvenimentCalendar = z.object({
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 })
-export type EvenimentCalendar = z.infer<typeof EvenimentCalendar>
+export type EvenimentProgram = z.infer<typeof EvenimentProgram>
 
 export const CerereCreareEveniment = z
   .object({

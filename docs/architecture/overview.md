@@ -17,7 +17,7 @@ flowchart TB
 
   subgraph Aplicatii["Aplicații (BFF-uri)"]
     ACC[account<br/>cont.·]
-    CAL[calendar<br/>calendar.·]
+    PRG[program<br/>program.·]
     ADM[admin<br/>admin.·]
   end
 
@@ -35,7 +35,7 @@ flowchart TB
     DID[(xc-identity)]
     DAZ[(xc-authz)]
     DAU[(xc-audit)]
-    DCA[(xc-calendar)]
+    DPR[(xc-program)]
     DCM[(xc-communication)]
     DAT[(xc-automation)]
     R2[(xc-media R2)]
@@ -44,14 +44,14 @@ flowchart TB
   Q{{Coada xc-events}}
   DLQ{{DLQ}}
 
-  B -->|cookie de sesiune| ACC & CAL & ADM
-  ACC & CAL & ADM -->|Service Binding| ID
-  CAL & ADM -->|can/require| AZ
-  ACC & CAL & ADM -->|audit| AU
+  B -->|cookie de sesiune| ACC & PRG & ADM
+  ACC & PRG & ADM -->|Service Binding| ID
+  PRG & ADM -->|can/require| AZ
+  ACC & PRG & ADM -->|audit| AU
   ID --> AZ
   ID --> AU
 
-  CAL -->|outbox| Q
+  PRG -->|outbox| Q
   Q --> EV
   EV --> AT
   AT -->|cerere de comunicare| CM
@@ -60,7 +60,7 @@ flowchart TB
   ID --- DID
   AZ --- DAZ
   AU --- DAU
-  CAL --- DCA
+  PRG --- DPR
   CM --- DCM
   AT --- DAT
   MD --- R2
@@ -82,5 +82,5 @@ flowchart TB
 ## Gateway-ul
 
 `apps/gateway` există **numai pentru preview local**, unde containerul are un singur port. El
-mapează căi (`/calendar`, `/admin`, restul) către aplicații. În staging și producție nu se
+mapează căi (`/program`, `/admin`, restul) către aplicații. În staging și producție nu se
 folosește: fiecare aplicație are subdomeniul ei, iar SSO-ul vine din cookie-ul pe domeniul părinte.

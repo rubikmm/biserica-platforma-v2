@@ -9,7 +9,7 @@ greșeală, nu o scurtătură.
 | `xc-identity-*` | `identity-worker` | utilizatori, sesiuni, jetoane, consimțăminte, emailuri sandbox | nimeni — doar prin `/sesiune` |
 | `xc-authz-*` | `authorization-worker` | atribuiri de rol, granturi de permisiuni | nimeni — doar prin `/can`, `/roluri` |
 | `xc-audit-*` | `audit-worker` | jurnalul append-only, marcaje de idempotență | `admin`, prin `/citeste`, după `audit.read` |
-| `xc-calendar-*` | `app-calendar` | evenimente, outbox propriu | nimeni |
+| `xc-program-*` | `app-program` | evenimente, outbox propriu | nimeni |
 | `xc-communication-*` | `communication-worker` | audiențe, preferințe, șabloane, cereri, livrări | `admin`, prin `/livrari` |
 | `xc-automation-*` | `automation-worker` | reguli, acțiuni | `admin`, prin `/actiuni` |
 | `xc-media-*` (R2) | `media-worker` | fișierele tuturor domeniilor, prefixate `<domeniu>/…` | nimeni — doar prin contract |

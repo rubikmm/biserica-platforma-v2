@@ -3,7 +3,7 @@ import {
   CerereCreareEveniment,
   SESIUNE_ANONIMA,
   SCOPE_GLOBAL,
-  type EvenimentCalendar,
+  type EvenimentProgram,
   type Principal,
   type SesiuneCurenta,
 } from '@xc/contracts'
@@ -48,7 +48,7 @@ interface RandEveniment {
   updated_at: string
 }
 
-function catreEveniment(r: RandEveniment): EvenimentCalendar {
+function catreEveniment(r: RandEveniment): EvenimentProgram {
   return {
     id: r.id,
     title: r.title,
@@ -131,14 +131,14 @@ export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const cfg = citesteConfig(env)
     const cid = correlationId(req)
-    const log = new Logger({ service: 'app-calendar', correlationId: cid })
+    const log = new Logger({ service: 'app-program', correlationId: cid })
     const url = new URL(req.url)
 
-    // Prin gateway-ul de preview aplicatia e montata la `/calendar`; pe subdomeniul propriu e la
+    // Prin gateway-ul de preview aplicatia e montata la `/program`; pe subdomeniul propriu e la
     // radacina. Taiem prefixul o singura data, aici, si il purtam mai departe pentru linkuri.
-    const areprefix = url.pathname === '/calendar' || url.pathname.startsWith('/calendar/')
-    const prefix = areprefix ? '/calendar' : ''
-    const cale = areprefix ? url.pathname.slice('/calendar'.length) || '/' : url.pathname
+    const areprefix = url.pathname === '/program' || url.pathname.startsWith('/program/')
+    const prefix = areprefix ? '/program' : ''
+    const cale = areprefix ? url.pathname.slice('/program'.length) || '/' : url.pathname
     const nav = navigatieDin(cfg)
     const ctx = { prefix, nav }
 
@@ -171,18 +171,18 @@ export default {
       if (cale === '/admin' && req.method === 'GET') {
         if (!principal) return redirect(`${nav.cont}/auth/login`)
 
-        const decizie = await authz.can(principal, 'calendar.write', SCOPE_GLOBAL)
+        const decizie = await authz.can(principal, 'program.write', SCOPE_GLOBAL)
         if (!decizie.allowed) {
           await scrieAudit(env, {
-            action: 'calendar.admin.open',
-            target: 'calendar',
+            action: 'program.admin.open',
+            target: 'program',
             outcome: 'denied',
             correlationId: cid,
             actorId: principal.userId,
             summary: { motiv: decizie.reason },
           })
           return html(
-            paginaRefuz(ctx, 'Nu ai permisiunea de a administra calendarul.', sesiune.user?.email),
+            paginaRefuz(ctx, 'Nu ai permisiunea de a administra programul.', sesiune.user?.email),
             403,
           )
         }
@@ -212,7 +212,7 @@ export default {
         const problemaCsrf = verificaTokenCsrf(req, String(formular.get('csrf') ?? ''))
         if (problemaCsrf) return html(paginaRefuz(ctx, problemaCsrf), 403)
 
-        await authz.require(principal, 'calendar.write', SCOPE_GLOBAL)
+        await authz.require(principal, 'program.write', SCOPE_GLOBAL)
 
         const inceput = dinInputLocal(String(formular.get('inceput') ?? ''))
         if (!inceput) return html(paginaRefuz(ctx, 'Data de început nu e validă.'), 400)
@@ -226,8 +226,8 @@ export default {
 
         const eventId = id()
         const envelope = construiesteEnvelope({
-          type: 'calendar.event.created.v1',
-          producer: 'app-calendar',
+          type: 'program.event.created.v1',
+          producer: 'app-program',
           actor: { type: 'user', id: principal.userId },
           correlationId: cid,
           idempotencyKey: eventId,
@@ -263,7 +263,7 @@ export default {
         ])
 
         await scrieAudit(env, {
-          action: 'calendar.event.created',
+          action: 'program.event.created',
           target: eventId,
           outcome: 'success',
           correlationId: cid,
@@ -282,7 +282,7 @@ export default {
         const problemaCsrf = verificaTokenCsrf(req, String(formular.get('csrf') ?? ''))
         if (problemaCsrf) return html(paginaRefuz(ctx, problemaCsrf), 403)
 
-        await authz.require(principal, 'calendar.publish', SCOPE_GLOBAL)
+        await authz.require(principal, 'program.publish', SCOPE_GLOBAL)
 
         const eventId = z.string().min(1).parse(String(formular.get('id') ?? ''))
         const existent = await unul<RandEveniment>(env.DB, `SELECT * FROM events WHERE id = ?`, [
@@ -291,8 +291,8 @@ export default {
         if (!existent) return html(paginaRefuz(ctx, 'Evenimentul nu există.'), 404)
 
         const envelope = construiesteEnvelope({
-          type: 'calendar.event.published.v1',
-          producer: 'app-calendar',
+          type: 'program.event.published.v1',
+          producer: 'app-program',
           actor: { type: 'user', id: principal.userId },
           correlationId: cid,
           idempotencyKey: `publicare:${eventId}`,
@@ -313,7 +313,7 @@ export default {
         ])
 
         await scrieAudit(env, {
-          action: 'calendar.event.published',
+          action: 'program.event.published',
           target: eventId,
           outcome: 'success',
           correlationId: cid,
@@ -334,7 +334,7 @@ export default {
         const problemaCsrf = verificaTokenCsrf(req, String(formular.get('csrf') ?? ''))
         if (problemaCsrf) return html(paginaRefuz(ctx, problemaCsrf), 403)
 
-        await authz.require(principal, 'calendar.publish', SCOPE_GLOBAL)
+        await authz.require(principal, 'program.publish', SCOPE_GLOBAL)
         const eventId = z.string().min(1).parse(String(formular.get('id') ?? ''))
 
         await ruleaza(env.DB, `UPDATE events SET status = 'archived', updated_at = ? WHERE id = ?`, [
@@ -343,7 +343,7 @@ export default {
         ])
 
         await scrieAudit(env, {
-          action: 'calendar.event.archived',
+          action: 'program.event.archived',
           target: eventId,
           outcome: 'success',
           correlationId: cid,
@@ -357,7 +357,7 @@ export default {
     } catch (e) {
       if (e instanceof EroareAutorizare) {
         await scrieAudit(env, {
-          action: 'calendar.permission.denied',
+          action: 'program.permission.denied',
           target: e.permission,
           outcome: 'denied',
           correlationId: cid,
@@ -378,7 +378,7 @@ export default {
   async scheduled(_eveniment: ScheduledController, env: Env): Promise<void> {
     const rezultat = await golesteOutbox(env.DB, env.EVENIMENTE)
     if (rezultat.publicate > 0 || rezultat.esuate > 0) {
-      new Logger({ service: 'app-calendar', correlationId: 'cron' }).info('outbox golit', rezultat)
+      new Logger({ service: 'app-program', correlationId: 'cron' }).info('outbox golit', rezultat)
     }
   },
 }

@@ -10,7 +10,7 @@ diferite și nicio imagine de ansamblu asupra cine ce poate.
 ## Decizie
 
 Roluri (`user`, `admin`, `super-admin`) plus scope-uri (`global`, `parish:<id>`, `team:<id>`,
-`audience:<id>`). Permisiunile sunt chei explicite (`calendar.publish`, `audit.read`, …), definite
+`audience:<id>`). Permisiunile sunt chei explicite (`program.publish`, `audit.read`, …), definite
 o singură dată în `packages/contracts`.
 
 Deciziile se cer de la `authorization-worker`:

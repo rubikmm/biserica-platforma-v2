@@ -10,7 +10,7 @@ date existente, ele se copiază, nu se partajează.
 
 | Zonă | Ce conține |
 |---|---|
-| `apps/` | aplicațiile-client: `account`, `admin`, `calendar` (pilot), `gateway` (doar preview local) |
+| `apps/` | aplicațiile-client: `account`, `admin`, `program` (pilot), `gateway` (doar preview local) |
 | `services/` | serviciile interne: identitate, autorizare, audit, evenimente, automatizare, comunicare, fișiere |
 | `packages/` | codul comun: contracte Zod, auth, autorizare, D1, evenimente, observabilitate, UI, config |
 | `infrastructure/` | migrații SQL, scripturi de seed și de creare a resurselor |

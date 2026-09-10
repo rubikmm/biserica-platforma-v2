@@ -13,7 +13,7 @@ putea fi încercat local.
 ## Decizie
 
 `apps/gateway` — un worker subțire care mapează căi către aplicații prin Service Bindings:
-`/calendar` → calendar, `/admin` → admin, restul → cont. Trimite cererea mai departe neschimbată,
+`/program` → program, `/admin` → admin, restul → cont. Trimite cererea mai departe neschimbată,
 inclusiv cookie-urile.
 
 **Nu se folosește în staging sau producție.** Acolo fiecare aplicație are domeniul ei, iar SSO-ul

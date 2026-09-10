@@ -14,7 +14,7 @@ function json(date: unknown, status = 200): Response {
 }
 
 /**
- * Cheile sunt mereu prefixate cu domeniul proprietar (`calendar/…`, `buletin/…`), ca sa se
+ * Cheile sunt mereu prefixate cu domeniul proprietar (`program/…`, `buletin/…`), ca sa se
  * vada cui apartine fisierul si sa se poata face curatenie pe domeniu.
  */
 const Cheie = z

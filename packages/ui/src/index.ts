@@ -81,17 +81,17 @@ th { color: var(--sters); font-weight: 550; font-size: .82rem; text-transform: u
 /** Adresele celorlalte aplicatii. In dev sunt cai pe acelasi host; in staging, origini absolute. */
 export interface Navigatie {
   cont: string
-  calendar: string
+  program: string
   admin: string
 }
 
-const NAVIGATIE_DEV: Navigatie = { cont: '', calendar: '/calendar', admin: '/admin' }
+const NAVIGATIE_DEV: Navigatie = { cont: '', program: '/program', admin: '/admin' }
 
 export interface OptiuniPagina {
   titlu: string
   /** Emailul celui logat, daca e cineva — apare in antet, cu logout. */
   utilizator?: string | null
-  /** Care intrare din antet e cea curenta: 'cont' | 'calendar' | 'admin'. */
+  /** Care intrare din antet e cea curenta: 'cont' | 'program' | 'admin'. */
   activ?: keyof Navigatie
   navigatie?: Navigatie
   continut: string
@@ -101,7 +101,7 @@ export function pagina(o: OptiuniPagina): string {
   const nav = o.navigatie ?? NAVIGATIE_DEV
   const intrari: Array<[keyof Navigatie, string, string]> = [
     ['cont', `${nav.cont}/`, 'Cont'],
-    ['calendar', `${nav.calendar}/`, 'Calendar'],
+    ['program', `${nav.program}/`, 'Program'],
     ['admin', `${nav.admin}/`, 'Administrare'],
   ]
   const legaturi = intrari

@@ -1,8 +1,8 @@
 {
-  // Aplicatia pilot. Proprietara datelor ei (`xc-calendar-*`) — nicio alta aplicatie nu are
+  // Aplicatia pilot. Proprietara datelor ei (`xc-program-*`) — nicio alta aplicatie nu are
   // binding catre baza asta.
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "xc-calendar",
+  "name": "xc-program",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-25",
   "compatibility_flags": ["nodejs_compat"],
@@ -19,9 +19,9 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "xc-calendar-staging",
-      "database_id": "c26bb69e-f157-4922-9fbc-77a267f8a99d",
-      "migrations_dir": "../../infrastructure/migrations/calendar"
+      "database_name": "xc-program-staging",
+      "database_id": "8a65cb26-a3c8-4b39-ba98-da0997509bbf",
+      "migrations_dir": "../../infrastructure/migrations/program"
     }
   ],
 
@@ -42,22 +42,22 @@
 
   "env": {
     "staging": {
-      "name": "xc-calendar-staging",
+      "name": "xc-program-staging",
       "vars": {
         "MEDIU": "staging",
-        "ORIGINE_PUBLICA": "https://calendar.staging.sfantul-ilie.ro",
+        "ORIGINE_PUBLICA": "https://program.staging.sfantul-ilie.ro",
         "DOMENIU_COOKIE": ".staging.sfantul-ilie.ro",
         "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
         "URL_CONT": "https://cont.staging.sfantul-ilie.ro",
-        "URL_CALENDAR": "https://calendar.staging.sfantul-ilie.ro",
+        "URL_PROGRAM": "https://program.staging.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.staging.sfantul-ilie.ro"
       },
       "d1_databases": [
         {
           "binding": "DB",
-          "database_name": "xc-calendar-staging",
-          "database_id": "c26bb69e-f157-4922-9fbc-77a267f8a99d",
-          "migrations_dir": "../../infrastructure/migrations/calendar"
+          "database_name": "xc-program-staging",
+          "database_id": "8a65cb26-a3c8-4b39-ba98-da0997509bbf",
+          "migrations_dir": "../../infrastructure/migrations/program"
         }
       ],
       "services": [
@@ -69,20 +69,20 @@
         "producers": [{ "binding": "EVENIMENTE", "queue": "xc-events-staging" }]
       },
       "triggers": { "crons": ["*/5 * * * *"] },
-      "routes": [{ "pattern": "calendar.staging.sfantul-ilie.ro", "custom_domain": true }]
+      "routes": [{ "pattern": "program.staging.sfantul-ilie.ro", "custom_domain": true }]
     },
     "production": {
-      "name": "xc-calendar-production",
+      "name": "xc-program-production",
       "vars": {
         "MEDIU": "production",
-        "ORIGINE_PUBLICA": "https://calendar.sfantul-ilie.ro",
+        "ORIGINE_PUBLICA": "https://program.sfantul-ilie.ro",
         "DOMENIU_COOKIE": ".sfantul-ilie.ro",
         "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
         "URL_CONT": "https://cont.sfantul-ilie.ro",
-        "URL_CALENDAR": "https://calendar.sfantul-ilie.ro",
+        "URL_PROGRAM": "https://program.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.sfantul-ilie.ro"
       }
-      // Ruta de productie (`calendar.sfantul-ilie.ro`) e a lui A1 pana la cutover-ul explicit.
+      // Ruta de productie (`program.sfantul-ilie.ro`) e a lui A2 pana la cutover-ul explicit.
     }
   }
 }

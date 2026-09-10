@@ -27,7 +27,7 @@ wrangler deploy --env staging --config services/automation-worker/wrangler.jsonc
 wrangler deploy --env staging --config services/event-worker/wrangler.jsonc
 wrangler deploy --env staging --config services/media-worker/wrangler.jsonc
 wrangler deploy --env staging --config apps/account/wrangler.jsonc
-wrangler deploy --env staging --config apps/calendar/wrangler.jsonc
+wrangler deploy --env staging --config apps/program/wrangler.jsonc
 wrangler deploy --env staging --config apps/admin/wrangler.jsonc
 ```
 
@@ -58,6 +58,6 @@ Dacă rutele erau deja legate, întoarcerea se face ștergând ruta — nu worke
 
 1. `/auth/inregistrare` răspunde;
 2. login în doi pași merge (link primit pe email real, dacă e configurat);
-3. aceeași sesiune funcționează pe `calendar.staging` și `admin.staging`;
+3. aceeași sesiune funcționează pe `program.staging` și `admin.staging`;
 4. cookie-ul are `Domain=.staging.sfantul-ilie.ro`, **nu** `.sfantul-ilie.ro`;
 5. aplicațiile V1 răspund neschimbat.

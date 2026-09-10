@@ -31,7 +31,7 @@ const SEED = [
         'Un eveniment nou: {{titlu}}',
         'Bună,
 
-În calendarul parohiei a fost publicat un eveniment nou: {{titlu}}, pe {{inceput}}.
+În programul parohiei a fost publicat un eveniment nou: {{titlu}}, pe {{inceput}}.
 
 Doamne ajută!',
         '${ACUM}'
@@ -40,7 +40,7 @@ Doamne ajută!',
       INSERT OR IGNORE INTO templates (id, version, channel, subject, body, created_at)
       VALUES (
         'eveniment-publicat', 1, 'whatsapp', NULL,
-        'Eveniment nou în calendarul parohiei: {{titlu}}, pe {{inceput}}.',
+        'Eveniment nou în programul parohiei: {{titlu}}, pe {{inceput}}.',
         '${ACUM}'
       );
 
@@ -57,9 +57,9 @@ Doamne ajută!',
       INSERT OR IGNORE INTO rules (id, nume, declansator, risc, proprietar, activa, created_at)
       VALUES (
         'notificare-eveniment-publicat',
-        'Anunță audiența când un eveniment de calendar e publicat',
-        'calendar.event.published.v1',
-        'low', 'calendar', 1, '${ACUM}'
+        'Anunță audiența când un eveniment de program e publicat',
+        'program.event.published.v1',
+        'low', 'program', 1, '${ACUM}'
       );
     `,
   },

@@ -20,7 +20,7 @@
 
   "services": [
     { "binding": "CONT", "service": "xc-account" },
-    { "binding": "CALENDAR", "service": "xc-calendar" },
+    { "binding": "PROGRAM", "service": "xc-program" },
     { "binding": "ADMIN", "service": "xc-admin" }
   ]
 }

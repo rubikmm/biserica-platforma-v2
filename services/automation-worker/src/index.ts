@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { Envelope, PayloadEvenimentCalendar, redacteaza } from '@xc/contracts'
+import { Envelope, PayloadEvenimentProgram, redacteaza } from '@xc/contracts'
 import { acum, id, ruleaza, toate, unul } from '@xc/db'
 import { Logger, correlationId } from '@xc/observability'
 
@@ -33,10 +33,10 @@ export interface Regula {
 const REGULI_IMPLICITE: Regula[] = [
   {
     id: 'notificare-eveniment-publicat',
-    nume: 'Anunță audiența când un eveniment de calendar e publicat',
-    declansator: 'calendar.event.published.v1',
+    nume: 'Anunță audiența când un eveniment de program e publicat',
+    declansator: 'program.event.published.v1',
     risc: 'low',
-    proprietar: 'calendar',
+    proprietar: 'program',
     activa: true,
   },
 ]
@@ -97,7 +97,7 @@ export default {
         let create = 0
 
         // Cheia de idempotenta a producatorului, cand exista, bate id-ul envelope-ului: doua
-        // publicari ale ACELUIASI eveniment de calendar produc envelope-uri diferite, dar
+        // publicari ale ACELUIASI eveniment de program produc envelope-uri diferite, dar
         // aceeasi cheie — si trebuie sa duca la o singura notificare, nu la doua.
         const cheieIdempotenta = envelope.idempotencyKey ?? envelope.id
 
@@ -137,7 +137,7 @@ export default {
 
           // Actiunea propriu-zisa: o CERERE de comunicare. Automatizarea nu trimite ea nimic
           // si nu atinge liste de destinatari — asta e treaba serviciului de comunicare.
-          const payload = PayloadEvenimentCalendar.safeParse(envelope.payload)
+          const payload = PayloadEvenimentProgram.safeParse(envelope.payload)
           if (!payload.success) continue
 
           const raspuns = await env.COMUNICARE.fetch('https://comunicare.intern/cerere', {

@@ -12,7 +12,7 @@ curățenia finală să se poată șterge tot ce nu-l are.
 | D1 | `xc-identity-staging` | identity-worker |
 | D1 | `xc-authz-staging` | authorization-worker |
 | D1 | `xc-audit-staging` | audit-worker, event-worker |
-| D1 | `xc-calendar-staging` | app-calendar |
+| D1 | `xc-program-staging` | app-program |
 | D1 | `xc-communication-staging` | communication-worker |
 | D1 | `xc-automation-staging` | automation-worker |
 | R2 | `xc-media-staging` | media-worker |
@@ -42,7 +42,7 @@ Ierarhia de subdomenii prevăzută (neconectată încă):
 
 ```
 cont.staging.sfantul-ilie.ro
-calendar.staging.sfantul-ilie.ro
+program.staging.sfantul-ilie.ro
 admin.staging.sfantul-ilie.ro
 ```
 
@@ -73,5 +73,5 @@ automat cheile sensibile.
 | `DB` | D1-ul propriu | fiecare serviciu cu bază |
 | `IDENTITATE`, `AUTORIZARE`, `AUDIT` | servicii interne | aplicații |
 | `COMUNICARE`, `AUTOMATIZARE` | servicii interne | admin, automation |
-| `EVENIMENTE` | producător de coadă | app-calendar |
+| `EVENIMENTE` | producător de coadă | app-program |
 | `FISIERE` | bucket R2 | doar media-worker |

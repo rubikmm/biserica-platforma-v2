@@ -40,8 +40,8 @@ describe('roluri', () => {
     expect(PERMISIUNI_IMPLICITE.admin).not.toContain('identity.manage')
   })
 
-  it('user obișnuit doar citește calendarul', () => {
-    expect(PERMISIUNI_IMPLICITE.user).toEqual(['calendar.read'])
+  it('user obișnuit doar citește programul', () => {
+    expect(PERMISIUNI_IMPLICITE.user).toEqual(['program.read'])
   })
 })
 
@@ -86,9 +86,9 @@ describe('redactare', () => {
 describe('evenimente', () => {
   const valid = {
     id: crypto.randomUUID(),
-    type: 'calendar.event.published.v1',
+    type: 'program.event.published.v1',
     occurredAt: new Date().toISOString(),
-    producer: 'app-calendar',
+    producer: 'app-program',
     actor: { type: 'user', id: 'u1' },
     correlationId: 'c1',
     payload: {

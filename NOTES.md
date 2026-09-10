@@ -14,7 +14,7 @@ aplicație), nu implementarea.
 Etape:
 
 1. ✅ **Nucleul** — monorepo, identitate fără parolă (email → link), autorizare centrală,
-   contracte, evenimente, audit, automatizare, comunicare (sandbox), calendar pilot.
+   contracte, evenimente, audit, automatizare, comunicare (sandbox), program pilot.
 2. ✅ **Staging** — 10 workeri publicați pe `xc-*-staging`, baze migrate, rute
    `cont/calendar/admin.staging.sfantul-ilie.ro`, email real prin Cloudflare Email Service.
 3. ⏳ **Portarea aplicațiilor**, în ordinea din `docs/migration/v1-to-v2.md` (propunere în
@@ -31,7 +31,7 @@ Etape:
 2. **Confirmarea ordinii de portare** (canvas) și a două decizii: abonații unificați în
    `communication-worker`? WhatsApp prin pullerul de pe NAS sau direct la WAHA?
 3. **A1 calendar complet** — prima portare: pascalia, zilele Patriarhiei (import), pagina zilei
-   (sinaxar, Evanghelie, Apostol), abonați. Bază `xc-calendar-*`, date copiate din A1.
+   (sinaxar, Evanghelie, Apostol), abonați. Bază `xc-program-*`, date copiate din A1.
 4. **Pornire automată în container** — `pnpm dev` se lansează manual; de pus în `app-init.sh`.
 5. Comunicare reală (`LIVRARE_REALA=da`) abia când A7 se portează — nu înainte.
 
@@ -66,9 +66,9 @@ Etape:
 - **Cookie-ul de staging** nu are voie pe `.sfantul-ilie.ro` — ar ajunge la aplicațiile V1.
 - **Gazda `rubik`** nu are punct în nume, deci cookie-ul local e host-only. SSO-ul între
   subdomenii se testează pe staging, nu local.
-- **Prefixul gateway-ului nu e al aplicației.** Local, calendarul e montat la `/calendar`; pe
+- **Prefixul gateway-ului nu e al aplicației.** Local, calendarul e montat la `/program`; pe
   subdomeniul lui e la rădăcină. Orice aplicație nouă detectează prefixul o dată (vezi
-  `apps/calendar/src/index.ts`) și primește adresele celorlalte prin `URL_CONT/URL_CALENDAR/URL_ADMIN`
+  `apps/program/src/index.ts`) și primește adresele celorlalte prin `URL_CONT/URL_CALENDAR/URL_ADMIN`
   — altfel dă 404 pe staging și trimite la login pe subdomeniul greșit (găsit la primul deploy).
 - **Tokenul Cloudflare nu citește Email Routing / certificate** (API răspunde „Authentication
   error"), dar deploy-ul cu `send_email` merge — verificarea e pe Workers API.

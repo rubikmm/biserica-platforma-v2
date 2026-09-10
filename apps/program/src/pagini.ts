@@ -1,8 +1,8 @@
 import { alerta, esc, pagina, type Navigatie } from '@xc/ui'
-import type { EvenimentCalendar } from '@xc/contracts'
+import type { EvenimentProgram } from '@xc/contracts'
 
 /**
- * Contextul de adresare al aplicatiei: `prefix` e `/calendar` cand cererea vine prin gateway-ul
+ * Contextul de adresare al aplicatiei: `prefix` e `/program` cand cererea vine prin gateway-ul
  * de preview (un singur host) si gol pe subdomeniul propriu; `nav` sunt adresele celorlalte
  * aplicatii, pentru antet si pentru trimiterea la intrare.
  */
@@ -25,7 +25,7 @@ function dataLizibila(iso: string): string {
 
 export function paginaPublica(o: {
   ctx: Ctx
-  evenimente: EvenimentCalendar[]
+  evenimente: EvenimentProgram[]
   utilizator?: string | null
 }): string {
   const randuri = o.evenimente
@@ -38,13 +38,13 @@ export function paginaPublica(o: {
     .join('')
 
   return pagina({
-    titlu: 'Calendar',
-    activ: 'calendar',
+    titlu: 'Program',
+    activ: 'program',
     navigatie: o.ctx.nav,
     utilizator: o.utilizator ?? null,
     continut: `
 <div class="carte">
-  <h1>Calendar</h1>
+  <h1>Program</h1>
   <p class="ajutor">Evenimentele publicate ale parohiei.</p>
   ${
     o.evenimente.length
@@ -58,7 +58,7 @@ export function paginaPublica(o: {
 
 export function paginaAdministrare(o: {
   ctx: Ctx
-  evenimente: EvenimentCalendar[]
+  evenimente: EvenimentProgram[]
   csrf: string
   utilizator: string
   mesaj?: string
@@ -98,15 +98,15 @@ export function paginaAdministrare(o: {
     .join('')
 
   return pagina({
-    titlu: 'Calendar — administrare',
-    activ: 'calendar',
+    titlu: 'Program — administrare',
+    activ: 'program',
     navigatie: o.ctx.nav,
     utilizator: o.utilizator,
     continut: `
 ${o.mesaj ? alerta('buna', esc(o.mesaj)) : ''}
 ${o.eroare ? alerta('rea', esc(o.eroare)) : ''}
 <div class="carte">
-  <h1>Administrare calendar</h1>
+  <h1>Administrare program</h1>
   <p class="ajutor">Ciclul unui eveniment: ciornă → publicat → arhivat. Publicarea declanșează
   o cerere de notificare, înregistrată dar netrimisă în această fază.</p>
   ${
@@ -136,14 +136,14 @@ ${o.eroare ? alerta('rea', esc(o.eroare)) : ''}
 export function paginaRefuz(ctx: Ctx, motiv: string, utilizator?: string | null): string {
   return pagina({
     titlu: 'Acces refuzat',
-    activ: 'calendar',
+    activ: 'program',
     navigatie: ctx.nav,
     utilizator: utilizator ?? null,
     continut: `
 <div class="carte ingust">
   <h1>Acces refuzat</h1>
   ${alerta('rea', esc(motiv))}
-  <p class="sub"><a href="${esc(ctx.prefix)}/">Înapoi la calendar</a></p>
+  <p class="sub"><a href="${esc(ctx.prefix)}/">Înapoi la program</a></p>
 </div>`,
   })
 }

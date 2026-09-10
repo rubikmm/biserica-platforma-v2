@@ -7,9 +7,9 @@ import { z } from 'zod'
 export const CHEI_PERMISIUNI = [
   'identity.manage',
   'roles.manage',
-  'calendar.read',
-  'calendar.write',
-  'calendar.publish',
+  'program.read',
+  'program.write',
+  'program.publish',
   'bulletin.write',
   'bulletin.publish',
   'cleaning.manage',
@@ -46,11 +46,11 @@ export const SCOPE_GLOBAL = 'global' satisfies Scope
  * se adauga peste, in `authorization-worker`.
  */
 export const PERMISIUNI_IMPLICITE: Record<Rol, readonly Permisiune[]> = {
-  user: ['calendar.read'],
+  user: ['program.read'],
   admin: [
-    'calendar.read',
-    'calendar.write',
-    'calendar.publish',
+    'program.read',
+    'program.write',
+    'program.publish',
     'bulletin.write',
     'bulletin.publish',
     'cleaning.manage',

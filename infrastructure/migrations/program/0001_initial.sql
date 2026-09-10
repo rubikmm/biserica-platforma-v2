@@ -1,4 +1,4 @@
--- Calendarul pilot. Proprietar unic al acestor date: `app-calendar`.
+-- Programul pilot. Proprietar unic al acestor date: `app-program`.
 
 CREATE TABLE IF NOT EXISTS events (
   id          TEXT PRIMARY KEY,

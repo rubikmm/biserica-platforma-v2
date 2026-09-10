@@ -2,7 +2,7 @@ import { correlationId } from '@xc/observability'
 
 export interface Env {
   CONT: Fetcher
-  CALENDAR: Fetcher
+  PROGRAM: Fetcher
   ADMIN: Fetcher
   MEDIU: string
 }
@@ -12,7 +12,7 @@ export interface Env {
  * iar `/` cade pe aplicatia de cont.
  */
 function alegeAplicatia(env: Env, cale: string): Fetcher {
-  if (cale === '/calendar' || cale.startsWith('/calendar/')) return env.CALENDAR
+  if (cale === '/program' || cale.startsWith('/program/')) return env.PROGRAM
   if (cale === '/admin' || cale.startsWith('/admin/')) return env.ADMIN
   return env.CONT
 }

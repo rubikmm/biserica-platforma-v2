@@ -20,11 +20,11 @@ export const VariabileComune = z.object({
   EMAIL_SUPERADMIN: z.string().default(''),
   /**
    * Unde stau celelalte aplicatii, pentru antet si redirecturi. In dev (un singur host, prin
-   * gateway) sunt cai: `/`, `/calendar`, `/admin`. In staging/productie sunt origini absolute,
+   * gateway) sunt cai: `/`, `/program`, `/admin`. In staging/productie sunt origini absolute,
    * cate un subdomeniu de aplicatie. Goale = caile de dev.
    */
   URL_CONT: z.string().default(''),
-  URL_CALENDAR: z.string().default(''),
+  URL_PROGRAM: z.string().default(''),
   URL_ADMIN: z.string().default(''),
 })
 export type VariabileComune = z.infer<typeof VariabileComune>
@@ -42,14 +42,14 @@ export function citesteConfig(env: unknown): VariabileComune {
 /** Adresele celorlalte aplicatii, cu implicitul de dev (cai pe acelasi host). */
 export interface Navigatie {
   cont: string
-  calendar: string
+  program: string
   admin: string
 }
 
 export function navigatieDin(cfg: VariabileComune): Navigatie {
   return {
     cont: cfg.URL_CONT || '',
-    calendar: cfg.URL_CALENDAR || '/calendar',
+    program: cfg.URL_PROGRAM || '/program',
     admin: cfg.URL_ADMIN || '/admin',
   }
 }

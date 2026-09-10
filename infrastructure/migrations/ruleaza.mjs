@@ -19,7 +19,7 @@ const BAZE = [
   { director: 'identity', config: 'services/identity-worker/wrangler.jsonc', binding: 'DB' },
   { director: 'authz', config: 'services/authorization-worker/wrangler.jsonc', binding: 'DB' },
   { director: 'audit', config: 'services/audit-worker/wrangler.jsonc', binding: 'DB' },
-  { director: 'calendar', config: 'apps/calendar/wrangler.jsonc', binding: 'DB' },
+  { director: 'program', config: 'apps/program/wrangler.jsonc', binding: 'DB' },
   { director: 'communication', config: 'services/communication-worker/wrangler.jsonc', binding: 'DB' },
   { director: 'automation', config: 'services/automation-worker/wrangler.jsonc', binding: 'DB' },
 ]
