@@ -98,7 +98,10 @@ export const STIL = `
 .proba .pr-nota { color:var(--faint); font-size:11.5px }
 
 /* capul saptamanii: titlul + starea (navigarea si hartiile au urcat in meniul din antet, 8 sept. 2026) */
-.sapt-cap { display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:26px 0 14px }
+/* Eticheta („propunere") se aseaza pe MIJLOCUL titlului, nu pe linia lui de baza: pastila are chenar
+   si spatiu inauntru, asa ca aliniata pe baza atarna cu vreo sase pixeli mai jos decat scrisul mare
+   de langa ea (semnalat de user, 10.09.2026). */
+.sapt-cap { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:26px 0 14px }
 .sapt-cap h2 { margin:0 }
 .stare { font:600 10.5px/1 ui-sans-serif,system-ui; letter-spacing:.12em; text-transform:uppercase;
          padding:5px 9px; border-radius:999px; border:1px solid var(--rule); color:var(--soft); white-space:nowrap }
