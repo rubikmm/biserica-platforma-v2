@@ -427,10 +427,28 @@ async function api(req: Request, env: Env, ctxExec: ExecutionContext, prefix: st
         { adresa: '/v1/versiune?dupa=', ce_da: 'versiunea calendarului și intervalele de recitit' },
         { adresa: '/v1/cauta?q=&an=', ce_da: 'zilele al căror titlu se potrivește' },
         { adresa: '/v1/texte/<data>', ce_da: 'sinaxarul zilei (HTML curățat)' },
+        { adresa: '/v1/pericopa?ref= · ?voscreasna=', ce_da: 'textul unei pericope, adus de la Biblia' },
         { adresa: '/v1/sursa/zi/<data> · /v1/sursa/an/<an>', ce_da: 'rândul brut al Patriarhiei, netradus' },
         { adresa: '/v1/atelier/pascalia?an=', ce_da: 'Pascalia față în față cu calendarul oficial' },
       ],
     }, cache)
+  }
+
+  /**
+   * Textul unei pericope, oricare ar fi ea. Calendarul e singurul care vorbeste cu Biblia, deci
+   * si cine are referinta lui (tipicul are Evanghelia Utreniei din randuiala ROEA) o cere tot
+   * de aici — altfel legatura cu Biblia s-ar face din doua locuri.
+   * `?voscreasna=<1..11>` in loc de `?ref=`: lista celor 11 Evanghelii ale Invierii sta aici,
+   * nu se copiaza in aplicatii.
+   */
+  if (cale === '/v1/pericopa') {
+    const nrVoscr = Number(url.searchParams.get('voscreasna') ?? '')
+    const refCerut = url.searchParams.get('ref')?.trim() ?? ''
+    const ref = nrVoscr >= 1 && nrVoscr <= 11 ? VOSCRESNE[nrVoscr]! : refCerut
+    if (!ref) return eroareApi(400, 'referinta_lipsa', 'Cere ?ref=<referință> sau ?voscreasna=<1..11>.')
+    if (ref.length > 120) return eroareApi(400, 'referinta_invalida', 'Referința e prea lungă.')
+    const text = await textulPericopei(env.URL_BIBLIA, ref)
+    return jsonCuEtag(req, { referinta: text.referinta, voscreasna: nrVoscr >= 1 && nrVoscr <= 11 ? nrVoscr : null, bucati: text.bucati, sursa: 'Biblia — biblia.sfantul-ilie.ro' }, cache)
   }
 
   const mZi = /^\/v1\/zi\/([^/]+)$/.exec(cale)

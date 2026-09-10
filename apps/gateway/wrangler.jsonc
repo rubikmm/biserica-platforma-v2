@@ -25,6 +25,7 @@
     { "binding": "CONT", "service": "xc-account" },
     { "binding": "PROGRAM", "service": "xc-program" },
     { "binding": "CALENDAR", "service": "xc-calendar" },
+    { "binding": "TIPIC", "service": "xc-tipic" },
     { "binding": "ADMIN", "service": "xc-admin" }
   ]
 }

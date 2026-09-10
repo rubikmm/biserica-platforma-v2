@@ -4,6 +4,7 @@ export interface Env {
   HOME: Fetcher
   CONT: Fetcher
   CALENDAR: Fetcher
+  TIPIC: Fetcher
   /** Se leaga pe masura ce aplicatiile sunt gata; in dev, un binding fara worker pornit opreste totul. */
   PROGRAM?: Fetcher
   CURATENIE?: Fetcher
@@ -20,6 +21,7 @@ function alegeAplicatia(env: Env, cale: string): Fetcher | null {
   if (cale === '/cont' || cale.startsWith('/cont/')) return env.CONT
   if (cale === '/calendar' || cale.startsWith('/calendar/')) return env.CALENDAR
   if (cale === '/program' || cale.startsWith('/program/')) return env.PROGRAM ?? null
+  if (cale === '/tipic' || cale.startsWith('/tipic/')) return env.TIPIC ?? null
   if (cale === '/curatenie' || cale.startsWith('/curatenie/')) return env.CURATENIE ?? null
   if (cale === '/admin' || cale.startsWith('/admin/')) return env.ADMIN
   return env.HOME

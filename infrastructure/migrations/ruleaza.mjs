@@ -22,6 +22,7 @@ const BAZE = [
   { director: 'calendar', config: 'apps/calendar/wrangler.jsonc', binding: 'DB' },
   { director: 'program', config: 'apps/program/wrangler.jsonc', binding: 'DB' },
   { director: 'curatenie', config: 'apps/curatenie/wrangler.jsonc', binding: 'DB' },
+  { director: 'tipic', config: 'apps/tipic/wrangler.jsonc', binding: 'DB' },
   { director: 'communication', config: 'services/communication-worker/wrangler.jsonc', binding: 'DB' },
   { director: 'automation', config: 'services/automation-worker/wrangler.jsonc', binding: 'DB' },
 ]

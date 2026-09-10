@@ -260,6 +260,33 @@ importers:
         specifier: ^4.1.5
         version: 4.5.4
 
+  apps/tipic:
+    dependencies:
+      '@xc/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@xc/authorization':
+        specifier: workspace:*
+        version: link:../../packages/authorization
+      '@xc/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@xc/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@xc/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@xc/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@xc/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      zod:
+        specifier: ^4.1.5
+        version: 4.5.4
+
   packages/auth:
     dependencies:
       '@xc/contracts':
@@ -307,7 +334,7 @@ importers:
     dependencies:
       '@cloudflare/puppeteer':
         specifier: ^1.4.0
-        version: 1.4.0
+        version: 1.4.0(supports-color@10.2.2)
 
   services/audit-worker:
     dependencies:

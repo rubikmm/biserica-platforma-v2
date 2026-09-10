@@ -42,8 +42,22 @@ Etape:
 1. ✅ **Nucleul** — monorepo, identitate fără parolă (email → cod de 6 cifre), autorizare centrală,
    contracte, evenimente, audit, automatizare, comunicare, home.
 2. ✅ **Staging** — publicat pe `*.staging.sfantul-ilie.ro`, email real prin Cloudflare Email Service.
-3. ⏳ **Portarea aplicațiilor**: ✅ calendar (A1), ✅ program (A2), ⏳ curățenie (A6), apoi
-   A9/A10 → A3/A8 → A12 → A7 → A5 → A4 → A13 se stinge.
+3. ⏳ **Portarea aplicațiilor**: ✅ calendar (A1), ✅ program (A2), ✅ tipic (A9), ⏳ curățenie (A6), apoi A10 → A3/A8 → A12 → A7 → A5 → A4 → A13 se stinge.
+
+**Tipicul (A9)**: rânduiala slujbei zilei, trei cărți așezate una sub alta, ca în V1 (user, 1 sept.
+2026): **Rânduiala Tipicului** (ROEA, 97 de zile) spune CE se face, **Anuarul liturgic și tipiconal**
+(IBMO, 365 de zile) o desfășoară, **Mineiul** (366/366 de zile) dă TEXTUL slujbei. Cărțile s-au copiat
+din V1 în `xc-tipic-staging` — Mineiul e cel de la slujbe.teologie.net pe unsprezece luni și scanarea
+IBMO 2005 pe noiembrie, exact setul pe care îl servește V1. Cartea Mineiului **nu ține de an**: cheia
+e (luna, zi), nu data. Afișarea, markup-ul și textele sunt cele din V1; ce s-a schimbat, și de ce:
+- pagina e **deschisă** (V1 cerea cont) — „totul la liber, deocamdată";
+- titlul zilei se face din ziua **structurată** a calendarului (`denumire` + `sfinti`), nu din
+  `titlu_html`: în V2 calendarul dă câmpurile desfăcute, deci nu mai e nimic de despicat;
+- **textul pericopelor vine de la calendar**, nu direct de la Biblia: calendarul e singurul care
+  vorbește cu ea. Pentru asta a căpătat `GET /v1/pericopa?ref=` (și `?voscreasna=<1..11>`, ca lista
+  celor 11 Evanghelii ale Învierii să nu se copieze în aplicații);
+- **cardurile care duc la PDF-ul cărții lipsesc**: cele trei PDF-uri (Anuarul 41 MB, Mineiul pe
+  noiembrie 67 MB, ROEA) stau în R2-ul V1 și n-au fost încă copiate în `xc-tipic-*`.
 
 **Programul (A2)**: baza afișării e V1 (stilul local, markup-ul și textele din `biserica-program`,
 9 sept.), iar **hârtiile — foaia A4, JPG-ul, „Sfinții zilei" — trebuie să rămână identice cu V1**;
@@ -76,7 +90,13 @@ propunerea automată, ca în V1.
    butoane, apoi patru (neautentificat / utilizator / admin / super-admin), alegerea în cookie-ul `proba_rol`, ruta
    `GET /proba/<rol>`. **Merge doar în dev**; pe staging și în producție e inert. Tot ce ține de el
    poartă marcajul `⚠️ TEMPORAR` în `apps/program/src/{index,pagini}.ts`.
-2. **Curățenia (A6)** — schema, sloturile din slujbele programului (`curatenie: true`), rapoartele
+2. **PDF-urile cărților tipicului în R2** — Anuarul (41 MB), Mineiul pe noiembrie (67 MB) și ROEA
+   stau în R2-ul V1 și n-au fost copiate. Fără ele, cardul care duce la pagina zilei din carte nu
+   se scrie (codul îl așteaptă). De întrebat utilizatorul dacă le vrea.
+3. **Sfinții zilei pe foaia A4 a programului** — API-ul e gata (`tipic /v1/sfinti/<data>`);
+   rămâne afișarea, **grupată după sursă** (cerere user, 10.09.2026): sfinții calendarului
+   într-un grup, pomenirile Mineiului în altul, cu cartea scrisă lângă ele.
+4. **Curățenia (A6)** — schema, sloturile din slujbele programului (`curatenie: true`), rapoartele
    prin serviciul de comunicare. Voluntarii devin conturi ale platformei: adresele lor din V1 se
    trec prin `identity /utilizatori/asigura`, iar aplicația ține doar `user_id`.
 2. **Testul real de email**, de către utilizator: `https://cont.staging.sfantul-ilie.ro` → cont nou
@@ -98,6 +118,7 @@ propunerea automată, ca în V1.
 | cont | `cont.staging.sfantul-ilie.ro` | intrarea fără parolă; singurul loc cu date personale |
 | calendar | `calendar.staging.sfantul-ilie.ro` | 730 de zile oficiale (2025–2026) + anii calculați |
 | program | `program.staging.sfantul-ilie.ro` | 654 săptămâni / 2619 slujbe copiate din V1 |
+| tipic | `tipic.staging.sfantul-ilie.ro` | 3 cărți: ROEA 97 zile, Anuar 365, Mineiul 366 |
 | admin | `admin.staging.sfantul-ilie.ro` | audit, livrări, automatizări |
 
 ## Stare tehnică
@@ -153,6 +174,18 @@ propunerea automată, ca în V1.
 ## Jurnal
 
 ### 2026-09-10
+
+- **Tipicul publicat pe staging**: `tipic.staging.sfantul-ilie.ro`, cu cele trei cărți în
+  `xc-tipic-staging` și cu `GET /v1/sfinti/<data>` — sfinții zilei așa cum îi numără Mineiul
+  (2041 de pomeniri pe an, 5,6 pe zi). Calendarul a fost republicat pentru `/v1/pericopa`, iar
+  home-ul are butonul Tipicului. Capcană nouă: subdomeniul nou nu se rezolvă din NAS ore în șir
+  (cache negativ de DNS), deși public răspunde — se probează cu `--resolve`.
+
+- **Tipicul (A9) portat pe V2, local**: contract `@xc/contracts/tipic`, baza `xc-tipic-staging`
+  (97 + 365 + 366 de zile copiate din V1, fără nicio literă stricată), aplicația `apps/tipic` cu
+  pagina zilei și `/v1`. Calendarul a căpătat `/v1/pericopa` — textul unei pericope, oricare ar fi
+  ea —, ca legătura cu Biblia să rămână într-un singur loc. Probat pe trei zile: duminică cu tot
+  (13 sept.), zi doar din Anuar (15 sept.), zi cu Evanghelia Utreniei (1 ian.). Nepublicat.
 
 - Proiect pornit de la zero: container, repo GitHub privat și resursele Cloudflare `xc-*` create
   în aceeași zi.

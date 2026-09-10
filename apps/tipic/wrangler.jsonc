@@ -1,0 +1,92 @@
+{
+  // Tipicul (A9 din V1): randuiala slujbei zilei — ce se canta si ce se citeste.
+  // Biblioteca de citit: nu decide nimic si nu anunta nimic, atarna de calendar.
+  // Proprietar al celor trei carti (`xc-tipic-*`): Randuiala Tipicului (ROEA), Anuarul liturgic
+  // si tipiconal (IBMO) si Mineiul. Ziua liturgica, sfintii si textul pericopelor se CER de la
+  // calendar (legatura de serviciu), nu se tin aici.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "xc-tipic",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "workers_dev": false,
+  // Data publicarii, pentru randul de versiune din subsol.
+  "version_metadata": { "binding": "VERSIUNE" },
+
+  "vars": {
+    "MEDIU": "dev",
+    "ORIGINE_PUBLICA": "https://rubik:8474",
+    "DOMENIU_COOKIE": "",
+    "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "xc-tipic-staging",
+      "database_id": "8c5ab60e-d3d8-4e96-aa89-f52492fdd83e",
+      "migrations_dir": "../../infrastructure/migrations/tipic"
+    }
+  ],
+
+  "services": [
+    { "binding": "IDENTITATE", "service": "xc-identity" },
+    { "binding": "AUTORIZARE", "service": "xc-authz" },
+    { "binding": "AUDIT", "service": "xc-audit" },
+    { "binding": "CALENDAR", "service": "xc-calendar" }
+  ],
+
+  "env": {
+    "staging": {
+      "name": "xc-tipic-staging",
+      "version_metadata": { "binding": "VERSIUNE" },
+      "vars": {
+        "MEDIU": "staging",
+        "ORIGINE_PUBLICA": "https://tipic.staging.sfantul-ilie.ro",
+        "DOMENIU_COOKIE": ".staging.sfantul-ilie.ro",
+        "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
+        "URL_HOME": "https://staging.sfantul-ilie.ro",
+        "URL_CONT": "https://cont.staging.sfantul-ilie.ro",
+        "URL_CALENDAR": "https://calendar.staging.sfantul-ilie.ro",
+        "URL_PROGRAM": "https://program.staging.sfantul-ilie.ro",
+        "URL_CURATENIE": "https://curatenie.staging.sfantul-ilie.ro",
+        "URL_TIPIC": "https://tipic.staging.sfantul-ilie.ro",
+        "URL_ADMIN": "https://admin.staging.sfantul-ilie.ro"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "xc-tipic-staging",
+          "database_id": "8c5ab60e-d3d8-4e96-aa89-f52492fdd83e",
+          "migrations_dir": "../../infrastructure/migrations/tipic"
+        }
+      ],
+      "services": [
+        { "binding": "IDENTITATE", "service": "xc-identity-staging" },
+        { "binding": "AUTORIZARE", "service": "xc-authz-staging" },
+        { "binding": "AUDIT", "service": "xc-audit-staging" },
+        { "binding": "CALENDAR", "service": "xc-calendar-staging" }
+      ],
+      "routes": [{ "pattern": "tipic.staging.sfantul-ilie.ro", "custom_domain": true }]
+    },
+    "production": {
+      "name": "xc-tipic-production",
+      "version_metadata": { "binding": "VERSIUNE" },
+      "vars": {
+        "MEDIU": "production",
+        "ORIGINE_PUBLICA": "https://tipic.sfantul-ilie.ro",
+        "DOMENIU_COOKIE": ".sfantul-ilie.ro",
+        "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
+        "URL_HOME": "https://sfantul-ilie.ro",
+        "URL_CONT": "https://cont.sfantul-ilie.ro",
+        "URL_CALENDAR": "https://calendar.sfantul-ilie.ro",
+        "URL_PROGRAM": "https://program.sfantul-ilie.ro",
+        "URL_CURATENIE": "https://curatenie.sfantul-ilie.ro",
+        "URL_TIPIC": "https://tipic.sfantul-ilie.ro",
+        "URL_ADMIN": "https://admin.sfantul-ilie.ro"
+      }
+      // Ruta de productie (`tipic.sfantul-ilie.ro`) ramane a lui A9 pana la cutover-ul explicit.
+    }
+  }
+}

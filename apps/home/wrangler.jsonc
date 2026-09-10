@@ -34,6 +34,7 @@
         "URL_CALENDAR": "https://calendar.staging.sfantul-ilie.ro",
         "URL_PROGRAM": "https://program.staging.sfantul-ilie.ro",
         "URL_CURATENIE": "https://curatenie.staging.sfantul-ilie.ro",
+        "URL_TIPIC": "https://tipic.staging.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.staging.sfantul-ilie.ro"
       },
       "services": [{ "binding": "IDENTITATE", "service": "xc-identity-staging" }],
@@ -53,6 +54,7 @@
         "URL_CALENDAR": "https://calendar.sfantul-ilie.ro",
         "URL_PROGRAM": "https://program.sfantul-ilie.ro",
         "URL_CURATENIE": "https://curatenie.sfantul-ilie.ro",
+        "URL_TIPIC": "https://tipic.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.sfantul-ilie.ro"
       }
       // Apexul productiei e al WordPress-ului V1 pana la o decizie explicita.
