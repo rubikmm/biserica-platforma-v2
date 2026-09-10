@@ -1,29 +1,23 @@
 import { z } from 'zod'
 import {
-  CerereInregistrare,
-  CerereLogin,
+  CerereIntrare,
   SESIUNE_ANONIMA,
+  NumeAfisat,
   type AtribuireRol,
   type SesiuneCurenta,
   redacteaza,
 } from '@xc/contracts'
 import { citesteConfig, permiteLinkDebug } from '@xc/config'
 import { Logger, correlationId } from '@xc/observability'
-import { hashParola, verificaParola, consumaTimpDegeaba } from './parole.js'
+import { DURATA_LINK_SEC, DURATA_SESIUNE_SEC } from './jetoane.js'
 import {
-  DURATA_CHALLENGE_SEC,
-  DURATA_SESIUNE_SEC,
-  DURATA_VERIFICARE_EMAIL_SEC,
-} from './jetoane.js'
-import {
+  actualizeazaNume,
   catreUtilizator,
-  consumaJeton,
+  consumaLinkDeIntrare,
   creeazaSesiune,
-  creeazaUtilizator,
+  creeazaUtilizatorConfirmat,
   emailuriDeDebug,
-  emiteJeton,
-  invalideazaJetoaneleAnterioare,
-  marcheazaEmailVerificat,
+  emiteLinkDeIntrare,
   revocaSesiune,
   revocaToateSesiunile,
   sesiuneDupaJeton,
@@ -31,10 +25,9 @@ import {
   utilizatorDupaId,
 } from './depozit.js'
 import {
-  EmailFurnizorHttp,
+  EmailCloudflare,
   EmailSandbox,
-  textConfirmareLogin,
-  textVerificareEmail,
+  scrisoareaDeIntrare,
   type AdaptorEmail,
 } from './email.js'
 import {
@@ -49,14 +42,15 @@ export interface Env {
   DB: D1Database
   AUTORIZARE: Fetcher
   AUDIT: Fetcher
+  /** Binding-ul `send_email` — lipseste in dev, unde scrisorile nu pleaca. */
+  POSTA?: SendEmail
   MEDIU: string
   ORIGINE_PUBLICA: string
   DOMENIU_COOKIE: string
   EMAIL_SUPERADMIN: string
   ADAPTOR_EMAIL?: string
-  EMAIL_API_URL?: string
-  EMAIL_API_KEY?: string
-  EMAIL_EXPEDITOR?: string
+  POSTA_DE_LA?: string
+  POSTA_NUME?: string
 }
 
 const SERVICIU = 'identity-worker'
@@ -68,9 +62,21 @@ function json(date: unknown, status = 200): Response {
   })
 }
 
-function alegeAdaptorEmail(env: Env): AdaptorEmail {
-  if (env.ADAPTOR_EMAIL === 'http' && env.EMAIL_API_URL && env.EMAIL_API_KEY) {
-    return new EmailFurnizorHttp(env.EMAIL_API_URL, env.EMAIL_API_KEY, env.EMAIL_EXPEDITOR ?? '')
+/**
+ * Drumul scrisorii. `cloudflare` cere binding-ul `POSTA`; fara el (dev) cadem pe sandbox
+ * si spunem asta in log — nu tacut, ca sa nu se creada ca a plecat ceva.
+ */
+function alegeAdaptorEmail(env: Env, log: Logger): AdaptorEmail {
+  if (env.ADAPTOR_EMAIL === 'cloudflare') {
+    if (env.POSTA && typeof env.POSTA.send === 'function') {
+      return new EmailCloudflare(
+        env.DB,
+        env.POSTA,
+        env.POSTA_DE_LA ?? 'no-reply@posta.sfantul-ilie.ro',
+        env.POSTA_NUME ?? 'Biserica Sfântul Ilie – Hanul Colței',
+      )
+    }
+    log.warn('ADAPTOR_EMAIL=cloudflare, dar binding-ul POSTA lipseste; folosesc sandbox')
   }
   return new EmailSandbox(env.DB)
 }
@@ -102,17 +108,12 @@ async function scrieAudit(
       }),
     })
   } catch (e) {
-    // Auditul indisponibil nu trebuie sa blocheze autentificarea, dar se vede in log.
+    // Auditul indisponibil nu trebuie sa blocheze intrarea, dar se vede in log.
     log.error('audit indisponibil', { eroare: e instanceof Error ? e.message : String(e) })
   }
 }
 
-async function atribuieRol(
-  env: Env,
-  userId: string,
-  role: string,
-  cid: string,
-): Promise<void> {
+async function atribuieRol(env: Env, userId: string, role: string, cid: string): Promise<void> {
   await env.AUTORIZARE.fetch('https://authz.intern/atribuie', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -137,7 +138,7 @@ async function roluriUtilizator(env: Env, userId: string): Promise<AtribuireRol[
 
 // ---------------------------------------------------------------------------
 
-const CerereVerificare = z.object({
+const CerereConsum = z.object({
   token: z.string().min(1),
   ip: z.string().default('necunoscut'),
   userAgent: z.string().default(''),
@@ -159,87 +160,19 @@ export default {
     try {
       switch (cale) {
         // -------------------------------------------------------------------
-        case '/inregistrare': {
-          const date = CerereInregistrare.parse(await req.json())
-          const hash = await hashParola(date.password)
-          const rezultat = await creeazaUtilizator(
-            env.DB,
-            date.email,
-            hash,
-            date.displayName ?? null,
-          )
-
-          if (rezultat.fel === 'exista') {
-            await scrieAudit(env, log, {
-              action: 'identity.register',
-              target: date.email,
-              outcome: 'failure',
-              correlationId: cid,
-              summary: { motiv: 'email deja inregistrat' },
-            })
-            // Raspuns identic cu succesul: nu confirmam existenta unui cont.
-            return json({ inregistrat: true, debugLink: null })
-          }
-
-          const utilizator = rezultat.utilizator
-          const eSuperadmin =
-            cfg.EMAIL_SUPERADMIN !== '' &&
-            utilizator.email === cfg.EMAIL_SUPERADMIN.trim().toLowerCase()
-
-          await atribuieRol(env, utilizator.id, eSuperadmin ? 'super-admin' : 'user', cid)
-
-          const jeton = await emiteJeton(
-            env.DB,
-            'email_verification_tokens',
-            utilizator.id,
-            DURATA_VERIFICARE_EMAIL_SEC,
-          )
-          const link = `${cfg.ORIGINE_PUBLICA}/auth/confirma-email?jeton=${encodeURIComponent(jeton)}`
-          const email = alegeAdaptorEmail(env)
-          const trimitere = await email.trimite({
-            catre: utilizator.email,
-            subiect: 'Confirmă adresa de email',
-            text: textVerificareEmail(link),
-            link,
-            correlationId: cid,
-          })
-
-          await scrieAudit(env, log, {
-            action: 'identity.register',
-            target: utilizator.id,
-            outcome: 'success',
-            correlationId: cid,
-            actorId: utilizator.id,
-            summary: {
-              superadmin: eSuperadmin,
-              emailLivrat: trimitere.livrat,
-              adaptor: email.nume,
-            },
-          })
-
-          log.info('utilizator creat', { superadmin: eSuperadmin })
-
-          return json({
-            inregistrat: true,
-            superadmin: eSuperadmin,
-            debugLink: permiteLinkDebug(cfg) ? link : null,
-          })
-        }
-
-        // -------------------------------------------------------------------
-        // Pasul 1 din login: parola. Nu creeaza sesiune — doar trimite linkul de confirmare.
-        case '/login/pas1': {
+        // Intrarea (si nasterea contului, daca adresa nu are unul): trimite linkul.
+        // Raspunsul e identic indiferent daca adresa are cont sau nu.
+        case '/intrare': {
           const brut = (await req.json()) as Record<string, unknown>
-          const date = CerereLogin.parse(brut)
+          const date = CerereIntrare.parse(brut)
           const ip = typeof brut.ip === 'string' ? brut.ip : 'necunoscut'
-          const userAgent = typeof brut.userAgent === 'string' ? brut.userAgent : ''
 
           if (
             (await eBlocat(env.DB, date.email, 'email', LIMITA_LOGIN_EMAIL)) ||
             (await eBlocat(env.DB, ip, 'ip', LIMITA_LOGIN_IP))
           ) {
             await scrieAudit(env, log, {
-              action: 'identity.login.step1',
+              action: 'identity.link.requested',
               target: date.email,
               outcome: 'denied',
               correlationId: cid,
@@ -251,62 +184,51 @@ export default {
           await inregistreazaIncercare(env.DB, date.email, 'email')
           await inregistreazaIncercare(env.DB, ip, 'ip')
 
-          const utilizator = await utilizatorDupaEmail(env.DB, date.email)
+          const existent = await utilizatorDupaEmail(env.DB, date.email)
 
-          if (!utilizator) {
-            // Consumam acelasi timp ca la un cont real, ca durata sa nu tradeze existenta.
-            await consumaTimpDegeaba()
+          if (existent?.disabled_at) {
+            // Cont inchis: nu trimitem nimic, dar nici nu spunem asta browserului.
             await scrieAudit(env, log, {
-              action: 'identity.login.step1',
-              target: date.email,
+              action: 'identity.link.requested',
+              target: existent.id,
               outcome: 'failure',
               correlationId: cid,
-              summary: { motiv: 'email inexistent' },
+              summary: { motiv: 'cont dezactivat' },
             })
             return json({ challengeSent: true, debugLink: null })
           }
 
-          const parolaOk = await verificaParola(date.password, utilizator.password_hash)
-
-          if (!parolaOk || utilizator.disabled_at) {
-            await scrieAudit(env, log, {
-              action: 'identity.login.step1',
-              target: utilizator.id,
-              outcome: 'failure',
-              correlationId: cid,
-              summary: { motiv: utilizator.disabled_at ? 'cont dezactivat' : 'parola gresita' },
-            })
-            return json({ challengeSent: true, debugLink: null })
-          }
-
-          await invalideazaJetoaneleAnterioare(env.DB, 'login_challenges', utilizator.id)
-          const jeton = await emiteJeton(
+          const jeton = await emiteLinkDeIntrare(
             env.DB,
-            'login_challenges',
-            utilizator.id,
-            DURATA_CHALLENGE_SEC,
+            date.email,
+            existent?.id ?? null,
+            date.displayName ?? null,
+            DURATA_LINK_SEC,
           )
           const link = `${cfg.ORIGINE_PUBLICA}/auth/confirma?jeton=${encodeURIComponent(jeton)}`
+          const contNou = !existent
+          const scrisoare = scrisoareaDeIntrare(link, contNou)
 
-          const email = alegeAdaptorEmail(env)
+          const email = alegeAdaptorEmail(env, log)
           const trimitere = await email.trimite({
-            catre: utilizator.email,
-            subiect: 'Confirmă autentificarea',
-            text: textConfirmareLogin(link),
+            catre: date.email,
+            subiect: contNou ? 'Deschide-ți contul' : 'Intră în platforma parohiei',
+            text: scrisoare.text,
+            html: scrisoare.html,
             link,
             correlationId: cid,
           })
 
           await scrieAudit(env, log, {
-            action: 'identity.login.step1',
-            target: utilizator.id,
-            outcome: 'success',
+            action: 'identity.link.requested',
+            target: existent?.id ?? date.email,
+            outcome: trimitere.livrat || email.nume === 'sandbox' ? 'success' : 'failure',
             correlationId: cid,
-            actorId: utilizator.id,
-            summary: { emailLivrat: trimitere.livrat, adaptor: email.nume },
+            ...(existent ? { actorId: existent.id } : {}),
+            summary: { contNou, adaptor: email.nume, livrat: trimitere.livrat, detaliu: trimitere.detaliu },
           })
 
-          log.info('challenge emis', { userId: utilizator.id, adaptor: email.nume })
+          log.info('link de intrare emis', { contNou, adaptor: email.nume, livrat: trimitere.livrat })
 
           return json({
             challengeSent: true,
@@ -315,14 +237,14 @@ export default {
         }
 
         // -------------------------------------------------------------------
-        // Pasul 2: linkul din email. Abia aici se naste sesiunea.
-        case '/login/verifica': {
-          const date = CerereVerificare.parse(await req.json())
-          const rezultat = await consumaJeton(env.DB, 'login_challenges', date.token)
+        // Linkul deschis: aici se naste sesiunea (si contul, la prima confirmare).
+        case '/confirma': {
+          const date = CerereConsum.parse(await req.json())
+          const rezultat = await consumaLinkDeIntrare(env.DB, date.token)
 
           if (!rezultat.ok) {
             await scrieAudit(env, log, {
-              action: 'identity.login.step2',
+              action: 'identity.link.confirmed',
               target: 'jeton',
               outcome: 'failure',
               correlationId: cid,
@@ -331,14 +253,41 @@ export default {
             return json({ ok: false, motiv: rezultat.motiv }, 400)
           }
 
-          const utilizator = await utilizatorDupaId(env.DB, rezultat.userId)
-          if (!utilizator || utilizator.disabled_at) {
-            return json({ ok: false, motiv: 'cont indisponibil' }, 400)
+          let utilizator = rezultat.userId ? await utilizatorDupaId(env.DB, rezultat.userId) : null
+          let contNou = false
+
+          if (!utilizator) {
+            const creare = await creeazaUtilizatorConfirmat(
+              env.DB,
+              rezultat.email,
+              rezultat.displayName,
+            )
+            utilizator = creare.utilizator
+            contNou = creare.fel === 'creat'
+
+            if (contNou) {
+              const eSuperadmin =
+                cfg.EMAIL_SUPERADMIN !== '' &&
+                utilizator.email === cfg.EMAIL_SUPERADMIN.trim().toLowerCase()
+              await atribuieRol(env, utilizator.id, eSuperadmin ? 'super-admin' : 'user', cid)
+
+              await scrieAudit(env, log, {
+                action: 'identity.register',
+                target: utilizator.id,
+                outcome: 'success',
+                correlationId: cid,
+                actorId: utilizator.id,
+                summary: { superadmin: eSuperadmin },
+              })
+              log.info('cont creat la prima confirmare', { superadmin: eSuperadmin })
+            }
+          } else if (rezultat.displayName && !utilizator.display_name) {
+            // Omul a completat un nume la un cont care nu avea: il pastram.
+            await actualizeazaNume(env.DB, utilizator.id, rezultat.displayName)
           }
 
-          // Confirmarea autentificarii dovedeste si controlul adresei de email.
-          if (!utilizator.email_verified_at) {
-            await marcheazaEmailVerificat(env.DB, utilizator.id)
+          if (utilizator.disabled_at) {
+            return json({ ok: false, motiv: 'cont indisponibil' }, 400)
           }
 
           const sesiune = await creeazaSesiune(
@@ -348,22 +297,22 @@ export default {
             date.ip,
             date.userAgent,
           )
-
           await resetIncercari(env.DB, utilizator.email, 'email')
 
           await scrieAudit(env, log, {
-            action: 'identity.login.step2',
+            action: 'identity.link.confirmed',
             target: utilizator.id,
             outcome: 'success',
             correlationId: cid,
             actorId: utilizator.id,
-            summary: { ip: date.ip },
+            summary: { ip: date.ip, contNou },
           })
 
-          log.info('sesiune creata', { userId: utilizator.id })
+          log.info('sesiune creata', { userId: utilizator.id, contNou })
 
           return json({
             ok: true,
+            contNou,
             sessionToken: sesiune.jeton,
             expiresAt: sesiune.expiraLa,
             maxAge: DURATA_SESIUNE_SEC,
@@ -421,24 +370,16 @@ export default {
         }
 
         // -------------------------------------------------------------------
-        case '/confirma-email': {
-          const date = CerereJeton.parse(await req.json())
-          const rezultat = await consumaJeton(env.DB, 'email_verification_tokens', date.token)
-          if (!rezultat.ok) return json({ ok: false, motiv: rezultat.motiv }, 400)
-          await marcheazaEmailVerificat(env.DB, rezultat.userId)
-          await scrieAudit(env, log, {
-            action: 'identity.email.verified',
-            target: rezultat.userId,
-            outcome: 'success',
-            correlationId: cid,
-            actorId: rezultat.userId,
-          })
+        case '/nume': {
+          const date = z
+            .object({ userId: z.string().min(1), displayName: NumeAfisat })
+            .parse(await req.json())
+          await actualizeazaNume(env.DB, date.userId, date.displayName)
           return json({ ok: true })
         }
 
         // -------------------------------------------------------------------
-        // Doar in dev: ultimele linkuri „trimise" catre o adresa, ca fluxul sa fie testabil
-        // fara furnizor de email configurat.
+        // Doar in dev: ultimele linkuri „trimise" catre o adresa.
         case '/emailuri-debug': {
           if (!permiteLinkDebug(cfg)) return json({ eroare: 'indisponibil' }, 404)
           const date = z.object({ email: z.string() }).parse(await req.json())

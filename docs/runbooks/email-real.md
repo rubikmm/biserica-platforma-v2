@@ -1,49 +1,53 @@
-# Activarea emailului real
+# Emailul: cum pleacă și ce faci când nu pleacă
 
-## Situația actuală
+## Drumul
 
-**Nu pleacă niciun email.** Adaptorul activ e `sandbox`: scrie mesajul în tabela `emails_iesire`
-și îl loghează. În `dev`, linkul de confirmare apare direct în pagină, ca fluxul să fie testabil.
-
-Asta e o alegere deliberată, nu o lipsă: nimic din V2 nu trebuie să ajungă la oameni reali cât
-timp platforma e în construcție.
-
-## Ce lipsește
-
-Tokenul Cloudflare al parohiei **nu are** permisiuni de Email Routing sau Email Service. Chiar
-dacă le-ar avea, Cloudflare nu oferă trimitere de email tranzacțional din Workers.
-
-E nevoie de un furnizor extern (Resend, Postmark, Brevo, SMTP prin HTTP) și de o cheie de API.
-
-## Cum se activează
-
-1. Alege furnizorul și creează o cheie de API.
-2. Verifică domeniul expeditor la furnizor (SPF/DKIM pe `sfantul-ilie.ro`) — **atenție**, asta
-   atinge DNS-ul de producție, deci se face doar cu confirmare explicită.
-3. Pune secretele, fără să le scrii în repo:
-
-```bash
-wrangler secret put EMAIL_API_KEY --env staging --config services/identity-worker/wrangler.jsonc
-```
-
-4. Schimbă în `wrangler.jsonc`-ul mediului:
+Scrisorile de intrare pleacă prin **Cloudflare Email Service**, prin binding-ul `send_email`
+declarat în `services/identity-worker/wrangler.jsonc`:
 
 ```jsonc
+"send_email": [{ "name": "POSTA" }],
 "vars": {
-  "ADAPTOR_EMAIL": "http",
-  "EMAIL_API_URL": "https://api.furnizorul.com/emails",
-  "EMAIL_EXPEDITOR": "parohia@sfantul-ilie.ro"
+  "ADAPTOR_EMAIL": "cloudflare",
+  "POSTA_DE_LA": "no-reply@posta.sfantul-ilie.ro",
+  "POSTA_NUME": "Biserica Sfântul Ilie – Hanul Colței"
 }
 ```
 
-5. Adaptorul `EmailFurnizorHttp` din `services/identity-worker/src/email.ts` e deja scris; verifică
-   doar dacă formatul cerut de furnizorul ales se potrivește cu corpul trimis acolo.
+Nu există chei de API sau parole de ținut: Cloudflare semnează DKIM și trimite. Planul Workers
+plătit include 3.000 de scrisori pe lună.
 
-## Pentru comunicarea în masă
+**Condiția unică**: domeniul expeditor `posta.sfantul-ilie.ro` să fie îmbarcat la Email Sending
+(panou → Compute → Email Service → Email Sending). E deja făcut pentru V1 (8.09.2026); V2 folosește
+același subdomeniu.
 
-`communication-worker` are un comutator separat, `LIVRARE_REALA`. Cât timp e `nu`, adaptoarele
-reale nici nu pot fi alese — funcția aruncă. Trecerea pe `da` cere un adaptor implementat și e o
-decizie explicită a utilizatorului, nu un efect secundar al configurării emailului de login.
+## Pe medii
 
-Distincția e intenționată: un link de autentificare către o singură persoană care tocmai a cerut-o
-e altceva decât un anunț către toată parohia.
+| Mediu | Adaptor | Ce se întâmplă |
+|---|---|---|
+| dev | `sandbox` | nimic nu pleacă; linkul apare în pagină și în `emails_iesire` |
+| staging | `cloudflare` | scrisoarea pleacă real, către adresa introdusă |
+| production | `cloudflare` | idem (când va exista) |
+
+`wrangler dev` **nu** trimite prin binding chiar dacă e declarat — de aceea în dev rămâne sandbox.
+
+## Când nu pleacă
+
+Jurnalul worker-ului (`wrangler tail xc-identity-staging --env staging`) și tabela `emails_iesire`
+(coloanele `livrat`, `detaliu`) spun ce s-a întâmplat. Codurile Cloudflare:
+
+| Cod | Înseamnă | Ce faci |
+|---|---|---|
+| `E_SENDER_NOT_VERIFIED` | domeniul expeditor nu e îmbarcat | verifică `posta.sfantul-ilie.ro` în panou |
+| `E_RATE_LIMIT_EXCEEDED` | plafonul lunar/orar atins | așteaptă sau cere plafon mai mare |
+| altceva | vezi mesajul | nu ocoli; spune utilizatorului |
+
+Nu există rezervă SMTP în V2 (V1 avea contul de pe cPanel ca rezervă). Dacă va fi nevoie, se
+adaugă ca al doilea adaptor în `email.ts`, fără să se atingă restul.
+
+## Comunicarea în masă
+
+`communication-worker` are alt comutator, `LIVRARE_REALA`, și e încă în sandbox. Când se
+activează, va folosi același binding pentru email, iar pentru WhatsApp gateway-ul WAHA de pe NAS
+(cum face A7 în V1). Decizie separată, explicită — un link de intrare către o persoană care l-a
+cerut e altceva decât un anunț către toată parohia.

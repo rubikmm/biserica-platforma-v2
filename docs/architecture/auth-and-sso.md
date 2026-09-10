@@ -1,85 +1,103 @@
 # Identitate, sesiuni și SSO
 
-## Fluxul de autentificare
+## Fluxul de intrare — fără parolă
 
-Autentificarea are **doi factori, la fiecare login**, fără excepții și fără „ține minte
-dispozitivul":
+Nu există parolă nicăieri (decizie a utilizatorului, 10.09.2026). Intrarea are un singur gest:
 
-1. **ce știi** — email + parolă;
-2. **ce controlezi** — un link de confirmare trimis pe adresa respectivă.
+1. omul dă adresa de email;
+2. primește un link pe adresa aceea;
+3. îl deschide — și abia atunci există o sesiune.
 
-Sesiunea se naște abia la pasul 2. Pasul 1 nu creează nimic durabil în afară de un jeton de
-confirmare cu viață scurtă.
+Același gest **naște și contul**: dacă adresa nu are cont, contul se creează la prima confirmare,
+cu numele purtat prin jeton. Nu există conturi neconfirmate.
 
 ```mermaid
 sequenceDiagram
   participant B as Browser
   participant A as app-account (BFF)
   participant I as identity-worker
-  participant E as Email (sandbox)
+  participant E as Cloudflare Email Service
 
-  B->>A: POST /auth/login (email, parolă)
-  A->>I: /login/pas1
-  I->>I: verifică parola (PBKDF2)
-  I->>E: link de confirmare (15 min, un singur consum)
+  B->>A: POST /auth/login (email) sau /auth/inregistrare (nume + email)
+  A->>I: /intrare
+  I->>I: rate limit, jeton nou (15 min, un singur consum)
+  I->>E: scrisoare cu link (binding send_email)
   I-->>A: challengeSent (mereu true)
   A-->>B: „Verifică-ți emailul"
   B->>A: GET /auth/confirma?jeton=…
-  A->>I: /login/verifica
-  I->>I: consumă jetonul, creează sesiunea
-  I-->>A: token de sesiune
+  A->>I: /confirma
+  I->>I: consumă jetonul; creează contul dacă lipsește; sesiune nouă
+  I-->>A: token de sesiune (30 de zile)
   A-->>B: Set-Cookie + redirect
 ```
 
 ## De ce link și nu cod din 6 cifre
 
-Decizia utilizatorului (10.09.2026): linkul e mai ușor de folosit pe telefon — o apăsare, fără
-comutat între aplicații și fără transcris cifre. Costul e că linkul trebuie să fie
-single-use și scurt ca durată, ceea ce e implementat: consum atomic (`UPDATE … WHERE consumed_at
-IS NULL`), 15 minute de viață, și invalidarea jetoanelor anterioare la emiterea unuia nou.
+Decizia utilizatorului: linkul e mai ușor de folosit pe telefon — o apăsare, fără comutat între
+aplicații și fără transcris cifre. Compensații, fiindcă un link e mai ușor de dat mai departe
+decât un cod citit cu ochii:
+
+- valabil 15 minute;
+- consum unic, **atomic** (`UPDATE … WHERE consumed_at IS NULL`) — două apăsări simultane dau o
+  singură sesiune;
+- un link nou le închide pe cele anterioare ale aceleiași adrese;
+- în baza de date se ține doar hash-ul SHA-256 al jetonului.
+
+## De ce sesiunea e lungă (30 de zile)
+
+Fără parolă, linkul e singurul gest de intrare. O sesiune de câteva ore ar trimite omul la
+email la fiecare vizită. 30 de zile e compromisul; contraponderea e revocarea centrală, imediată
+(„Închide toate sesiunile"), plus faptul că sesiunile sunt opace și verificate la fiecare cerere.
 
 ## Ce se stochează
 
 | Element | Cum |
 |---|---|
-| Parolă | PBKDF2-HMAC-SHA256, 210.000 iterații, sare per utilizator; parametrii sunt scriși în hash, ca să poată fi crescuți fără invalidare |
-| Jeton de sesiune | aleator, 32 de octeți; în baza de date **doar** SHA-256 al lui |
-| Jeton de confirmare | identic ca tratament — hash, expirare, consum unic |
+| Jeton de sesiune | aleator, 32 de octeți; în bază **doar** SHA-256 |
+| Jeton de intrare | identic ca tratament — hash, expirare, consum unic; poartă emailul și numele pentru conturile încă nenăscute |
 | PII | doar email și nume afișat. Fără telefon, adresă, date personale |
+| Parole | **nu există** |
 
-O scurgere a bazei nu dă nici parole utilizabile, nici sesiuni active.
+O scurgere a bazei nu dă sesiuni active și nu dă nimic de spart.
+
+## Emailul
+
+Scrisoarea pleacă prin **Cloudflare Email Service** (binding `send_email`, numit `POSTA`), același
+drum pe care merge intrarea în platforma V1 din 8.09.2026: 3.000 de scrisori pe lună incluse în
+planul Workers plătit, DKIM semnat de Cloudflare, nicio parolă de ținut.
+
+Expeditorul e `no-reply@posta.sfantul-ilie.ro` — subdomeniul îmbarcat la Email Sending — nu
+apexul, ca SPF-ul mailului obișnuit al parohiei să rămână neatins.
+
+În `dev`, `wrangler dev` nu trimite prin binding; adaptorul e `sandbox` și linkul apare în pagină.
+Pe drumul real, linkul **nu** se scrie în jurnal — ar fi o a doua copie a secretului.
 
 ## Cookie-uri
 
 | Atribut | Valoare | De ce |
 |---|---|---|
-| `HttpOnly` | da | JS-ul paginii nu trebuie să atingă sesiunea |
+| `HttpOnly` | da | JS-ul paginii nu atinge sesiunea |
 | `Secure` | da | doar HTTPS |
-| `SameSite` | `Lax` | permite navigarea normală, blochează POST-uri din alte origini |
+| `SameSite` | `Lax` | navigare normală, fără POST-uri din alte origini |
 | `Path` | `/` | |
 | `Domain` | gol în dev, `.staging.sfantul-ilie.ro` în staging | SSO pe subdomeniile mediului |
 
-În dev, gazda `rubik` nu are punct în nume, iar un cookie nu poate avea `Domain` acolo — de aceea
-cookie-ul e host-only și SSO-ul se vede prin gateway, pe același host.
-
-**Cookie-ul de staging nu are voie să fie pe `.sfantul-ilie.ro`.** Ar fi trimis și către
-aplicațiile V1 de pe subdomeniile de producție.
+**Cookie-ul de staging nu are voie pe `.sfantul-ilie.ro`** — ar fi trimis și aplicațiilor V1.
 
 ## Amenințări și ce le oprește
 
 | Amenințare | Măsură |
 |---|---|
-| Enumerarea conturilor | răspuns identic la email inexistent / parolă greșită, plus cost artificial de timp (`consumaTimpDegeaba`) |
-| Forță brută pe parolă | limitare pe email (8/15 min) și pe IP (30/15 min), în ferestre glisante |
+| Enumerarea conturilor | răspuns identic indiferent dacă adresa are cont |
+| Cereri în rafală | limitare pe email (8/15 min) și pe IP (30/15 min), ferestre glisante |
 | CSRF | verificare de `Origin` **și** jeton pereche cookie/formular, comparat în timp constant |
 | Refolosirea linkului | consum atomic, o singură dată |
-| Sesiune furată | durată 12 h, revocare centrală („închide toate sesiunile"), rotație la fiecare login |
-| Scurgere prin loguri | logger cu redactare obligatorie; nu există cale de a scrie un obiect ne-redactat |
+| Sesiune furată | revocare centrală, sesiuni opace verificate la fiecare cerere |
+| Roboți de „sunt în concediu" | antetul `Auto-Submitted: auto-generated` pe scrisoare |
+| Scurgere prin loguri | logger cu redactare obligatorie |
 
-## Ce nu e implementat încă
+## Ce nu e implementat
 
-- **OIDC** — nu e nevoie cât timp toate aplicațiile sunt ale noastre, pe subdomenii proprii. Se
-  adaugă când apare o aplicație mobilă sau un terț.
-- **Resetare de parolă** — tabela există, fluxul nu. Se adaugă odată cu emailul real; până atunci
-  resetarea ar fi oricum netestabilă.
-- **Livrare reală de email** — vezi `docs/runbooks/email-real.md`.
+- **OIDC** — inutil cât timp toate aplicațiile sunt ale noastre, pe subdomenii proprii.
+- **Al doilea factor** — cerut inițial, retras de utilizator odată cu parola. Dacă revine, e o
+  schimbare izolată în `identity-worker`.

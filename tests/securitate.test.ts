@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  hashParola,
-  verificaParola,
-} from '../services/identity-worker/src/parole.js'
-import { hashJeton, jetonNou, aExpirat, peste } from '../services/identity-worker/src/jetoane.js'
+import { hashJeton, jetonNou, aExpirat, peste, DURATA_LINK_SEC, DURATA_SESIUNE_SEC } from '../services/identity-worker/src/jetoane.js'
 import {
   construiesteCookie,
   cookieSters,
@@ -11,33 +7,7 @@ import {
   egaleInTimpConstant,
   verificaCsrf,
 } from '../packages/auth/src/index.js'
-
-describe('parole', () => {
-  it('acceptă parola corectă și o respinge pe cea greșită', async () => {
-    const hash = await hashParola('parolaMeaFoarteLunga123')
-    expect(await verificaParola('parolaMeaFoarteLunga123', hash)).toBe(true)
-    expect(await verificaParola('parolaMeaFoarteLunga124', hash)).toBe(false)
-  })
-
-  it('produce hash-uri diferite pentru aceeași parolă (sare per utilizator)', async () => {
-    const a = await hashParola('aceeasiParolaLunga12')
-    const b = await hashParola('aceeasiParolaLunga12')
-    expect(a).not.toBe(b)
-    expect(await verificaParola('aceeasiParolaLunga12', a)).toBe(true)
-    expect(await verificaParola('aceeasiParolaLunga12', b)).toBe(true)
-  })
-
-  it('scrie parametrii în hash, ca iterațiile să poată crește ulterior', async () => {
-    const hash = await hashParola('oarecareParolaLunga1')
-    expect(hash.startsWith('pbkdf2$210000$')).toBe(true)
-  })
-
-  it('respinge un hash stricat fără să arunce', async () => {
-    expect(await verificaParola('orice', 'gunoi')).toBe(false)
-    expect(await verificaParola('orice', 'pbkdf2$1$x$y')).toBe(false)
-    expect(await verificaParola('orice', '')).toBe(false)
-  })
-})
+import { scrisoareaDeIntrare } from '../services/identity-worker/src/email.js'
 
 describe('jetoane', () => {
   it('generează jetoane unice', () => {
@@ -58,6 +28,25 @@ describe('jetoane', () => {
     expect(aExpirat(peste(60))).toBe(false)
     expect(aExpirat(peste(-1))).toBe(true)
   })
+
+  it('linkul e scurt, sesiunea e lungă (fără parolă, linkul e singurul gest de intrare)', () => {
+    expect(DURATA_LINK_SEC).toBe(15 * 60)
+    expect(DURATA_SESIUNE_SEC).toBeGreaterThanOrEqual(7 * 24 * 60 * 60)
+  })
+})
+
+describe('scrisoarea de intrare', () => {
+  it('conține linkul, atât în text cât și în HTML, și nu îl deformează', () => {
+    const link = 'https://rubik:8474/auth/confirma?jeton=abc_DEF-123'
+    const s = scrisoareaDeIntrare(link, false)
+    expect(s.text).toContain(link)
+    expect(s.html).toContain(`href="${link}"`)
+  })
+
+  it('spune altceva la cont nou față de intrare', () => {
+    expect(scrisoareaDeIntrare('https://x/y', true).text).toContain('Bine ai venit')
+    expect(scrisoareaDeIntrare('https://x/y', false).text).not.toContain('Bine ai venit')
+  })
 })
 
 describe('cookie-uri', () => {
@@ -74,10 +63,7 @@ describe('cookie-uri', () => {
   })
 
   it('pune Domain pentru domeniul de staging', () => {
-    const c = construiesteCookie('xc_sesiune', 'v', {
-      maxAge: 100,
-      domeniu: '.staging.sfantul-ilie.ro',
-    })
+    const c = construiesteCookie('xc_sesiune', 'v', { maxAge: 100, domeniu: '.staging.sfantul-ilie.ro' })
     expect(c).toContain('Domain=.staging.sfantul-ilie.ro')
   })
 
@@ -98,28 +84,22 @@ describe('CSRF', () => {
   const permise = ['https://rubik:8474']
 
   it('lasă GET-urile să treacă', () => {
-    const req = new Request('https://rubik:8474/', { method: 'GET' })
-    expect(verificaCsrf(req, permise)).toBeNull()
+    expect(verificaCsrf(new Request('https://rubik:8474/', { method: 'GET' }), permise)).toBeNull()
   })
 
   it('respinge POST fără Origin', () => {
-    const req = new Request('https://rubik:8474/', { method: 'POST' })
-    expect(verificaCsrf(req, permise)).toBe('lipseste antetul Origin')
+    expect(verificaCsrf(new Request('https://rubik:8474/', { method: 'POST' }), permise)).toBe(
+      'lipseste antetul Origin',
+    )
   })
 
   it('respinge POST dintr-o origine străină', () => {
-    const req = new Request('https://rubik:8474/', {
-      method: 'POST',
-      headers: { origin: 'https://atacator.ro' },
-    })
+    const req = new Request('https://rubik:8474/', { method: 'POST', headers: { origin: 'https://atacator.ro' } })
     expect(verificaCsrf(req, permise)).toBe('origine neacceptata')
   })
 
   it('acceptă POST din originea proprie', () => {
-    const req = new Request('https://rubik:8474/', {
-      method: 'POST',
-      headers: { origin: 'https://rubik:8474' },
-    })
+    const req = new Request('https://rubik:8474/', { method: 'POST', headers: { origin: 'https://rubik:8474' } })
     expect(verificaCsrf(req, permise)).toBeNull()
   })
 

@@ -1,12 +1,14 @@
--- Identitate: utilizatori, sesiuni, jetoane. PII tinut la minimum:
+-- Identitate FARA parola: utilizatori, sesiuni, jetoane de intrare. PII tinut la minimum:
 -- email, nume afisat si atat. Fara telefon, adresa sau alte date personale.
+--
+-- Nu exista tabela de parole si nici nu va exista (decizie user, 10.09.2026): intrarea e
+-- email -> link -> sesiune. Contul se naste abia la prima confirmare a unui link.
 
 CREATE TABLE IF NOT EXISTS users (
   id                TEXT PRIMARY KEY,
   email             TEXT NOT NULL UNIQUE,
   display_name      TEXT,
-  password_hash     TEXT NOT NULL,
-  email_verified_at TEXT,
+  email_verified_at TEXT NOT NULL,      -- nu poate fi NULL: fara confirmare nu exista cont
   disabled_at       TEXT,
   created_at        TEXT NOT NULL,
   updated_at        TEXT NOT NULL
@@ -36,25 +38,19 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id, revoked_at);
 
--- Al doilea factor: linkul trimis pe email la fiecare autentificare.
+-- Linkul de intrare. `user_id` e NULL cand adresa nu are inca un cont: contul se creeaza la
+-- consumul jetonului, cu `display_name` purtat de aici. Un singur consum, atomic.
 CREATE TABLE IF NOT EXISTS login_challenges (
-  id          TEXT PRIMARY KEY,
-  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  token_hash  TEXT NOT NULL UNIQUE,
-  created_at  TEXT NOT NULL,
-  expires_at  TEXT NOT NULL,
-  consumed_at TEXT
+  id           TEXT PRIMARY KEY,
+  email        TEXT NOT NULL,
+  user_id      TEXT REFERENCES users(id) ON DELETE CASCADE,
+  display_name TEXT,
+  token_hash   TEXT NOT NULL UNIQUE,
+  created_at   TEXT NOT NULL,
+  expires_at   TEXT NOT NULL,
+  consumed_at  TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_challenges_user ON login_challenges (user_id, consumed_at);
-
-CREATE TABLE IF NOT EXISTS email_verification_tokens (
-  id          TEXT PRIMARY KEY,
-  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  token_hash  TEXT NOT NULL UNIQUE,
-  created_at  TEXT NOT NULL,
-  expires_at  TEXT NOT NULL,
-  consumed_at TEXT
-);
+CREATE INDEX IF NOT EXISTS idx_challenges_email ON login_challenges (email, consumed_at);
 
 -- Contorul de rate limiting. Se curata singur (intrarile mai vechi de 24h).
 CREATE TABLE IF NOT EXISTS login_attempts (
@@ -74,16 +70,17 @@ CREATE TABLE IF NOT EXISTS consents (
   revoked_at TEXT
 );
 
--- Emailurile „trimise" de adaptorul sandbox. In dev, de aici se citeste linkul de confirmare.
--- In productie tabela ramane goala (adaptorul real nu scrie continut aici).
+-- Jurnalul scrisorilor plecate: ce adaptor, cui, cand, cu ce rezultat. In dev (adaptor sandbox)
+-- de aici se citeste linkul; in staging/productie linkul NU se scrie (coloana ramane goala).
 CREATE TABLE IF NOT EXISTS emails_iesire (
   id             TEXT PRIMARY KEY,
   catre          TEXT NOT NULL,
   subiect        TEXT NOT NULL,
-  text           TEXT NOT NULL,
-  link           TEXT NOT NULL,
+  link           TEXT,
+  adaptor        TEXT NOT NULL,
+  livrat         INTEGER NOT NULL DEFAULT 0,
+  detaliu        TEXT,
   correlation_id TEXT NOT NULL,
-  created_at     TEXT NOT NULL,
-  adaptor        TEXT NOT NULL
+  created_at     TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_emails_catre ON emails_iesire (catre, created_at);

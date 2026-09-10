@@ -1,10 +1,9 @@
-# Copiaza in `.dev.vars` si completeaza DOAR daca activezi livrarea reala de email.
-# Fisierul `.dev.vars` e in .gitignore si nu trebuie sa ajunga niciodata in repo.
+# Fisierul `.dev.vars` e in .gitignore si nu ajunge niciodata in repo.
 #
-# Cat timp ADAPTOR_EMAIL ramane `sandbox`, nu e nevoie de nimic aici: linkurile de
-# confirmare se citesc din interfata (mediul dev) sau din tabela `emails_iesire`.
-
-# ADAPTOR_EMAIL=http
-# EMAIL_API_URL=https://api.furnizorul-tau.com/emails
-# EMAIL_API_KEY=
-# EMAIL_EXPEDITOR=parohia@sfantul-ilie.ro
+# In dev NU e nevoie de nimic aici: `wrangler dev` nu trimite prin binding-ul `send_email`,
+# adaptorul ramane `sandbox`, iar linkul de intrare apare direct in pagina.
+#
+# Emailul real merge prin Cloudflare Email Service (binding `POSTA`, configurat in
+# services/identity-worker/wrangler.jsonc pe staging/production) — fara chei de tinut aici.
+# Singura conditie: subdomeniul `posta.sfantul-ilie.ro` sa fie imbarcat la Email Sending
+# (deja facut pentru V1, 8 sept. 2026).

@@ -25,7 +25,10 @@ export function aExpirat(momentISO: string): boolean {
   return new Date(momentISO).getTime() <= Date.now()
 }
 
-/** Cat traiesc jetoanele. Sesiunea e scurta pentru ca al doilea factor se cere oricum la fiecare login. */
-export const DURATA_SESIUNE_SEC = 12 * 60 * 60
-export const DURATA_CHALLENGE_SEC = 15 * 60
-export const DURATA_VERIFICARE_EMAIL_SEC = 24 * 60 * 60
+/**
+ * Cat traiesc jetoanele. Fara parola, singurul gest de intrare e linkul de pe email; de aceea
+ * sesiunea e lunga (30 de zile) — omul nu trebuie sa-si deschida emailul la fiecare vizita.
+ * Revocarea centrala („inchide toate sesiunile") ramane la o apasare distanta.
+ */
+export const DURATA_SESIUNE_SEC = 30 * 24 * 60 * 60
+export const DURATA_LINK_SEC = 15 * 60

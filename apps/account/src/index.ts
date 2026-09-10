@@ -13,9 +13,9 @@ import { SESIUNE_ANONIMA } from '@xc/contracts'
 import { Logger, correlationId } from '@xc/observability'
 import { html } from '@xc/ui'
 import {
-  paginaAsteptareConfirmare,
-  paginaInregistrare,
-  paginaLogin,
+  paginaAsteptareLink,
+  paginaContNou,
+  paginaIntrare,
   paginaMesaj,
   paginaProfil,
 } from './pagini.js'
@@ -37,17 +37,13 @@ function jetonCsrfNou(): string {
   return btoa(binar).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '')
 }
 
-/** Cookie-ul CSRF e citibil din JS-ul paginii? Nu — il punem noi in formular, deci ramane HttpOnly. */
 function asiguraCsrf(req: Request, domeniu: string): { jeton: string; setCookie?: string } {
   const existent = citesteCookie(req, NUME_COOKIE_CSRF)
   if (existent) return { jeton: existent }
   const jeton = jetonCsrfNou()
   return {
     jeton,
-    setCookie: construiesteCookie(NUME_COOKIE_CSRF, jeton, {
-      maxAge: DURATA_CSRF_SEC,
-      domeniu,
-    }),
+    setCookie: construiesteCookie(NUME_COOKIE_CSRF, jeton, { maxAge: DURATA_CSRF_SEC, domeniu }),
   }
 }
 
@@ -55,17 +51,34 @@ function redirect(catre: string, antete: Record<string, string> = {}): Response 
   return new Response(null, { status: 303, headers: { location: catre, ...antete } })
 }
 
-async function apelIdentitate(
-  env: Env,
-  cale: string,
-  corp: unknown,
-  cid: string,
-): Promise<Response> {
+async function apelIdentitate(env: Env, cale: string, corp: unknown, cid: string): Promise<Response> {
   return env.IDENTITATE.fetch(`https://identity.intern${cale}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-correlation-id': cid },
     body: JSON.stringify(corp),
   })
+}
+
+/** Cere linkul de intrare. Acelasi drum pentru „intra" si „cont nou" — difera doar numele purtat. */
+async function cereLink(
+  env: Env,
+  req: Request,
+  cid: string,
+  email: string,
+  nume: string | null,
+): Promise<{ status: number; debugLink: string | null }> {
+  const raspuns = await apelIdentitate(
+    env,
+    '/intrare',
+    {
+      email,
+      ...(nume ? { displayName: nume } : {}),
+      ip: req.headers.get('cf-connecting-ip') ?? 'necunoscut',
+    },
+    cid,
+  )
+  const date = (await raspuns.json().catch(() => ({}))) as { debugLink?: string | null }
+  return { status: raspuns.status, debugLink: date.debugLink ?? null }
 }
 
 export default {
@@ -90,11 +103,11 @@ export default {
     }
 
     try {
-      // ---------------------------------------------------------------- login
+      // ---------------------------------------------------------------- intrare
       if (cale === '/auth/login' && req.method === 'GET') {
         const csrf = asiguraCsrf(req, domeniu)
         return html(
-          paginaLogin({ csrf: csrf.jeton }),
+          paginaIntrare({ csrf: csrf.jeton }),
           200,
           csrf.setCookie ? { 'set-cookie': csrf.setCookie } : {},
         )
@@ -106,45 +119,61 @@ export default {
         if (problema) return html(paginaMesaj({ titlu: 'Cerere respinsă', fel: 'rea', text: problema }), 403)
 
         const email = String(formular.get('email') ?? '').trim().toLowerCase()
-        const parola = String(formular.get('parola') ?? '')
+        const r = await cereLink(env, req, cid, email, null)
 
-        const raspuns = await apelIdentitate(
-          env,
-          '/login/pas1',
-          {
-            email,
-            password: parola,
-            ip: req.headers.get('cf-connecting-ip') ?? 'necunoscut',
-            userAgent: req.headers.get('user-agent') ?? '',
-          },
-          cid,
-        )
-
-        if (raspuns.status === 429) {
+        if (r.status === 429) {
           const csrf = asiguraCsrf(req, domeniu)
           return html(
-            paginaLogin({
-              csrf: csrf.jeton,
-              email,
-              eroare: 'Prea multe încercări. Așteaptă câteva minute și reia.',
-            }),
+            paginaIntrare({ csrf: csrf.jeton, email, eroare: 'Prea multe cereri. Așteaptă câteva minute și reia.' }),
             429,
           )
         }
-
-        if (!raspuns.ok) {
+        if (r.status >= 400) {
           const csrf = asiguraCsrf(req, domeniu)
-          return html(
-            paginaLogin({ csrf: csrf.jeton, email, eroare: 'Datele nu par valide.' }),
-            400,
-          )
+          return html(paginaIntrare({ csrf: csrf.jeton, email, eroare: 'Adresa nu pare validă.' }), 400)
         }
-
-        const date = (await raspuns.json()) as { debugLink?: string | null }
-        return html(paginaAsteptareConfirmare({ email, linkDebug: date.debugLink ?? null }))
+        return html(paginaAsteptareLink({ email, linkDebug: r.debugLink }))
       }
 
-      // ------------------------------------------------- pasul 2: linkul din email
+      // ---------------------------------------------------------------- cont nou
+      if (cale === '/auth/inregistrare' && req.method === 'GET') {
+        const csrf = asiguraCsrf(req, domeniu)
+        return html(
+          paginaContNou({ csrf: csrf.jeton }),
+          200,
+          csrf.setCookie ? { 'set-cookie': csrf.setCookie } : {},
+        )
+      }
+
+      if (cale === '/auth/inregistrare' && req.method === 'POST') {
+        const formular = await req.formData()
+        const problema = verificaTokenCsrf(req, String(formular.get('csrf') ?? ''))
+        if (problema) return html(paginaMesaj({ titlu: 'Cerere respinsă', fel: 'rea', text: problema }), 403)
+
+        const email = String(formular.get('email') ?? '').trim().toLowerCase()
+        const nume = String(formular.get('nume') ?? '').trim()
+
+        if (!nume) {
+          const csrf = asiguraCsrf(req, domeniu)
+          return html(paginaContNou({ csrf: csrf.jeton, email, eroare: 'Spune-ne cum te cheamă.' }), 400)
+        }
+
+        const r = await cereLink(env, req, cid, email, nume)
+        if (r.status === 429) {
+          const csrf = asiguraCsrf(req, domeniu)
+          return html(
+            paginaContNou({ csrf: csrf.jeton, email, nume, eroare: 'Prea multe cereri. Așteaptă câteva minute și reia.' }),
+            429,
+          )
+        }
+        if (r.status >= 400) {
+          const csrf = asiguraCsrf(req, domeniu)
+          return html(paginaContNou({ csrf: csrf.jeton, email, nume, eroare: 'Adresa nu pare validă.' }), 400)
+        }
+        return html(paginaAsteptareLink({ email, linkDebug: r.debugLink }))
+      }
+
+      // ------------------------------------------------- linkul din email
       if (cale === '/auth/confirma' && req.method === 'GET') {
         const jeton = url.searchParams.get('jeton')
         if (!jeton) {
@@ -156,7 +185,7 @@ export default {
 
         const raspuns = await apelIdentitate(
           env,
-          '/login/verifica',
+          '/confirma',
           {
             token: jeton,
             ip: req.headers.get('cf-connecting-ip') ?? 'necunoscut',
@@ -173,95 +202,21 @@ export default {
               fel: 'rea',
               text:
                 date.motiv === 'jeton expirat'
-                  ? 'Linkul a expirat. Reia autentificarea ca să primești altul.'
-                  : 'Linkul a fost deja folosit sau nu mai e valabil. Reia autentificarea.',
+                  ? 'Linkul a expirat. Cere altul — durează câteva secunde.'
+                  : 'Linkul a fost deja folosit sau nu mai e valabil. Cere altul.',
             }),
             400,
           )
         }
 
-        const date = (await raspuns.json()) as { sessionToken: string; maxAge: number }
+        const date = (await raspuns.json()) as { sessionToken: string; maxAge: number; contNou: boolean }
         const cookieSesiune = construiesteCookie(NUME_COOKIE_SESIUNE, date.sessionToken, {
           maxAge: date.maxAge,
           domeniu,
         })
 
-        log.info('sesiune deschisa prin link')
-        return redirect('/', { 'set-cookie': cookieSesiune })
-      }
-
-      // ------------------------------------------------------------ inregistrare
-      if (cale === '/auth/inregistrare' && req.method === 'GET') {
-        const csrf = asiguraCsrf(req, domeniu)
-        return html(
-          paginaInregistrare({ csrf: csrf.jeton }),
-          200,
-          csrf.setCookie ? { 'set-cookie': csrf.setCookie } : {},
-        )
-      }
-
-      if (cale === '/auth/inregistrare' && req.method === 'POST') {
-        const formular = await req.formData()
-        const problema = verificaTokenCsrf(req, String(formular.get('csrf') ?? ''))
-        if (problema) return html(paginaMesaj({ titlu: 'Cerere respinsă', fel: 'rea', text: problema }), 403)
-
-        const email = String(formular.get('email') ?? '').trim().toLowerCase()
-        const parola = String(formular.get('parola') ?? '')
-        const nume = String(formular.get('nume') ?? '').trim()
-
-        if (parola.length < 12) {
-          const csrf = asiguraCsrf(req, domeniu)
-          return html(
-            paginaInregistrare({
-              csrf: csrf.jeton,
-              email,
-              eroare: 'Parola trebuie să aibă cel puțin 12 caractere.',
-            }),
-            400,
-          )
-        }
-
-        const raspuns = await apelIdentitate(
-          env,
-          '/inregistrare',
-          { email, password: parola, ...(nume ? { displayName: nume } : {}) },
-          cid,
-        )
-
-        if (!raspuns.ok) {
-          const detalii = (await raspuns.json().catch(() => ({}))) as { detalii?: string[] }
-          const csrf = asiguraCsrf(req, domeniu)
-          return html(
-            paginaInregistrare({
-              csrf: csrf.jeton,
-              email,
-              eroare: detalii.detalii?.[0] ?? 'Datele nu par valide.',
-            }),
-            400,
-          )
-        }
-
-        // Contul e creat; autentificarea trece prin acelasi flux ca oricare alta.
-        const date = (await raspuns.json()) as { debugLink?: string | null }
-        return html(
-          paginaAsteptareConfirmare({ email, linkDebug: date.debugLink ?? null }),
-        )
-      }
-
-      if (cale === '/auth/confirma-email' && req.method === 'GET') {
-        const jeton = url.searchParams.get('jeton')
-        if (!jeton) return html(paginaMesaj({ titlu: 'Link incomplet', fel: 'rea', text: 'Jeton lipsă.' }), 400)
-
-        const raspuns = await apelIdentitate(env, '/confirma-email', { token: jeton }, cid)
-        if (!raspuns.ok) {
-          return html(
-            paginaMesaj({ titlu: 'Link neutilizabil', fel: 'rea', text: 'Linkul a expirat sau a fost deja folosit.' }),
-            400,
-          )
-        }
-        return html(
-          paginaMesaj({ titlu: 'Adresă confirmată', fel: 'buna', text: 'Emailul tău e confirmat. Te poți autentifica.' }),
-        )
+        log.info('sesiune deschisa prin link', { contNou: date.contNou })
+        return redirect(date.contNou ? '/?bun-venit=1' : '/', { 'set-cookie': cookieSesiune })
       }
 
       // ----------------------------------------------------------------- logout
@@ -284,11 +239,27 @@ export default {
         return redirect('/auth/login', { 'set-cookie': cookieSters(NUME_COOKIE_SESIUNE, domeniu) })
       }
 
+      if (cale === '/auth/nume' && req.method === 'POST') {
+        const formular = await req.formData()
+        const problema = verificaTokenCsrf(req, String(formular.get('csrf') ?? ''))
+        if (problema) return html(paginaMesaj({ titlu: 'Cerere respinsă', fel: 'rea', text: problema }), 403)
+        if (!sesiune.authenticated || !sesiune.user) return redirect('/auth/login')
+
+        const nume = String(formular.get('nume') ?? '').trim().slice(0, 120)
+        if (nume) await apelIdentitate(env, '/nume', { userId: sesiune.user.id, displayName: nume }, cid)
+        return redirect('/?salvat=1')
+      }
+
       if (cale === '/' || cale === '/profil') {
         if (!sesiune.authenticated) return redirect('/auth/login')
         const csrf = asiguraCsrf(req, domeniu)
+        const mesaj = url.searchParams.has('bun-venit')
+          ? 'Bine ai venit! Contul tău e deschis.'
+          : url.searchParams.has('salvat')
+            ? 'Numele a fost salvat.'
+            : undefined
         return html(
-          paginaProfil({ sesiune, csrf: csrf.jeton }),
+          paginaProfil({ sesiune, csrf: csrf.jeton, ...(mesaj ? { mesaj } : {}) }),
           200,
           csrf.setCookie ? { 'set-cookie': csrf.setCookie } : {},
         )
@@ -297,10 +268,7 @@ export default {
       return html(paginaMesaj({ titlu: 'Pagină inexistentă', fel: 'rea', text: 'Ruta nu există.' }), 404)
     } catch (e) {
       log.error('eroare neasteptata', { eroare: e instanceof Error ? e.message : String(e) })
-      return html(
-        paginaMesaj({ titlu: 'Eroare', fel: 'rea', text: 'A apărut o eroare neașteptată.' }),
-        500,
-      )
+      return html(paginaMesaj({ titlu: 'Eroare', fel: 'rea', text: 'A apărut o eroare neașteptată.' }), 500)
     }
   },
 }

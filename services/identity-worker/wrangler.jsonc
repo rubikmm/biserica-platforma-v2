@@ -1,5 +1,7 @@
 {
   // Serviciul de identitate. NU e expus public: aplicatiile il apeleaza prin Service Binding.
+  //
+  // Intrarea e fara parola: email -> link (Cloudflare Email Service) -> sesiune.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "xc-identity",
   "main": "src/index.ts",
@@ -7,6 +9,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
 
+  // dev: `wrangler dev` nu trimite prin binding, deci ramanem pe sandbox si linkul apare in pagina.
   "vars": {
     "MEDIU": "dev",
     "ORIGINE_PUBLICA": "https://rubik:8474",
@@ -37,8 +40,13 @@
         "ORIGINE_PUBLICA": "https://cont.staging.sfantul-ilie.ro",
         "DOMENIU_COOKIE": ".staging.sfantul-ilie.ro",
         "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
-        "ADAPTOR_EMAIL": "sandbox"
+        // Cloudflare Email Service: expeditorul e pe subdomeniul imbarcat `posta.sfantul-ilie.ro`,
+        // NU pe apex — SPF-ul mailului obisnuit al parohiei ramane neatins (decizie V1, 8 sept.).
+        "ADAPTOR_EMAIL": "cloudflare",
+        "POSTA_DE_LA": "no-reply@posta.sfantul-ilie.ro",
+        "POSTA_NUME": "Biserica Sfântul Ilie – Hanul Colței"
       },
+      "send_email": [{ "name": "POSTA" }],
       "d1_databases": [
         {
           "binding": "DB",
@@ -62,8 +70,11 @@
         "ORIGINE_PUBLICA": "https://cont.sfantul-ilie.ro",
         "DOMENIU_COOKIE": ".sfantul-ilie.ro",
         "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
-        "ADAPTOR_EMAIL": "http"
+        "ADAPTOR_EMAIL": "cloudflare",
+        "POSTA_DE_LA": "no-reply@posta.sfantul-ilie.ro",
+        "POSTA_NUME": "Biserica Sfântul Ilie – Hanul Colței"
       },
+      "send_email": [{ "name": "POSTA" }],
       "services": [
         { "binding": "AUTORIZARE", "service": "xc-authz-production" },
         { "binding": "AUDIT", "service": "xc-audit-production" }

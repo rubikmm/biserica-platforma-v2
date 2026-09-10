@@ -8,10 +8,7 @@ export const Email = z
   .toLowerCase()
   .pipe(z.email('adresa de email nu pare valida'))
 
-export const Parola = z
-  .string()
-  .min(12, 'parola trebuie sa aiba cel putin 12 caractere')
-  .max(200, 'parola e prea lunga')
+export const NumeAfisat = z.string().trim().min(1).max(120)
 
 export const Utilizator = z.object({
   id: z.string().min(1),
@@ -51,31 +48,25 @@ export const SESIUNE_ANONIMA: SesiuneCurenta = {
 // Cereri catre identity-worker
 // ---------------------------------------------------------------------------
 
-export const CerereInregistrare = z.object({
+/**
+ * Intrarea e FARA parola (decizie user, 10.09.2026): omul da emailul, primeste un link, il
+ * deschide, si abia atunci exista sesiune. Acelasi gest naste si contul, la prima confirmare —
+ * `displayName` e purtat prin jeton pana atunci. Nu exista conturi neconfirmate.
+ */
+export const CerereIntrare = z.object({
   email: Email,
-  password: Parola,
-  displayName: z.string().trim().min(1).max(120).optional(),
+  displayName: NumeAfisat.optional(),
 })
-export type CerereInregistrare = z.infer<typeof CerereInregistrare>
-
-export const CerereLogin = z.object({
-  email: Email,
-  password: z.string().min(1),
-})
-export type CerereLogin = z.infer<typeof CerereLogin>
+export type CerereIntrare = z.infer<typeof CerereIntrare>
 
 /**
- * Rezultatul pasului 1 din login. Niciodata nu spune daca emailul exista sau daca parola
- * a fost gresita — raspunsul e identic in ambele cazuri (anti-enumerare).
+ * Rezultatul cererii de intrare. Niciodata nu spune daca emailul are cont sau nu —
+ * raspunsul e identic in ambele cazuri (anti-enumerare).
  */
-export const RezultatPasul1 = z.object({
+export const RezultatIntrare = z.object({
   /** Mereu true catre browser; ce s-a intamplat in spate se vede doar in audit. */
   challengeSent: z.boolean(),
-  /** Doar in dev/sandbox: linkul care ar fi plecat pe email, ca sa poti testa fara SMTP. */
+  /** Doar in dev: linkul care ar fi plecat pe email, ca sa poti testa fara livrare reala. */
   debugLink: z.string().nullable().optional(),
 })
-export type RezultatPasul1 = z.infer<typeof RezultatPasul1>
-
-export const SCOP_TOKEN = ['login_challenge', 'email_verification'] as const
-export const ScopToken = z.enum(SCOP_TOKEN)
-export type ScopToken = z.infer<typeof ScopToken>
+export type RezultatIntrare = z.infer<typeof RezultatIntrare>

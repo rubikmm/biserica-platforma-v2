@@ -35,17 +35,16 @@ cu Service Bindings funcționale între ele, și expune gateway-ul pe `127.0.0.1
 > Fără asta fiecare configurație își face propria bază și migrațiile ajung într-un loc pe care
 > aplicația nu-l citește niciodată.
 
-## Cum te autentifici
+## Cum intri
 
-Autentificarea are **doi pași, de fiecare dată**:
+**Fără parolă.** Dai adresa de email, primești un link, îl deschizi — ai intrat. Prima dată,
+același link îți deschide și contul. Sesiunea ține 30 de zile; „Închide toate sesiunile" o
+revocă oriunde.
 
-1. email + parolă;
-2. un link de confirmare trimis pe email — sesiunea se creează abia când e deschis.
+În mediul `dev` nu pleacă niciun email: linkul apare direct în pagină. Pe staging și producție
+scrisoarea pleacă prin Cloudflare Email Service, de pe `no-reply@posta.sfantul-ilie.ro`.
 
-În mediul `dev` nu pleacă niciun email: linkul apare direct în pagină. În orice alt mediu apare
-doar dacă e configurat un furnizor real (vezi `.dev.vars.example`).
-
-Adresa din variabila `EMAIL_SUPERADMIN` primește automat rolul `super-admin` la înregistrare.
+Adresa din variabila `EMAIL_SUPERADMIN` primește automat rolul `super-admin` la deschiderea contului.
 
 ## Comenzi
 
@@ -60,7 +59,6 @@ Adresa din variabila `EMAIL_SUPERADMIN` primește automat rolul `super-admin` la
 
 ## Ce NU face încă
 
-- **Nu trimite niciun email sau WhatsApp real.** Toate adaptoarele sunt sandbox; livrările se
-  înregistrează, dar nu pleacă nicăieri.
-- **Nu are rute publice.** Nici staging, nici producție nu au domenii legate.
+- **Nu trimite comunicări în masă.** Adaptoarele din `communication-worker` sunt sandbox;
+  livrările se înregistrează, dar nu pleacă. Doar linkurile de intrare pleacă real, pe staging.
 - **Nu atinge V1.** Niciun worker, DNS, D1, R2 sau KV existent nu e modificat.

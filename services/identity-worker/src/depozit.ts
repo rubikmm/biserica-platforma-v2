@@ -6,8 +6,7 @@ export interface RandUtilizator {
   id: string
   email: string
   display_name: string | null
-  password_hash: string
-  email_verified_at: string | null
+  email_verified_at: string
   disabled_at: string | null
   created_at: string
 }
@@ -37,31 +36,34 @@ export async function utilizatorDupaId(
   return unul<RandUtilizator>(db, `SELECT * FROM users WHERE id = ?`, [userId])
 }
 
-export async function numaraUtilizatori(db: D1Database): Promise<number> {
-  const rand = await unul<{ n: number }>(db, `SELECT COUNT(*) AS n FROM users`)
-  return rand?.n ?? 0
-}
-
 export type RezultatCreare =
   | { fel: 'creat'; utilizator: RandUtilizator }
-  | { fel: 'exista' }
+  | { fel: 'exista'; utilizator: RandUtilizator }
 
-export async function creeazaUtilizator(
+/**
+ * Se cheama DOAR la consumul unui link de intrare: contul se naste cu adresa deja confirmata.
+ * Daca intre timp a aparut acelasi email (doua linkuri deschise aproape simultan), il intoarcem
+ * pe cel existent — nu e o eroare, e aceeasi persoana.
+ */
+export async function creeazaUtilizatorConfirmat(
   db: D1Database,
   email: string,
-  hashParola: string,
   displayName: string | null,
 ): Promise<RezultatCreare> {
   const userId = id()
   try {
     await ruleaza(
       db,
-      `INSERT INTO users (id, email, display_name, password_hash, created_at, updated_at)
+      `INSERT INTO users (id, email, display_name, email_verified_at, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      [userId, email, displayName, hashParola, acum(), acum()],
+      [userId, email, displayName, acum(), acum(), acum()],
     )
   } catch (e) {
-    if (eIncalcareUnicitate(e)) return { fel: 'exista' }
+    if (eIncalcareUnicitate(e)) {
+      const existent = await utilizatorDupaEmail(db, email)
+      if (!existent) throw e
+      return { fel: 'exista', utilizator: existent }
+    }
     throw e
   }
 
@@ -71,48 +73,58 @@ export async function creeazaUtilizator(
 }
 
 // ---------------------------------------------------------------------------
-// Jetoane cu un singur consum (challenge de login + verificare email)
+// Linkul de intrare (jeton cu un singur consum)
 // ---------------------------------------------------------------------------
 
-type TabelaJeton = 'login_challenges' | 'email_verification_tokens'
-
-export async function emiteJeton(
+export async function emiteLinkDeIntrare(
   db: D1Database,
-  tabela: TabelaJeton,
-  userId: string,
+  email: string,
+  userId: string | null,
+  displayName: string | null,
   durataSec: number,
 ): Promise<string> {
+  // Un link nou le inchide pe cele vechi ale aceleiasi adrese: doar ultimul e bun.
+  await ruleaza(
+    db,
+    `UPDATE login_challenges SET consumed_at = ? WHERE email = ? AND consumed_at IS NULL`,
+    [acum(), email],
+  )
   const jeton = jetonNou()
   await ruleaza(
     db,
-    `INSERT INTO ${tabela} (id, user_id, token_hash, created_at, expires_at)
-     VALUES (?, ?, ?, ?, ?)`,
-    [id(), userId, await hashJeton(jeton), acum(), peste(durataSec)],
+    `INSERT INTO login_challenges (id, email, user_id, display_name, token_hash, created_at, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [id(), email, userId, displayName, await hashJeton(jeton), acum(), peste(durataSec)],
   )
   return jeton
 }
 
-interface RandJeton {
+interface RandChallenge {
   id: string
-  user_id: string
+  email: string
+  user_id: string | null
+  display_name: string | null
   expires_at: string
   consumed_at: string | null
 }
 
+export type RezultatConsum =
+  | { ok: true; email: string; userId: string | null; displayName: string | null }
+  | { ok: false; motiv: 'jeton inexistent' | 'jeton deja folosit' | 'jeton expirat' }
+
 /**
- * Consuma un jeton daca e valid. Consumul e atomic: `UPDATE ... WHERE consumed_at IS NULL`,
+ * Consuma linkul daca e valid. Consumul e atomic (`UPDATE ... WHERE consumed_at IS NULL`),
  * deci doua apasari simultane pe acelasi link produc o singura sesiune.
  */
-export async function consumaJeton(
+export async function consumaLinkDeIntrare(
   db: D1Database,
-  tabela: TabelaJeton,
   jeton: string,
-): Promise<{ ok: true; userId: string } | { ok: false; motiv: string }> {
-  const hash = await hashJeton(jeton)
-  const rand = await unul<RandJeton>(
+): Promise<RezultatConsum> {
+  const rand = await unul<RandChallenge>(
     db,
-    `SELECT id, user_id, expires_at, consumed_at FROM ${tabela} WHERE token_hash = ?`,
-    [hash],
+    `SELECT id, email, user_id, display_name, expires_at, consumed_at
+     FROM login_challenges WHERE token_hash = ?`,
+    [await hashJeton(jeton)],
   )
 
   if (!rand) return { ok: false, motiv: 'jeton inexistent' }
@@ -121,25 +133,12 @@ export async function consumaJeton(
 
   const rezultat = await ruleaza(
     db,
-    `UPDATE ${tabela} SET consumed_at = ? WHERE id = ? AND consumed_at IS NULL`,
+    `UPDATE login_challenges SET consumed_at = ? WHERE id = ? AND consumed_at IS NULL`,
     [acum(), rand.id],
   )
   if ((rezultat.meta.changes ?? 0) === 0) return { ok: false, motiv: 'jeton deja folosit' }
 
-  return { ok: true, userId: rand.user_id }
-}
-
-/** La emiterea unui challenge nou, cele nefolosite ale aceluiasi user se invalideaza. */
-export async function invalideazaJetoaneleAnterioare(
-  db: D1Database,
-  tabela: TabelaJeton,
-  userId: string,
-): Promise<void> {
-  await ruleaza(
-    db,
-    `UPDATE ${tabela} SET consumed_at = ? WHERE user_id = ? AND consumed_at IS NULL`,
-    [acum(), userId],
-  )
+  return { ok: true, email: rand.email, userId: rand.user_id, displayName: rand.display_name }
 }
 
 // ---------------------------------------------------------------------------
@@ -204,9 +203,13 @@ export async function revocaToateSesiunile(db: D1Database, userId: string): Prom
   return rezultat.meta.changes ?? 0
 }
 
-export async function marcheazaEmailVerificat(db: D1Database, userId: string): Promise<void> {
-  await ruleaza(db, `UPDATE users SET email_verified_at = ?, updated_at = ? WHERE id = ?`, [
-    acum(),
+export async function actualizeazaNume(
+  db: D1Database,
+  userId: string,
+  displayName: string,
+): Promise<void> {
+  await ruleaza(db, `UPDATE users SET display_name = ?, updated_at = ? WHERE id = ?`, [
+    displayName,
     acum(),
     userId,
   ])
@@ -216,10 +219,10 @@ export async function emailuriDeDebug(
   db: D1Database,
   catre: string,
   limita = 5,
-): Promise<Array<{ subiect: string; link: string; created_at: string }>> {
+): Promise<Array<{ subiect: string; link: string | null; adaptor: string; created_at: string }>> {
   return toate(
     db,
-    `SELECT subiect, link, created_at FROM emails_iesire WHERE catre = ?
+    `SELECT subiect, link, adaptor, created_at FROM emails_iesire WHERE catre = ?
      ORDER BY created_at DESC LIMIT ?`,
     [catre, limita],
   )
