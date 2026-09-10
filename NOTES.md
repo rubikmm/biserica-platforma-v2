@@ -48,12 +48,6 @@ Etape:
 
 ## NEXT
 
-0. **Publicarea pe staging a intrării cu cod + „vezi ca"** — nefăcută încă (10.09, seara).
-   Ordinea: `node infrastructure/migrations/ruleaza.mjs --remote --env staging --doar identity`,
-   apoi deploy la `identity-worker`, `authorization-worker` și toate aplicațiile (carcasa `@xc/ui`
-   s-a schimbat peste tot). Migrația **șterge** `login_challenges` și redenumește `emails_iesire.link`
-   → `secret_debug`: workerul vechi rămâne rupt până la publicarea celui nou, deci cele două merg
-   una după alta, fără pauză.
 1. **Curățenia (A6)** — schema, sloturile din slujbele programului (`curatenie: true`), rapoartele
    prin serviciul de comunicare. Voluntarii devin conturi ale platformei: adresele lor din V1 se
    trec prin `identity /utilizatori/asigura`, iar aplicația ține doar `user_id`.
@@ -110,6 +104,12 @@ Etape:
   subdomeniul lui e la rădăcină. Orice aplicație nouă detectează prefixul o dată (vezi
   `apps/program/src/index.ts`) și primește adresele celorlalte prin `URL_CONT/URL_CALENDAR/URL_ADMIN`
   — altfel dă 404 pe staging și trimite la login pe subdomeniul greșit (găsit la primul deploy).
+- **Nu publica cu `pnpm deploy:staging` (turbo) cât timp `wrangler dev` merge.** Turbo pornește
+  cele 12 publicări în paralel, iar `wrangler dev` singur ține ~1,4 GB din cei 2 GB ai
+  containerului — totul se sufocă (10.09: 98% memorie, 611% CPU, `docker exec` mort, repornire de
+  container). Publică **un worker o dată**: `pnpm -C <dir> run deploy:staging`, cu `CI=1` (fără
+  prompturi) și `timeout` pe fiecare pas — durează ~6 s de worker. La schimbări de schemă:
+  migrația, apoi imediat workerul care o citește.
 - **`Origin` nu are cale.** Orice listă de adrese permise pentru CSRF se taie la origine
   (`new URL(x).origin`) înainte de comparație — `ORIGINE_PUBLICA` are prefixul gateway-ului în dev.
 - **Masca „vezi ca" trebuie să ajungă la autorizare**, nu doar în antet: `principalDin` (din
@@ -132,6 +132,9 @@ Etape:
 - Autentificarea a avut patru forme într-o singură zi: „parolă + link" (presupunerea mea) →
   utilizatorul a cerut **fără parolă** → email → link → **email → cod de șase cifre**, linkul scos
   cu totul. Contul se naște la prima confirmare, indiferent de formă.
+- Publicat pe staging intrarea cu cod + „vezi ca" (16:17). Prima încercare, prin turbo, a sufocat
+  containerul (12 publicări paralele peste `wrangler dev`); a fost nevoie de `docker restart`, apoi
+  publicare secvențială, ~6 s pe worker. Testul real de email rămâne al utilizatorului.
 - Găsit reparând altceva: în dev, `ORIGINE_PUBLICA` poartă și prefixul gateway-ului
   (`https://rubik:8474/cont`), dar antetul `Origin` e mereu numai `schemă://gazdă:port` — comparate
   ca șiruri, nu se potriveau niciodată și **orice POST local era respins** cu „origine neacceptată".
