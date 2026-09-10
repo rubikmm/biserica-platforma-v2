@@ -6,7 +6,7 @@
  */
 import type { ZiLiturgica } from '@xc/contracts'
 import type { Navigatie } from '@xc/config'
-import { LUNI, ZILE_SAPTAMANA, esc, momentLizibil, pagina } from '@xc/ui'
+import { LUNI, STIL_COMUN, ZILE_SAPTAMANA, esc, momentLizibil, pagina } from '@xc/ui'
 import type { PericopaCuText } from './biblia.js'
 import type { Import, Versiune } from './depozit.js'
 import { LOCAL } from './stil.js'
@@ -656,4 +656,47 @@ export function texteFereastra(o: { r: RandZi; d: RandDesfacut; zi: ZiLiturgica;
     sinaxar: cuprinsul(sectiunile(o.zi, o.texte, 'sinaxar')),
     'apostolul-evanghelia': cuprinsul(sectiunile(o.zi, o.texte, 'apostolul-evanghelia')),
   }
+}
+
+/**
+ * POZA SĂPTĂMÂNII — pagina din care iese PNG-ul cerut de `/v1/poza/saptamana/<zi>`: antetul cu
+ * intervalul și cele șapte zile, una sub alta, exact în forma din lista lunii (`randZi`).
+ *
+ * În V1 pozele se făceau dinainte, cu un script, pentru tot anul, și stăteau în R2 (limita de atunci:
+ * un an întreg dura zece minute de Browser Rendering). Aici se fac la cerere și rămân în cache-ul de
+ * muchie, cu cheia pe amprenta HTML-ului: prima cerere așteaptă câteva secunde, restul vin din cache,
+ * iar când calendarul se corectează, poza se reface singură.
+ *
+ * Pagina e autonomă (stilul înăuntru) și n-are antet, unelte, șirul lunilor sau subsol — nimic din ce
+ * e buton, fiindcă într-o poză nu se apasă nimic.
+ */
+export function pozaSaptamaniiHtml(o: {
+  ctx: Ctx
+  eticheta: string
+  randuri: Array<{ r: RandZi; d: RandDesfacut; zi: ZiLiturgica }>
+  azi: string
+}): string {
+  const zile = o.randuri.map(({ r, d, zi }) => randZi(o.ctx, r, d, zi, r.data === o.azi)).join('')
+  return `<!doctype html><html lang="ro"><head><meta charset="utf-8"><title>Calendarul săptămânii ${esc(o.eticheta)}</title>
+<style>${STIL_COMUN}${LOCAL}
+body { margin: 0; background: #fff; }
+.poza { width: 900px; box-sizing: border-box; padding: 26px 30px 30px; background: #fff; }
+.poza .cap { text-align: center; margin: 0 0 18px; }
+.poza .cap .parohia { font: 600 11px/1.3 ui-sans-serif, system-ui; letter-spacing: .18em;
+                      text-transform: uppercase; color: #7f7f7f; margin: 0 0 6px; }
+.poza .cap h1 { font-size: 27px; font-weight: 400; margin: 0; letter-spacing: -.01em; }
+.poza .cap .rand { border-top: 1px solid #ddd; margin: 14px 0 0; }
+/* in poza nimic nu se apasa: fereastra textelor si sagetile de deschidere n-au ce cauta */
+.poza .zi .deschide, .poza .zi .fereastra, .poza .zi details summary::-webkit-details-marker { display: none; }
+.poza .zi { break-inside: avoid; }
+</style></head><body>
+<div class="poza">
+  <header class="cap">
+    <p class="parohia">Biserica Sfântul Ilie – Hanul Colței</p>
+    <h1>${esc(o.eticheta)}</h1>
+    <div class="rand"></div>
+  </header>
+  <div class="zile">${zile}</div>
+</div>
+</body></html>`
 }

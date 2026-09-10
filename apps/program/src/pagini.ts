@@ -75,6 +75,9 @@ const STARE: Record<string, string> = {
   propunere: 'propunere',
 }
 
+/** Iconita descarcarii: sageata in jos peste o talpa — pentru poza calendarului (user, 10.09.2026). */
+const IC_DESCARCA = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v11"/><path d="m7 10 5 5 5-5"/><path d="M4 20h16"/></svg>`
+
 /** Iconita Arhivei: cutie cu capac — exact cea din V1 (18px, cu manerul desenat separat). */
 const IC_ARHIVA = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></svg>`
 
@@ -420,7 +423,24 @@ function intrerupatorCalendar(): string {
 /** Randul din antet: navigarea saptamanii, o liniuta verticala si intrerupatorul „Calendar". */
 function unelte(ctx: Ctx, m: Meniu): string {
   return navigarea(ctx, m)
-    + (m.calendar ? `<span class="desparte" aria-hidden="true"></span>` + intrerupatorCalendar() : '')
+    + (m.calendar ? `<span class="desparte" aria-hidden="true"></span>` + intrerupatorCalendar() + pozaCalendarului(ctx, m) : '')
+}
+
+/**
+ * Poza calendarului saptamanii — butonul de langa intrerupator, cu sageata in jos (user, 10.09.2026).
+ * Deschide PNG-ul facut de CALENDAR (`/v1/poza/saptamana/<luni>`): poza e a lui, programul doar o
+ * cere — ca la orice altceva care tine de ziua liturgica. In V1 pozele se faceau dinainte, cu un
+ * script, pentru tot anul; in V2 se fac la cerere si stau in cache.
+ *
+ * Se scrie doar unde se aprinde si calendarul (cele trei saptamani ale navigarii), fiindca aceeasi
+ * saptamana o arata si poza.
+ */
+function pozaCalendarului(ctx: Ctx, m: Meniu): string {
+  if (!m.luni) return ''
+  const adresa = `${ctx.nav.calendar}/v1/poza/saptamana/${esc(m.luni)}`
+  return `<a class="btn mic poza-cal" href="${adresa}" target="_blank" rel="noopener"`
+    + ` title="Calendarul săptămânii ca poză — de trimis pe WhatsApp" aria-label="Calendarul săptămânii ca poză">`
+    + `${IC_DESCARCA}</a>`
 }
 
 /**

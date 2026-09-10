@@ -603,3 +603,6 @@ export function faraDiacritice(s: string): string {
     .replaceAll('Ș', 's').replaceAll('Ş', 's').replaceAll('Ț', 't').replaceAll('Ţ', 't')
     .toLowerCase()
 }
+
+// Hartiile (PDF/JPG/PNG prin Browser Rendering) si cache-ul lor — vezi hartie.ts
+export * from "./hartie.js"

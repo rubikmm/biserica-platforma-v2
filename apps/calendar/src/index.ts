@@ -5,7 +5,7 @@ import { NUME_COOKIE_CSRF, citesteCookie, construiesteCookie, principalDin, sesi
 import { citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
 import { construiesteEnvelope, declaratieOutbox, golesteOutbox } from '@xc/events'
 import { Logger, correlationId } from '@xc/observability'
-import { adaugaZile, aziBucuresti, dataVersiunii, eDataValida, eroareApi, html, json, jsonCuEtag, zileIntre } from '@xc/ui'
+import { adaugaZile, aziBucuresti, dataVersiunii, eDataValida, eroareApi, hartieDinCache, html, intervalLizibil, json, jsonCuEtag, luneaSaptamanii, pngDin, zileIntre } from '@xc/ui'
 import pkg from '../package.json'
 import { VOSCRESNE, textulPericopei, type PericopaCuText } from './biblia.js'
 import {
@@ -35,7 +35,7 @@ import { extrageZi, faraTaguri, dataDinAcf, type RandZiExtras } from './extrager
 import { duminica, glasSiVoscreasna, perioadaOficiala, randuialaMesei, repereContract, sambataMortilor, ziLibera } from './pascalia.js'
 import { canonizeazaReferinta } from './titluri.js'
 import { type RandZi, desfaRandul, ziLiturgica } from './traducere.js'
-import { type Ctx, type FelCruce, type Parte, type TexteZilei, paginaAdmin, paginaLuna, paginaMesaj, paginaSarbatori, paginaZi, texteFereastra } from './pagini.js'
+import { type Ctx, type FelCruce, type Parte, type TexteZilei, paginaAdmin, paginaLuna, paginaMesaj, paginaSarbatori, paginaZi, pozaSaptamaniiHtml, texteFereastra } from './pagini.js'
 
 export interface Env {
   DB: D1Database
@@ -43,6 +43,8 @@ export interface Env {
   AUTORIZARE: Fetcher
   AUDIT: Fetcher
   COMUNICARE: Fetcher
+  /** Browser Rendering — din el iese poza saptamanii. */
+  BROWSER: Fetcher
   EVENIMENTE: Queue
   MEDIU: string
   ORIGINE_PUBLICA: string
@@ -197,7 +199,7 @@ export default {
       if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, HEAD, OPTIONS', 'access-control-allow-headers': 'if-none-match, content-type' } })
       if (req.method !== 'GET' && req.method !== 'HEAD') return eroareApi(405, 'metoda_nepermisa', 'Sub /v1 merg doar GET, HEAD și OPTIONS.')
       try {
-        return await api(req, env, cale, url, azi)
+        return await api(req, env, ctxExec, prefix, cale, url, azi)
       } catch (e) {
         log.error('eroare api', { eroare: e instanceof Error ? e.message : String(e) })
         return eroareApi(500, 'eroare_interna', 'A apărut o eroare neașteptată.')
@@ -402,7 +404,7 @@ export default {
 // API-ul `/v1` — GET, public, forma din CONTRACTE.md
 // ---------------------------------------------------------------------------
 
-async function api(req: Request, env: Env, cale: string, url: URL, azi: string): Promise<Response> {
+async function api(req: Request, env: Env, ctxExec: ExecutionContext, prefix: string, cale: string, url: URL, azi: string): Promise<Response> {
   const ani = await aniPreluati(env.DB)
   const { versiune, moment } = await versiuneaCalendarului(env.DB)
   const aniCalculati = ani.length ? [Math.max(...ani) + 1, Math.max(...ani) + 2] : []
@@ -453,6 +455,41 @@ async function api(req: Request, env: Env, cale: string, url: URL, azi: string):
     }
     const lista = [...zile.values()].sort((a, b) => (a.data < b.data ? -1 : 1)).map((r) => ziLiturgica(r, versiune))
     return jsonCuEtag(req, { de_la: deLa, pana_la: panaLa, versiune_calendar: versiune, zile: lista }, cache)
+  }
+
+  /*
+   * POZA SAPTAMANII (PNG): antetul cu intervalul si cele sapte zile, ca in lista lunii. Fara data =
+   * saptamana de azi. In V1 pozele se faceau dinainte, cu un script, pentru tot anul, si stateau in
+   * R2; aici se fac la cerere, prin Browser Rendering, si raman in cache-ul de muchie — deci se refac
+   * singure cand calendarul se corecteaza, si nu mai e nimic de intretinut la preluarea unui an nou.
+   */
+  const mPoza = /^\/v1\/poza\/saptamana(?:\/([^/]+))?$/.exec(cale)
+  if (mPoza) {
+    const cerut = mPoza[1] ? dataDin(mPoza[1], azi) : azi
+    if (!cerut) return eroareApi(400, 'data_invalida', 'Data se scrie AAAA-LL-ZZ (sau azi / maine).')
+    const luni = luneaSaptamanii(cerut)
+    const duminica = adaugaZile(luni, 6)
+    const preluate = await randuriInterval(env.DB, luni, duminica)
+    const zile = new Map(preluate.map((r) => [r.data, r]))
+    for (const an of aniCalculati) {
+      if (`${an}-12-31` < luni || `${an}-01-01` > duminica) continue
+      for (const r of await zileleAnuluiCalculat(env.DB, an)) if (r.data >= luni && r.data <= duminica) zile.set(r.data, r)
+    }
+    const lista = [...zile.values()].sort((a, b) => (a.data < b.data ? -1 : 1)).map((r) => ({ r, d: desfaRandul(r), zi: ziLiturgica(r, versiune) }))
+    if (!lista.length) {
+      return eroareApi(404, 'saptamana_neacoperita', 'Săptămâna nu e în calendarul preluat.', { de_la: luni, pana_la: duminica, ani_preluati: ani, ani_calculati: aniCalculati })
+    }
+    const ctxPoza: Ctx = {
+      prefix,
+      nav: navigatieDin(citesteConfig(env)),
+      utilizator: null,
+      eAdmin: false,
+      versiune: pkg.version,
+      modificata: dataVersiunii(env.VERSIUNE),
+      anCurent: Number(azi.slice(0, 4)),
+    }
+    const pagina = pozaSaptamaniiHtml({ ctx: ctxPoza, eticheta: intervalLizibil(luni, duminica), randuri: lista, azi })
+    return hartieDinCache(req, ctxExec, pagina, 'png', `calendar-${luni}`, () => pngDin(env.BROWSER, pagina))
   }
 
   const mRepere = /^\/v1\/an\/(\d{4})\/repere$/.exec(cale)

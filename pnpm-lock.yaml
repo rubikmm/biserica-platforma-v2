@@ -303,7 +303,11 @@ importers:
 
   packages/posta: {}
 
-  packages/ui: {}
+  packages/ui:
+    dependencies:
+      '@cloudflare/puppeteer':
+        specifier: ^1.4.0
+        version: 1.4.0
 
   services/audit-worker:
     dependencies:

@@ -21,6 +21,9 @@
     "URL_BIBLIA": "https://biblia.sfantul-ilie.ro"
   },
 
+  // Browser Rendering — din el iese poza saptamanii (/v1/poza/saptamana/<zi>).
+  "browser": { "binding": "BROWSER" },
+
   "d1_databases": [
     {
       "binding": "DB",
@@ -62,6 +65,7 @@
         "URL_ADMIN": "https://admin.staging.sfantul-ilie.ro",
         "URL_BIBLIA": "https://biblia.sfantul-ilie.ro"
       },
+      "browser": { "binding": "BROWSER" },
       "d1_databases": [
         {
           "binding": "DB",
