@@ -489,7 +489,7 @@ async function api(req: Request, env: Env, ctxExec: ExecutionContext, prefix: st
       anCurent: Number(azi.slice(0, 4)),
     }
     const pagina = pozaSaptamaniiHtml({ ctx: ctxPoza, eticheta: intervalLizibil(luni, duminica), randuri: lista, azi })
-    return hartieDinCache(req, ctxExec, pagina, 'png', `calendar-${luni}`, () => pngDin(env.BROWSER, pagina))
+    return hartieDinCache(req, ctxExec, pagina, 'png', `calendar-${luni}`, () => pngDin(env.BROWSER, pagina, 450))
   }
 
   const mRepere = /^\/v1\/an\/(\d{4})\/repere$/.exec(cale)

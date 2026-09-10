@@ -680,18 +680,24 @@ export function pozaSaptamaniiHtml(o: {
   return `<!doctype html><html lang="ro"><head><meta charset="utf-8"><title>Calendarul săptămânii ${esc(o.eticheta)}</title>
 <style>${STIL_COMUN}${LOCAL}
 body { margin: 0; background: #fff; }
-.poza { width: 900px; box-sizing: border-box; padding: 26px 30px 30px; background: #fff; }
-.poza .cap { text-align: center; margin: 0 0 18px; }
-.poza .cap .parohia { font: 600 11px/1.3 ui-sans-serif, system-ui; letter-spacing: .18em;
-                      text-transform: uppercase; color: #7f7f7f; margin: 0 0 6px; }
-.poza .cap h1 { font-size: 27px; font-weight: 400; margin: 0; letter-spacing: -.01em; }
-.poza .cap .rand { border-top: 1px solid #ddd; margin: 14px 0 0; }
+/* Lata cat un telefon (user, 10.09.2026: „la 50% din cat e acum") — poza se trimite pe WhatsApp si se
+   citeste tot pe telefon; la doi pixeli pe punct iese oricum de 900 px adevarati. */
+.poza { width: 450px; box-sizing: border-box; padding: 20px 18px 22px; background: #fff; }
+.poza .cap { text-align: center; margin: 0 0 14px; }
+/* Numele aplicatiei, mare, ca in antetul paginilor; sub el parohia, apoi saptamana (user) */
+.poza .cap .nume { font: 400 32px/1.05 "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+                   letter-spacing: .04em; margin: 0; }
+.poza .cap .parohia { font: 600 10px/1.4 ui-sans-serif, system-ui; letter-spacing: .16em;
+                      text-transform: uppercase; color: #7f7f7f; margin: 5px 0 0; }
+.poza .cap h1 { font-size: 20px; font-weight: 400; margin: 12px 0 0; letter-spacing: -.01em; }
+.poza .cap .rand { border-top: 1px solid #ddd; margin: 12px 0 0; }
 /* in poza nimic nu se apasa: fereastra textelor si sagetile de deschidere n-au ce cauta */
 .poza .zi .deschide, .poza .zi .fereastra, .poza .zi details summary::-webkit-details-marker { display: none; }
 .poza .zi { break-inside: avoid; }
 </style></head><body>
 <div class="poza">
   <header class="cap">
+    <p class="nume">CALENDAR</p>
     <p class="parohia">Biserica Sfântul Ilie – Hanul Colței</p>
     <h1>${esc(o.eticheta)}</h1>
     <div class="rand"></div>
