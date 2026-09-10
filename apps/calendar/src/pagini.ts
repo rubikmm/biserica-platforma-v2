@@ -677,12 +677,16 @@ export function pozaSaptamaniiHtml(o: {
   azi: string
 }): string {
   const zile = o.randuri.map(({ r, d, zi }) => randZi(o.ctx, r, d, zi, r.data === o.azi)).join('')
-  return `<!doctype html><html lang="ro"><head><meta charset="utf-8"><title>Calendarul săptămânii ${esc(o.eticheta)}</title>
+  return `<!doctype html><html lang="ro" data-tema="dark"><head><meta charset="utf-8"><title>Calendarul săptămânii ${esc(o.eticheta)}</title>
 <style>${STIL_COMUN}${LOCAL}
-body { margin: 0; background: #fff; }
+/* Poza iese pe temă închisă (cerere user, 10.09.2026): se trimite pe WhatsApp și se citește pe
+   telefon, unde fundalul alb bate la ochi. Culorile sunt cele ale temei de noapte a platformei —
+   data-tema="dark" pe html —, deci roșul sărbătorilor și albastrul sfinților locali rămân
+   aceleași cu ce se vede pe site noaptea. */
+body { margin: 0; background: var(--paper); color: var(--ink); }
 /* Lata cat un telefon (user, 10.09.2026: „la 50% din cat e acum") — poza se trimite pe WhatsApp si se
    citeste tot pe telefon; la doi pixeli pe punct iese oricum de 900 px adevarati. */
-.poza { width: 450px; box-sizing: border-box; padding: 20px 18px 22px; background: #fff; }
+.poza { width: 450px; box-sizing: border-box; padding: 20px 18px 22px; background: var(--paper); }
 .poza .cap { text-align: center; margin: 0 0 14px; }
 /* Numele aplicatiei, mare, ca in antetul paginilor; sub el parohia, apoi saptamana (user) */
 .poza .cap .nume { font: 400 32px/1.05 "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
@@ -690,7 +694,7 @@ body { margin: 0; background: #fff; }
 .poza .cap .parohia { font: 600 10px/1.4 ui-sans-serif, system-ui; letter-spacing: .16em;
                       text-transform: uppercase; color: #7f7f7f; margin: 5px 0 0; }
 .poza .cap h1 { font-size: 20px; font-weight: 400; margin: 12px 0 0; letter-spacing: -.01em; }
-.poza .cap .rand { border-top: 1px solid #ddd; margin: 12px 0 0; }
+.poza .cap .rand { border-top: 1px solid var(--rule); margin: 12px 0 0; }
 /* in poza nimic nu se apasa: fereastra textelor si sagetile de deschidere n-au ce cauta */
 .poza .zi .deschide, .poza .zi .fereastra, .poza .zi details summary::-webkit-details-marker { display: none; }
 .poza .zi { break-inside: avoid; }
