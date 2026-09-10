@@ -145,7 +145,7 @@ export default {
     }
 
     // ⚠️ TEMPORAR (vezi „MODUL DE PROBA" mai jos): butoanele bannerului. Numai in dev.
-    const mProba = /^\/proba\/(anonim|user|admin)$/.exec(cale)
+    const mProba = /^\/proba\/(anonim|user|admin|super)$/.exec(cale)
     if (eDev && mProba && req.method === 'GET') {
       const spre = url.searchParams.get('spre') ?? `${prefix}/`
       const spreSigur = spre.startsWith('/') && !spre.startsWith('//') ? spre : `${prefix}/`
@@ -165,15 +165,18 @@ export default {
     }
     const sesiune = await sesiuneCurenta(env.IDENTITATE, req).catch(() => SESIUNE_ANONIMA)
     const principal = principalDin(sesiune)
-    const eAdminReal = sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin')
+    const eSuperAdminReal = sesiune.roles.some((r) => r.role === 'super-admin')
+    const eAdminReal = eSuperAdminReal || sesiune.roles.some((r) => r.role === 'admin')
     const utilizatorReal = sesiune.user?.displayName ?? sesiune.user?.email ?? null
     // ⚠️ TEMPORAR — MODUL DE PROBA (user, 10.09.2026, 18:06: „nu se poate testa local autentificarea").
-    // Trei butoane in banner comuta afisarea intre neautentificat / utilizator / admin; alegerea sta
-    // intr-un cookie, ca sa tina de la o pagina la alta. Merge DOAR in dev — pe staging si in productie
-    // `rolProba` e mereu null, deci nimic din blocul asta nu poate deschide o portita. DE STERS la cerere:
-    // blocul de mai jos, ruta `/proba/<rol>`, campurile `proba`/`caleAcum` din Ctx si bannerul din pagini.ts.
+    // Patru butoane in banner comuta afisarea intre neautentificat / utilizator / admin / super-admin
+    // (al patrulea, de la 19:39, fiindca hartiile se vad altfel la admin decat la super-admin); alegerea
+    // sta intr-un cookie, ca sa tina de la o pagina la alta. Merge DOAR in dev — pe staging si in
+    // productie `rolProba` e mereu null, deci nimic din blocul asta nu poate deschide o portita.
+    // DE STERS la cerere: blocul de mai jos, ruta `/proba/<rol>`, campurile `proba`/`caleAcum` din Ctx
+    // si bannerul din pagini.ts.
     const rolProba = eDev
-      ? (/(?:^|;\s*)proba_rol=(anonim|user|admin)(?:;|$)/.exec(req.headers.get('cookie') ?? '')?.[1] as RolProba | undefined)
+      ? (/(?:^|;\s*)proba_rol=(anonim|user|admin|super)(?:;|$)/.exec(req.headers.get('cookie') ?? '')?.[1] as RolProba | undefined)
       : undefined
     const ctx: Ctx = {
       prefix,
@@ -181,14 +184,16 @@ export default {
       utilizator: rolProba === 'anonim' ? null
         : rolProba === 'user' ? 'Utilizator de probă'
         : rolProba === 'admin' ? 'Admin de probă'
+        : rolProba === 'super' ? 'Super-admin de probă'
         : utilizatorReal,
-      eAdmin: rolProba ? rolProba === 'admin' : eAdminReal,
+      eAdmin: rolProba ? rolProba === 'admin' || rolProba === 'super' : eAdminReal,
+      eSuperAdmin: rolProba ? rolProba === 'super' : eSuperAdminReal,
       versiune: pkg.version,
       modificata: dataVersiunii(env.VERSIUNE),
       veziCa: sesiune.veziCa,
       poateVedeaCa: sesiune.poateVedeaCa,
       spre: url.toString(),
-      proba: eDev ? (rolProba ?? (eAdminReal ? 'admin' : utilizatorReal ? 'user' : 'anonim')) : null,
+      proba: eDev ? (rolProba ?? (eSuperAdminReal ? 'super' : eAdminReal ? 'admin' : utilizatorReal ? 'user' : 'anonim')) : null,
       caleAcum: `${prefix}${cale}`,
     }
 

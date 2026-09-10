@@ -28,13 +28,15 @@ import { ziRosie } from './calendar.js'
 import { randurileSlujbei } from './foaie.js'
 
 /** ⚠️ TEMPORAR — rolurile modului de proba local (vezi `bannerProba`). */
-export type RolProba = 'anonim' | 'user' | 'admin'
+export type RolProba = 'anonim' | 'user' | 'admin' | 'super'
 
 export interface Ctx {
   prefix: string
   nav: Navigatie
   utilizator: string | null
   eAdmin: boolean
+  /** super-adminul vede hartiile pe tot istoricul, adminul doar pe saptamanile din navigare */
+  eSuperAdmin?: boolean
   versiune: string
   modificata: string
   /** „Vezi ca" — vin din sesiune, gata calculate de identitate; doar pentru meniu si banda. */
@@ -213,6 +215,11 @@ body.cu-calendar .cal { display:block; min-width:0; padding:0 0 0 18px; border-l
                           border-left:3px solid var(--rule); border-radius:0 8px 8px 0 }
   .cal-zi { display:none }
   .zi.goala .cal-zi { display:block; margin:0 0 6px }
+  /* In zilele rosii CU slujbe — duminicile si sarbatorile — programul spune deja sarbatoarea si sfintii,
+     pe randurile „→" ale slujbei de dimineata. Pe telefon, unde calendarul sta sub program, ar veni a
+     doua oara imediat dedesubt: nu se mai scrie (user, 10.09.2026). Zilele rosii FARA slujbe raman —
+     acolo calendarul e singurul care spune ce zi e. */
+  body.cu-calendar .zi.rosie:not(.goala) .cal { display:none }
 }
 /* In coloana calendarului, SFINTII stau unul sub altul, cu sageata in fata — ca randurile „→" ale
    slujbelor (cerere user, 10.09.2026: „cel mai mult mă interesează sfinții… pune-le cu săgeată, așa
@@ -334,6 +341,7 @@ function bannerProba(ctx: Ctx): string {
     `<a class="pr-btn${ctx.proba === rol ? ' activ' : ''}" href="${esc(ctx.prefix)}/proba/${rol}?spre=${spre}">${text}</a>`
   return `<p class="proba"><b>probă locală</b> vezi pagina ca:`
     + buton('anonim', 'neautentificat') + buton('user', 'utilizator') + buton('admin', 'admin')
+    + buton('super', 'super-admin')
     + `<span class="pr-nota">se șterge când nu mai trebuie</span></p>`
 }
 
@@ -421,9 +429,17 @@ function unelte(ctx: Ctx, m: Meniu): string {
  * Se scrie DOAR pentru admini (user, 10.09.2026: „care se văd doar pentru admini") — enoriasul are in
  * antet doar navigarea si calendarul. Rutele (`/arhiva`, `/v1/foaie/…`) raman deschise ca pana acum:
  * deocamdata nimic din ce se citeste nu cere cont.
+ *
+ * DOUA TREPTE (user, 10.09.2026, 19:39): **adminul** le are doar pe saptamana de acum si pe cea
+ * urmatoare — atat cat ii trebuie ca sa scoata foaia de pe usa —, iar **super-adminul** le are pe TOT
+ * istoricul, deci si pe saptamanile vechi si pe pagina Arhivei.
  */
 function hartiile(ctx: Ctx, m: Meniu): string {
   if (!ctx.eAdmin) return ''
+  if (!ctx.eSuperAdmin) {
+    const aAzi = luneaSaptamanii(m.azi)
+    if (m.luni !== aAzi && m.luni !== adaugaZile(aAzi, 7)) return ''
+  }
   const p = esc(ctx.prefix)
   const hartie = (ext: 'pdf' | 'jpg', titlu: string) => (m.foaie
     ? `<a class="btn mic" href="${p}${m.foaie}.${ext}" target="_blank" rel="noopener" title="${titlu}">${ext.toUpperCase()}</a>`
