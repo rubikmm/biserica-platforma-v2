@@ -243,15 +243,24 @@ body { font-family: "Caladea", Cambria, Georgia, serif; color: #000; }
 .cruce { width: calc(42mm * var(--f)); display: block; margin: 0 auto 2mm; }
 .titlu { font-family: "Trajan", serif; font-size: calc(38pt * var(--f)); line-height: 1; margin: 0; font-weight: 400; }
 .parohia { font-family: "Trajan", serif; font-size: calc(10pt * var(--f)); white-space: pre; margin: 2mm 0 0; }
-.linie { border-top: 0.5pt solid #000; margin: 4mm 0 0; position: relative; height: 0; }
-.caseta { display: inline-block; background: #e6e6e6; box-shadow: 0 .8mm 1.5mm rgba(0,0,0,.35); border-radius: 0 0 2mm 2mm; padding: 1.2mm 8mm; font-size: calc(14pt * var(--f)); font-weight: 700; margin-bottom: 4mm; }
-table.program { width: 175mm; margin: 0 auto; border-collapse: collapse; table-layout: fixed; border-left: 3pt solid #000; border-right: 3pt solid #000; border-top: 1.5pt solid #000; border-bottom: 1.5pt solid #000; }
+/* Caseta cu intervalul atarna de o linie pe toata latimea: colturile de sus drepte, cele de jos
+   rotunjite, chenar subtire de jur imprejur (fara cel de sus, il tine linia) si umbra DURA, deplasata
+   pe diagonala, ca in Wordul parohiei — nu o umbra difuza (masurile din V1). */
+.linie { border-top: .75pt solid #333; margin: 5mm 0 0; font-size: 0; line-height: 0; height: 0; }
+.caseta { display: inline-block; background: #e6e6e6; border: .5pt solid #333; border-top: 0;
+          border-radius: 0 0 2mm 2mm; box-shadow: .8mm .8mm 0 #999;
+          padding: 1.6mm 9mm; font-size: calc(14pt * var(--f)); font-weight: 700; line-height: 1.2;
+          margin-bottom: 4mm; }
+/* Tabelul n-are chenar la stanga si nici jos: bara groasa din stanga o poarta celulele zilei (si se
+   opreste la duminica, unde coltul ramane deschis), iar linia de jos o pune ultimul rand, doar peste
+   coloanele orei si slujbei. Sus e subtire, dreapta groasa cat stanga (V1, dupa Wordul parohiei). */
+table.program { width: 175mm; margin: 0 auto; border-collapse: collapse; table-layout: fixed; border-top: .5pt solid #000; border-right: 3pt solid #000; }
 col.c-zi { width: 32.5mm; } col.c-ora { width: 20mm; } col.c-slujba { width: 122.5mm; }
 /* Fara linie intre randuri: ziua e o caseta, iar liniile se pun doar la piciorul ei (jos-plin /
    jos-lipit, mai jos) — ca in foaia V1. Continutul sta SUS in celula: ora trebuie sa fie in dreptul
    numelui slujbei, nu la mijlocul detaliilor. */
 td { vertical-align: top; padding: calc(1mm * var(--f)) calc(2mm * var(--f)); text-align: left; }
-td.zi { text-align: center; vertical-align: middle; border-right: .5pt solid #000; border-bottom: .5pt solid #000; }
+td.zi { text-align: center; vertical-align: middle; background: #fff; border-left: 3pt solid #000; border-right: .5pt solid #000; border-bottom: .5pt solid #000; }
 td.zi .numezi { font-size: calc(18pt * var(--f)); font-weight: 700; line-height: 1.1; }
 td.zi.rosie .numezi { color: var(--rosu); }
 td.zi .datazi { font-style: italic; font-size: calc(11pt * var(--f)); color: var(--gri); }
@@ -281,8 +290,9 @@ tr.lipsa td { height: calc(5mm * var(--f) * var(--f)); background: var(--gri-ban
               border-top: .5pt solid #000; border-bottom: .5pt solid #000; }
 /* duminica: linia groasa doar peste celula zilei — pe coloanele orei si slujbei ramane legatura
    punctata cu sambata seara, ca in V1 */
-tr.dum td.zi { border-left: 3pt solid #fff; vertical-align: top; border-top: 1.5pt solid #000; }
-tr.dum:last-child td.zi { border-bottom: 1.5pt solid #fff; }
+/* Duminica: celula zilei n-are nici bara groasa la stanga, nici linie jos — coltul din stanga-jos al
+   tabelului ramane DESCHIS (V1). Deasupra ei, linia groasa o desparte de sambata. */
+tr.dum td.zi { vertical-align: top; border-left: 0; border-bottom: 0; border-top: 1.5pt solid #000; }
 .semnatura { text-align: right; font-size: calc(18pt * var(--f)); margin: 5mm 0 0; line-height: 1.15; }
 .semnatura b { display: block; }
 .nota { position: absolute; left: 17.5mm; right: 17.5mm; bottom: 17.5mm; font-family: "Carlito", Calibri, sans-serif; font-size: 14pt; text-align: left; line-height: 1.25; }
