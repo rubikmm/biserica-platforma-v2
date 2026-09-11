@@ -219,6 +219,28 @@ propunerea automată, ca în V1.
 
 ## Jurnal
 
+### 2026-09-12
+
+- **Întrerupătorul „Calendar" lucrează oriunde AVEM calendarul, nu doar pe săptămâna de azi și pe cea
+  viitoare** (user, 00:03: „să fie activ pe toate săptămânile din anul curent… unde știm că avem
+  calendarul, dar și pe anii care trec, adică anul viitor. Dacă mă uit în arhivă și văd 2026, să pot
+  să văd ecranul împărțit în două coloane"). Regula e **a datelor, nu a anilor**
+  (`areCalendarulSaptamanii`, `pagini.ts`): niciun an scris în cod, deci când calendarul (A1) mai
+  capătă un an, săptămânile lui se aprind singure. ⚠️ `calendarulIntervalului` răspunde **mereu** cu
+  șapte zile — ce lipsește îl **împrumută** din anul curent, însemnat `aproximativ` —, așa că
+  întrebarea nu e „a venit ceva?", ci „a venit măcar o zi adevărată?". „Măcar una", nu toate șapte:
+  săptămâna călare pe 31 decembrie e pe jumătate adevărată și e tot o săptămână a anului curent.
+  Azi A1 acoperă **2025–2028** (2025+2026 preluați, 2027–2028 calculați din Pascalie), deci arhiva
+  se deschide în două coloane din 2025 în sus; 2024 în jos rămâne stinsă.
+
+- **Butoanele din meniu nu mai dispar în arhivă nici pentru adminul simplu** (user, 00:06: „la fel și
+  pentru admini; să nu mai dispară butoanele din meniu în arhivă, să fie doar dezactivate"). Cele
+  **două trepte au rămas neatinse ca drept de FOLOSIRE** (`poateLuaHartiile`, fost `vedeHartiile`);
+  ce s-a despărțit de ele e **vederea**: orice admin vede tot grupul din dreapta pe orice pagină —
+  întrerupător, download, PDF, JPG —, stinse unde treapta lui nu ajunge, cu pricina scrisă în `title`
+  (`deCeStinsa`). Enoriașul tot nu vede hârtiile: el are navigarea, întrerupătorul și abonarea.
+  Publicat pe staging, 0.4.9.
+
 ### 2026-09-11
 
 - **Arhiva: întrerupătorul „Calendar" și butonul de download se DEZACTIVEAZĂ, nu se mai ascund**

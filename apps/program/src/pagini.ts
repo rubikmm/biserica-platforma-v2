@@ -24,8 +24,9 @@
  *
  *   DREAPTA, lipit de marginea din dreapta (user, 10:48: „să fie aliniate la dreapta… tot ce este
  *   după bara verticală"): INTRERUPATORUL „Calendar", butonul de DESCARCARE a paginii, apoi
- *   hartiile PDF si JPG. Ultimele trei se scriu numai pentru ADMINI, pe cele doua trepte
- *   (`vedeHartiile`); enoriasul ramane cu navigarea si intrerupatorul.
+ *   hartiile PDF si JPG. Ultimele trei se scriu numai pentru ADMINI — pe TOATE paginile, dar stinse
+ *   unde treapta omului nu ajunge (`poateLuaHartiile`, `deCeStinsa`); enoriasul ramane cu navigarea,
+ *   intrerupatorul si abonarea.
  *
  * PDF si JPG au URCAT aici din casuta care atarna sub linia antetului (user, 10:48: „să urci sus
  * cele două butoane"). Casuta (`.nav-jos`, slotul `subantet`) a disparut cu totul — daca cineva o
@@ -78,12 +79,13 @@ export interface Meniu {
    */
   dinArhiva?: boolean
   /**
-   * Calendarul se POATE aprinde pe pagina asta — adica se scrie intrerupatorul, iar coloana zilei
-   * liturgice sta in pagina, gata sa iasa la iveala. Adevarat pe saptamana de azi si pe cea viitoare
-   * (alegerea userului, 11.09.2026, ora 10:47), fals pe saptamanile din arhiva: acolo calendarul
-   * n-are ce spune despre ziua de azi, deci nici intrerupator, nici coloana.
+   * Calendarul se POATE aprinde pe pagina asta — adica intrerupatorul e viu, iar coloana zilei
+   * liturgice sta in pagina, gata sa iasa la iveala. Adevarat pe orice saptamana pentru care AVEM
+   * calendarul (user, 12.09.2026 — vezi `areCalendarulSaptamanii`); fals acolo unde zilele sunt
+   * imprumutate din anul curent, adica in arhiva veche.
    *
-   * Fals => si butonul de descarcare da mereu varianta pe O COLOANA, fiindca alta nu se poate vedea.
+   * Fals => intrerupatorul se scrie STINS (nu se ascunde — user, 11.09.2026), iar butonul de
+   * descarcare da mereu varianta pe O COLOANA, fiindca alta nu se poate vedea.
    */
   calendar?: boolean
 }
@@ -698,9 +700,9 @@ function navigarea(ctx: Ctx, m: Meniu): string {
 
 /**
  * Intrerupatorul „Calendar" — primul din grupul din dreapta. Aprins, aduce langa program coloana zilei
- * liturgice (si schimba, o data cu ea, butonul de descarcare de langa el). Lucreaza doar pe saptamana
- * de azi si pe cea viitoare — „ON/OFF are sens doar pe ultima săptămână și pe săptămâna următoare"
- * (user, 10.09.2026; reconfirmat 11.09, intrebat anume) —, fiindca doar acolo calendarul are ce spune.
+ * liturgice (si schimba, o data cu ea, butonul de descarcare de langa el). Lucreaza pe orice saptamana
+ * pentru care AVEM calendarul — si in arhiva (user, 12.09.2026; vezi `areCalendarulSaptamanii`). Pana
+ * atunci mergea doar pe saptamana de azi si pe cea viitoare.
  *
  * N-are cuvant, ci ICONITA ecranului impartit (user, 11.09.2026: „în loc de cuvântul «calendar», pune
  * iconița"). Becul care aluneca ramane — el spune daca e aprins sau stins; ce face butonul spun
@@ -717,7 +719,10 @@ function navigarea(ctx: Ctx, m: Meniu): string {
  */
 function intrerupatorCalendar(m: Meniu): string {
   if (!m.calendar) {
-    const spune = 'Calendarul zilei se poate aprinde doar pe săptămâna de acum și pe cea viitoare'
+    // pe Arhiva nicio saptamana nu e in context, deci pricina e alta decat pe o saptamana veche
+    const spune = m.luni
+      ? 'Pentru săptămâna asta nu avem calendarul — zilele sunt împrumutate din anul curent'
+      : 'Calendarul se aprinde pe pagina unei săptămâni'
     return `<span class="btn mic com-cal gol" title="${spune}" aria-label="Calendarul zilei, lângă program — ${spune}">`
       + `${IC_DOUA_COLOANE}<span class="bec" aria-hidden="true"></span></span>`
   }
@@ -731,10 +736,14 @@ function intrerupatorCalendar(m: Meniu): string {
  * spatiul ramas; la dreapta, lipite de margine, bara verticala si apoi intrerupatorul, descarcarea
  * paginii si hartiile PDF/JPG.
  *
- * Grupul din dreapta se scrie doar daca are ce pune in el. ⚠️ De la 11.09.2026 intrerupatorul se
- * scrie pe TOATE paginile de om — viu pe saptamana de azi si pe cea viitoare, stins in rest —, deci
- * grupul (si bara lui) nu mai dispare de sub ochii omului cand trece pe Arhiva ori pe o saptamana
- * veche. Verificarea a ramas: paginile de serviciu (mesajele) n-au nici macar atat.
+ * ⚠️ GRUPUL DIN DREAPTA ARE ACEEASI FORMA PE TOATE PAGINILE DE OM (user, 11.09 pentru intrerupator,
+ * 12.09 pentru hartii): ce nu se poate folosi aici se scrie STINS, nu se ascunde. Deci enoriasul are
+ * peste tot intrerupatorul, iar adminul are peste tot intrerupatorul, descarcarea, PDF-ul si JPG-ul —
+ * aprinse unde lucreaza, palite unde nu. Randul nu se mai scurteaza cand omul trece pe Arhiva ori pe
+ * o saptamana veche. Cine ce poate lua ramane neschimbat (vezi `poateLuaHartiile`).
+ *
+ * Verificarea `dreapta` a ramas ca plasa: o pagina fara nimic in grup (daca s-ar ivi) n-ar trage dupa
+ * ea nici bara verticala.
  */
 function unelte(ctx: Ctx, m: Meniu): string {
   const dreapta = intrerupatorCalendar(m) + pozaPaginii(ctx, m) + hartiile(ctx, m)
@@ -745,23 +754,36 @@ function unelte(ctx: Ctx, m: Meniu): string {
 }
 
 /**
- * CINE VEDE HARTIILE saptamanii, pe DOUA TREPTE (user, 10.09.2026, 19:39): **adminul** doar pe
+ * CINE POATE LUA HARTIILE saptamanii, pe DOUA TREPTE (user, 10.09.2026, 19:39): **adminul** doar pe
  * saptamana de acum si pe cea urmatoare — atat cat ii trebuie ca sa scoata foaia de pe usa —, iar
  * **super-adminul** pe TOT istoricul, deci si pe saptamanile vechi si pe pagina Arhivei (unde nicio
  * saptamana nu e in context, deci `m.luni` e null).
  *
+ * ⚠️ ASTA E DREPTUL DE FOLOSIRE, NU DE VEDERE (user, 12.09.2026: „la fel și pentru admini — să nu mai
+ * dispară butoanele din meniu în arhivă, să fie doar dezactivate"). VEDEREA se hotaraste mai simplu,
+ * o data, in `unelte`: **orice admin vede tot grupul din dreapta, pe orice pagina**; unde treapta lui
+ * nu ajunge, butonul se scrie STINS. Asa randul are aceeasi forma de la o pagina la alta si adminul
+ * simplu vede ce exista, nu un rand ciuntit.
+ *
  * Regula e a TUTUROR hartiilor din grupul din dreapta: descarcarea paginii, PDF-ul si JPG-ul
  * (user, 11.09.2026). Rutele raman deschise ca pana acum — „totul la liber".
  *
- * ⚠️ Butonul ARHIVEI nu mai trece pe aici. Din 11.09.2026 sta in pastila navigarii si se scrie dupa
+ * ⚠️ Butonul ARHIVEI nu trece pe aici. Din 11.09.2026 sta in pastila navigarii si se scrie dupa
  * `ctx.eAdmin` simplu: el nu e o hartie a unei saptamani, deci n-are de ce sa se stinga pe saptamanile
  * vechi — dimpotriva, tocmai acolo e singurul drum inapoi.
  */
-function vedeHartiile(ctx: Ctx, m: Meniu): boolean {
+function poateLuaHartiile(ctx: Ctx, m: Meniu): boolean {
   if (!ctx.eAdmin) return false
   if (ctx.eSuperAdmin) return true
   const aAzi = luneaSaptamanii(m.azi)
   return m.luni === aAzi || m.luni === adaugaZile(aAzi, 7)
+}
+
+/** De ce e stinsa hartia, spus omului; `null` = nu e stinsa. */
+function deCeStinsa(ctx: Ctx, m: Meniu): string | null {
+  if (!poateLuaHartiile(ctx, m)) return 'se ia doar de pe săptămâna de acum și de pe cea viitoare'
+  if (!m.luni) return 'se ia de pe pagina unei săptămâni'
+  return null
 }
 
 /**
@@ -774,22 +796,26 @@ function vedeHartiile(ctx: Ctx, m: Meniu): boolean {
  * cu poza la JPG. Numele scurt ramane langa iconita — aici el ESTE felul fisierului, deci nu se repeta
  * degeaba, iar doua foi cu coltul indoit una langa alta s-ar deosebi greu la 17 px.
  *
- * Se scrie DOAR pentru admini (user, 10.09.2026: „care se văd doar pentru admini") — enoriasul are in
- * antet navigarea si intrerupatorul. Rutele (`/v1/foaie/…`) raman deschise ca pana acum: deocamdata
- * nimic din ce se citeste nu cere cont. Pe pagina Arhivei nicio saptamana nu e in context (`m.foaie` e
- * null), deci hartiile se scriu stinse — asa erau si in casuta.
+ * Se scriu DOAR pentru admini (user, 10.09.2026: „care se văd doar pentru admini") — enoriasul are in
+ * antet navigarea, intrerupatorul si abonarea. Rutele (`/v1/foaie/…`) raman deschise ca pana acum:
+ * deocamdata nimic din ce se citeste nu cere cont.
+ *
+ * ⚠️ ORICE ADMIN LE VEDE PE ORICE PAGINA; unde nu se pot lua, se scriu STINSE (user, 12.09.2026).
+ * Trei pricini de stingere, toate spuse in `title`: treapta omului (adminul simplu, pe o saptamana
+ * veche), lipsa unei saptamani in context (pagina Arhivei) si saptamana fara program validat.
  */
 function hartiile(ctx: Ctx, m: Meniu): string {
-  if (!vedeHartiile(ctx, m)) return ''
+  if (!ctx.eAdmin) return ''
   const p = esc(ctx.prefix)
+  const stinsa = deCeStinsa(ctx, m) ?? (m.foaie ? null : 'se deschide de pe pagina unei săptămâni cu program validat')
   // ⚠️ Numele felului (`.fel`) CADE pe telefon, ca tot randul de unelte sa incapa pe o linie (user,
   // 11.09.2026) — raman iconitele, care sunt desenate anume ca sa se deosebeasca. De aceea numele
   // hartiei se scrie si in `aria-label`: fara el, cu scrisul ascuns, butonul ar ramane fara nume.
-  const hartie = (ext: 'pdf' | 'jpg', iconita: string, titlu: string) => (m.foaie
-    ? `<a class="btn mic" href="${p}${m.foaie}.${ext}" target="_blank" rel="noopener" title="${titlu}"`
-      + ` aria-label="${titlu}">${iconita}<span class="fel">${ext.toUpperCase()}</span></a>`
-    : `<span class="btn mic gol" title="Foaia se deschide de pe pagina unei săptămâni cu program validat"`
-      + ` aria-label="${titlu} — se deschide de pe pagina unei săptămâni cu program validat">${iconita}<span class="fel">${ext.toUpperCase()}</span></span>`)
+  const hartie = (ext: 'pdf' | 'jpg', iconita: string, titlu: string) => (stinsa
+    ? `<span class="btn mic gol" title="${titlu} — ${stinsa}"`
+      + ` aria-label="${titlu} — ${stinsa}">${iconita}<span class="fel">${ext.toUpperCase()}</span></span>`
+    : `<a class="btn mic" href="${p}${m.foaie}.${ext}" target="_blank" rel="noopener" title="${titlu}"`
+      + ` aria-label="${titlu}">${iconita}<span class="fel">${ext.toUpperCase()}</span></a>`)
   return hartie('pdf', ICOANE.pdf, 'Foaia A4, de tipărit')
     + hartie('jpg', ICOANE.jpg, 'Foaia ca poză, de trimis pe WhatsApp')
 }
@@ -807,26 +833,28 @@ function hartiile(ctx: Ctx, m: Meniu): string {
  * ⚠️ Se scriu AMANDOUA infatisarile, iar CSS-ul o arata pe cea potrivita dupa clasa `cu-calendar` de pe
  * body (vezi `.poza-1`/`.poza-2` din STIL). Asa butonul se schimba in aceeasi clipa cu coloana, fara ca
  * JS-ul intrerupatorului sa stie de el si fara sa apuce sa se vada vreodata semnul care nu trebuie.
- * Unde intrerupatorul e stins (saptamanile din arhiva), `m.calendar` e fals si ramane doar varianta
- * simpla — alta nici nu se poate vedea acolo.
+ * Unde intrerupatorul e stins (saptamanile fara calendar propriu), `m.calendar` e fals si ramane doar
+ * varianta simpla — alta nici nu se poate vedea acolo.
  *
- * ⚠️ PE ARHIVA SE SCRIE STINS, NU SE ASCUNDE (user, 11.09.2026, o data cu intrerupatorul): acolo nicio
- * saptamana nu e in context (`m.luni` e null), deci n-are ce poza sa aduca — dar dispariti amandoua
- * lasau randul de unelte mai scurt decat pe pagina de unde venise omul. Stins = acelasi `.gol` ca
- * hartiile de langa, cu sageata simpla (a doua infatisare n-ar avea cum sa iasa la iveala, `cu-calendar`
- * nu se pune pe body acolo).
+ * ⚠️ UNDE NU SE POATE LUA, SE SCRIE STINS, NU SE ASCUNDE (user, 11.09.2026 pentru Arhiva, 12.09.2026
+ * si pentru adminul simplu): pe pagina Arhivei nicio saptamana nu e in context (`m.luni` e null), iar
+ * adminul simplu n-o poate lua de pe saptamanile vechi — pana acum, in amandoua cazurile, butonul
+ * lipsea cu totul si randul de unelte iesea mai scurt decat pe pagina de unde venise omul. Stins =
+ * acelasi `.gol` ca hartiile de langa, cu sageata simpla (a doua infatisare n-are cum sa iasa la
+ * iveala fara `cu-calendar` pe body, si oricum n-ar duce nicaieri).
  *
  * Deosebirea de JPG-ul de langa: acela e foaia A4 de pe usa, fotografiata; asta e PAGINA, cu grafica ei.
  * Amandoua pleaca pe WhatsApp, de aceea stau despartite si ca iconita.
  *
- * E tot o hartie a saptamanii, deci se vede dupa ACELEASI DOUA TREPTE ca celelalte (alegerea userului,
+ * E tot o hartie a saptamanii, deci merge dupa ACELEASI DOUA TREPTE ca celelalte (alegerea userului,
  * 11.09.2026): enoriasul si utilizatorul simplu n-o vad deloc — nici stinsa.
  */
 function pozaPaginii(ctx: Ctx, m: Meniu): string {
-  if (!vedeHartiile(ctx, m)) return ''
-  if (!m.luni) {
-    const spune = 'Poza paginii se descarcă de pe pagina unei săptămâni'
-    return `<span class="btn mic gol" title="${spune}" aria-label="Pagina ca poză (JPEG) — ${spune}">${IC_DESCARCA}</span>`
+  if (!ctx.eAdmin) return ''
+  const stinsa = deCeStinsa(ctx, m)
+  if (stinsa || !m.luni) {
+    const spune = `Pagina ca poză (JPEG) — ${stinsa ?? 'se ia de pe pagina unei săptămâni'}`
+    return `<span class="btn mic gol" title="${spune}" aria-label="${spune}">${IC_DESCARCA}</span>`
   }
   const adresa = (coloane: 1 | 2) => `${esc(ctx.prefix)}/v1/poza/saptamana/${esc(m.luni)}.jpg?coloane=${coloane}`
   const buton = (clasa: string, href: string, spune: string, iconita: string) =>
@@ -1065,13 +1093,44 @@ function zileleSaptamanii(o: {
   return zile
 }
 
+/**
+ * SE POATE APRINDE CALENDARUL PE SAPTAMANA ASTA? — adica il AVEM cu adevarat pentru ea.
+ *
+ * ⚠️ Regula e a datelor, nu a anilor (user, 12.09.2026: „întrerupătorul să fie activ pe toate
+ * săptămânile din anul curent… unde știm că avem calendarul, dar și pe anii care trec, adică anul
+ * viitor. Dacă mă uit în arhivă și văd 2026, să pot să văd ecranul împărțit în două coloane"). Pana
+ * atunci se aprindea doar pe saptamana de azi si pe cea viitoare.
+ *
+ * Nu se scrie niciun an in cod ANUME ca sa nu trebuiasca umblat aici: cand calendarul (A1) capata
+ * 2027, saptamanile lui se aprind singure, iar anii vechi raman stinsi cat timp n-au calendar propriu.
+ *
+ * Cum se deosebeste „avem" de „n-avem": `calendarulIntervalului` raspunde MEREU cu sapte zile — ce
+ * lipseste il IMPRUMUTA din anul curent, insemnat `aproximativ` (asa se coloreaza rosu sarbatorile
+ * din arhiva veche). Deci intrebarea nu e „a venit ceva?", ci „a venit macar o zi ADEVARATA?".
+ *
+ * De ce „macar una", si nu toate sapte: saptamana calare pe 31 decembrie (2026-12-28 → 2027-01-03) e
+ * pe jumatate adevarata, si e o saptamana a anului curent — cu „toate" ar ramane singura stinsa din
+ * an, impotriva cererii. Zilele imprumutate ramanse in coloana isi spun singure ce sunt („calendar
+ * împrumutat din anul curent — aproximativ"), deci nimic nu trece drept sigur.
+ */
+function areCalendarulSaptamanii(cal: CalendarSaptamana | null | undefined, luni: string): boolean {
+  if (!cal) return false
+  for (let i = 0; i < 7; i++) {
+    const z = cal.zile.get(adaugaZile(luni, i))
+    if (z && !z.aproximativ) return true
+  }
+  return false
+}
+
 export function paginaSaptamana(o: OptiuniSaptamana): string {
-  // Calendarul se poate aprinde pe saptamana de azi si pe cea viitoare (alegerea userului, 11.09.2026,
-  // 10:47, intrebat anume). Pe saptamanile din arhiva nu se scrie nici intrerupatorul, nici coloana lui;
-  // zilele raman insa colorate dupa calendar (rosul sarbatorilor) si randurile „→" ale slujbelor sunt
-  // tot de acolo. `cuCalendar` inseamna „coloana STA in pagina", nu „se vede": aprinsul e al omului.
+  // Calendarul se poate aprinde ORIUNDE IL AVEM CU ADEVARAT (user, 12.09.2026 — vezi
+  // `areCalendarulSaptamanii`), nu doar pe saptamana de azi si pe cea viitoare, cum era pana acum.
+  // Pe saptamanile fara calendar propriu nu se scrie nici intrerupatorul (ramane stins), nici coloana
+  // lui; zilele raman insa colorate dupa calendarul imprumutat (rosul sarbatorilor) si randurile „→"
+  // ale slujbelor sunt tot de acolo. `cuCalendar` inseamna „coloana STA in pagina", nu „se vede":
+  // aprinsul e al omului.
   const aAzi = luneaSaptamanii(o.azi)
-  const cuCalendar = o.luni === aAzi || o.luni === adaugaZile(aAzi, 7)
+  const cuCalendar = areCalendarulSaptamanii(o.cal, o.luni)
   const zile = zileleSaptamanii({ ...o, cuCalendar })
   // Eticheta de langa titlu spune doar ce NU e gata: „propunere" (si, daca s-ar ivi, „propus" ori
   // „modificat după validare"). Pe programul validat nu se mai scrie nimic — user, 10.09.2026:
