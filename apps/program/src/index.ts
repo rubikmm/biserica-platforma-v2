@@ -14,7 +14,7 @@
  */
 import { SCOPE_GLOBAL, SESIUNE_ANONIMA, type IntrareVocabular, type Slujba } from '@xc/contracts'
 import { principalDin, sesiuneCurenta, verificaCsrf } from '@xc/auth'
-import { citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
+import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
 import { golesteOutbox } from '@xc/events'
 import { Logger, correlationId } from '@xc/observability'
 import { adaugaZile, aziBucuresti, dataVersiunii, eDataValida, eroareApi, html, intervalLizibil, json, jsonCuEtag, luneaSaptamanii, oraBucuresti, zileIntre } from '@xc/ui'
@@ -175,7 +175,7 @@ export default {
       modificata: dataVersiunii(env.VERSIUNE),
       veziCa: sesiune.veziCa,
       poateVedeaCa: sesiune.poateVedeaCa,
-      spre: url.toString(),
+      spre: adresaPaginii(cfg, url),
     }
 
     try {

@@ -8,7 +8,7 @@
  */
 import { SESIUNE_ANONIMA } from '@xc/contracts'
 import { sesiuneCurenta } from '@xc/auth'
-import { citesteConfig, navigatieDin, type Navigatie } from '@xc/config'
+import { adresaPaginii, citesteConfig, navigatieDin, type Navigatie } from '@xc/config'
 import { correlationId, Logger } from '@xc/observability'
 import { dataVersiunii, esc, html, json, pagina } from '@xc/ui'
 import pkg from '../package.json'
@@ -92,7 +92,7 @@ export default {
         urlAdmin: nav.admin,
         poateVedeaCa: sesiune.poateVedeaCa,
         veziCa: sesiune.veziCa,
-        spre: url.toString(),
+        spre: adresaPaginii(cfg, url),
       },
     }
 

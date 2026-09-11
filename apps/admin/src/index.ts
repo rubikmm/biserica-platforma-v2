@@ -1,7 +1,7 @@
 import { SCOPE_GLOBAL, SESIUNE_ANONIMA, type SesiuneCurenta } from '@xc/contracts'
 import { ClientAutorizare } from '@xc/authorization'
 import { principalDin, sesiuneCurenta } from '@xc/auth'
-import { citesteConfig, navigatieDin } from '@xc/config'
+import { adresaPaginii, citesteConfig, navigatieDin } from '@xc/config'
 import { Logger, correlationId } from '@xc/observability'
 import { alerta, dataVersiunii, esc, html, pagina } from '@xc/ui'
 import pkg from '../package.json'
@@ -87,7 +87,7 @@ export default {
     if (!decizie.allowed) {
       return html(
         pagina({
-          ...comune(env, nav, principal.email, eAdmin, sesiune, url.toString()),
+          ...comune(env, nav, principal.email, eAdmin, sesiune, adresaPaginii(cfg, url)),
           corp: `<h2>Administrare</h2>
             ${alerta('rea', 'Nu ai permisiunea <code>audit.read</code>.')}
             <p class="ajutor">Ești autentificat ca ${esc(principal.email)}, dar fără drepturile necesare.
@@ -128,7 +128,7 @@ export default {
 
       return html(
         pagina({
-          ...comune(env, nav, principal.email, eAdmin, sesiune, url.toString()),
+          ...comune(env, nav, principal.email, eAdmin, sesiune, adresaPaginii(cfg, url)),
           corp: `
 <h2>Administrare</h2>
   <p>Ești autentificat ca <strong>${esc(principal.email)}</strong> — fără să te fi
@@ -148,7 +148,7 @@ export default {
       log.error('eroare la citirea panoului', { eroare: e instanceof Error ? e.message : String(e) })
       return html(
         pagina({
-          ...comune(env, nav, principal.email, eAdmin, sesiune, url.toString()),
+          ...comune(env, nav, principal.email, eAdmin, sesiune, adresaPaginii(cfg, url)),
           corp: `${alerta("rea", "Nu am putut citi datele panoului.")}`,
         }),
         500,

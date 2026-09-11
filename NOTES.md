@@ -158,6 +158,11 @@ propunerea automată, ca în V1.
   cache și după ce masca fusese scoasă, așa că butonul „Revino la super admin" părea că nu face
   nimic (reclamat de user, 11.09.2026). Din 11.09 condiția e `ctx.utilizator || ctx.veziCa` în
   program / calendar / tipic / home. La orice aplicație nouă: **masca intră în decizia de cache**.
+- **`req.url` NU e adresa din bara browserului.** Prin gateway-ul de preview workerul vede
+  `http://127.0.0.1/program/…`, nu `https://rubik:8474/program/…` — iar `spre`, construit din el,
+  era refuzat de `intoarcereSigura` și omul ajungea pe pagina contului. Din 11.09 toate aplicațiile
+  folosesc `adresaPaginii(cfg, url)` din `@xc/config` (calea paginii pusă pe originea din
+  `ORIGINE_PUBLICA`). **La orice adresă pe care o dai mai departe browserului, folosește-o pe ea.**
 - **Întoarcerea de la „vezi ca" trece printr-o listă albă de origini.** `intoarcereSigura`
   (`apps/account/src/index.ts`) acceptă doar originile din `navigatieDin(cfg)`, deci o aplicație
   fără `URL_<APP>` în varsurile **contului** nu e o destinație validă: omul ajungea pe pagina
@@ -199,6 +204,15 @@ propunerea automată, ca în V1.
 
 ### 2026-09-11
 
+- **Întoarcerea la pagina de unde ai plecat**, două cereri ale userului într-una:
+  (1) comutatoarele „Vezi ca …" din meniul contului te lasă **în pagina în care erai**, doar o
+  reîncarcă — nu te mai duc în pagina contului. Cauza era `spre`, construit din `req.url`: prin
+  gateway workerul vede `http://127.0.0.1/…`, adresă pe care contul n-o recunoaște. Acum toate
+  aplicațiile folosesc `adresaPaginii(cfg, url)` din `@xc/config`.
+  (2) **după intrare** te întorci de unde ai plecat: linkul „Cont" din antet poartă pagina de acum
+  (`?spre=`), care călătorește prin cele două formulare (câmp ascuns `spre`) până la cele șase
+  cifre. Dacă nu se știe de unde ai venit → **Home**, nu pagina contului (contul nou își păstrează
+  urarea). Publicat: cont/home/tipic/calendar 0.1.2, program 0.3.3, admin.
 - **Modul de probă local a ieșit de tot** (user: „scoate-o de tot... să fie la fel ca pe staging").
   Scoase din `program`: bannerul `.proba` cu tot cu stil și media query, tipurile `RolProba`/
   `StareProba`, câmpurile `proba`/`caleAcum`/`navProba` din `Ctx`, ruta `GET /proba/<rol>`, blocul

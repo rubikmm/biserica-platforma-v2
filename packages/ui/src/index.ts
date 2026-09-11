@@ -359,7 +359,10 @@ function contul(c: Cont): string {
   const urlCont = c.urlCont ?? ''
   const nume = c.nume ?? 'Cont'
   if (!c.intrat) {
-    return `<a class="cont" href="${esc(c.href ?? `${urlCont}/auth/login`)}">${ICOANE.om}<span>${esc(nume)}</span></a>`
+    // Linkul de intrare poarta pagina de acum, ca dupa cele sase cifre omul sa se intoarca exact
+    // aici, nu in pagina contului (user, 11.09.2026). Fara ea, contul il lasa la Home.
+    const spre = c.spre ? `?spre=${encodeURIComponent(c.spre)}` : ''
+    return `<a class="cont" href="${esc(c.href ?? `${urlCont}/auth/login${spre}`)}">${ICOANE.om}<span>${esc(nume)}</span></a>`
   }
   return `<details class="cont-meniu">
         <summary class="cont">${ICOANE.om}<span>${esc(nume)}</span></summary>

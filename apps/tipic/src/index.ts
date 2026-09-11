@@ -17,7 +17,7 @@
  */
 import { principalDin, sesiuneCurenta } from '@xc/auth'
 import { SESIUNE_ANONIMA } from '@xc/contracts'
-import { citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
+import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
 import { Logger, correlationId } from '@xc/observability'
 import { adaugaZile, aziBucuresti, dataVersiunii, eDataValida, eroareApi, html, json, jsonCuEtag } from '@xc/ui'
 import pkg from '../package.json'
@@ -220,7 +220,7 @@ export default {
       modificata: dataVersiunii(env.VERSIUNE),
       veziCa: sesiune.veziCa,
       poateVedeaCa: sesiune.poateVedeaCa,
-      spre: url.toString(),
+      spre: adresaPaginii(cfg, url),
     }
     // In dev nu se tine cache: cei cinci minute faceau schimbarile sa para nefacute (10.09.2026).
   // Sub masca „vezi ca" pagina e personala chiar cand n-are niciun nume pe ea (masca

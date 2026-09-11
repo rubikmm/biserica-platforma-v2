@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { SCOPE_GLOBAL, SESIUNE_ANONIMA, type ZiLiturgica } from '@xc/contracts'
 import { ClientAutorizare, EroareAutorizare } from '@xc/authorization'
 import { NUME_COOKIE_CSRF, citesteCookie, construiesteCookie, principalDin, sesiuneCurenta, verificaCsrf, verificaTokenCsrf } from '@xc/auth'
-import { citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
+import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
 import { construiesteEnvelope, declaratieOutbox, golesteOutbox } from '@xc/events'
 import { Logger, correlationId } from '@xc/observability'
 import { adaugaZile, aziBucuresti, dataVersiunii, eDataValida, eroareApi, hartieDinCache, html, intervalLizibil, json, jsonCuEtag, luneaSaptamanii, pngDin, zileIntre } from '@xc/ui'
@@ -226,7 +226,7 @@ export default {
       anCurent: Number(azi.slice(0, 4)),
       veziCa: sesiune.veziCa,
       poateVedeaCa: sesiune.poateVedeaCa,
-      spre: url.toString(),
+      spre: adresaPaginii(cfg, url),
     }
     const authz = new ClientAutorizare(env.AUTORIZARE, cid)
 

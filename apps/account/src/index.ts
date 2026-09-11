@@ -112,6 +112,19 @@ function intoarcereSigura(brut: string | null, cfg: VariabileComune, nav: Naviga
   return alePlatformei.has(ceruta.origin) ? ceruta.toString() : null
 }
 
+/**
+ * De unde a plecat omul sa se autentifice. Calatoreste prin tot fluxul — link → camp ascuns →
+ * link — fiindca intre „scrie adresa" si „scrie codul" sunt doua formulare. Nu e crezuta pe
+ * nemestecat: la final trece tot prin `intoarcereSigura`.
+ */
+function spreDinCerere(url: URL): string {
+  return url.searchParams.get('spre') ?? ''
+}
+
+function spreDinFormular(formular: FormData): string {
+  return String(formular.get('spre') ?? '')
+}
+
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const cfg = citesteConfig(env)
@@ -151,7 +164,7 @@ export default {
       if (cale === '/auth/login' && req.method === 'GET') {
         const csrf = asiguraCsrf(req, domeniu)
         return html(
-          paginaIntrare({ ctx, cine, csrf: csrf.jeton }),
+          paginaIntrare({ ctx, cine, csrf: csrf.jeton, spre: spreDinCerere(url) }),
           200,
           csrf.setCookie ? { 'set-cookie': csrf.setCookie } : {},
         )
@@ -163,27 +176,28 @@ export default {
         if (problema) return html(paginaMesaj({ ctx, cine, titlu: 'Cerere respinsă', fel: 'rea', text: problema }), 403)
 
         const email = String(formular.get('email') ?? '').trim().toLowerCase()
+        const spre = spreDinFormular(formular)
         const r = await cereCod(env, req, cid, email, null)
 
         if (r.status === 429) {
           const csrf = asiguraCsrf(req, domeniu)
           return html(
-            paginaIntrare({ ctx, cine, csrf: csrf.jeton, email, eroare: 'Prea multe cereri. Așteaptă câteva minute și reia.' }),
+            paginaIntrare({ ctx, cine, csrf: csrf.jeton, email, spre, eroare: 'Prea multe cereri. Așteaptă câteva minute și reia.' }),
             429,
           )
         }
         if (r.status >= 400) {
           const csrf = asiguraCsrf(req, domeniu)
-          return html(paginaIntrare({ ctx, cine, csrf: csrf.jeton, email, eroare: 'Adresa nu pare validă.' }), 400)
+          return html(paginaIntrare({ ctx, cine, csrf: csrf.jeton, email, spre, eroare: 'Adresa nu pare validă.' }), 400)
         }
-        return html(paginaCod({ ctx, cine, csrf: String(formular.get('csrf') ?? ''), email, codDebug: r.debugCod }))
+        return html(paginaCod({ ctx, cine, csrf: String(formular.get('csrf') ?? ''), email, spre, codDebug: r.debugCod }))
       }
 
       // ---------------------------------------------------------------- cont nou
       if (cale === '/auth/inregistrare' && req.method === 'GET') {
         const csrf = asiguraCsrf(req, domeniu)
         return html(
-          paginaContNou({ ctx, cine, csrf: csrf.jeton }),
+          paginaContNou({ ctx, cine, csrf: csrf.jeton, spre: spreDinCerere(url) }),
           200,
           csrf.setCookie ? { 'set-cookie': csrf.setCookie } : {},
         )
@@ -196,26 +210,27 @@ export default {
 
         const email = String(formular.get('email') ?? '').trim().toLowerCase()
         const nume = String(formular.get('nume') ?? '').trim()
+        const spre = spreDinFormular(formular)
 
         if (!nume) {
           const csrf = asiguraCsrf(req, domeniu)
-          return html(paginaContNou({ ctx, cine, csrf: csrf.jeton, email, eroare: 'Spune-ne cum te cheamă.' }), 400)
+          return html(paginaContNou({ ctx, cine, csrf: csrf.jeton, email, spre, eroare: 'Spune-ne cum te cheamă.' }), 400)
         }
 
         const r = await cereCod(env, req, cid, email, nume)
         if (r.status === 429) {
           const csrf = asiguraCsrf(req, domeniu)
           return html(
-            paginaContNou({ ctx, cine, csrf: csrf.jeton, email, nume, eroare: 'Prea multe cereri. Așteaptă câteva minute și reia.' }),
+            paginaContNou({ ctx, cine, csrf: csrf.jeton, email, nume, spre, eroare: 'Prea multe cereri. Așteaptă câteva minute și reia.' }),
             429,
           )
         }
         if (r.status >= 400) {
           const csrf = asiguraCsrf(req, domeniu)
-          return html(paginaContNou({ ctx, cine, csrf: csrf.jeton, email, nume, eroare: 'Adresa nu pare validă.' }), 400)
+          return html(paginaContNou({ ctx, cine, csrf: csrf.jeton, email, nume, spre, eroare: 'Adresa nu pare validă.' }), 400)
         }
         return html(
-          paginaCod({ ctx, cine, csrf: String(formular.get('csrf') ?? ''), email, nume, codDebug: r.debugCod }),
+          paginaCod({ ctx, cine, csrf: String(formular.get('csrf') ?? ''), email, nume, spre, codDebug: r.debugCod }),
         )
       }
 
@@ -230,14 +245,15 @@ export default {
         if (!email) return redirect(`${prefix}/auth/login`)
 
         const csrf = String(formular.get('csrf') ?? '')
+        const spre = spreDinFormular(formular)
         const r = await cereCod(env, req, cid, email, nume)
         if (r.status === 429) {
           return html(
-            paginaCod({ ctx, cine, csrf, email, nume, eroare: 'S-au cerut prea multe coduri. Așteaptă câteva minute și reia.' }),
+            paginaCod({ ctx, cine, csrf, email, nume, spre, eroare: 'S-au cerut prea multe coduri. Așteaptă câteva minute și reia.' }),
             429,
           )
         }
-        return html(paginaCod({ ctx, cine, csrf, email, nume, codDebug: r.debugCod }))
+        return html(paginaCod({ ctx, cine, csrf, email, nume, spre, codDebug: r.debugCod }))
       }
 
       // ------------------------------------------------- cele sase cifre din email
@@ -249,6 +265,7 @@ export default {
         const csrf = String(formular.get('csrf') ?? '')
         const email = String(formular.get('email') ?? '').trim().toLowerCase()
         const nume = String(formular.get('nume') ?? '').trim() || null
+        const spre = spreDinFormular(formular)
         if (!email) return redirect(`${prefix}/auth/login`)
 
         // Cele sase casute se lipesc intr-un singur cod. Se accepta si un cod intreg scris
@@ -260,7 +277,7 @@ export default {
           .slice(0, 6)
 
         if (cod.length < 6) {
-          return html(paginaCod({ ctx, cine, csrf, email, nume, eroare: 'Codul are șase cifre.' }), 400)
+          return html(paginaCod({ ctx, cine, csrf, email, nume, spre, eroare: 'Codul are șase cifre.' }), 400)
         }
 
         const raspuns = await apelIdentitate(
@@ -285,7 +302,7 @@ export default {
               : date.motiv === 'cod expirat'
                 ? 'Codul a expirat sau s-a greșit de prea multe ori. Cere altul.'
                 : 'Codul nu mai e valabil. Cere altul.'
-          return html(paginaCod({ ctx, cine, csrf, email, nume, eroare: text }), 400)
+          return html(paginaCod({ ctx, cine, csrf, email, nume, spre, eroare: text }), 400)
         }
 
         const date = (await raspuns.json()) as { sessionToken: string; maxAge: number; contNou: boolean }
@@ -294,10 +311,15 @@ export default {
           domeniu,
         })
 
+        // Unde ajunge omul dupa cele sase cifre (user, 11.09.2026): inapoi in pagina din care a
+        // plecat sa se autentifice; daca nu se stie de unde a venit, la HOME — „acolo unde pot să
+        // aleg aplicația" —, nu in pagina contului. Contul nou isi pastreaza urarea.
+        const inapoi =
+          intoarcereSigura(spre, cfg, nav) ??
+          (date.contNou ? `${prefix}/?bun-venit=1` : nav.home || '/')
+
         log.info('sesiune deschisa cu cod', { contNou: date.contNou })
-        return redirect(date.contNou ? `${prefix}/?bun-venit=1` : `${prefix}/`, {
-          'set-cookie': cookieSesiune,
-        })
+        return redirect(inapoi, { 'set-cookie': cookieSesiune })
       }
 
       // ----------------------------------------------------------------- logout

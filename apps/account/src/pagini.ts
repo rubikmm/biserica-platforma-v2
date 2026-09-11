@@ -65,12 +65,27 @@ function comune(ctx: Ctx, cine: Cine = {}) {
   }
 }
 
+/**
+ * Pagina de unde a plecat omul, purtata prin tot fluxul de intrare (user, 11.09.2026: „ideal ar fi
+ * să mă întoarcă în pagina din care am plecat"). Trece din link in camp ascuns si inapoi in link,
+ * la fiecare pas, fiindca intre „scrie adresa" si „scrie codul" sunt doua formulare.
+ */
+function campSpre(spre?: string): string {
+  return spre ? `\n  <input type="hidden" name="spre" value="${esc(spre)}">` : ''
+}
+
+function intrebareSpre(spre?: string): string {
+  return spre ? `?spre=${encodeURIComponent(spre)}` : ''
+}
+
 export function paginaIntrare(o: {
   ctx: Ctx
   csrf: string
   mesaj?: string
   eroare?: string
   email?: string
+  /** Pagina de unde a plecat omul: se duce mai departe prin tot fluxul si il aduce inapoi acolo. */
+  spre?: string
   cine?: Cine
 }): string {
   const p = esc(o.ctx.prefix)
@@ -83,12 +98,12 @@ export function paginaIntrare(o: {
 ${o.eroare ? alerta('rea', esc(o.eroare)) : ''}
 ${o.mesaj ? alerta('info', o.mesaj) : ''}
 <form class="bloc" method="post" action="${p}/auth/login">
-  <input type="hidden" name="csrf" value="${esc(o.csrf)}">
+  <input type="hidden" name="csrf" value="${esc(o.csrf)}">${campSpre(o.spre)}
   <label for="email">Adresă de email</label>
   <input id="email" name="email" type="email" required autocomplete="email" inputmode="email" autofocus value="${esc(o.email ?? '')}">
   <button type="submit" style="margin-top:12px">Trimite-mi codul</button>
 </form>
-<p><small>Prima dată aici? <a href="${p}/auth/inregistrare">Deschide un cont</a></small></p>`,
+<p><small>Prima dată aici? <a href="${p}/auth/inregistrare${intrebareSpre(o.spre)}">Deschide un cont</a></small></p>`,
   })
 }
 
@@ -98,6 +113,7 @@ export function paginaContNou(o: {
   eroare?: string
   email?: string
   nume?: string
+  spre?: string
   cine?: Cine
 }): string {
   const p = esc(o.ctx.prefix)
@@ -110,14 +126,14 @@ export function paginaContNou(o: {
 nu e nevoie de parolă, nici acum, nici mai târziu.</p>
 ${o.eroare ? alerta('rea', esc(o.eroare)) : ''}
 <form class="bloc" method="post" action="${p}/auth/inregistrare">
-  <input type="hidden" name="csrf" value="${esc(o.csrf)}">
+  <input type="hidden" name="csrf" value="${esc(o.csrf)}">${campSpre(o.spre)}
   <label for="nume">Numele tău</label>
   <input id="nume" name="nume" type="text" required maxlength="120" autocomplete="name" autofocus value="${esc(o.nume ?? '')}">
   <label for="email">Adresă de email</label>
   <input id="email" name="email" type="email" required autocomplete="email" inputmode="email" value="${esc(o.email ?? '')}">
   <button type="submit" style="margin-top:12px">Trimite-mi codul</button>
 </form>
-<p><small>Ai deja cont? <a href="${p}/auth/login">Intră</a></small></p>`,
+<p><small>Ai deja cont? <a href="${p}/auth/login${intrebareSpre(o.spre)}">Intră</a></small></p>`,
   })
 }
 
@@ -173,6 +189,7 @@ export function paginaCod(o: {
   nume?: string | null
   eroare?: string
   codDebug?: string | null
+  spre?: string
   cine?: Cine
 }): string {
   const p = esc(o.ctx.prefix)
@@ -185,7 +202,7 @@ export function paginaCod(o: {
       )
     : ''
   const ascunse = `<input type="hidden" name="csrf" value="${esc(o.csrf)}">
-  <input type="hidden" name="email" value="${esc(o.email)}">${
+  <input type="hidden" name="email" value="${esc(o.email)}">${campSpre(o.spre)}${
     o.nume ? `\n  <input type="hidden" name="nume" value="${esc(o.nume)}">` : ''
   }`
   return pagina({

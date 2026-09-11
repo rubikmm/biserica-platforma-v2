@@ -78,6 +78,22 @@ export function prefixSiCale(url: URL, montaj: string): { prefix: string; cale: 
   return { prefix: montaj, cale: url.pathname.slice(montaj.length) || '/' }
 }
 
+/**
+ * Adresa PUBLICA a paginii de acum — cea din bara browserului, nu cea vazuta de worker.
+ * `req.url` nu e buna la asta: prin gateway-ul de preview workerul vede `http://127.0.0.1/program/…`,
+ * nu `https://rubik:8474/program/…`. Comutatorul „vezi ca" trimitea inapoi adresa vazuta de worker,
+ * contul n-o recunostea (`intoarcereSigura` o refuza) si omul ajungea pe pagina contului in loc sa
+ * ramana unde era — reclamat de user, 11.09.2026. Calea si intrebarea raman ale paginii; se schimba
+ * doar schema/gazda/portul, luate din `ORIGINE_PUBLICA`.
+ */
+export function adresaPaginii(cfg: VariabileComune, url: URL): string {
+  try {
+    return new URL(url.pathname + url.search, new URL(cfg.ORIGINE_PUBLICA).origin).toString()
+  } catch {
+    return url.toString()
+  }
+}
+
 export function eProductie(cfg: VariabileComune): boolean {
   return cfg.MEDIU === 'production'
 }
