@@ -64,6 +64,14 @@ export interface Actiune<I extends z.ZodType = z.ZodType, O extends z.ZodType = 
   /** Fraze omenesti care duc la ea: ajuta modelul sa aleaga si omul sa inteleaga. */
   exemple?: string[]
   /**
+   * CUNOSTINTE DE FUNDAL: actiunea (fara argumente, de citire) se cheama INAINTE de orice raspuns,
+   * iar rezultatul ei intra in contextul modelului — nu e o unealta pe care s-o aleaga, e ce stie
+   * dinainte. Pentru ce e mic si mereu util: tiparele programului („Sfantul Maslu se face de obicei
+   * marti seara"). Un rezultat de fundal trebuie sa ramana MIC (cateva KB): se plateste la fiecare
+   * mesaj.
+   */
+  fundal?: boolean
+  /**
    * Are voie sa o ceara un SERVICIU (nu un om)? Implicit nu, pentru actiunile cu permisiune:
    * altfel un serviciu ar ocoli tacut drepturile. Actiunile fara permisiune sunt oricum deschise.
    */

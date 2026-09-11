@@ -92,12 +92,24 @@ interface UndeStaActiunea {
  * Listele tuturor aplicațiilor, puse cap la cap. O aplicație care tace nu oprește chatul: se
  * lucrează cu ce răspunde (manifestele sunt ținute un minut în memoria izolatului).
  */
+/**
+ * Cunoștințele de fundal, ținute o oră în memoria izolatului: se plătesc la fiecare mesaj (intră
+ * în context), deci nu se recalculează la fiecare mesaj. Tiparele programului nu se schimbă de
+ * pe o replică pe alta.
+ */
+const FUNDAL = new Map<string, { la: number; text: string }>()
+const VIATA_FUNDAL = 60 * 60_000
+/** Cât din rezultatul unei acțiuni de fundal intră în context. Mai mult de atât e semn că nu e „fundal". */
+const TAIERE_FUNDAL = 8000
+
 async function adunaUneltele(
   env: Env,
   o: { secret: string; correlationId: string },
-): Promise<{ unelte: UnealtaDescrisa[]; harta: Map<string, UndeStaActiunea> }> {
+): Promise<{ unelte: UnealtaDescrisa[]; harta: Map<string, UndeStaActiunea>; fundal: string[] }> {
   const harta = new Map<string, UndeStaActiunea>()
   const unelte: UnealtaDescrisa[] = []
+  const fundal: string[] = []
+  const deAdus: Array<Promise<void>> = []
 
   const manifeste = await Promise.all(
     aplicatiileLegate(env).map(async (a) => ({
@@ -118,8 +130,33 @@ async function adunaUneltele(
       })
     }
     unelte.push(...unelteDinManifest(m as Manifest))
+
+    // Fundalul: actiunile marcate asa se cheama ACUM, ca serviciu, si rezultatul lor intra in
+    // instructiuni. Cine tace nu opreste nimic — se raspunde cu ce e.
+    for (const descriere of (m as Manifest).actiuni) {
+      if (!descriere.fundal) continue
+      const cheie = `${a.nume}:${descriere.nume}`
+      const tinut = FUNDAL.get(cheie)
+      if (tinut && Date.now() - tinut.la < VIATA_FUNDAL) {
+        fundal.push(tinut.text)
+        continue
+      }
+      deAdus.push(
+        cereActiune(a.fetcher, descriere.nume, {}, { fel: 'serviciu', nume: 'chat' }, {
+          secret: o.secret,
+          correlationId: o.correlationId,
+          prin: 'chat',
+        }).then((r) => {
+          if (!r.ok) return
+          const text = `${descriere.nume} — ${descriere.descriere}\n${JSON.stringify(r.date).slice(0, TAIERE_FUNDAL)}`
+          FUNDAL.set(cheie, { la: Date.now(), text })
+          fundal.push(text)
+        }),
+      )
+    }
   }
-  return { unelte, harta }
+  await Promise.all(deAdus)
+  return { unelte, harta, fundal }
 }
 
 /** Ce se scrie modelului despre ce a întors o acțiune. Hârtia nu se descrie, se anunță. */
@@ -264,11 +301,11 @@ export default {
         return json({ conversatieId: c.id, text, obiecte: [], propunere: null } satisfies RaspunsChat)
       }
 
-      const { unelte, harta } = await adunaUneltele(env, { secret, correlationId: cid })
+      const { unelte, harta, fundal } = await adunaUneltele(env, { secret, correlationId: cid })
       const istoric = await mesajeleDin(env.DB, c.id)
 
       const mesaje: MesajModel[] = [
-        { rol: 'sistem', text: instructiuni(cerere.aplicatie ?? '', cerere.numeleOmului ?? null, ziuaDeAzi()) },
+        { rol: 'sistem', text: instructiuni(cerere.aplicatie ?? '', cerere.numeleOmului ?? null, ziuaDeAzi(), fundal) },
         ...istoric.map((m) => ({
           rol: m.rol === 'om' ? ('om' as const) : m.rol === 'agent' ? ('agent' as const) : ('unealta' as const),
           text: m.text,

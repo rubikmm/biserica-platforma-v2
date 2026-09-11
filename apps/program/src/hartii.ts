@@ -9,8 +9,8 @@
  * Fără fișierul ăsta, `program.foaia_sfintilor` ar fi trebuit să repete cum se cer sfinții de la
  * tipic și cum se așază pe foaie — adică exact duplicarea din V1, mutată cu un etaj mai sus.
  */
-import { adaugaZile, luneaSaptamanii, dataLunga } from '@xc/ui'
-import type { IntrareVocabular, Slujba } from '@xc/contracts'
+import { adaugaZile, dataCuZi, dataLunga, luneaSaptamanii } from '@xc/ui'
+import type { IntrareVocabular, Saptamana, Slujba } from '@xc/contracts'
 import { calendarulIntervalului, texteleZilei, ziuaCalendarului } from './calendar.js'
 import {
   istoriculSlujbelor,
@@ -236,3 +236,29 @@ export async function htmlPozaSaptamanii(
 }
 
 export { LATIME_POZA }
+
+// ---------------------------------------------------------------------------
+// Săptămâna ca TEXT
+// ---------------------------------------------------------------------------
+
+/**
+ * Programul săptămânii în text simplu: de citit la radio, de lipit într-un mesaj, de dat unui
+ * model. Aceeași ordine ca pe foaie — zilele, apoi orele —, cu rândurile „→" ale slujbei dedesubt.
+ */
+export function textSaptamanii(s: Saptamana): string {
+  const randuri: string[] = [
+    `Programul săptămânii ${titluSaptamanii(s.de_la)}${s.stare === 'validat' ? '' : ' (propunere)'}`,
+  ]
+  let ziCurenta = ''
+  for (const sl of s.slujbe) {
+    if (sl.data !== ziCurenta) {
+      ziCurenta = sl.data
+      const zi = dataCuZi(sl.data)
+      randuri.push('', zi.charAt(0).toUpperCase() + zi.slice(1))
+    }
+    randuri.push(`  ${sl.ora}  ${sl.nume}${sl.loc && sl.loc !== 'biserica' ? ` (${sl.loc})` : ''}`)
+    for (const d of sl.detalii) randuri.push(`         → ${d}`)
+  }
+  if (!s.slujbe.length) randuri.push('', 'Săptămână fără slujbe înregistrate.')
+  return randuri.join('\n')
+}

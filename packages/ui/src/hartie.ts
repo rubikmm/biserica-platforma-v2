@@ -114,7 +114,7 @@ export async function amprenta(html: string): Promise<string> {
   return [...new Uint8Array(h)].slice(0, 10).map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-const TIPURI = { pdf: 'application/pdf', jpg: 'image/jpeg', png: 'image/png' } as const
+const TIPURI = { pdf: 'application/pdf', jpg: 'image/jpeg', png: 'image/png', json: 'application/json; charset=utf-8', txt: 'text/plain; charset=utf-8' } as const
 
 /**
  * Hartia din Cache API sau proaspat facuta. Cheia = adresa + amprenta HTML-ului, deci un fisier
@@ -220,4 +220,38 @@ async function octetiiDinMedia(media: Fetcher, cheie: string): Promise<number | 
 /** Adresa publică a unui obiect, pentru cardul din chat sau linkul dintr-o scrisoare. */
 export function adresaObiectului(urlMedia: string, cheie: string): string {
   return `${urlMedia.replace(/\/$/, '')}/fisier/${cheie.split('/').map(encodeURIComponent).join('/')}`
+}
+
+// ---------------------------------------------------------------------------
+// Obiectul din TEXT (arhiva ca JSON, un text de trimis)
+// ---------------------------------------------------------------------------
+
+/**
+ * Ca `obiectDinHtml`, dar pentru ce nu trece prin browser: un JSON (arhiva programului) sau un
+ * text. Aceeași cheie cu amprentă, aceeași așezare în media, aceeași regulă — mai departe circulă
+ * doar cheia.
+ */
+export async function obiectDinText(o: {
+  media: Fetcher
+  text: string
+  fel: 'json' | 'txt'
+  cale: string
+  nume: string
+  titlu: string
+}): Promise<Obiect> {
+  const amp = await amprenta(o.text)
+  const cheie = `${o.cale}-${amp}.${o.fel}`
+  const nume = `${o.nume}.${o.fel}`
+  const octeti = new TextEncoder().encode(o.text)
+
+  const gasit = await octetiiDinMedia(o.media, cheie)
+  if (gasit !== null) return { fel: o.fel, nume, titlu: o.titlu, cheie, amprenta: amp, octeti: gasit }
+
+  const urcat = await o.media.fetch('https://media.intern/incarca', {
+    method: 'POST',
+    headers: { 'x-meta': JSON.stringify({ key: cheie, contentType: TIPURI[o.fel] }), 'content-type': 'application/octet-stream' },
+    body: octeti,
+  })
+  if (!urcat.ok) throw new Error(`obiectul nu s-a putut așeza în media: ${urcat.status}`)
+  return { fel: o.fel, nume, titlu: o.titlu, cheie, amprenta: amp, octeti: octeti.byteLength }
 }

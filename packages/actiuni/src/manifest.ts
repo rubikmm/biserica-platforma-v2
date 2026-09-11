@@ -19,6 +19,8 @@ export interface DescriereActiune {
   intrare: Record<string, unknown>
   iesire: Record<string, unknown>
   exemple: string[]
+  /** Se cheama inainte de orice raspuns si intra in context (vezi `Actiune.fundal`). */
+  fundal: boolean
 }
 
 export interface Manifest {
@@ -50,6 +52,7 @@ export function descrie(a: Actiune): DescriereActiune {
     intrare: schema(a.intrare, 'input'),
     iesire: schema(a.iesire, 'output'),
     exemple: a.exemple ?? [],
+    fundal: Boolean(a.fundal),
   }
 }
 
@@ -90,7 +93,7 @@ export function actiuneaDupaUnealta(numeUnealta: string): string {
 }
 
 export function unelteDinManifest(m: Manifest): UnealtaDescrisa[] {
-  return m.actiuni.map((a) => ({
+  return m.actiuni.filter((a) => !a.fundal).map((a) => ({
     name: numeUnealta(a.nume),
     description:
       a.descriere +

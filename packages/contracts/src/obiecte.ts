@@ -12,7 +12,7 @@ import { z } from 'zod'
  * continutului, deci o corectura in calendar schimba cheia si hartia se reface singura.
  */
 export const Obiect = z.object({
-  fel: z.enum(['pdf', 'jpg', 'png']),
+  fel: z.enum(['pdf', 'jpg', 'png', 'json', 'txt']),
   /** Cum se numeste fisierul in atasament: `sfintii-2026-09-13.pdf`. */
   nume: z.string().min(1),
   /** Cum se numeste in vorbe: „Sfinții zilei — duminică, 13 septembrie". */

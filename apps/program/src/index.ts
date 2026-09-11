@@ -32,13 +32,19 @@ import {
   urmatoareaSlujba,
   vecinele,
   vocabularul,
+  arhivaIntreaga,
+  cautaInVocabular,
+  slujbaCurenta,
+  slujbeTrecuteDupaNume,
+  tiparele,
+  urmatoareaDupaNume,
   type RandSaptamana,
 } from './depozit.js'
 import { hartieDinCache, jpgDin, jpgPozaDin, pdfDin, titluSaptamanii } from './foaie.js'
 import { modulActiuni } from '@xc/actiuni'
 import { modulChat } from '@xc/chat'
 import { ACTIUNI } from './actiuni.js'
-import { htmlFoaiaSaptamanii, htmlPozaSaptamanii, htmlSfintiiZilei, saptamanaOriPropunere } from './hartii.js'
+import { htmlFoaiaSaptamanii, htmlPozaSaptamanii, htmlSfintiiZilei, saptamanaOriPropunere, textSaptamanii } from './hartii.js'
 import { LATIME_POZA, type Ctx, type Meniu, paginaArhiva, paginaMesaj, paginaSaptamana } from './pagini.js'
 
 export interface Env {
@@ -290,6 +296,11 @@ async function api(req: Request, env: Env, ctxExec: ExecutionContext, cale: stri
         { adresa: '/v1/zi/<data> · azi · maine', ce_da: 'slujbele unei zile' },
         { adresa: '/v1/azi', ce_da: 'slujbele de azi, cele care mai urmează, și următoarea' },
         { adresa: '/v1/urmatoarea', ce_da: 'următoarea slujbă, cel mult 21 de zile' },
+        { adresa: '/v1/curenta', ce_da: 'slujba în curs acum (a început de cel mult trei ore), pentru live și radio' },
+        { adresa: '/v1/saptamana/<data>.txt', ce_da: 'programul săptămânii ca text simplu, de citit sau de lipit' },
+        { adresa: '/v1/cauta?slujba=', ce_da: 'când se face o slujbă, după nume: următoarea, ultimele dăți, obiceiul' },
+        { adresa: '/v1/paternuri', ce_da: 'tiparele ultimilor doi ani: cât de des, în ce zile, la ce ore se face fiecare slujbă' },
+        { adresa: '/v1/arhiva.json', ce_da: 'tot istoricul: săptămânile și slujbele, din 2014 până azi (mare)' },
         { adresa: '/v1/interval?de_la=&pana_la=', ce_da: 'slujbele și starea săptămânilor atinse (cel mult 366 de zile)' },
         { adresa: '/v1/saptamani?an=', ce_da: 'săptămânile din bază, cea mai nouă prima' },
         { adresa: '/v1/slujbe/vocabular', ce_da: 'cele 29 de nume, cu cod_nume, categorie, activ' },
@@ -303,6 +314,18 @@ async function api(req: Request, env: Env, ctxExec: ExecutionContext, cale: stri
   }
 
   if (cale === '/v1/slujbe/vocabular') return jsonCuEtag(req, { vocabular: lista }, { 'cache-control': 'public, max-age=3600', ...ANTETE_APP })
+
+  // Saptamana ca TEXT — aceeasi functie ca actiunea `program.text_saptamanii`.
+  const mText = /^\/v1\/saptamana\/([^/]+)\.txt$/.exec(cale)
+  if (mText) {
+    const data = dataCeruta(mText[1]!, azi)
+    if (!data) return eroareApi(400, 'data_invalida', 'Data se scrie AAAA-LL-ZZ (sau azi / viitoare).')
+    const luni = luneaSaptamanii(data)
+    const rand = await saptamana(env.DB, luni)
+    if (!rand) return eroareApi(404, 'saptamana_inexistenta', 'Săptămâna nu e în bază.', { de_la: luni, pana_la: adaugaZile(luni, 6) })
+    const text = textSaptamanii(saptamanaDin(rand, await slujbeleSaptamanii(env.DB, luni)))
+    return new Response(text, { status: 200, headers: { 'content-type': 'text/plain; charset=utf-8', ...cache, ...ANTETE_APP } })
+  }
 
   const mSapt = /^\/v1\/saptamana\/([^/]+)$/.exec(cale)
   if (mSapt) {
@@ -322,6 +345,40 @@ async function api(req: Request, env: Env, ctxExec: ExecutionContext, cale: stri
     const rand = await saptamana(env.DB, luni)
     const slujbe = (await slujbeInterval(env.DB, data, data)).map(slujbaDin)
     return jsonCuEtag(req, { data, saptamana: { de_la: luni, pana_la: adaugaZile(luni, 6) }, stare: rand?.stare ?? null, slujbe }, cache)
+  }
+
+  // Slujba in curs, pentru live si radio — aceeasi functie ca actiunea `program.slujba_curenta`.
+  if (cale === '/v1/curenta') {
+    const ora = oraBucuresti()
+    const r = await slujbaCurenta(env.DB, azi, ora)
+    return jsonCuEtag(req, { acum: { data: azi, ora }, slujba: r ? slujbaDin(r) : null }, { 'cache-control': 'public, max-age=60', ...ANTETE_APP })
+  }
+
+  // Cand se face o slujba, dupa nume — aceeasi cautare ca `program.cauta_slujba`.
+  if (cale === '/v1/cauta') {
+    const nume = (url.searchParams.get('slujba') ?? '').trim()
+    if (nume.length < 3) return eroareApi(400, 'cautare_scurta', 'Cer ?slujba= cu cel puțin 3 litere.')
+    const potriviri = cautaInVocabular(lista, nume).slice(0, 3)
+    if (!potriviri.length) return eroareApi(404, 'slujba_necunoscuta', `Nu cunosc nicio slujbă numită „${nume}".`)
+    const tipare = await tiparele(env.DB, azi)
+    const gasite = await Promise.all(
+      potriviri.map(async (v) => ({
+        slujba: { cod_nume: v.cod_nume, nume: v.nume },
+        urmatoarea: await urmatoareaDupaNume(env.DB, v.cod_nume, azi).then((r) => (r ? slujbaDin(r) : null)),
+        trecute: (await slujbeTrecuteDupaNume(env.DB, v.cod_nume, azi, 8)).map(slujbaDin),
+        obicei: tipare.find((t) => t.cod_nume === v.cod_nume) ?? null,
+      })),
+    )
+    return jsonCuEtag(req, { cautat: nume, gasite }, cache)
+  }
+
+  if (cale === '/v1/paternuri') {
+    return jsonCuEtag(req, { azi, tipare: await tiparele(env.DB, azi) }, { 'cache-control': 'public, max-age=3600', ...ANTETE_APP })
+  }
+
+  if (cale === '/v1/arhiva.json') {
+    const a = await arhivaIntreaga(env.DB)
+    return jsonCuEtag(req, { facuta: azi, numar_saptamani: a.saptamani.length, numar_slujbe: a.slujbe.length, ...a }, { 'cache-control': 'public, max-age=3600', ...ANTETE_APP })
   }
 
   if (cale === '/v1/azi' || cale === '/v1/urmatoarea') {

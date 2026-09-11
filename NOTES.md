@@ -218,6 +218,28 @@ propunerea automată, ca în V1.
 
 ### 2026-09-11
 
+- **API-ul programului știe de istoric** (user, 18:41–18:46: „trebuie să adaptăm api-ul și să știe de
+  istoric" — la „Sfântul Maslu" chatul n-avea ce să cheme). Cinci acțiuni noi, toate învelișuri
+  peste `depozit.ts`, fiecare cu perechea ei publică:
+  - `program.slujba_curenta` / `/v1/curenta` — în curs = a început de cel mult **3 ore** și e ultima
+    începută (slujbele au doar oră de început; regulă confirmată de user). Pentru live și radio;
+  - `program.text_saptamanii` / `/v1/saptamana/<data>.txt` — săptămâna ca text simplu;
+  - `program.cauta_slujba` / `/v1/cauta?slujba=` — după NUME („maslu"): următoarea programată, ultimele
+    dăți, obiceiul. Potrivirea pe vocabular e fără diacritice, pe `nume` și `cod_nume`;
+  - `program.paternuri` / `/v1/paternuri` — tiparele ultimilor doi ani, ~4 KB: pentru fiecare slujbă
+    cât de des, în ce zile, la ce ore, ultima, următoarea;
+  - `program.arhiva` / `/v1/arhiva.json` — tot istoricul (654 săptămâni, 2619 slujbe, 1,28 MB); ca
+    acțiune iese **obiect JSON în media**, nu în context.
+  `urmatoarea_slujba` s-a redenumit `slujba_urmatoare`. `Slujba` rămâne obiectul întreg (user: „nu
+  toate câmpurile au sens… dar lasă-le așa acum").
+
+- **Cunoștințe de FUNDAL — cum „știe de istoric" chatul fără să care arhiva.** O acțiune poate purta
+  `fundal: true` (fără argumente, de citire): chat-worker o cheamă ÎNAINTE de orice răspuns, ca
+  serviciu, ține rezultatul o oră în memoria izolatului și îl pune în instrucțiuni. `program.paternuri`
+  e prima. Nu e unealtă de ales (iese din lista modelului), e ce știe dinainte. Regula scrisă modelului:
+  **obiceiul nu e programare** — dacă „următoarea" lipsește, spune că nu e pusă încă, nu „va fi".
+  Probat: „când e Sfântul Maslu?" → marți, 18:00, ultima pe 1 septembrie, din prima.
+
 - **MODUL NOU: Chat (AI) + acțiunile interne ale aplicațiilor** (user, 16:54 și 17:00: „să poată fi
   implementat pe toate aplicațiile din această platformă cu un simplu întrerupător"). Sunt **două
   lucruri separate**, iar despărțirea e miezul: **registrul de acțiuni** (`@xc/actiuni`, ruta

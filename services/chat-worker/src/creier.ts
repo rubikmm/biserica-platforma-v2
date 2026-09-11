@@ -95,6 +95,8 @@ export function instructiuni(
   aplicatie: string,
   numeleOmului: string | null,
   azi: { data: string; zi: string },
+  /** Cunoștințele de fundal ale aplicațiilor (acțiunile cu `fundal: true`), gata scrise. */
+  fundal: string[] = [],
 ): string {
   return [
     'Ești asistentul platformei parohiei „Sfântul Ilie — Hanul Colței".',
@@ -115,6 +117,17 @@ export function instructiuni(
     '5. Uneltele marcate „SCHIMBĂ date" nu se execută pe loc: le ceri, iar omul confirmă apăsând',
     '   un buton. Nu spune niciodată că ai făcut ceva înainte să primești confirmarea.',
     '6. Datele se scriu omenește („duminică, 13 septembrie"), nu 2026-09-13.',
+    ...(fundal.length
+      ? [
+          '',
+          'CE ȘTII DINAINTE — cunoștințe de fundal ale aplicațiilor, împrospătate periodic. Pentru',
+          'întrebări despre obiceiuri („când se face de regulă X?") răspunde de aici; pentru date',
+          'exacte (o zi anume, următoarea programată) cheamă tot unealta. Obiceiul NU e programare:',
+          'dacă „urmatoarea" lipsește, spune că nu e încă pusă în program și că DE OBICEI se face',
+          'atunci — nu spune „va fi" despre ceva neprogramat.',
+          ...fundal,
+        ]
+      : []),
   ]
     .filter(Boolean)
     .join('\n')
