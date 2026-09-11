@@ -440,6 +440,9 @@ importers:
       '@xc/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@xc/chat':
+        specifier: workspace:*
+        version: link:../../packages/chat
       '@xc/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts

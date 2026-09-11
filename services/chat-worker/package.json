@@ -12,6 +12,7 @@
   "dependencies": {
     "@xc/actiuni": "workspace:*",
     "@xc/auth": "workspace:*",
+    "@xc/chat": "workspace:*",
     "@xc/contracts": "workspace:*",
     "@xc/observability": "workspace:*",
     "@xc/ui": "workspace:*",

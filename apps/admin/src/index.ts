@@ -86,6 +86,10 @@ function paginaModule(o: {
       <input type="radio" name="cineVede" value="${valoare}" ${o.c.cineVede === valoare ? 'checked' : ''}>
       <span>${scris} <small>${lamurire}</small></span>
     </label>`
+  const creierul = (valoare: string, scris: string, lamurire: string) => `<label class="bifa">
+      <input type="radio" name="creier" value="${valoare}" ${o.c.creier === valoare ? 'checked' : ''}>
+      <span>${scris} <small>${lamurire}</small></span>
+    </label>`
 
   return pagina({
     ...o.comune,
@@ -105,6 +109,13 @@ ${o.salvat ? alerta('buna', 'Am salvat. Schimbarea se vede în cel mult un minut
   <h4>În care aplicații</h4>
   <table><tbody>${APLICATII_CU_CHAT.map(rand).join('')}</tbody></table>
   <p class="ajutor">Bifa are efect numai acolo unde modulul e montat în cod. Azi: <code>program</code>.</p>
+
+  <h4>De unde vine răspunsul</h4>
+  <div class="trepte">
+    ${creierul('workers-ai', 'Workers AI', 'modelul de la Cloudflare, de-a dreptul')}
+    ${creierul('gateway', 'Workers AI prin AI Gateway', 'aceleași răspunsuri, dar cu loguri, cache și plafon de cost')}
+    ${creierul('fara', 'Fără model', 'doar interfața: bula se deschide, dar nu răspunde nimeni — zero cost')}
+  </div>
 
   <h4>Cine îl vede</h4>
   <div class="trepte">
@@ -169,9 +180,10 @@ export default {
           activ: formular.get('activ') === 'on',
           aplicatii,
           cineVede: String(formular.get('cineVede') ?? 'admini'),
+          creier: String(formular.get('creier') ?? 'workers-ai'),
         })
         await scrieConfigChat(env, nou)
-        log.info('module: comutator schimbat', { activ: nou.activ, cineVede: nou.cineVede, aplicatii: Object.keys(nou.aplicatii) })
+        log.info('module: comutator schimbat', { activ: nou.activ, cineVede: nou.cineVede, creier: nou.creier, aplicatii: Object.keys(nou.aplicatii) })
         return html(paginaModule({ comune: comuneAici, c: nou, csrf: csrf.jeton, salvat: true, prefix }))
       }
 

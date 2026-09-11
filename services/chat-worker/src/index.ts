@@ -27,6 +27,7 @@ import { Obiect } from '@xc/contracts'
 import { aziBucuresti, ZILE_SAPTAMANA, ziuaSaptamanii } from '@xc/ui'
 import { egaleInTimpConstant } from '@xc/auth'
 import { Logger, correlationId } from '@xc/observability'
+import { configChat, type ConfigChat } from '@xc/chat'
 import { intreabaModelul, instructiuni, type EnvCreier, type MesajModel } from './creier.js'
 import {
   conversatia,
@@ -46,6 +47,8 @@ export interface Env extends EnvCreier {
   TIPIC?: Fetcher
   AUDIT?: Fetcher
   SECRET_INTERN?: string
+  /** Comutatoarele modulelor: de aici afla si cu ce creier raspunde (sau daca raspunde fara unul). */
+  CONFIG?: KVNamespace
   MEDIU: string
 }
 
@@ -250,6 +253,17 @@ export default {
       const c = await conversatia(env.DB, userId, cerere.aplicatie ?? '', cerere.conversatieId)
       await scrieMesaj(env.DB, { conversatie_id: c.id, rol: 'om', text: textOm })
 
+      // Cu ce creier raspundem — scris in panoul de admin, citit de aici. `fara` inseamna ca
+      // interfata merge intreaga, dar nimeni nu intreaba niciun model (si nu costa nimic).
+      const comutator: ConfigChat = await configChat(env)
+      if (comutator.creier === 'fara') {
+        const text =
+          'Deocamdată sunt doar interfața: nu sunt legat la niciun model, deci nu pot răspunde la ' +
+          'întrebări. Se aprinde din panoul de administrare, la Module.'
+        await scrieMesaj(env.DB, { conversatie_id: c.id, rol: 'agent', text })
+        return json({ conversatieId: c.id, text, obiecte: [], propunere: null } satisfies RaspunsChat)
+      }
+
       const { unelte, harta } = await adunaUneltele(env, { secret, correlationId: cid })
       const istoric = await mesajeleDin(env.DB, c.id)
 
@@ -266,7 +280,7 @@ export default {
       let textFinal = ''
 
       for (let pas = 0; pas < PASI_MAXIM; pas++) {
-        const r = await intreabaModelul(env, mesaje, unelte)
+        const r = await intreabaModelul(env, mesaje, unelte, comutator.creier)
         textFinal = r.text || textFinal
 
         if (!r.cereri.length) break

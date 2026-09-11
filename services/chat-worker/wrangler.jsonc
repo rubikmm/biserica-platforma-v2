@@ -25,6 +25,11 @@
   // Inteligenta: Workers AI (alegerea utilizatorului, 11.09.2026, pentru cost).
   "ai": { "binding": "AI" },
 
+  // Comutatoarele modulelor: de aici afla chatul daca e pornit si cu ce creier raspunde.
+  "kv_namespaces": [
+    { "binding": "CONFIG", "id": "4fb91926da484c4395160390d5348950" }
+  ],
+
   "d1_databases": [
     {
       "binding": "DB",
@@ -53,6 +58,9 @@
         // SECRET_INTERN se pune cu `wrangler secret put SECRET_INTERN --env staging`
       },
       "ai": { "binding": "AI" },
+      "kv_namespaces": [
+        { "binding": "CONFIG", "id": "4fb91926da484c4395160390d5348950" }
+      ],
       "d1_databases": [
         {
           "binding": "DB",

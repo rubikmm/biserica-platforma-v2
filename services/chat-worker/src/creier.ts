@@ -10,8 +10,19 @@
  */
 
 export interface EnvCreier {
-  AI: { run: (model: string, intrare: Record<string, unknown>) => Promise<unknown> }
+  AI: {
+    run: (
+      model: string,
+      intrare: Record<string, unknown>,
+      optiuni?: Record<string, unknown>,
+    ) => Promise<unknown>
+  }
   MODEL_CHAT?: string
+  /**
+   * Numele porții AI (Cloudflare AI Gateway). Cand e scrisa SI comutatorul cere `gateway`,
+   * cererile trec pe acolo: loguri, cache si plafoane de cost, fara schimbare de cod.
+   */
+  AI_GATEWAY?: string
 }
 
 /**
@@ -164,8 +175,11 @@ export async function intreabaModelul(
   env: EnvCreier,
   mesaje: MesajModel[],
   unelte: UnealtaModel[],
+  prin: 'workers-ai' | 'gateway' = 'workers-ai',
 ): Promise<RaspunsModel> {
   const model = env.MODEL_CHAT || MODEL_IMPLICIT
+  // Poarta AI se cere doar daca e si aleasa, si scrisa; altfel mergem de-a dreptul, ca pana acum.
+  const poarta = prin === 'gateway' && env.AI_GATEWAY ? { gateway: { id: env.AI_GATEWAY } } : undefined
 
   const brut = await env.AI.run(model, {
     messages: mesaje.map((m) => ({
@@ -196,7 +210,7 @@ export async function intreabaModelul(
       : {}),
     max_tokens: 800,
     temperature: 0.2,
-  })
+  }, poarta)
 
   return desface(brut)
 }

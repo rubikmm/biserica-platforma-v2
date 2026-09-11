@@ -13,18 +13,33 @@ export const CHEIE_CONFIG = 'modul:chat'
 
 export type CineVede = 'admini' | 'conturi' | 'toti'
 
+/**
+ * DE UNDE VINE RĂSPUNSUL. Despărțit de „activ" dinadins (user, 11.09.2026: „doar grafica,
+ * afișarea, panoul de control de activare-dezactivare și, abia apoi, cu AI Gateway"):
+ *
+ * - `fara`       — bula, panoul și discuția merg, dar nimeni nu întreabă niciun model. Chatul
+ *                  spune limpede că nu e legat încă. **Zero bani cheltuiți.** Implicit.
+ * - `workers-ai` — Workers AI de-a dreptul, cum a fost probat pe local.
+ * - `gateway`    — tot Workers AI, dar prin AI Gateway (loguri, cache, plafoane de cost).
+ *                  Cere `AI_GATEWAY` scris la chat-worker; până atunci se poartă ca `workers-ai`.
+ *
+ * Implicit: `workers-ai` — modulul pornit înseamnă modul care răspunde.
+ */
+export type Creier = 'fara' | 'workers-ai' | 'gateway'
+
 export interface ConfigChat {
   activ: boolean
   /** Pe ce aplicații se arată. O aplicație nescrisă aici e stinsă. */
   aplicatii: Record<string, boolean>
   cineVede: CineVede
+  creier: Creier
 }
 
 /**
  * STINS peste tot. Un modul nou nu se aprinde singur nicăieri: fiecare aplicație se deschide
  * anume, din admin. (Și: fiecare mesaj costă bani la fiecare apăsare.)
  */
-export const CONFIG_STINS: ConfigChat = { activ: false, aplicatii: {}, cineVede: 'admini' }
+export const CONFIG_STINS: ConfigChat = { activ: false, aplicatii: {}, cineVede: 'admini', creier: 'workers-ai' }
 
 export interface EnvComutator {
   CONFIG?: KVNamespace
@@ -62,7 +77,10 @@ export function normalizeaza(brut: unknown): ConfigChat {
   for (const [nume, pornit] of Object.entries(o.aplicatii ?? {})) aplicatii[nume] = Boolean(pornit)
   const cineVede: CineVede =
     o.cineVede === 'toti' || o.cineVede === 'conturi' || o.cineVede === 'admini' ? o.cineVede : 'admini'
-  return { activ: Boolean(o.activ), aplicatii, cineVede }
+  // Implicit CONECTAT (user, 11.09.2026: „nu am cerut deconectarea - lasă conectat"). `fara` se
+  // cere anume, din panou, cand vrei interfata fara niciun model si fara niciun ban cheltuit.
+  const creier: Creier = o.creier === 'fara' || o.creier === 'gateway' ? o.creier : 'workers-ai'
+  return { activ: Boolean(o.activ), aplicatii, cineVede, creier }
 }
 
 /**
