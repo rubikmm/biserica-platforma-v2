@@ -155,8 +155,6 @@ export function instructiuni(
   fundal: string[] = [],
   /** Îndrumările scrise de administrator în panou — obiceiuri, ton, ce să nu facă. */
   indrumari = '',
-  /** Numele uneltelor pe care le are de fapt (după îngustarea din panou). */
-  unelteDisponibile: string[] = [],
 ): string {
   return [
     'Ești asistentul platformei parohiei „Sfântul Ilie — Hanul Colței".',
@@ -191,13 +189,6 @@ export function instructiuni(
     '   cauta_slujba; „ce sărbătoare / ce zi e" → calendar.ziua; „cine sunt sfinții" → tipic.sfintii_zilei;',
     '   „foaia / PDF / poză" → foaia_* / poza_paginii. Fiecare unealtă are exemple cu argumentele',
     '   gata scrise — potrivește fraza omului cu cel mai apropiat exemplu și copiază-i forma.',
-    ...(unelteDisponibile.length
-      ? [
-          `9. AICI POȚI FACE DOAR ATÂT: ${unelteDisponibile.join(', ')}. Pentru orice altceva (rapoarte,`,
-          '   liste, întrebări despre arhivă, alte aplicații) spune într-o frază că nu e de aici și ce',
-          '   POȚI face — nu încerca să răspunzi din memorie și nu inventa o unealtă.',
-        ]
-      : []),
     ...(indrumari.trim()
       ? [
           '',
@@ -396,6 +387,9 @@ async function intreabaClaude(
  * e, tot ce vine dupa un marcaj de canal se arunca.
  */
 export function curataCanalele(text: string): string {
+  // Gandirea scursa FARA marcaje: textul incepe direct cu numele canalului („analysis We need
+  // to call…"). Vazut la proba din 11.09.2026, 21:10 — e tot bolboroseala, nu raspuns.
+  if (/^\s*(analysis|commentary)\b/.test(text) && !text.includes('<|channel|>final')) return ''
   if (!text.includes('<|')) return text
   const final = text.lastIndexOf('<|channel|>final')
   if (final >= 0) {
@@ -505,11 +499,14 @@ async function intreabaWorkersAi(
     // iesea taiat (11.09.2026). Cand e oprit in mijloc fara sa fi cerut nicio unealta, se mai
     // incearca o data, cu bugetul dublat.
     max_tokens: maxTokens,
-    temperature: 0.2,
+    // 0, nu 0.2: alegerea uneltei trebuie sa fie aceeasi de fiecare data. La probele din 11.09 seara
+    // gpt-oss rata alta fraza la fiecare rulare (13/14, dar alta) — variatie, nu neputinta.
+    temperature: 0,
   })
 
   let r = desface(await env.AI.run(model, cerere(2500), poarta))
-  if (r.taiat && !r.cereri.length) r = desface(await env.AI.run(model, cerere(6000), poarta))
+  // Taiat, sau ramas fara nimic dupa curatarea gandirii: inca o incercare, cu buget dublat.
+  if ((r.taiat || !r.text) && !r.cereri.length) r = desface(await env.AI.run(model, cerere(6000), poarta))
   return r
 }
 

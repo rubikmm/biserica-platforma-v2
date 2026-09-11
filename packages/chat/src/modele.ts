@@ -33,10 +33,12 @@ export const MODELE: readonly ModelDeAles[] = [
   { id: 'claude-sonnet-4-6', nume: 'Claude Sonnet 4.6', grup: 'platit', fel: 'claude', nota: '$3 / $15' },
   { id: 'claude-haiku-4-5', nume: 'Claude Haiku 4.5', grup: 'platit', fel: 'claude', nota: '$1 / $5 — cel mai ieftin și mai rapid' },
   // ------------------------------------------------------------- gratuite (Workers AI)
-  { id: '@cf/openai/gpt-oss-120b', nume: 'gpt-oss-120b', grup: 'gratuit', fel: 'workers-ai', nota: '5/5 la proba uneltelor — cel mai bun dintre cele gratuite' },
-  { id: '@cf/meta/llama-4-scout-17b-16e-instruct', nume: 'Llama 4 Scout 17B', grup: 'gratuit', fel: 'workers-ai', nota: '3/5 la proba uneltelor' },
-  { id: '@cf/zai-org/glm-5.3', nume: 'GLM 5.3', grup: 'gratuit', fel: 'workers-ai', nota: '3/5 la proba uneltelor' },
-  { id: '@cf/zai-org/glm-5.3-flash', nume: 'GLM 5.3 Flash', grup: 'gratuit', fel: 'workers-ai', nota: '3/5 la proba uneltelor, mai rapid' },
+  // Scorurile: „proba uneltelor" = 5 întrebări cu 14 unelte (11.09, după-amiază); „probele de
+  // scriere" = 14 fraze cu DOAR cele două unelte permise, prin bucla reală (11.09, seară).
+  { id: '@cf/zai-org/glm-5.3-flash', nume: 'GLM 5.3 Flash', grup: 'gratuit', fel: 'workers-ai', nota: '14/14 la probele de scriere, rapid — cel mai bun gratuit pe adăugat/modificat' },
+  { id: '@cf/openai/gpt-oss-120b', nume: 'gpt-oss-120b', grup: 'gratuit', fel: 'workers-ai', nota: '13/14 la probele de scriere; 5/5 la proba uneltelor; gândește mult, uneori se bâlbâie' },
+  { id: '@cf/meta/llama-4-scout-17b-16e-instruct', nume: 'Llama 4 Scout 17B', grup: 'gratuit', fel: 'workers-ai', nota: '3/5 la proba uneltelor (cu 14 unelte)' },
+  { id: '@cf/zai-org/glm-5.3', nume: 'GLM 5.3', grup: 'gratuit', fel: 'workers-ai', nota: '3/5 la proba uneltelor (cu 14 unelte)' },
   { id: '@cf/deepseek-ai/deepseek-v4-flash-0731', nume: 'DeepSeek V4 Flash', grup: 'gratuit', fel: 'workers-ai', nota: '3/5 la proba uneltelor' },
   { id: '@cf/qwen/qwen3-30b-a3b-fp8', nume: 'Qwen3 30B', grup: 'gratuit', fel: 'workers-ai', nota: '2/5 la proba uneltelor' },
   { id: '@cf/openai/gpt-oss-20b', nume: 'gpt-oss-20b', grup: 'gratuit', fel: 'workers-ai', nota: 'neprobat; fratele mic al lui 120b' },

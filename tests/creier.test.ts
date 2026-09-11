@@ -21,6 +21,11 @@ describe('canalele modelului', () => {
     expect(curataCanalele(brut)).toBe('Am pregătit schimbarea.')
   })
 
+  it('gândirea scursă FĂRĂ marcaj (începe cu „analysis") se aruncă și ea', () => {
+    expect(curataCanalele('analysis  We need to call program__adauga_s arguments: {" zi":"joi?')).toBe('')
+    expect(curataCanalele('Analysis: programul e gata.')).toBe('Analysis: programul e gata.')
+  })
+
   it('text bun urmat de un marcaj rătăcit păstrează textul bun', () => {
     expect(curataCanalele('Gata, am pregătit.<|channel|>analysis and now…')).toBe('Gata, am pregătit.')
   })

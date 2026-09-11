@@ -221,6 +221,14 @@ propunerea automată, ca în V1.
 
 ### 2026-09-11
 
+- **Măsurat, cu hățurile puse (setul de 14 probe, doar `modifica_slujba` + `adauga_slujba`)**:
+  **glm-5.3-flash 14/14** (98 s), **gpt-oss-120b 13/14** (86 s; ratarea se mută de la o rulare la
+  alta — variație, de aceea temperatura la Workers AI e acum 0; și gândirea lui se scurge uneori
+  în text fără marcaj, „analysis …" — prinsă și ea, cu reîncercare). Concluzia userului se
+  confirmă: cu propunerea bună (fără model) și două unelte limpezi, **un model gratuit ajunge**.
+  Scorurile stau în lista din panou (`@xc/chat/modele.ts`). Rerulează probele la orice lărgire a
+  listei de unelte — modelele mici cad exact acolo.
+
 - **„Antrenamentul" pentru modelele gratuite** (user, 21:04–21:08: „un câmp de instrucțiuni pe care
   să-l pot scrie eu… ai putea să faci tu acest antrenament?… scurtează lista de unelte, pune
   restricții… practic doar trebuie adăugate slujbe și modificate"). Nu e reantrenare — sunt patru
