@@ -303,10 +303,16 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
     efect: 'citeste',
     fundal: true,
     intrare: z.object({}),
-    iesire: z.object({ azi: z.string(), tipare: z.array(z.any()) }),
+    iesire: z.object({ azi: z.string(), text: z.string(), tipare: z.array(z.any()) }),
     async executa(_a, c) {
       const azi = aziBucuresti()
-      return { azi, tipare: await tiparele(c.env.DB, azi) }
+      const tipare = await tiparele(c.env.DB, azi)
+      // `text` e ce citeste modelul: randuri simple, nu JSON. Masurat 11.09.2026 — JSON-ul cu
+      // diacritice il incurca (citea „UUTrenia L liturgie") si se pierdea in el in loc sa cheme unealta.
+      const text = tipare
+        .map((t) => `- ${t.nume}: de ${t.aparitii} ori în 2 ani; zile: ${t.zile.map(([z, n]) => `${z} (${n})`).join(', ')}; ore: ${t.ore.map(([o, n]) => `${o} (${n})`).join(', ')}; ultima ${t.ultima ?? '—'}; următoarea programată ${t.urmatoarea ?? 'niciuna'}`)
+        .join('\n')
+      return { azi, text, tipare }
     },
   }),
 

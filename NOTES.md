@@ -218,6 +218,15 @@ propunerea automată, ca în V1.
 
 ### 2026-09-11
 
+- **⚠️ Gândirea modelului scursă la om** (user, 19:27, cu exemplu: „<|channel|>analysis We need to
+  modify slujba of Monday…"). gpt-oss vorbește în canale (Harmony): `analysis` = gândirea, `final` =
+  răspunsul. Cu `max_tokens: 800`, fundal + zece unelte + română, gândirea singură trecea de buget,
+  modelul era oprit la mijloc și marcajul de canal ajungea în text. Trei apărări în `creier.ts`:
+  `curataCanalele` (rămâne doar canalul `final`; fără el, tot ce e după un marcaj se aruncă),
+  buget 2500 cu reîncercare la 6000 când e tăiat fără să fi cerut o unealtă, iar `reasoning` nu e
+  niciodată luat drept răspuns. Și paternurile intră acum în context ca **text**, nu JSON —
+  JSON-ul cu diacritice îl încurca („UUTrenia L liturgie"). 88 de teste, 7 noi pe canale.
+
 - **Partea EXECUTIVĂ: chatul scrie în program** (user, 19:00, cu poza chatului care spunea „nu pot
   modifica"). Programul V2 n-avea NICIUN drum de scriere (`/admin` scos, propunerea din zbor). Acum
   sunt cinci funcții în `depozit.ts` — `scrieSaptamana`, `modificaSlujba`, `adaugaSlujba`,

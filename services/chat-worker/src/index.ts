@@ -149,7 +149,10 @@ async function adunaUneltele(
           prin: 'chat',
         }).then((r) => {
           if (!r.ok) return
-          const text = `${descriere.nume} — ${descriere.descriere}\n${JSON.stringify(r.date).slice(0, TAIERE_FUNDAL)}`
+          // O actiune de fundal care isi scrie singura `text` stie mai bine decat noi cum se citeste.
+          const corp = (r.date as { text?: unknown })?.text
+          const scris = typeof corp === 'string' ? corp : JSON.stringify(r.date)
+          const text = `${descriere.nume} — ${descriere.descriere}\n${scris.slice(0, TAIERE_FUNDAL)}`
           FUNDAL.set(cheie, { la: Date.now(), text })
           fundal.push(text)
         }),

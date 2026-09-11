@@ -77,6 +77,8 @@ export interface CerereUnealta {
 export interface RaspunsModel {
   text: string
   cereri: CerereUnealta[]
+  /** Modelul a fost oprit de `max_tokens` inainte sa termine (`finish_reason: length`). */
+  taiat: boolean
 }
 
 const ROLURI: Record<RolMesaj, string> = {
@@ -142,9 +144,31 @@ export function instructiuni(
     .join('\n')
 }
 
+/**
+ * gpt-oss vorbeste in „canale" (Harmony): `analysis` e gandirea, `final` e raspunsul. Workers AI
+ * le desparte de obicei (`reasoning` / `content`), dar cand modelul e oprit de `max_tokens` in
+ * mijlocul gandirii, marcajul `<|channel|>analysis…` poate ajunge in `content` — si asa a ajuns la
+ * om o pagina de bolboroseala (11.09.2026, seara). Aici se pastreaza doar canalul `final`; daca nu
+ * e, tot ce vine dupa un marcaj de canal se arunca.
+ */
+export function curataCanalele(text: string): string {
+  if (!text.includes('<|')) return text
+  const final = text.lastIndexOf('<|channel|>final')
+  if (final >= 0) {
+    const dupa = text.slice(final)
+    const mesaj = dupa.indexOf('<|message|>')
+    return (mesaj >= 0 ? dupa.slice(mesaj + '<|message|>'.length) : '').replace(/<\|[a-z_]+\|>/g, '').trim()
+  }
+  const canal = text.indexOf('<|channel|>')
+  const curat = (canal >= 0 ? text.slice(0, canal) : text).replace(/<\|[a-z_]+\|>/g, '').trim()
+  return curat
+}
+
 /** Ce a răspuns modelul, indiferent de forma în care a răspuns. */
-function desface(brut: unknown): RaspunsModel {
+export function desface(brut: unknown): RaspunsModel {
   const r = (brut ?? {}) as Record<string, unknown>
+  const alegere = (r.choices as Array<{ finish_reason?: string }> | undefined)?.[0]
+  const taiat = alegere?.finish_reason === 'length'
 
   // Textul: `response` e forma Workers AI; unele modele îl dau ca obiect cu `response.text`,
   // altele în stil OpenAI (`choices[0].message.content`).
@@ -190,7 +214,7 @@ function desface(brut: unknown): RaspunsModel {
     cereri.push({ nume, argumente, ...(id ? { id } : {}) })
   }
 
-  return { text: text.trim(), cereri }
+  return { text: curataCanalele(text), cereri, taiat }
 }
 
 export async function intreabaModelul(
@@ -203,7 +227,7 @@ export async function intreabaModelul(
   // Poarta AI se cere doar daca e si aleasa, si scrisa; altfel mergem de-a dreptul, ca pana acum.
   const poarta = prin === 'gateway' && env.AI_GATEWAY ? { gateway: { id: env.AI_GATEWAY } } : undefined
 
-  const brut = await env.AI.run(model, {
+  const cerere = (maxTokens: number): Record<string, unknown> => ({
     messages: mesaje.map((m) => ({
       role: ROLURI[m.rol],
       content: m.text,
@@ -230,9 +254,15 @@ export async function intreabaModelul(
           })),
         }
       : {}),
-    max_tokens: 800,
+    // Modelul GANDESTE din bugetul asta (gpt-oss: canalul de analiza). 800 ajungeau pentru o
+    // intrebare; cu fundal + zece unelte + romana, gandirea singura trecea de atat si raspunsul
+    // iesea taiat (11.09.2026). Cand e oprit in mijloc fara sa fi cerut nicio unealta, se mai
+    // incearca o data, cu bugetul dublat.
+    max_tokens: maxTokens,
     temperature: 0.2,
-  }, poarta)
+  })
 
-  return desface(brut)
+  let r = desface(await env.AI.run(model, cerere(2500), poarta))
+  if (r.taiat && !r.cereri.length) r = desface(await env.AI.run(model, cerere(6000), poarta))
+  return r
 }
