@@ -267,6 +267,11 @@ body.cu-calendar .zi { display:grid; grid-template-columns:minmax(0,1fr) minmax(
                        column-gap:26px; align-items:start }
 body.cu-calendar .zi .prog { min-width:0 }
 body.cu-calendar .cal { display:block; min-width:0; padding:0 0 0 18px; border-left:1px solid var(--rule) }
+/* ⚠️ Zilele rosii CU slujbe — duminicile si sarbatorile cu cruce rosie — raman pe O SINGURA coloana,
+   cat e pagina de lata (user, 11.09.2026): programul lor spune deja sarbatoarea si sfintii, pe
+   randurile „→" ale slujbei de dimineata. Coloana din dreapta nici nu se mai scrie (vezi ziuaHtml);
+   aici doar se desface grila, ca programul sa nu ramana ingramadit in jumatatea stanga. */
+body.cu-calendar .zi.fara-cal { display:block }
 /* capul coloanei: numele zilei, cu aceleasi masuri ca titlul din stanga, ca cele doua sa stea pe
    aceeasi linie (cerere user, 10.09.2026 — titlu deasupra fiecarei liste, chiar daca se repeta) */
 /* 10px sub titlu, ca in stanga: acolo h3 sta intr-un flex (.zi-cap), deci marginea lui de jos (4px) nu
@@ -283,11 +288,8 @@ body.cu-calendar .cal { display:block; min-width:0; padding:0 0 0 18px; border-l
                           border-left:3px solid var(--rule); border-radius:0 8px 8px 0 }
   .cal-zi { display:none }
   .zi.goala .cal-zi { display:block; margin:0 0 6px }
-  /* In zilele rosii CU slujbe — duminicile si sarbatorile — programul spune deja sarbatoarea si sfintii,
-     pe randurile „→" ale slujbei de dimineata. Pe telefon, unde calendarul sta sub program, ar veni a
-     doua oara imediat dedesubt: nu se mai scrie (user, 10.09.2026). Zilele rosii FARA slujbe raman —
-     acolo calendarul e singurul care spune ce zi e. */
-  body.cu-calendar .zi.rosie:not(.goala) .cal { display:none }
+  /* (Zilele rosii CU slujbe n-au nevoie aici de nicio regula: de la 11.09.2026 coloana lor nu se mai
+     scrie nicaieri — vezi ziuaHtml. Pana atunci se ascundea doar pe telefon.) */
 }
 /* In coloana calendarului, SFINTII stau unul sub altul, cu sageata in fata — ca randurile „→" ale
    slujbelor (cerere user, 10.09.2026: „cel mai mult mă interesează sfinții… pune-le cu săgeată, așa
@@ -718,8 +720,18 @@ function ziuaHtml(o: {
   const maine = o.cal?.zile.get(adaugaZile(o.data, 1))
   const zs = ziuaSaptamanii(o.data)
   const duminica = zs === 0
-  const clase = ['zi', o.data === o.azi ? 'azi' : '', duminica || (z && ziRosie(z)) ? 'rosie' : '',
-    o.slujbe.length ? '' : 'goala', o.ultima ? 'ultima' : ''].filter(Boolean).join(' ')
+  const rosie = duminica || (!!z && ziRosie(z))
+  // ⚠️ ZILELE ROSII CU SLUJBE NU SE MAI IMPART IN DOUA (user, 11.09.2026: „la vizualizarea dublată a
+  // zilei de duminică să nu se mai afișeze text deloc în partea dreaptă… la fel și la sărbătorile cu
+  // cruce roșie, care în mod sigur deja au slujba setată"). Programul lor spune deja sarbatoarea si
+  // sfintii, pe randurile „→" ale slujbei de dimineata — coloana calendarului ar scrie a doua oara
+  // acelasi lucru. Pana acum regula era doar pe telefon (ascunsa din CSS); acum coloana nici nu se mai
+  // scrie, iar ziua ia toata latimea (clasa `fara-cal`). Se vede la fel in pagina si in POZA.
+  // Zilele rosii FARA slujbe raman impartite: acolo calendarul e singurul care spune ce zi e.
+  const cuCal = o.cuCalendar && !(rosie && o.slujbe.length > 0)
+  const clase = ['zi', o.data === o.azi ? 'azi' : '', rosie ? 'rosie' : '',
+    o.slujbe.length ? '' : 'goala', o.cuCalendar && !cuCal ? 'fara-cal' : '',
+    o.ultima ? 'ultima' : ''].filter(Boolean).join(' ')
   const randuri = o.slujbe.map((s) => slujbaHtml(s, o.vocabular, z, maine, o.dinCalendar, o.granita)).join('\n')
   // „Sfinții zilei" numai duminica si numai in anul in curs (vezi butonSfintii); in zilele fara slujbe
   // nu se scrie nici capul zilei, deci nici butonul.
@@ -732,7 +744,7 @@ function ziuaHtml(o: {
     ${cap}
     ${randuri}
   </div>
-  ${o.cuCalendar ? calendarulZilei(z, o.data) : ''}
+  ${cuCal ? calendarulZilei(z, o.data) : ''}
 </section>`
 }
 
@@ -976,8 +988,8 @@ ${luni || '<p class="gol">Niciun program în anul acesta.</p>'}</section>`
     ...comune(o.ctx),
     titluPagina: 'Arhiva',
     ...antetul(o.ctx, { ...o.meniu, arhiva: true }),
-    corp: `<h2>Arhiva programelor</h2>
-<p class="marunt">${o.total} săptămâni, din ${o.deLa ? esc(o.deLa.slice(0, 4)) : '—'} până azi. Importate din site-ul vechi; se completează de aici înainte.</p>
+    corp: `<h2>Arhiva</h2>
+<p class="marunt">${o.total} săptămâni, din ${o.deLa ? esc(o.deLa.slice(0, 4)) : '—'} până azi.</p>
 ${butoane}
 ${bloc}`,
   })

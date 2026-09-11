@@ -204,6 +204,19 @@ propunerea automată, ca în V1.
 
 ### 2026-09-11
 
+- **Zilele roșii cu slujbe nu se mai împart în două coloane** (user: „la vizualizarea dublată a zilei
+  de duminică să nu se mai afișeze text deloc în partea dreaptă… la fel și la sărbătorile cu cruce
+  roșie, care în mod sigur deja au slujba setată"). Duminicile și zilele cu cruce roșie **care au
+  slujbe** rămân pe o singură coloană, cât e pagina de lată: programul lor spune deja sărbătoarea și
+  sfinții, pe rândurile „→" ale slujbei de dimineață, iar coloana calendarului le scria a doua oară.
+  Coloana **nici nu se mai scrie** (`cuCal` în `ziuaHtml`), iar ziua poartă clasa `fara-cal`, care
+  desface grila de două coloane. Zilele roșii **fără** slujbe rămân împărțite — acolo calendarul e
+  singurul care spune ce zi e. Regula exista din 10.09, dar numai pe telefon (ascunsă din CSS);
+  acum e peste tot, **și în poza JPEG** — poza folosește aceeași `zileleSaptamanii` și același stil,
+  deci n-a fost nimic de făcut separat pentru ea. Publicat pe staging (program 0.4.1).
+- **Pagina arhivei**: titlul e acum doar „Arhiva", iar sub el a rămas doar numărătoarea („654
+  săptămâni, din 2014 până azi") — propoziția „Importate din site-ul vechi; se completează de aici
+  înainte" a ieșit la cererea userului.
 - **Probele pe roluri, mai simple** (trei cereri ale userului, plus una pe parcurs). **Banda roșie
   de jos a ieșit cu totul** („să dispară banner-ul de jos. Nu am nevoie de el"), iar semnele ei s-au
   mutat în meniul de cont: **numele contului din antet e scris roșu** cât timp porți o mască, iar
