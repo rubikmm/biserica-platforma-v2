@@ -269,6 +269,20 @@ propunerea automată, ca în V1.
   bază; „trimite-mi foaia cu sfinții de duminică" → PDF de 54 KB făcut prin Browser Rendering, așezat
   în R2 și descărcat prin `/program/chat/fisier/<cheie>`. Bula e în pagină, cu salutul cerut.
 
+- **⚠️ Două lucruri prinse abia la proba cap-coadă** (11.09.2026, seara):
+  1. **Rezultatul unei unelte trebuie să poarte `tool_call_id`**, iar apelurile cerute trebuie puse
+     înapoi în istoric ca mesaj al agentului. Fără ele, modelul primește rezultate care nu se leagă
+     de nicio cerere de-a lui și **tace** — chatul răspundea „N-am reușit să duc asta la capăt".
+  2. **Un răspuns prea mare rupe totul**: `calendar.cauta` întorcea ziua liturgică întreagă pentru
+     fiecare potrivire; tăiat la 2500 de caractere înainte de model, JSON-ul se rupea la mijloc și
+     modelul tăcea la fel. Acum dă doar data, denumirea și rangul, cel mult zece zile. **Regula
+     pentru acțiunile noi: răspunde cu ce se poate citi, nu cu tot ce ai.**
+
+- **⚠️ `wrangler dev` nu se mai vede ca „wrangler dev" în `ps`** — procesul se numește
+  **`MainThread`** (`ps -eo pid,ppid,comm`). Verificarea veche (`ps -ef | grep -c "[w]rangler dev"`)
+  dă **0** deși sesiunea rulează, iar pornirea următoare cade cu „Address already in use (8787)".
+  La repornire: caută `MainThread` ȘI `workerd`, omoară întâi părintele, apoi copiii.
+
 - **⚠️ `pnpm dev` cere de acum tokenul Cloudflare în mediu**: binding-ul `ai` n-are variantă locală,
   wrangler face proxy spre Cloudflare și cade cu „Failed to start the remote proxy session" fără el.
   Pornire: `set -a; . /backup/_setup/cloudflare.env; set +a; pnpm dev`.

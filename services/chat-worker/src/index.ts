@@ -271,12 +271,16 @@ export default {
 
         if (!r.cereri.length) break
 
+        // Apelurile cerute intra in istoric ca mesaj al agentului: raspunsurile uneltelor trebuie
+        // sa atarne de ele, altfel modelul primeste rezultate fara intrebare si tace.
+        mesaje.push({ rol: 'agent', text: r.text, apeluri: r.cereri })
+
         for (const cerut of r.cereri) {
           // Numele traduse (cu `__`) sunt cele trimise modelului, dar unele modele raspund
           // totusi cu numele canonic — se cauta si asa, ca sa nu cada cererea degeaba.
           const unde = harta.get(cerut.nume) ?? harta.get(numeUnealta(cerut.nume))
           if (!unde) {
-            mesaje.push({ rol: 'unealta', text: `Nu există unealta ${cerut.nume}.`, numeUnealta: cerut.nume })
+            mesaje.push({ rol: 'unealta', text: `Nu există unealta ${cerut.nume}.`, numeUnealta: cerut.nume, idApel: cerut.id })
             continue
           }
 
@@ -304,12 +308,13 @@ export default {
               rol: 'unealta',
               text: `Nu a mers (${rez.cod}): ${rez.mesaj}`,
               numeUnealta: cerut.nume,
+              idApel: cerut.id,
             })
             continue
           }
           const rezumat = rezumaRezultat(rez.date)
           if (rezumat.obiect) obiecte.push(rezumat.obiect)
-          mesaje.push({ rol: 'unealta', text: rezumat.text, numeUnealta: cerut.nume })
+          mesaje.push({ rol: 'unealta', text: rezumat.text, numeUnealta: cerut.nume, idApel: cerut.id })
         }
 
         if (propunere) break

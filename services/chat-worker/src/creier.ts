@@ -38,6 +38,16 @@ export interface MesajModel {
   text: string
   /** Numai la `rol: 'unealta'`: care unealtă a răspuns. */
   numeUnealta?: string
+  /**
+   * ⚠️ Numai la `rol: 'unealta'`: id-ul apelului la care răspunde.
+   *
+   * Fără el, modelul primește un rezultat care nu se leagă de nicio cerere de-a lui și TACE —
+   * răspunsul vine gol, iar chatul spunea „N-am reușit să duc asta la capăt" (pățit 11.09.2026,
+   * la a doua rundă model→unealtă→model).
+   */
+  idApel?: string
+  /** Numai la `rol: 'agent'`: apelurile pe care le-a cerut, puse înapoi în istoric ca atare. */
+  apeluri?: CerereUnealta[]
 }
 
 export interface UnealtaModel {
@@ -49,6 +59,8 @@ export interface UnealtaModel {
 export interface CerereUnealta {
   nume: string
   argumente: Record<string, unknown>
+  /** Id-ul dat de model apelului; se dă înapoi la răspuns (`tool_call_id`). */
+  id?: string
 }
 
 export interface RaspunsModel {
@@ -141,7 +153,8 @@ function desface(brut: unknown): RaspunsModel {
     } else if (a && typeof a === 'object') {
       argumente = a as Record<string, unknown>
     }
-    cereri.push({ nume, argumente })
+    const id = typeof o.id === 'string' ? o.id : undefined
+    cereri.push({ nume, argumente, ...(id ? { id } : {}) })
   }
 
   return { text: text.trim(), cereri }
@@ -159,6 +172,19 @@ export async function intreabaModelul(
       role: ROLURI[m.rol],
       content: m.text,
       ...(m.numeUnealta ? { name: m.numeUnealta } : {}),
+      // Perechea cerere–răspuns, așa cum o așteaptă API-ul: mesajul `assistant` își poartă
+      // apelurile, iar fiecare `tool` spune la care apel răspunde. Fără ele, a doua rundă
+      // se pierde și modelul tace.
+      ...(m.idApel ? { tool_call_id: m.idApel } : {}),
+      ...(m.apeluri?.length
+        ? {
+            tool_calls: m.apeluri.map((a, i) => ({
+              id: a.id ?? `apel-${i}`,
+              type: 'function',
+              function: { name: a.nume, arguments: JSON.stringify(a.argumente ?? {}) },
+            })),
+          }
+        : {}),
     })),
     ...(unelte.length
       ? {
