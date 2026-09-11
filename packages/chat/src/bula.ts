@@ -22,6 +22,9 @@ export const IC_BULA = `<svg viewBox="0 0 24 24" width="26" height="26" fill="no
 
 const IC_X = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>`
 
+/** Discutie NOUA (user, 11.09.2026, 21:33): un plus intr-o bula. Cea veche ramane pe server. */
+const IC_NOUA = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.5 9.5 0 0 1-2.9-.4L4 21l1.4-4.1A8.2 8.2 0 0 1 3.6 11.5 8.4 8.4 0 0 1 12 3.1a8.4 8.4 0 0 1 9 8.4z"/><path d="M12 8.5v6M9 11.5h6"/></svg>`
+
 const IC_COS = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/></svg>`
 
 const IC_TRIMITE = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg>`
@@ -115,6 +118,7 @@ export function bulaHtml(o: { prefix: string; titlu?: string }): string {
   <div class="xc-chat-panou" role="dialog" aria-label="${titlu}">
     <div class="xc-chat-cap">
       <b>${titlu}</b>
+      <button type="button" data-xc="noua" title="Discuție nouă" aria-label="Discuție nouă">${IC_NOUA}</button>
       <button type="button" data-xc="sterge" title="Șterge discuția" aria-label="Șterge discuția">${IC_COS}</button>
       <button type="button" data-xc="strange" title="Strânge" aria-label="Strânge chatul">${IC_X}</button>
     </div>
@@ -230,7 +234,17 @@ export const JS_CHAT = `(function(){
     if (ce === 'deschide') deschide();
     else if (ce === 'strange') strange();
     else if (ce === 'sterge') sterge();
+    else if (ce === 'noua') noua();
   });
+
+  // Discutie noua: firul de pe ecran se goleste si urmatorul mesaj deschide alta discutie pe
+  // server. Cea veche NU se sterge si nu se ascunde — ramane, de referinta.
+  function noua(){
+    idConv = null; incarcat = true;
+    try { localStorage.removeItem(CHEIE_ID); } catch(e){}
+    fir.innerHTML = '<div class="xc-chat-m agent">' + ${JSON.stringify(SALUT)} + '</div>';
+    camp.focus();
+  }
 
   function sterge(){
     if (!confirm('Ștergi discuția?')) return;

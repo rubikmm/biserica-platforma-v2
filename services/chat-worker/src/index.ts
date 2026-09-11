@@ -224,6 +224,8 @@ export default {
     const userId = actor.fel === 'utilizator' ? actor.principal.userId : ''
     const log = new Logger({ service: SERVICIU, correlationId: cid })
     const secret = env.SECRET_INTERN!
+    /** Discutia in lucru, ca o eroare sa se poata scrie in ea (toate se pastreaza, si erorile). */
+    let discutiaInLucru: string | null = null
 
     try {
       // -------------------------------------------------------------- istoricul
@@ -301,6 +303,7 @@ export default {
       if (!textOm) return json({ ok: false, mesaj: 'mesaj gol' }, 400)
 
       const c = await conversatia(env.DB, userId, cerere.aplicatie ?? '', cerere.conversatieId)
+      discutiaInLucru = c.id
       await scrieMesaj(env.DB, { conversatie_id: c.id, rol: 'om', text: textOm })
 
       // Cu ce creier raspundem — scris in panoul de admin, citit de aici. `fara` inseamna ca
@@ -327,6 +330,8 @@ export default {
 
       const obiecte: Obiect[] = []
       const unelteChemate: string[] = []
+      /** Pentru referinta si antrenament: fiecare apel cu argumentele lui si cum a iesit. */
+      const apeluri: Array<{ nume: string; argumente: unknown; rezultat: string }> = []
       let propunere: RaspunsChat['propunere'] = null
       let textFinal = ''
 
@@ -346,6 +351,7 @@ export default {
           // totusi cu numele canonic — se cauta si asa, ca sa nu cada cererea degeaba.
           const unde = harta.get(cerut.nume) ?? harta.get(numeUnealta(cerut.nume))
           if (!unde) {
+            apeluri.push({ nume: cerut.nume, argumente: cerut.argumente, rezultat: 'necunoscuta' })
             mesaje.push({ rol: 'unealta', text: `Nu există unealta ${cerut.nume}.`, numeUnealta: cerut.nume, idApel: cerut.id })
             continue
           }
@@ -360,6 +366,7 @@ export default {
               correlationId: cid,
               prin: 'chat',
             })
+            apeluri.push({ nume: unde.nume, argumente: cerut.argumente, rezultat: prev.ok ? 'propusa' : `previzualizare: ${prev.cod}` })
             if (!prev.ok) {
               mesaje.push({
                 rol: 'unealta',
@@ -391,6 +398,7 @@ export default {
             correlationId: cid,
             prin: 'chat',
           })
+          apeluri.push({ nume: unde.nume, argumente: cerut.argumente, rezultat: rez.ok ? 'ok' : rez.cod })
           if (!rez.ok) {
             mesaje.push({
               rol: 'unealta',
@@ -423,14 +431,23 @@ export default {
         conversatie_id: c.id,
         rol: 'agent',
         text: textFinal,
-        date: { obiecte, propunere },
+        // Ce se pastreaza langa raspuns: hartiile si propunerea (pentru redeschiderea panoului),
+        // plus modelul si apelurile lui (pentru referinta si antrenament — user, 11.09.2026).
+        date: { obiecte, propunere, model: comutator.model, apeluri },
       })
 
       const raspuns: RaspunsChat = { conversatieId: c.id, text: textFinal, obiecte, propunere, unelte: unelteChemate }
       return json(raspuns)
     } catch (e) {
-      log.error('chat cazut', { eroare: e instanceof Error ? e.message : String(e) })
-      return json({ ok: false, text: 'S-a împiedicat ceva la mine. Mai încearcă o dată.' }, 500)
+      const detaliu = e instanceof Error ? e.message : String(e)
+      log.error('chat cazut', { eroare: detaliu })
+      const text = 'S-a împiedicat ceva la mine. Mai încearcă o dată.'
+      // Si erorile se pastreaza in discutie (user, 11.09.2026: „le-aș salva pe toate - chiar și
+      // erorile") — la export se vede exact unde si de ce a cazut.
+      if (discutiaInLucru) {
+        await scrieMesaj(env.DB, { conversatie_id: discutiaInLucru, rol: 'agent', text, date: { eroare: detaliu } }).catch(() => undefined)
+      }
+      return json({ ok: false, conversatieId: discutiaInLucru, text }, 500)
     }
   },
 }

@@ -9,6 +9,8 @@ export interface Conversatie {
   aplicatie: string
   creata_la: string
   ultimul_la: string
+  /** Ascunsa de om (cosul din bula); ramane in baza pentru probe si antrenament. */
+  stearsa_la: string | null
 }
 
 export type RolScris = 'om' | 'agent' | 'unealta'
@@ -45,7 +47,7 @@ export async function conversatia(
 ): Promise<Conversatie> {
   if (id) {
     const gasita = await db
-      .prepare('SELECT * FROM conversatii WHERE id = ?1 AND user_id = ?2')
+      .prepare('SELECT * FROM conversatii WHERE id = ?1 AND user_id = ?2 AND stearsa_la IS NULL')
       .bind(id, userId)
       .first<Conversatie>()
     if (gasita) return gasita
@@ -56,6 +58,7 @@ export async function conversatia(
     aplicatie,
     creata_la: acum(),
     ultimul_la: acum(),
+    stearsa_la: null,
   }
   await db
     .prepare('INSERT INTO conversatii (id, user_id, aplicatie, creata_la, ultimul_la) VALUES (?1, ?2, ?3, ?4, ?5)')
@@ -158,17 +161,14 @@ export async function inchidePropunerea(db: D1Database, id: string, stare: Propu
   await db.prepare('UPDATE propuneri SET stare = ?2 WHERE id = ?1').bind(id, stare).run()
 }
 
-/** Omul își poate șterge discuția. Mesajele și propunerile cad odată cu ea. */
+/**
+ * Omul își „șterge" discuția: ea dispare pentru el (nu se mai redeschide), dar RĂMÂNE în bază —
+ * toate discuțiile se păstrează, de referință și pentru antrenament (user, 11.09.2026).
+ */
 export async function stergeConversatia(db: D1Database, id: string, userId: string): Promise<boolean> {
-  const a = await db
-    .prepare('SELECT id FROM conversatii WHERE id = ?1 AND user_id = ?2')
-    .bind(id, userId)
-    .first<{ id: string }>()
-  if (!a) return false
-  await db.batch([
-    db.prepare('DELETE FROM propuneri WHERE conversatie_id = ?1').bind(id),
-    db.prepare('DELETE FROM mesaje WHERE conversatie_id = ?1').bind(id),
-    db.prepare('DELETE FROM conversatii WHERE id = ?1').bind(id),
-  ])
-  return true
+  const r = await db
+    .prepare('UPDATE conversatii SET stearsa_la = ?3 WHERE id = ?1 AND user_id = ?2 AND stearsa_la IS NULL')
+    .bind(id, userId, acum())
+    .run()
+  return (r.meta?.changes ?? 0) > 0
 }

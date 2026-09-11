@@ -221,6 +221,18 @@ propunerea automată, ca în V1.
 
 ### 2026-09-11
 
+- **Toate discuțiile se păstrează, și erorile** (user, 21:33–21:34: „să ții minte toate
+  conversațiile — și de referință și ca să mai facem training… le-aș salva pe toate, chiar și
+  erorile"). Migrația `chat/0002_pastrare.sql`: `conversatii.stearsa_la` — coșul din bulă **ascunde**
+  (nu se mai redeschide omului), nu șterge. În mesajul agentului se păstrează acum `model` și
+  `apeluri` (unealta, argumentele, cum a ieșit: ok / propusa / cod de eroare); o cădere a chatului
+  se scrie și ea în discuție (`date.eroare`). Export: `node infrastructure/eval/discutii.mjs
+  --remote --env staging > discutii.jsonl` — un rând pe discuție, cu mesaje, apeluri și propuneri
+  (stare făcută/refuzată/expirată); de aici se scot probe noi pentru `chat.mjs`.
+- **Bula: după o acțiune făcută, pagina se reîncarcă** (user, 21:32: „nu a reîncărcat pagina") —
+  discuția stă pe server, panoul se redeschide unde era. **Iconiță de discuție nouă** lângă coș
+  (user, 21:33); cea veche rămâne pe server.
+
 - **Măsurat, cu hățurile puse (setul de 14 probe, doar `modifica_slujba` + `adauga_slujba`)**:
   **glm-5.3-flash 14/14** (98 s), **gpt-oss-120b 13/14** (86 s; ratarea se mută de la o rulare la
   alta — variație, de aceea temperatura la Workers AI e acum 0; și gândirea lui se scurge uneori
