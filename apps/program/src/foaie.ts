@@ -4,6 +4,7 @@
  * autonom (fonturile si imaginile inglobate); PDF-ul/JPG-ul le face Browser Rendering.
  */
 import type { IntrareVocabular, Slujba } from '@xc/contracts'
+import type { SfintiiDinMinei } from './tipic.js'
 import { LUNI, ZILE_SAPTAMANA, esc, dataLunga, intervalLizibil, adaugaZile, ziuaSaptamanii } from '@xc/ui'
 import trajanOtf from '../resurse/TrajanPro3-Regular.otf'
 import caladeaRegular from '../resurse/Caladea-Regular.ttf'
@@ -357,13 +358,27 @@ const POTRIVESTE = `
 // Sfintii zilei
 // ---------------------------------------------------------------------------
 
-export function sfintiiHtml(o: { data: string; zi: ZiPeProgram; sinaxar: string | null; cuSinaxar: boolean }): string {
+export function sfintiiHtml(o: { data: string; zi: ZiPeProgram; sinaxar: string | null; cuSinaxar: boolean; minei: SfintiiDinMinei | null }): string {
   const cand = `${ZILE_SAPTAMANA[ziuaSaptamanii(o.data)]}, ${dataLunga(o.data)}`
   // Titlul e NUMELE zilei (duminica, praznicul), ca in V1 — nu `titlu_html`, care tine la un loc si
   // sfintii, si pericopele, si glasul: puse acolo, se repetau imediat dedesubt, in lista si pe randul
   // marunt (semnalat de user, 10.09.2026, la comparatia cu foile V1).
   const titlu = o.zi.denumire ? `<h1>${esc(o.zi.denumire)}</h1>` : ''
   const sfinti = o.zi.sfinti.map((s) => `<li class="${s.rang === 'praznic_imparatesc' || s.rang === 'cruce_rosie' ? 'rosu' : s.rang === 'cruce_albastra' ? 'albastru' : ''}">${esc(`${s.semn ? `${s.semn} ` : ''}${s.nume}`)}</li>`).join('')
+  // GRUPAT DUPA SURSA (cerere user, 10.09.2026). Cele doua carti nu spun acelasi lucru: Mineiul
+  // trece toata ceata zilei si da cu cinci pana la zece nume mai mult, dar n-are sfintii romani
+  // canonizati dupa editie, care sunt numai in calendar. De aceea listele stau una sub alta,
+  // fiecare cu numele cartii ei — nu se contopesc si nu se alege una in locul celeilalte.
+  // Capul de grup se scrie doar cand chiar sunt doua grupuri; cu unul singur ar fi zgomot.
+  const dinMinei = o.minei
+    ? `<ul>${o.minei.pomeniri.map((p) => `<li>${esc(p.nume)}</li>`).join('')}</ul>`
+    : ''
+  const grupuri = dinMinei
+    ? `<p class="sursa">Calendarul bisericesc</p>
+<ul>${sfinti}</ul>
+<p class="sursa">${esc(o.minei!.carte || 'Mineiul')}</p>
+${dinMinei}`
+    : `<ul>${sfinti}</ul>`
   // Randul marunt de sub lista NU poarta pericopele: Apostolul si Evanghelia au fost scoase la cererea
   // userului (10.09.2026) — foaia se citeste cu glas tare la sfarsitul Liturghiei, unde pericopele
   // tocmai s-au citit. Raman glasul/voscreasna, postul si notele zilei.
@@ -382,6 +397,10 @@ body { font-family: "Caladea", Cambria, Georgia, serif; color: #000; margin: 0; 
 h1 { font-size: 20pt; line-height: 1.3; margin: 0 0 5mm; }
 ul { padding-left: 1.2em; margin: 0 0 6mm; } li { font-size: 15pt; line-height: 1.5; }
 li.rosu { color: #c00000; } li.albastru { color: #1c58bb; }
+/* Capul fiecarui grup: numele cartii din care vine lista de dedesubt. Marunt si gri, ca sa nu
+   fure ochiul de la sfinti, dar destul de aproape de lista ca sa se vada ca e a lui. */
+.sursa { font-family: "Carlito", Calibri, sans-serif; font-size: 10.5pt; color: #7f7f7f;
+         margin: 0 0 1.5mm; text-transform: uppercase; letter-spacing: .04em; }
 .rand { font-family: "Carlito", Calibri, sans-serif; font-size: 12pt; color: #333; }
 .text { margin-top: 8mm; font-size: 12pt; line-height: 1.45; } .text h3 { font-size: 13pt; margin: 6mm 0 2mm; } .text h4 { color:#7f7f7f; margin: 4mm 0 1mm; }
 /* Fara subsol: numele parohiei si adresa sitului au fost scoase la cererea userului (10.09.2026). */
@@ -389,7 +408,7 @@ li.rosu { color: #c00000; } li.albastru { color: #1c58bb; }
 <p class="parohia">${esc(PAROHIA)} · Sfinții zilei</p>
 <p class="cand">${esc(cand)}</p>
 ${titlu}
-<ul>${sfinti}</ul>
+${grupuri}
 ${rand.length ? `<p class="rand">${rand.join(' · ')}</p>` : ''}
 ${sinaxar}
 </body></html>`

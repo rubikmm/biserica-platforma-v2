@@ -33,6 +33,7 @@
     { "binding": "AUTORIZARE", "service": "xc-authz" },
     { "binding": "AUDIT", "service": "xc-audit" },
     { "binding": "CALENDAR", "service": "xc-calendar" },
+    { "binding": "TIPIC", "service": "xc-tipic" },
     { "binding": "COMUNICARE", "service": "xc-communication" }
   ],
 
@@ -63,6 +64,7 @@
         "URL_HOME": "https://staging.sfantul-ilie.ro",
         "URL_CONT": "https://cont.staging.sfantul-ilie.ro",
         "URL_CALENDAR": "https://calendar.staging.sfantul-ilie.ro",
+        "URL_TIPIC": "https://tipic.staging.sfantul-ilie.ro",
         "URL_PROGRAM": "https://program.staging.sfantul-ilie.ro",
         "URL_CURATENIE": "https://curatenie.staging.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.staging.sfantul-ilie.ro"
@@ -80,6 +82,7 @@
         { "binding": "AUTORIZARE", "service": "xc-authz-staging" },
         { "binding": "AUDIT", "service": "xc-audit-staging" },
         { "binding": "CALENDAR", "service": "xc-calendar-staging" },
+        { "binding": "TIPIC", "service": "xc-tipic-staging" },
         { "binding": "COMUNICARE", "service": "xc-communication-staging" }
       ],
       "browser": { "binding": "BROWSER" },
@@ -100,6 +103,7 @@
         "URL_HOME": "https://sfantul-ilie.ro",
         "URL_CONT": "https://cont.sfantul-ilie.ro",
         "URL_CALENDAR": "https://calendar.sfantul-ilie.ro",
+        "URL_TIPIC": "https://tipic.sfantul-ilie.ro",
         "URL_PROGRAM": "https://program.sfantul-ilie.ro",
         "URL_CURATENIE": "https://curatenie.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.sfantul-ilie.ro"
