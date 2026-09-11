@@ -1,5 +1,5 @@
 {
-  "name": "@xc/app-admin",
+  "name": "@xc/chat-worker",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,10 +10,8 @@
     "deploy:staging": "wrangler deploy --env staging"
   },
   "dependencies": {
+    "@xc/actiuni": "workspace:*",
     "@xc/auth": "workspace:*",
-    "@xc/authorization": "workspace:*",
-    "@xc/chat": "workspace:*",
-    "@xc/config": "workspace:*",
     "@xc/contracts": "workspace:*",
     "@xc/observability": "workspace:*",
     "@xc/ui": "workspace:*",

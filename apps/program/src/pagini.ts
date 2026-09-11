@@ -37,6 +37,7 @@
  */
 import type { IntrareVocabular, Slujba, StareSaptamana } from '@xc/contracts'
 import type { Navigatie } from '@xc/config'
+import type { BucataChat } from '@xc/ui'
 import { ICOANE, LUNI, STIL_COMUN, ZILE_SAPTAMANA, adaugaZile, alerta, esc, intervalLizibil, luneaSaptamanii, pagina, ziuaSaptamanii } from '@xc/ui'
 import type { CalendarSaptamana, ZiPeProgram } from './calendar.js'
 import { ziRosie } from './calendar.js'
@@ -44,6 +45,8 @@ import { PAROHIA, randurileSlujbei } from './foaie.js'
 
 export interface Ctx {
   prefix: string
+  /** Bula modulului de Chat, cand e pornit pentru aplicatia si omul acesta; `undefined` = stinsa. */
+  chat?: BucataChat
   nav: Navigatie
   utilizator: string | null
   eAdmin: boolean
@@ -605,6 +608,9 @@ function comune(ctx: Ctx) {
     cont: contDin(ctx),
     versiune: ctx.versiune,
     modificata: ctx.modificata,
+    // Bula modulului de Chat, cand e pornita. Sta AICI, in optiunile comune, ca sa apara pe
+    // fiecare pagina a aplicatiei fara ca vreo pagina noua sa trebuiasca sa-si aduca aminte de ea.
+    chat: ctx.chat,
   }
 }
 

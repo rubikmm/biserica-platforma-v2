@@ -18,7 +18,9 @@
     "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
     // Textul pericopelor vine din Biblia platformei (A10), nu din calendar. Pana la portarea
     // lui A10 in V2, adresa e cea a aplicatiei V1 — se citeste doar, nu se scrie nimic acolo.
-    "URL_BIBLIA": "https://biblia.sfantul-ilie.ro"
+    "URL_BIBLIA": "https://biblia.sfantul-ilie.ro",
+    // Secretul dintre workerii nostri, pentru `/_actiuni`. Pe staging: `wrangler secret put`.
+    "SECRET_INTERN": "dev-actiuni-local"
   },
 
   // Browser Rendering — din el iese poza saptamanii (/v1/poza/saptamana/<zi>).

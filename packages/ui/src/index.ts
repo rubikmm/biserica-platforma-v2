@@ -442,6 +442,18 @@ export interface OptiuniPagina {
   /** Pagina ocupa latimea mare (arhive, tabele late). */
   lat?: boolean
   indexabil?: boolean
+  /**
+   * Modulul de Chat, cand e pornit pentru aplicatia si omul acesta (vezi `@xc/chat`). Carcasa nu
+   * stie ce e inauntru: primeste stilul, HTML-ul si scriptul si le pune la locurile lor.
+   */
+  chat?: BucataChat
+}
+
+/** Bucatile bulei de chat. Forma sta aici ca sa nu atarne carcasa de pachetul chatului. */
+export interface BucataChat {
+  stil: string
+  html: string
+  js: string
 }
 
 export function subsol(versiune = '0.1.0', modificata = ''): string {
@@ -479,7 +491,7 @@ export function pagina(p: OptiuniPagina): string {
 <meta name="apple-mobile-web-app-title" content="${esc(p.titlu)}">
 <meta name="robots" content="${p.indexabil ? 'index, follow' : 'noindex, nofollow'}">${p.metaExtra ? `\n${p.metaExtra}` : ''}
 <title>${esc(p.titluPagina ?? p.titlu)} · Sfântul Ilie — Hanul Colței</title>
-<style>${STIL_COMUN}${p.local ?? ''}</style>
+<style>${STIL_COMUN}${p.local ?? ''}${p.chat?.stil ?? ''}</style>
 <script>${JS_CAP}</script>
 </head><body${p.clasaCorp ? ` class="${esc(p.clasaCorp)}"` : ''}>
 ${antet(p)}
@@ -487,7 +499,8 @@ ${antet(p)}
 <main>${p.corp}</main>
 ${subsol(p.versiune, p.modificata)}
 </div>
-<script>${JS_JOS}</script>${p.scripturi ? `\n<script>${p.scripturi}</script>` : ''}
+${p.chat ? `\n${p.chat.html}` : ''}
+<script>${JS_JOS}</script>${p.scripturi ? `\n<script>${p.scripturi}</script>` : ''}${p.chat ? `\n<script>${p.chat.js}</script>` : ''}
 </body></html>`
 }
 
@@ -574,6 +587,21 @@ export function aziBucuresti(acum: Date = new Date()): string {
 
 export function oraBucuresti(acum: Date = new Date()): string {
   return new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Bucharest', hour: '2-digit', minute: '2-digit', hour12: false }).format(acum)
+}
+
+/**
+ * Ziua ceruta in vorbe sau in cifre: `azi`, `maine`, `viitoare` (peste o saptamana) sau o data
+ * scrisa AAAA-LL-ZZ. `null` cand nu e niciuna.
+ *
+ * A stat copiata in calendar, program si tipic (aceeasi functie, trei locuri) pana pe 11.09.2026,
+ * cand a urcat aici: cuvintele pe care le intelege platforma sunt ale platformei, nu ale unei
+ * aplicatii, iar de acum si actiunile le folosesc.
+ */
+export function dataCeruta(text: string, azi: string): string | null {
+  if (text === 'azi') return azi
+  if (text === 'maine') return adaugaZile(azi, 1)
+  if (text === 'viitoare') return adaugaZile(azi, 7)
+  return eDataValida(text) ? text : null
 }
 
 export function eDataValida(s: string): boolean {

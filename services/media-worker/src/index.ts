@@ -53,6 +53,20 @@ export default {
         })
       }
 
+      // Cati octeti are un fisier, fara sa-l descarce (`head` pe R2). De aici afla `obiectDinHtml`
+      // daca hartia e deja facuta; altfel ar reface un PDF la fiecare cerere, desi sta gata in R2.
+      if (req.method === 'GET' && url.pathname.startsWith('/info/')) {
+        const cheie = decodeURIComponent(url.pathname.slice('/info/'.length))
+        const parsat = Cheie.safeParse(cheie)
+        if (!parsat.success) return json({ eroare: 'cheie invalida' }, 400)
+        const cap = await env.FISIERE.head(parsat.data)
+        return json(
+          cap
+            ? { exista: true, octeti: cap.size, tip: cap.httpMetadata?.contentType ?? null }
+            : { exista: false },
+        )
+      }
+
       if (req.method !== 'POST') return json({ eroare: 'metoda nepermisa' }, 405)
 
       if (url.pathname === '/incarca') {

@@ -1,4 +1,5 @@
 import {
+  asiguraCsrf,
   NUME_COOKIE_CSRF,
   NUME_COOKIE_SESIUNE,
   citesteCookie,
@@ -28,25 +29,6 @@ export interface Env {
   DOMENIU_COOKIE: string
   EMAIL_SUPERADMIN: string
   VERSIUNE?: { timestamp?: string }
-}
-
-const DURATA_CSRF_SEC = 60 * 60 * 4
-
-function jetonCsrfNou(): string {
-  const octeti = crypto.getRandomValues(new Uint8Array(24))
-  let binar = ''
-  for (const octet of octeti) binar += String.fromCharCode(octet)
-  return btoa(binar).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '')
-}
-
-function asiguraCsrf(req: Request, domeniu: string): { jeton: string; setCookie?: string } {
-  const existent = citesteCookie(req, NUME_COOKIE_CSRF)
-  if (existent) return { jeton: existent }
-  const jeton = jetonCsrfNou()
-  return {
-    jeton,
-    setCookie: construiesteCookie(NUME_COOKIE_CSRF, jeton, { maxAge: DURATA_CSRF_SEC, domeniu }),
-  }
 }
 
 function redirect(catre: string, antete: Record<string, string> = {}): Response {

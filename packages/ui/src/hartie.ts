@@ -7,6 +7,7 @@
  * aplicație la alta. Aici nu se știe nimic despre program sau calendar: intră HTML, ies octeți.
  */
 import puppeteer, { type Browser } from '@cloudflare/puppeteer'
+import type { Obiect } from '@xc/contracts'
 
 /**
  * O sesiune de browser, cu reîncercări. Browser Rendering ține un număr mic de sesiuni deodată și
@@ -144,4 +145,79 @@ export async function hartieDinCache(
   const raspuns = new Response(octeti, { status: 200, headers: { ...antete, 'cache-control': 'public, max-age=2592000' } })
   ctx.waitUntil(cache.put(cheie, raspuns.clone()))
   return new Response(octeti, { status: 200, headers: antete })
+}
+
+// ---------------------------------------------------------------------------
+// Hârtia ca OBIECT care circulă
+// ---------------------------------------------------------------------------
+
+/**
+ * Aceeași hârtie ca mai sus, dar așezată în `media-worker` și întoarsă ca `Obiect` — forma cu care
+ * circulă prin platformă: chatul o arată ca un card, comunicarea o atașează la o scrisoare, o
+ * automatizare o trimite la o audiență. **Între ele trece doar cheia**, niciodată octeții.
+ *
+ * Cheia poartă amprenta conținutului, deci:
+ * - aceeași foaie cerută de zece ori se face o singură dată (a doua oară o găsește în media);
+ * - o corectură în calendar schimbă HTML-ul, deci amprenta, deci cheia — hârtia se reface singură
+ *   și nimeni nu trimite mai departe o versiune veche.
+ *
+ * Deosebirea față de `hartieDinCache`: acolo hârtia e un RĂSPUNS către browser (Cache API, expiră);
+ * aici e un FIȘIER cu adresă stabilă, pe care îl poate cere altcineva, mai târziu.
+ */
+export async function obiectDinHtml(o: {
+  media: Fetcher
+  browser: Fetcher
+  html: string
+  fel: 'pdf' | 'jpg' | 'png'
+  /** Calea în media, FĂRĂ amprentă și fără extensie: `program/sfintii/2026-09-13`. */
+  cale: string
+  /** Numele fișierului văzut de om, fără extensie: `sfintii-zilei-2026-09-13`. */
+  nume: string
+  /** Cum se numește în vorbe: „Sfinții zilei — duminică, 13 septembrie". */
+  titlu: string
+  /** Doar pentru poze; PDF-ul merge pe A4. */
+  latime?: number
+}): Promise<Obiect> {
+  const amp = await amprenta(o.html)
+  const cheie = `${o.cale}-${amp}.${o.fel}`
+  const nume = `${o.nume}.${o.fel}`
+
+  const gasit = await octetiiDinMedia(o.media, cheie)
+  if (gasit !== null) {
+    return { fel: o.fel, nume, titlu: o.titlu, cheie, amprenta: amp, octeti: gasit }
+  }
+
+  const octeti =
+    o.fel === 'pdf' ? await pdfDin(o.browser, o.html)
+    : o.fel === 'jpg' ? await jpgPozaDin(o.browser, o.html, o.latime ?? 900)
+    : await pngDin(o.browser, o.html, o.latime ?? 900)
+
+  const urcat = await o.media.fetch('https://media.intern/incarca', {
+    method: 'POST',
+    headers: {
+      'x-meta': JSON.stringify({ key: cheie, contentType: TIPURI[o.fel] }),
+      'content-type': 'application/octet-stream',
+    },
+    body: octeti,
+  })
+  if (!urcat.ok) throw new Error(`hârtia nu s-a putut așeza în media: ${urcat.status}`)
+
+  return { fel: o.fel, nume, titlu: o.titlu, cheie, amprenta: amp, octeti: octeti.byteLength }
+}
+
+/** Câți octeți are fișierul, sau `null` dacă nu e acolo. Nu descarcă nimic — `head` pe R2. */
+async function octetiiDinMedia(media: Fetcher, cheie: string): Promise<number | null> {
+  try {
+    const r = await media.fetch(`https://media.intern/info/${encodeURIComponent(cheie)}`)
+    if (!r.ok) return null
+    const j = (await r.json()) as { exista?: boolean; octeti?: number }
+    return j.exista ? (j.octeti ?? 0) : null
+  } catch {
+    return null
+  }
+}
+
+/** Adresa publică a unui obiect, pentru cardul din chat sau linkul dintr-o scrisoare. */
+export function adresaObiectului(urlMedia: string, cheie: string): string {
+  return `${urlMedia.replace(/\/$/, '')}/fisier/${cheie.split('/').map(encodeURIComponent).join('/')}`
 }

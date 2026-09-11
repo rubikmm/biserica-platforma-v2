@@ -92,6 +92,31 @@ export function verificaCsrf(req: Request, adresePermise: string[], eDev = false
   return null
 }
 
+/** Cat tine un jeton CSRF: patru ore, cat o sedinta lunga de lucru. */
+export const DURATA_CSRF_SEC = 60 * 60 * 4
+
+export function jetonCsrfNou(): string {
+  const octeti = crypto.getRandomValues(new Uint8Array(24))
+  let binar = ''
+  for (const octet of octeti) binar += String.fromCharCode(octet)
+  return btoa(binar).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '')
+}
+
+/**
+ * Jetonul de pus in formular: cel din cookie, daca e, altfel unul nou (si cookie-ul care-l
+ * insoteste). A stat pana pe 11.09.2026 in `apps/account`; a urcat aici cand a doua aplicatie
+ * (panoul de module din `admin`) a avut nevoie de un formular — se copia altfel a doua oara.
+ */
+export function asiguraCsrf(req: Request, domeniu: string): { jeton: string; setCookie?: string } {
+  const existent = citesteCookie(req, NUME_COOKIE_CSRF)
+  if (existent) return { jeton: existent }
+  const jeton = jetonCsrfNou()
+  return {
+    jeton,
+    setCookie: construiesteCookie(NUME_COOKIE_CSRF, jeton, { maxAge: DURATA_CSRF_SEC, domeniu }),
+  }
+}
+
 export function verificaTokenCsrf(req: Request, tokenDinFormular: string | null): string | null {
   const dinCookie = citesteCookie(req, NUME_COOKIE_CSRF)
   if (!dinCookie || !tokenDinFormular) return 'token CSRF lipsa'

@@ -11,8 +11,10 @@
   },
   "dependencies": {
     "@cloudflare/puppeteer": "^1.4.0",
+    "@xc/actiuni": "workspace:*",
     "@xc/auth": "workspace:*",
     "@xc/authorization": "workspace:*",
+    "@xc/chat": "workspace:*",
     "@xc/config": "workspace:*",
     "@xc/contracts": "workspace:*",
     "@xc/db": "workspace:*",

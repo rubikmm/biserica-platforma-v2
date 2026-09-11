@@ -1,0 +1,72 @@
+{
+  // Creierul modulului de Chat. Serviciu INTERN: fara adresa publica, ca restul serviciilor.
+  // Browserul nu ajunge niciodata aici — aplicatia in care sta bula primeste mesajul pe originea
+  // ei (cu sesiunea si CSRF-ul ei) si il trece mai departe prin Service Binding.
+  //
+  // Ce tine: discutiile (`xc-chat-*`). Ce NU tine: nimic despre parohie — programul, calendarul
+  // si tipicul se CER prin actiuni, la fiecare intrebare.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "xc-chat",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "workers_dev": false,
+
+  "vars": {
+    "MEDIU": "dev",
+    // Modelul se schimba de AICI, fara publicare de cod. Alternative cu apelare de unelte in
+    // contul parohiei: @cf/meta/llama-4-scout-17b-16e-instruct,
+    // @cf/mistralai/mistral-small-3.1-24b-instruct, @cf/qwen/qwen3-30b-a3b-fp8.
+    "MODEL_CHAT": "@cf/openai/gpt-oss-120b",
+    "SECRET_INTERN": "dev-actiuni-local"
+  },
+
+  // Inteligenta: Workers AI (alegerea utilizatorului, 11.09.2026, pentru cost).
+  "ai": { "binding": "AI" },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "xc-chat-staging",
+      "database_id": "a3d30428-fba0-46bf-9895-1ed0478a7039",
+      "migrations_dir": "../../infrastructure/migrations/chat"
+    }
+  ],
+
+  // Aplicatiile ale caror actiuni sunt de fata. Se adauga pe masura ce se porteaza.
+  // ⚠️ In `wrangler dev`, un binding catre un worker nepornit opreste toata sesiunea.
+  "services": [
+    { "binding": "PROGRAM", "service": "xc-program" },
+    { "binding": "CALENDAR", "service": "xc-calendar" },
+    { "binding": "TIPIC", "service": "xc-tipic" },
+    { "binding": "AUDIT", "service": "xc-audit" }
+  ],
+
+  "env": {
+    "staging": {
+      "name": "xc-chat-staging",
+      "version_metadata": { "binding": "VERSIUNE" },
+      "vars": {
+        "MEDIU": "staging",
+        "MODEL_CHAT": "@cf/openai/gpt-oss-120b"
+        // SECRET_INTERN se pune cu `wrangler secret put SECRET_INTERN --env staging`
+      },
+      "ai": { "binding": "AI" },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "xc-chat-staging",
+          "database_id": "a3d30428-fba0-46bf-9895-1ed0478a7039",
+          "migrations_dir": "../../infrastructure/migrations/chat"
+        }
+      ],
+      "services": [
+        { "binding": "PROGRAM", "service": "xc-program-staging" },
+        { "binding": "CALENDAR", "service": "xc-calendar-staging" },
+        { "binding": "TIPIC", "service": "xc-tipic-staging" },
+        { "binding": "AUDIT", "service": "xc-audit-staging" }
+      ]
+    }
+  }
+}

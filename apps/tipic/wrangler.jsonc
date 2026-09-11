@@ -18,7 +18,9 @@
     "MEDIU": "dev",
     "ORIGINE_PUBLICA": "https://rubik:8474",
     "DOMENIU_COOKIE": "",
-    "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
+    "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
+    // Secretul dintre workerii nostri, pentru `/_actiuni`. Pe staging: `wrangler secret put`.
+    "SECRET_INTERN": "dev-actiuni-local"
   },
 
   "d1_databases": [

@@ -5,8 +5,10 @@ import { NUME_COOKIE_CSRF, citesteCookie, construiesteCookie, principalDin, sesi
 import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
 import { construiesteEnvelope, declaratieOutbox, golesteOutbox } from '@xc/events'
 import { Logger, correlationId } from '@xc/observability'
-import { adaugaZile, aziBucuresti, dataVersiunii, eDataValida, eroareApi, hartieDinCache, html, intervalLizibil, json, jsonCuEtag, luneaSaptamanii, pngDin, zileIntre } from '@xc/ui'
+import { adaugaZile, aziBucuresti, dataCeruta, dataVersiunii, eDataValida, eroareApi, hartieDinCache, html, intervalLizibil, json, jsonCuEtag, luneaSaptamanii, pngDin, zileIntre } from '@xc/ui'
+import { modulActiuni } from '@xc/actiuni'
 import pkg from '../package.json'
+import { ACTIUNI } from './actiuni.js'
 import { VOSCRESNE, textulPericopei, type PericopaCuText } from './biblia.js'
 import {
   aniPreluati,
@@ -53,6 +55,8 @@ export interface Env {
   URL_BIBLIA: string
   /** Data publicarii, pentru subsol — binding-ul `version_metadata`. */
   VERSIUNE?: { timestamp?: string }
+  /** Secretul dintre workerii nostri; fara el `/_actiuni` nu exista. */
+  SECRET_INTERN?: string
 }
 
 const SERVICIU = 'app-calendar'
@@ -116,12 +120,6 @@ async function scrieAudit(env: Env, intrare: { action: string; target: string; o
 
 const eAdresaDeMasina = (cale: string) => /^\/(v1|intern|\.well-known|health)(\/|$)/.test(cale)
 
-function dataDin(text: string, azi: string): string | null {
-  if (text === 'azi') return azi
-  if (text === 'maine') return adaugaZile(azi, 1)
-  return eDataValida(text) ? text : null
-}
-
 /** O zi completa: randul (preluat sau calculat), desfacerea si forma de contract. */
 async function ziuaCompleta(env: Env, data: string, ani: number[], versiune: string) {
   const r = await randulOriCalculat(env.DB, data, ani)
@@ -184,6 +182,9 @@ async function preiaAnul(env: Env, an: number): Promise<{ zile: number }> {
   return { zile: randuri.length }
 }
 
+/** Lista de verbe a calendarului, publicata la `/_actiuni` (vezi `actiuni.ts`). */
+const MODUL = modulActiuni<Env>({ aplicatie: 'calendar', versiune: pkg.version, actiuni: ACTIUNI })
+
 export default {
   async fetch(req: Request, env: Env, ctxExec: ExecutionContext): Promise<Response> {
     const cfg = citesteConfig(env)
@@ -195,6 +196,10 @@ export default {
     const azi = aziBucuresti()
 
     // ------------------------------------------------------------------ masini
+    // Actiunile interne: doar prin Service Binding, cu secretul platformei (404 altfel).
+    const raspunsActiuni = await MODUL.ruteaza(req, env, ctxExec, cale)
+    if (raspunsActiuni) return raspunsActiuni
+
     if (eAdresaDeMasina(cale)) {
       if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, HEAD, OPTIONS', 'access-control-allow-headers': 'if-none-match, content-type' } })
       if (req.method !== 'GET' && req.method !== 'HEAD') return eroareApi(405, 'metoda_nepermisa', 'Sub /v1 merg doar GET, HEAD și OPTIONS.')
@@ -456,7 +461,7 @@ async function api(req: Request, env: Env, ctxExec: ExecutionContext, prefix: st
 
   const mZi = /^\/v1\/zi\/([^/]+)$/.exec(cale)
   if (mZi) {
-    const data = dataDin(mZi[1]!, azi)
+    const data = dataCeruta(mZi[1]!, azi)
     if (!data) return eroareApi(400, 'data_invalida', 'Data se scrie AAAA-LL-ZZ (sau azi / maine).')
     const r = await randulOriCalculat(env.DB, data, ani)
     if (!r) return eroareApi(404, 'zi_inexistenta', 'Data cerută e în afara intervalului acoperit.', { ani_preluati: ani, ani_calculati: aniCalculati })
@@ -486,7 +491,7 @@ async function api(req: Request, env: Env, ctxExec: ExecutionContext, prefix: st
    */
   const mPoza = /^\/v1\/poza\/saptamana(?:\/([^/]+))?$/.exec(cale)
   if (mPoza) {
-    const cerut = mPoza[1] ? dataDin(mPoza[1], azi) : azi
+    const cerut = mPoza[1] ? dataCeruta(mPoza[1], azi) : azi
     if (!cerut) return eroareApi(400, 'data_invalida', 'Data se scrie AAAA-LL-ZZ (sau azi / maine).')
     const luni = luneaSaptamanii(cerut)
     const duminica = adaugaZile(luni, 6)

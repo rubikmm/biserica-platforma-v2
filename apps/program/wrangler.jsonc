@@ -16,7 +16,10 @@
     "MEDIU": "dev",
     "ORIGINE_PUBLICA": "https://rubik:8474",
     "DOMENIU_COOKIE": "",
-    "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
+    "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
+    // Secretul dintre workerii nostri, pentru `/_actiuni`. Local nu e un secret adevarat
+    // (containerul nu e expus); pe staging se pune cu `wrangler secret put SECRET_INTERN`.
+    "SECRET_INTERN": "dev-actiuni-local"
   },
 
   "d1_databases": [
@@ -34,7 +37,15 @@
     { "binding": "AUDIT", "service": "xc-audit" },
     { "binding": "CALENDAR", "service": "xc-calendar" },
     { "binding": "TIPIC", "service": "xc-tipic" },
-    { "binding": "COMUNICARE", "service": "xc-communication" }
+    { "binding": "COMUNICARE", "service": "xc-communication" },
+    { "binding": "MEDIA", "service": "xc-media" },
+    // Creierul modulului de Chat. Bula se aprinde din panoul de admin, nu de aici.
+    { "binding": "CHAT", "service": "xc-chat" }
+  ],
+
+  // Comutatoarele modulelor (cheia `modul:chat`), scrise din `apps/admin`.
+  "kv_namespaces": [
+    { "binding": "CONFIG", "id": "4fb91926da484c4395160390d5348950" }
   ],
 
   // Browser Rendering (Chrome pe Cloudflare) — foaia A4 ca PDF/JPG si foaia sfintilor zilei.
@@ -83,7 +94,12 @@
         { "binding": "AUDIT", "service": "xc-audit-staging" },
         { "binding": "CALENDAR", "service": "xc-calendar-staging" },
         { "binding": "TIPIC", "service": "xc-tipic-staging" },
-        { "binding": "COMUNICARE", "service": "xc-communication-staging" }
+        { "binding": "COMUNICARE", "service": "xc-communication-staging" },
+        { "binding": "MEDIA", "service": "xc-media-staging" },
+        { "binding": "CHAT", "service": "xc-chat-staging" }
+      ],
+      "kv_namespaces": [
+        { "binding": "CONFIG", "id": "4fb91926da484c4395160390d5348950" }
       ],
       "browser": { "binding": "BROWSER" },
       "queues": {

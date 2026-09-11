@@ -18,6 +18,9 @@ export const CHEI_PERMISIUNI = [
   'communication.send',
   'automation.manage',
   'audit.read',
+  // Aprinderea si stingerea modulelor (chatul, deocamdata). NU e a adminului: un modul pornit
+  // costa bani la fiecare apasare, deci ramane la super-admin (11.09.2026).
+  'modules.manage',
 ] as const
 
 export const Permisiune = z.enum(CHEI_PERMISIUNI)

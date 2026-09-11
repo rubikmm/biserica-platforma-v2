@@ -127,6 +127,9 @@ importers:
       wrangler:
         specifier: ^4.130.0
         version: 4.130.0(@cloudflare/workers-types@5.20260908.1)
+      zod:
+        specifier: ^4.1.5
+        version: 4.5.4
 
   apps/account:
     dependencies:
@@ -157,6 +160,9 @@ importers:
       '@xc/authorization':
         specifier: workspace:*
         version: link:../../packages/authorization
+      '@xc/chat':
+        specifier: workspace:*
+        version: link:../../packages/chat
       '@xc/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -175,6 +181,9 @@ importers:
 
   apps/calendar:
     dependencies:
+      '@xc/actiuni':
+        specifier: workspace:*
+        version: link:../../packages/actiuni
       '@xc/auth':
         specifier: workspace:*
         version: link:../../packages/auth
@@ -232,12 +241,18 @@ importers:
       '@cloudflare/puppeteer':
         specifier: ^1.4.0
         version: 1.4.0(supports-color@10.2.2)
+      '@xc/actiuni':
+        specifier: workspace:*
+        version: link:../../packages/actiuni
       '@xc/auth':
         specifier: workspace:*
         version: link:../../packages/auth
       '@xc/authorization':
         specifier: workspace:*
         version: link:../../packages/authorization
+      '@xc/chat':
+        specifier: workspace:*
+        version: link:../../packages/chat
       '@xc/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -262,6 +277,9 @@ importers:
 
   apps/tipic:
     dependencies:
+      '@xc/actiuni':
+        specifier: workspace:*
+        version: link:../../packages/actiuni
       '@xc/auth':
         specifier: workspace:*
         version: link:../../packages/auth
@@ -287,6 +305,24 @@ importers:
         specifier: ^4.1.5
         version: 4.5.4
 
+  packages/actiuni:
+    dependencies:
+      '@xc/auth':
+        specifier: workspace:*
+        version: link:../auth
+      '@xc/authorization':
+        specifier: workspace:*
+        version: link:../authorization
+      '@xc/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@xc/observability':
+        specifier: workspace:*
+        version: link:../observability
+      zod:
+        specifier: ^4.1.5
+        version: 4.5.4
+
   packages/auth:
     dependencies:
       '@xc/contracts':
@@ -295,6 +331,15 @@ importers:
 
   packages/authorization:
     dependencies:
+      '@xc/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+
+  packages/chat:
+    dependencies:
+      '@xc/actiuni':
+        specifier: workspace:*
+        version: link:../actiuni
       '@xc/contracts':
         specifier: workspace:*
         version: link:../contracts
@@ -335,6 +380,9 @@ importers:
       '@cloudflare/puppeteer':
         specifier: ^1.4.0
         version: 1.4.0(supports-color@10.2.2)
+      '@xc/contracts':
+        specifier: workspace:*
+        version: link:../contracts
 
   services/audit-worker:
     dependencies:
@@ -380,6 +428,27 @@ importers:
       '@xc/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      zod:
+        specifier: ^4.1.5
+        version: 4.5.4
+
+  services/chat-worker:
+    dependencies:
+      '@xc/actiuni':
+        specifier: workspace:*
+        version: link:../../packages/actiuni
+      '@xc/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@xc/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@xc/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@xc/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       zod:
         specifier: ^4.1.5
         version: 4.5.4

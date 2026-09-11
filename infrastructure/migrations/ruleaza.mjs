@@ -25,6 +25,7 @@ const BAZE = [
   { director: 'tipic', config: 'apps/tipic/wrangler.jsonc', binding: 'DB' },
   { director: 'communication', config: 'services/communication-worker/wrangler.jsonc', binding: 'DB' },
   { director: 'automation', config: 'services/automation-worker/wrangler.jsonc', binding: 'DB' },
+  { director: 'chat', config: 'services/chat-worker/wrangler.jsonc', binding: 'DB' },
 ]
 
 const argumente = process.argv.slice(2)

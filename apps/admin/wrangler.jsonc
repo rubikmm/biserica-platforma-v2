@@ -24,6 +24,11 @@
     { "binding": "COMUNICARE", "service": "xc-communication" }
   ],
 
+  // Comutatoarele modulelor. Panoul de administrare e singurul care SCRIE aici.
+  "kv_namespaces": [
+    { "binding": "CONFIG", "id": "4fb91926da484c4395160390d5348950" }
+  ],
+
   "env": {
     "staging": {
       "name": "xc-admin-staging",
@@ -44,6 +49,9 @@
         { "binding": "AUDIT", "service": "xc-audit-staging" },
         { "binding": "AUTOMATIZARE", "service": "xc-automation-staging" },
         { "binding": "COMUNICARE", "service": "xc-communication-staging" }
+      ],
+      "kv_namespaces": [
+        { "binding": "CONFIG", "id": "4fb91926da484c4395160390d5348950" }
       ],
       "routes": [{ "pattern": "admin.staging.sfantul-ilie.ro", "custom_domain": true }]
     },

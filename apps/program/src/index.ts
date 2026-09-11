@@ -17,13 +17,11 @@ import { principalDin, sesiuneCurenta, verificaCsrf } from '@xc/auth'
 import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
 import { golesteOutbox } from '@xc/events'
 import { Logger, correlationId } from '@xc/observability'
-import { adaugaZile, aziBucuresti, dataVersiunii, eDataValida, eroareApi, html, intervalLizibil, json, jsonCuEtag, luneaSaptamanii, oraBucuresti, zileIntre } from '@xc/ui'
+import { adaugaZile, aziBucuresti, dataCeruta, dataVersiunii, eDataValida, eroareApi, html, intervalLizibil, json, jsonCuEtag, luneaSaptamanii, oraBucuresti, zileIntre } from '@xc/ui'
 import pkg from '../package.json'
-import { calendarulIntervalului, texteleZilei, ziuaCalendarului } from './calendar.js'
 import {
   acoperire,
   aniiArhivei,
-  istoriculSlujbelor,
   saptamana,
   saptamanaDin,
   saptamanileAnului,
@@ -36,10 +34,12 @@ import {
   vocabularul,
   type RandSaptamana,
 } from './depozit.js'
-import { foaieHtml, hartieDinCache, jpgDin, jpgPozaDin, pdfDin, sfintiiHtml, titluSaptamanii } from './foaie.js'
-import { propune } from './propunere.js'
-import { sfintiiDinCarti } from './tipic.js'
-import { LATIME_POZA, type Ctx, type Meniu, paginaArhiva, paginaMesaj, paginaSaptamana, pozaSaptamaniiHtml } from './pagini.js'
+import { hartieDinCache, jpgDin, jpgPozaDin, pdfDin, titluSaptamanii } from './foaie.js'
+import { modulActiuni } from '@xc/actiuni'
+import { modulChat } from '@xc/chat'
+import { ACTIUNI } from './actiuni.js'
+import { htmlFoaiaSaptamanii, htmlPozaSaptamanii, htmlSfintiiZilei, saptamanaOriPropunere } from './hartii.js'
+import { LATIME_POZA, type Ctx, type Meniu, paginaArhiva, paginaMesaj, paginaSaptamana } from './pagini.js'
 
 export interface Env {
   DB: D1Database
@@ -50,14 +50,31 @@ export interface Env {
   TIPIC: Fetcher
   COMUNICARE: Fetcher
   BROWSER: Fetcher
+  /** Locul in care se aseaza hartiile care circula (obiectele). */
+  MEDIA: Fetcher
+  /** Creierul modulului de Chat; lipsa lui inseamna doar ca bula nu se aprinde. */
+  CHAT?: Fetcher
+  /** Comutatoarele modulelor, scrise din panoul de admin. */
+  CONFIG?: KVNamespace
   EVENIMENTE: Queue
   MEDIU: string
   ORIGINE_PUBLICA: string
   DOMENIU_COOKIE: string
   EMAIL_SUPERADMIN: string
+  /** Secretul dintre workerii nostri; fara el `/_actiuni` nu exista. */
+  SECRET_INTERN?: string
   /** Data publicarii, pentru subsol — binding-ul `version_metadata`. */
   VERSIUNE?: { timestamp?: string }
 }
+
+/**
+ * Lista de verbe a programului, publicata la `/_actiuni` (vezi `actiuni.ts` si
+ * docs/architecture/chat-si-actiuni.md). Se construieste o data pe izolat.
+ */
+/** Modulul de Chat: rutele `/chat/*` si bula. Se aprinde din `apps/admin`, per aplicatie. */
+const CHAT = modulChat({ aplicatie: 'program', titlu: 'Întreabă' })
+
+const MODUL = modulActiuni<Env>({ aplicatie: 'program', versiune: pkg.version, actiuni: ACTIUNI })
 
 const SERVICIU = 'app-program'
 const AUDIENTA = 'program-abonati'
@@ -91,13 +108,6 @@ async function comunicare<T = unknown>(env: Env, cale: string, corp: unknown): P
 
 const eAdresaDeMasina = (cale: string) => /^\/(v1|intern|\.well-known|health)(\/|$)/.test(cale)
 
-function dataDin(text: string, azi: string): string | null {
-  if (text === 'azi') return azi
-  if (text === 'maine') return adaugaZile(azi, 1)
-  if (text === 'viitoare') return adaugaZile(azi, 7)
-  return eDataValida(text) ? text : null
-}
-
 // Navigarea nu mai are „vecini": cele trei trepte (saptamana trecuta, cea de azi, cea urmatoare) se
 // socotesc in pagina, din ziua de azi — „este o navigare, dar nu este un istoric" (user, 10.09.2026).
 // Antetul are nevoie doar de lunea saptamanii de pe ecran, ca sa stie pe care treapta se afla.
@@ -108,21 +118,6 @@ async function vocabularHarta(env: Env): Promise<{ lista: IntrareVocabular[]; ha
 }
 
 /** Slujbele unei saptamani + starea ei; daca nu e scrisa, propunerea in aceeasi forma. */
-async function saptamanaOriPropunere(env: Env, luni: string, vocabular: Map<string, IntrareVocabular>) {
-  const rand = await saptamana(env.DB, luni)
-  const cal = await calendarulIntervalului(env.CALENDAR, luni, adaugaZile(luni, 7))
-  if (rand) {
-    const slujbe = (await slujbeleSaptamanii(env.DB, luni)).map(slujbaDin)
-    return { rand, slujbe, cal, propunere: null, dinCalendar: rand.sursa !== 'wp_program' && rand.sursa !== 'wp_articol' && rand.sursa !== 'wp_live' }
-  }
-  const istoric = await istoriculSlujbelor(env.DB, luni)
-  const p = propune(luni, istoric, vocabular, cal)
-  const slujbe: Slujba[] = p.zile.flatMap((zi) =>
-    zi.slujbe.map((s) => ({ id: `${s.data}-${s.cod_nume}`, data: s.data, ora: s.ora, nume: s.nume, cod_nume: s.cod_nume, slujitor: null, loc: 'biserica', observatii: null, detalii: s.detalii, curatenie: false, transmisie: false })),
-  )
-  return { rand: null, slujbe, cal, propunere: p, dinCalendar: true }
-}
-
 export default {
   async fetch(req: Request, env: Env, ctxExec: ExecutionContext): Promise<Response> {
     const cfg = citesteConfig(env)
@@ -134,6 +129,11 @@ export default {
     const azi = aziBucuresti()
     /** Singura deosebire ramasa fata de public: in dev paginile nu se cacheaza (vezi `cachePagina`). */
     const eDev = env.MEDIU === 'dev'
+
+    // Actiunile interne: raspund DOAR prin Service Binding, cu secretul platformei. De pe
+    // internet calea nu exista (404), deci nu se amesteca nici cu paginile, nici cu `/v1`.
+    const raspunsActiuni = await MODUL.ruteaza(req, env, ctxExec, cale)
+    if (raspunsActiuni) return raspunsActiuni
 
     if (eAdresaDeMasina(cale)) {
       if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, HEAD, OPTIONS', 'access-control-allow-headers': 'if-none-match, content-type' } })
@@ -178,6 +178,14 @@ export default {
       spre: adresaPaginii(cfg, url),
     }
 
+    // Modulul de Chat. Poarta (comutatorul din admin + drepturile omului) e in `@xc/chat`, intr-un
+    // singur loc si pentru rute, si pentru bula: altfel o stingere din admin ar ascunde bula
+    // lasand rutele deschise.
+    const ctxChat = { prefix, principal, numeleOmului: ctx.utilizator, eAdmin: ctx.eAdmin }
+    const raspunsChat = await CHAT.ruteaza(req, env, ctxExec, cale, ctxChat)
+    if (raspunsChat) return raspunsChat
+    ctx.chat = await CHAT.bula(env, ctxChat)
+
     try {
       const { harta } = await vocabularHarta(env)
       // In dev nu se tine cache: la o schimbare de afisare, pagina veche mai statea cinci minute in
@@ -190,7 +198,7 @@ export default {
       // ---------------------------------------------------------- saptamana
       const mSapt = /^\/saptamana\/([^/]+)$/.exec(cale)
       if ((cale === '/' || mSapt) && req.method === 'GET') {
-        const cerut = mSapt ? dataDin(mSapt[1]!, azi) : azi
+        const cerut = mSapt ? dataCeruta(mSapt[1]!, azi) : azi
         if (!cerut) return html(paginaMesaj(ctx, 'Dată greșită', 'Adresa e /saptamana/AAAA-LL-ZZ.', 'rea', meniuAzi()), 404)
         const luni = luneaSaptamanii(cerut)
         const s = await saptamanaOriPropunere(env, luni, harta)
@@ -298,7 +306,7 @@ async function api(req: Request, env: Env, ctxExec: ExecutionContext, cale: stri
 
   const mSapt = /^\/v1\/saptamana\/([^/]+)$/.exec(cale)
   if (mSapt) {
-    const data = dataDin(mSapt[1]!, azi)
+    const data = dataCeruta(mSapt[1]!, azi)
     if (!data) return eroareApi(400, 'data_invalida', 'Data se scrie AAAA-LL-ZZ (sau azi / maine / viitoare).')
     const luni = luneaSaptamanii(data)
     const rand = await saptamana(env.DB, luni)
@@ -308,7 +316,7 @@ async function api(req: Request, env: Env, ctxExec: ExecutionContext, cale: stri
 
   const mZi = /^\/v1\/zi\/([^/]+)$/.exec(cale)
   if (mZi) {
-    const data = dataDin(mZi[1]!, azi)
+    const data = dataCeruta(mZi[1]!, azi)
     if (!data) return eroareApi(400, 'data_invalida', 'Data se scrie AAAA-LL-ZZ (sau azi / maine).')
     const luni = luneaSaptamanii(data)
     const rand = await saptamana(env.DB, luni)
@@ -346,34 +354,15 @@ async function api(req: Request, env: Env, ctxExec: ExecutionContext, cale: stri
   const mFoaie = /^\/v1\/(foaie|propunere)\/([^/]+)\.(pdf|jpg|html)$/.exec(cale)
   if (mFoaie) {
     const fel = mFoaie[1] as 'foaie' | 'propunere'
-    const data = dataDin(mFoaie[2]!, azi)
+    const data = dataCeruta(mFoaie[2]!, azi)
     const format = mFoaie[3] as 'pdf' | 'jpg' | 'html'
     if (!data) return eroareApi(400, 'data_invalida', 'Data se scrie AAAA-LL-ZZ (sau azi / viitoare).')
-    const luni = luneaSaptamanii(data)
-    const rand = await saptamana(env.DB, luni)
-    let slujbe: Slujba[]
-    let titlu: string
-    let dinCalendar = true
-    if (fel === 'foaie') {
-      if (!rand) return eroareApi(404, 'saptamana_inexistenta', 'Săptămâna nu e în bază.', { de_la: luni, pana_la: adaugaZile(luni, 6), vecine: await vecinele(env.DB, luni) })
-      if (rand.stare !== 'validat') return eroareApi(409, 'saptamana_nevalidata', 'Foaia se tipărește numai din săptămâni validate.', { de_la: luni, pana_la: rand.duminica, stare: rand.stare })
-      slujbe = (await slujbeleSaptamanii(env.DB, luni)).map(slujbaDin)
-      // Pe HARTIE intervalul se scrie mereu la fel, calculat („7 – 13 septembrie 2026"), ca in V1 —
-      // titlurile importate din V1 au cratima in loc de linie de dialog, si se vedea in caseta foii.
-      // In pagina ramane titlul din baza, asa cum a fost scris.
-      titlu = titluSaptamanii(luni)
-      dinCalendar = rand.sursa === 'manual' || rand.sursa === 'propunere'
-    } else {
-      const p = propune(luni, await istoriculSlujbelor(env.DB, luni), harta, await calendarulIntervalului(env.CALENDAR, luni, adaugaZile(luni, 7)))
-      slujbe = p.zile.flatMap((zi) => zi.slujbe.map((s) => ({ id: `${s.data}-${s.cod_nume}`, data: s.data, ora: s.ora, nume: s.nume, cod_nume: s.cod_nume, slujitor: null, loc: 'biserica', observatii: null, detalii: s.detalii, curatenie: false, transmisie: false })))
-      titlu = titluSaptamanii(luni)
-    }
-    const cal = await calendarulIntervalului(env.CALENDAR, luni, adaugaZile(luni, 7))
-    const corp = foaieHtml({ luni, duminica: adaugaZile(luni, 6), titlu, slujbe, vocabular: harta, calendar: cal, dinCalendar, ciorna: fel === 'propunere' })
-    if (format === 'html') return new Response(corp, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300', ...ANTETE_APP } })
-    const nume = fel === 'foaie' ? `program-${luni}` : `propunere-${luni}`
+    // Aceeasi foaie si pentru actiunea `program.foaia_saptamanii` — vezi `hartii.ts`.
+    const f = await htmlFoaiaSaptamanii(env, data, fel, harta)
+    if (!f.ok) return eroareApi(f.cod === 'saptamana_inexistenta' ? 404 : 409, f.cod, f.mesaj, f.detalii)
+    if (format === 'html') return new Response(f.corp, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300', ...ANTETE_APP } })
     try {
-      return await hartieDinCache(req, ctxExec, corp, format, nume, () => (format === 'pdf' ? pdfDin(env.BROWSER, corp) : jpgDin(env.BROWSER, corp)))
+      return await hartieDinCache(req, ctxExec, f.corp, format, f.nume, () => (format === 'pdf' ? pdfDin(env.BROWSER, f.corp) : jpgDin(env.BROWSER, f.corp)))
     } catch (e) {
       return eroareApi(503, 'pdf_indisponibil', 'Tiparul nu e disponibil acum; încearcă peste un minut sau ia varianta .html.', { detaliu: e instanceof Error ? e.message.slice(0, 200) : '' })
     }
@@ -403,14 +392,12 @@ async function api(req: Request, env: Env, ctxExec: ExecutionContext, cale: stri
    */
   const mPoza = /^\/v1\/poza\/saptamana\/([^/]+)\.(jpg|html)$/.exec(cale)
   if (mPoza) {
-    const data = dataDin(mPoza[1]!, azi)
+    const data = dataCeruta(mPoza[1]!, azi)
     const format = mPoza[2] as 'jpg' | 'html'
     if (!data) return eroareApi(400, 'data_invalida', 'Data se scrie AAAA-LL-ZZ (sau azi / maine / viitoare).')
     const cuCalendar = url.searchParams.get('coloane') !== '1'
-    const luni = luneaSaptamanii(data)
-    const s = await saptamanaOriPropunere(env, luni, harta)
     // Ctx-ul pozei: fara om si fara drepturi. In poza nu se apasa nimic, deci butoanele adminului
-    // (foaia „Sfinții zilei") nici nu apuca sa se scrie.
+    // nici nu apuca sa se scrie. Asezarea sta in `hartii.ts`, langa celelalte hartii.
     const ctxPoza: Ctx = {
       prefix,
       nav: navigatieDin(citesteConfig(env)),
@@ -419,28 +406,16 @@ async function api(req: Request, env: Env, ctxExec: ExecutionContext, cale: stri
       versiune: pkg.version,
       modificata: dataVersiunii(env.VERSIUNE),
     }
-    const corp = pozaSaptamaniiHtml({
+    const poza = await htmlPozaSaptamanii(env, data, {
       ctx: ctxPoza,
-      luni,
-      // Pe POZA intervalul se scrie calculat, ca pe foaia A4 si ca pe poza calendarului (user, 11.09.2026,
-      // dupa ce cele doua poze ale aceleiasi saptamani s-au vazut una langa alta): titlurile importate din
-      // V1 au cratima in loc de linie de dialog, si se vede. In PAGINA ramane titlul din baza, asa cum a
-      // fost scris — acolo n-a cerut nimeni altfel.
-      titlu: titluSaptamanii(luni),
-      stare: s.rand?.stare ?? 'propunere',
-      slujbe: s.slujbe,
-      vocabular: harta,
-      cal: s.cal,
-      dinCalendar: s.dinCalendar,
       azi,
-      // pe negru doar daca se cere anume; implicit fundal deschis, ca la poza calendarului (user, 11.09)
-      tema: url.searchParams.get('tema') === 'dark' ? 'dark' : 'light',
       cuCalendar,
+      tema: url.searchParams.get('tema') === 'dark' ? 'dark' : 'light',
+      vocabular: harta,
     })
-    if (format === 'html') return new Response(corp, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300', ...ANTETE_APP } })
+    if (format === 'html') return new Response(poza.corp, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300', ...ANTETE_APP } })
     try {
-      const nume = cuCalendar ? `program-calendar-${luni}` : `program-${luni}`
-      return await hartieDinCache(req, ctxExec, corp, 'jpg', nume, () => jpgPozaDin(env.BROWSER, corp, LATIME_POZA))
+      return await hartieDinCache(req, ctxExec, poza.corp, 'jpg', poza.nume, () => jpgPozaDin(env.BROWSER, poza.corp, LATIME_POZA))
     } catch (e) {
       return eroareApi(503, 'poza_indisponibila', 'Poza nu se poate face acum; încearcă peste un minut sau ia varianta .html.', { detaliu: e instanceof Error ? e.message.slice(0, 200) : '' })
     }
@@ -448,23 +423,16 @@ async function api(req: Request, env: Env, ctxExec: ExecutionContext, cale: stri
 
   const mSfinti = /^\/v1\/sfintii-zilei\/([^/]+)\.(pdf|html)$/.exec(cale)
   if (mSfinti) {
-    const data = dataDin(mSfinti[1]!, azi)
+    const data = dataCeruta(mSfinti[1]!, azi)
     const format = mSfinti[2] as 'pdf' | 'html'
     if (!data) return eroareApi(400, 'data_invalida', 'Data se scrie AAAA-LL-ZZ (sau azi / maine).')
-    const zi = await ziuaCalendarului(env.CALENDAR, data)
-    if (!zi) return eroareApi(502, 'calendar_indisponibil', 'Calendarul nu răspunde acum.')
-    const cuSinaxar = url.searchParams.get('sinaxar') === '1'
-    // Pomenirile cartilor tipicului (Mineiul, apoi Anuarul) vin de la A9 si se scriu in grupuri
-    // ALE LOR, sub lista calendarului, fiecare fara ce s-a spus mai sus (cerere user).
-    // Daca tipicul tace, foaia ramane cum era — o singura lista, fara cap de grup.
-    const [texte, surse] = await Promise.all([
-      cuSinaxar ? texteleZilei(env.CALENDAR, data) : Promise.resolve(null),
-      sfintiiDinCarti(env.TIPIC, data),
-    ])
-    const corp = sfintiiHtml({ data, zi, sinaxar: texte?.sinaxar ?? null, cuSinaxar, surse })
-    if (format === 'html') return new Response(corp, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=3600', ...ANTETE_APP } })
+    // Cum se aduna foaia (calendarul, apoi cartile tipicului, fara repetari) sta in `hartii.ts`:
+    // un singur loc si pentru ruta asta, si pentru actiunea `program.foaia_sfintilor`.
+    const foaie = await htmlSfintiiZilei(env, data, url.searchParams.get('sinaxar') === '1')
+    if (!foaie) return eroareApi(502, 'calendar_indisponibil', 'Calendarul nu răspunde acum.')
+    if (format === 'html') return new Response(foaie.corp, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=3600', ...ANTETE_APP } })
     try {
-      return await hartieDinCache(req, ctxExec, corp, 'pdf', `sfintii-zilei-${data}${cuSinaxar ? '-cu-sinaxar' : ''}`, () => pdfDin(env.BROWSER, corp))
+      return await hartieDinCache(req, ctxExec, foaie.corp, 'pdf', foaie.nume, () => pdfDin(env.BROWSER, foaie.corp))
     } catch (e) {
       return eroareApi(503, 'pdf_indisponibil', 'Tiparul nu e disponibil acum; încearcă peste un minut sau ia varianta .html.', { detaliu: e instanceof Error ? e.message.slice(0, 200) : '' })
     }

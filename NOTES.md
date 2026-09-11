@@ -81,33 +81,43 @@ schimb, a fost refăcută la cererea userului pe 10.09.2026, seara, și NU mai e
 **Fără scriere manuală**: pagina `/admin` (scrierea și validarea săptămânii) a fost scoasă cu totul —
 „nu vreau să fac nimic manual" (user, 16:36). Programul are săptămânile importate din V1 și
 propunerea automată, ca în V1.
-4. ⏳ **Curățenia finală** — se șterge tot ce NU are prefix `xc-`.
+4. ⏳ **Modulul de Chat și acțiunile interne** (11.09.2026) — fiecare aplicație își publică
+   verbele la `/_actiuni` (lista folosibilă de un AI, de altă aplicație sau de o unealtă), iar bula
+   de chat se aprinde per aplicație din panoul de admin. Detalii:
+   `docs/architecture/chat-si-actiuni.md`. Regula: **o acțiune nu conține logică proprie** — cheamă
+   aceeași funcție de domeniu ca ruta `/v1`.
+5. ⏳ **Curățenia finală** — se șterge tot ce NU are prefix `xc-`.
 
 ## NEXT
 
-1. **Ce a mai rămas deosebit între local și public** (user, 11.09.2026: „să nu fie nicio diferență
-   între testare și public"). Modul de probă a fost **scos de tot** atunci; local se intră cu cont
-   adevărat și masca „vezi ca" se pune din meniul contului, exact ca pe staging. Mai rămân trei
-   deosebiri, toate **structurale**, nu de afișare:
-   - **emailul nu poate pleca din `wrangler dev`** (binding-ul `send_email` nu funcționează acolo) —
-     de aceea codul apare în pagină și `123456` merge oricând pentru super-admin;
+1. **Modulul de Chat, ce a rămas** (11.09.2026):
+   - bula e montată doar pe `program`; `calendar` și `tipic` au acțiuni, dar nu și bulă (aceleași
+     trei linii: `modulChat`, `ruteaza`, `chat` în opțiunile comune ale paginilor);
+   - **acțiunile care SCRIU și confirmarea „Da/Nu" sunt scrise, dar neprobate cap-coadă** — prima
+     candidată firească e `comunicare.trimite_obiect` (trimiterea unei foi la o audiență);
+   - nimic nu e publicat pe staging: acolo trebuie `wrangler secret put SECRET_INTERN` la fiecare
+     worker cu acțiuni (`program`, `calendar`, `tipic`, `chat`) și migrația bazei `xc-chat-staging`;
+   - de probat cu ochii pe telefon: bula pe ecran mic (panoul ia toată lățimea sub 480 px).
+2. **Ce a mai rămas deosebit între local și public** (user, 11.09.2026: „să nu fie nicio diferență
+   între testare și public"). Trei deosebiri, toate **structurale**, nu de afișare:
+   - **emailul nu poate pleca din `wrangler dev`** — de aceea codul apare în pagină și `123456`
+     merge oricând pentru super-admin;
    - **un singur host, cu căi** (`/program`, `/cont`) față de subdomenii pe staging;
-   - **cache**: în dev paginile ies `no-store`, pe staging `max-age=300` — dinadins, altfel
-     schimbările par nefăcute cinci minute. (`calendar` n-are ramura asta: și local cachează 5 min.)
-2. **PDF-urile cărților tipicului în R2** — Anuarul (41 MB), Mineiul pe noiembrie (67 MB) și ROEA
-   stau în R2-ul V1 și n-au fost copiate. Fără ele, cardul care duce la pagina zilei din carte nu
-   se scrie (codul îl așteaptă). De întrebat utilizatorul dacă le vrea.
-3. **Curățenia (A6)** — schema, sloturile din slujbele programului (`curatenie: true`), rapoartele
-   prin serviciul de comunicare. Voluntarii devin conturi ale platformei: adresele lor din V1 se
-   trec prin `identity /utilizatori/asigura`, iar aplicația ține doar `user_id`.
-4. **Testul real de email**, de către utilizator: `https://cont.staging.sfantul-ilie.ro` → cont nou
+   - **cache**: în dev paginile ies `no-store`, pe staging `max-age=300` — dinadins.
+     (`calendar` n-are ramura asta: și local cachează 5 min.)
+3. **PDF-urile cărților tipicului în R2** — Anuarul (41 MB), Mineiul pe noiembrie (67 MB) și ROEA
+   stau în R2-ul V1 și n-au fost copiate. Fără ele, cardul spre pagina zilei din carte nu se scrie.
+4. **Curățenia (A6)** — schema, sloturile din slujbele programului (`curatenie: true`), rapoartele
+   prin serviciul de comunicare. Voluntarii devin conturi: adresele din V1 trec prin
+   `identity /utilizatori/asigura`, iar aplicația ține doar `user_id`.
+5. **Testul real de email**, de către utilizator: `https://cont.staging.sfantul-ilie.ro` → cont nou
    cu `rubikmm@gmail.com` → codul vine pe email → super-admin automat.
-5. **Pornire automată în container** — `pnpm dev` se lansează manual; de pus în `app-init.sh`.
-6. Comunicare reală (`LIVRARE_REALA=da`) abia când A7 se portează — nu înainte.
-7. Vocabularul de nume al subdomeniilor V2 (lista de 15) — de confirmat cu utilizatorul.
-8. **Titlul zilei din calendar** (`titlu_html`, văzut în program la „Afișează calendarul"): V2 îl
-   reface din segmente, fără `<strong>`/`<em>` din sursa Patriarhiei; V1 le păstra (sfinții cu
-   cruce, bold). De lămurit cu utilizatorul dacă vrea bold-ul înapoi — se schimbă în calendar, nu în program.
+6. **Pornire automată în container** — `pnpm dev` se lansează manual; de pus în `app-init.sh`.
+   ⚠️ De acum are nevoie și de tokenul Cloudflare în mediu (binding-ul `ai` al chatului).
+7. Comunicare reală (`LIVRARE_REALA=da`) abia când A7 se portează — nu înainte.
+8. Vocabularul de nume al subdomeniilor V2 (lista de 15) — de confirmat cu utilizatorul.
+9. **Titlul zilei din calendar** (`titlu_html`): V2 îl reface din segmente, fără `<strong>`/`<em>`
+   din sursa Patriarhiei; V1 le păstra. De lămurit dacă vrea bold-ul înapoi — se schimbă în calendar.
 
 ## Aplicațiile de pe staging
 
@@ -203,6 +213,66 @@ propunerea automată, ca în V1.
 ## Jurnal
 
 ### 2026-09-11
+
+- **MODUL NOU: Chat (AI) + acțiunile interne ale aplicațiilor** (user, 16:54 și 17:00: „să poată fi
+  implementat pe toate aplicațiile din această platformă cu un simplu întrerupător"). Sunt **două
+  lucruri separate**, iar despărțirea e miezul: **registrul de acțiuni** (`@xc/actiuni`, ruta
+  `/_actiuni`) e lista verbelor fiecărei aplicații, folosibilă de un AI, de o altă aplicație sau de
+  o unealtă de întreținere; **chatul** (`services/chat-worker` + `@xc/chat`) e doar primul lui
+  client. Dacă chatul s-ar scoate mâine, registrul rămâne și își merită singur costul. Arhitectura
+  întreagă: `docs/architecture/chat-si-actiuni.md`, decizia: `docs/adr/0007-actiuni-interne-si-chat.md`.
+
+  **Regula împotriva dublării**: o acțiune nu conține logică proprie — cheamă exact funcția pe care
+  o cheamă și ruta `/v1`. De aceea facerea hârtiilor programului a ieșit din rute în `hartii.ts`, iar
+  compunerea zilei tipicului în `zi.ts`: fără mutările astea, acțiunile ar fi repetat cum se adună o
+  foaie, adică exact tiparul V1 mutat cu un etaj mai sus.
+
+  **Regula împotriva confuziei cu publicul**: `/_actiuni` răspunde numai prin Service Binding, cu
+  secretul platformei; de pe internet calea dă **404**, nu 403.
+
+  **Drepturile**: neschimbate. Acțiunea cu permisiune întreabă `authorization-worker` cu principalul
+  real al omului, mască „vezi ca" cu tot — chatul nu poate face nimic ce n-ar putea face omul care
+  scrie în el. Acțiunile care **scriu** nu se execută din chat: devin propuneri cu „Da/Nu", expiră în
+  zece minute, iar dreptul se verifică din nou la confirmare.
+
+- **„Sfinții zilei" și celelalte hârtii sunt acum OBIECTE care circulă** (user, 17:03). O acțiune
+  întoarce fie date, fie un `Obiect`: hârtia se face la cerere, se așază în `media-worker` (R2) și
+  mai departe circulă **doar cheia** — octeții nu trec niciodată prin model, prin chat sau prin
+  context. Așa aceeași foaie cerută de zece ori se face o dată, iar o corectură în calendar schimbă
+  amprenta, deci cheia, deci hârtia se reface singură. Trimiterea lor va fi o acțiune a comunicării,
+  nu a aplicației care le face.
+
+- **Alegerile utilizatorului, înainte de cod**: creierul pe **Workers AI** (pentru cost — i-am spus
+  că modelele deschise aleg uneltele mai slab decât Claude), bula **doar pentru admini** la pornire,
+  **citire + scriere cu confirmare**, discuția **pe server (D1)** ca să treacă din aplicație în
+  aplicație. Creierul stă după o singură funcție (`intreabaModelul`): schimbarea furnizorului e o
+  linie, nu o rescriere.
+
+- **⚠️ MĂSURAT: numele de acțiune cu PUNCT rup apelarea uneltelor.** Cu `program.slujbele_zilei`
+  modelul alege unealta potrivită dar scrie apelul ca **text** (`[program.slujbele_zilei(zi="duminică")]`)
+  și nu se execută nimic; cu `program__slujbele_zilei`, același model și aceeași întrebare, întoarce
+  `tool_calls` cum trebuie. Numele de funcție acceptat e `^[a-zA-Z0-9_-]{1,64}$`. Traducerea stă
+  într-un singur loc (`numeUnealta`); numele canonic cu punct rămâne peste tot în rest.
+
+- **Modelul, ales pe cifre** (6 modele × 5 întrebări omenești, aceleași unelte): `@cf/openai/gpt-oss-120b`
+  **5/5** — singurul care a și socotit data duminicii; llama-4-scout, glm-5.3, glm-5.3-flash și
+  deepseek-v4-flash 3/5; qwen3-30b 2/5. Greșeala tipică a celorlalte: confundă „slujbele zilei" cu
+  „slujbele săptămânii" și cheamă „următoarea slujbă" când li se cere o foaie. Tot atunci s-a văzut
+  că **fără ziua de azi în instrucțiuni** „duminică" nu se poate socoti.
+
+- **Întrerupătorul, în două locuri**: în cod, o aplicație capătă chatul cu trei linii plus
+  `src/actiuni.ts`; din `apps/admin` → pagina **„Module"**, scrisă în KV `xc-config-staging`
+  (cheia `modul:chat`), cu permisiunea nouă `modules.manage` (super-admin: un modul pornit costă bani
+  la fiecare apăsare). **Stingerea oprește și rutele**, nu doar bula, iar implicitul e STINS peste tot.
+
+- **Probat cap-coadă pe local**, cu sesiune adevărată: „ce slujbe sunt duminică?" → orele reale din
+  bază; „trimite-mi foaia cu sfinții de duminică" → PDF de 54 KB făcut prin Browser Rendering, așezat
+  în R2 și descărcat prin `/program/chat/fisier/<cheie>`. Bula e în pagină, cu salutul cerut.
+
+- **⚠️ `pnpm dev` cere de acum tokenul Cloudflare în mediu**: binding-ul `ai` n-are variantă locală,
+  wrangler face proxy spre Cloudflare și cade cu „Failed to start the remote proxy session" fără el.
+  Pornire: `set -a; . /backup/_setup/cloudflare.env; set +a; pnpm dev`.
+
 
 - **Săptămânile deschise DIN ARHIVĂ au drum de întoarcere** (user, 16:24). Linkurile din pagina
   arhivei poartă acum **`?din=arhiva`**, iar de semnul ăsta atârnă două lucruri: **„← Înapoi la
