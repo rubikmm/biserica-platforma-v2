@@ -34,6 +34,10 @@ const PROBE = [
   { text: 'liturghia de duminică nu se transmite online', unealta: 'program__modifica_slujba', propunere: true },
   // ambigue, dar rezolvabile de unealtă (o singură slujbă în zi)
   { text: 'luni începe la 7', unealta: 'program__modifica_slujba', propunere: true },
+  // din discuțiile ADEVĂRATE de pe staging, 11.09.2026 seara — ambele duse la capăt (GLM 5.3 Flash);
+  // frazele omului, nu ale noastre. Se adaugă aici fiecare discuție bună din export (discutii.mjs).
+  { text: 'Slujba de luni să fie de la ora 7', unealta: 'program__modifica_slujba', propunere: true },
+  { text: 'Adaugă marți la 18 slujba Sfântul Maslu', unealta: 'program__adauga_slujba', propunere: true },
   // NU e de aici: modelul trebuie să spună că nu poate, fără să inventeze
   { text: 'ce slujbe sunt duminică?', unealta: null, propunere: false },
   { text: 'fă-mi un raport cu slujbele din 2025', unealta: null, propunere: false },
