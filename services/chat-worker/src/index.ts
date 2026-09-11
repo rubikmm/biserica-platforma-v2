@@ -17,6 +17,7 @@ import {
   ANTET_SECRET,
   cereActiune,
   manifestulLui,
+  previzualizeaza,
   numeUnealta,
   unelteDinManifest,
   type Actor,
@@ -270,7 +271,11 @@ export default {
           prin: 'chat',
         })
         await inchidePropunerea(env.DB, p.id, r.ok ? 'facuta' : 'refuzata')
-        const text = r.ok ? `Gata: ${p.rezumat}` : `N-am putut: ${r.mesaj}`
+        // Rezumatul era la viitor („Schimb…", „o scriu întâi"); după execuție se spune la trecut.
+        const laTrecut = p.rezumat
+          .replace(/^(Schimb|Adaug|Scot|Scriu|Validez)\b/, (v) => ({ Schimb: 'Am schimbat', Adaug: 'Am adăugat', Scot: 'Am scos', Scriu: 'Am scris', Validez: 'Am validat' })[v] ?? v)
+          .replace(/\s*Săptămâna nu e scrisă încă — o scriu întâi din propunere\.|\s*Nu e scrisă încă — o scriu întâi din propunere\./, ' Săptămâna a fost scrisă din propunere.')
+        const text = r.ok ? `Gata. ${laTrecut}` : `N-am putut: ${r.mesaj}`
         await scrieMesaj(env.DB, { conversatie_id: p.conversatie_id, rol: 'agent', text })
         return json({ ok: r.ok, text })
       }
@@ -336,16 +341,38 @@ export default {
           }
 
           // ⚠️ AICI se oprește totul pentru acțiunile care schimbă date: se propune, nu se face.
+          // Intai PREVIZUALIZAREA: argumentele se valideaza, dreptul se verifica, iar aplicatia
+          // spune in vorbe ce ar urma („ora 08:00 → 07:00"). Omul confirma ceva concret si deja
+          // verificat; daca cererea n-are sens, afla de ce, si nu se propune nimic.
           if (unde.efect === 'scrie') {
+            const prev = await previzualizeaza(unde.fetcher, unde.nume, cerut.argumente, actor, {
+              secret,
+              correlationId: cid,
+              prin: 'chat',
+            })
+            if (!prev.ok) {
+              mesaje.push({
+                rol: 'unealta',
+                text: `Nu se poate (${prev.cod}): ${prev.mesaj}`,
+                numeUnealta: cerut.nume,
+                idApel: cerut.id,
+              })
+              continue
+            }
             const p = await scriePropunere(env.DB, {
               conversatie_id: c.id,
               aplicatie: unde.aplicatie,
               actiune: unde.nume,
               argumente: cerut.argumente,
-              rezumat: `${unde.descriere.split('.')[0]} (${unde.nume})`,
+              rezumat: prev.date.rezumat,
             })
             propunere = { id: p.id, rezumat: p.rezumat }
-            textFinal = textFinal || 'Am pregătit acțiunea. O fac dacă îmi confirmi.'
+            mesaje.push({
+              rol: 'unealta',
+              text: `Propunere pregătită, așteaptă confirmarea omului: ${prev.date.rezumat}`,
+              numeUnealta: cerut.nume,
+              idApel: cerut.id,
+            })
             break
           }
 
@@ -368,7 +395,13 @@ export default {
           mesaje.push({ rol: 'unealta', text: rezumat.text, numeUnealta: cerut.nume, idApel: cerut.id })
         }
 
-        if (propunere) break
+        if (propunere) {
+          // Un ultim rand de la model, ca sa spuna omului ce a pregatit — fara unelte, ca sa nu
+          // mai ceara altceva pana nu s-a raspuns la asta.
+          const ultim = await intreabaModelul(env, mesaje, [], comutator.creier)
+          textFinal = ultim.text || textFinal || 'Am pregătit schimbarea. O fac dacă îmi confirmi.'
+          break
+        }
       }
 
       if (!textFinal) {

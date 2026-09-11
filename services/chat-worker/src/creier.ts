@@ -117,6 +117,15 @@ export function instructiuni(
     '5. Uneltele marcate „SCHIMBĂ date" nu se execută pe loc: le ceri, iar omul confirmă apăsând',
     '   un buton. Nu spune niciodată că ai făcut ceva înainte să primești confirmarea.',
     '6. Datele se scriu omenește („duminică, 13 septembrie"), nu 2026-09-13.',
+    '7. Când omul cere o SCHIMBARE (o oră, o slujbă în plus sau în minus, o validare), CHEAMĂ',
+    '   IMEDIAT unealta de scriere potrivită, cu argumentele cerute. NU cere confirmarea în text',
+    '   („vrei să…?", „confirmă") și nu spune că nu poți: chemarea uneltei NU execută nimic —',
+    '   ea pregătește o propunere, iar omul o confirmă apăsând un buton care apare sub răspuns.',
+    '   După ce unealta răspunde că propunerea e pregătită, spune-i într-o frază ce urmează și că',
+    '   așteaptă apăsarea lui. Când o unealtă răspunde „Nu se poate", spune-i motivul, în vorbele tale.',
+    '   NU pune întrebări de lămurire înainte de a chema unealta: cheam-o cu ce ai (ziua se poate da',
+    '   și ca „luni", „marți"; numele slujbei se poate lăsa gol) — dacă lipsește ceva, unealta îți',
+    '   spune exact ce, și abia atunci întrebi omul.',
     ...(fundal.length
       ? [
           '',

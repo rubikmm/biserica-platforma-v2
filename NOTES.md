@@ -93,8 +93,8 @@ propunerea automată, ca în V1.
 1. **Modulul de Chat, ce a rămas** (11.09.2026):
    - bula e montată doar pe `program`; `calendar` și `tipic` au acțiuni, dar nu și bulă (aceleași
      trei linii: `modulChat`, `ruteaza`, `chat` în opțiunile comune ale paginilor);
-   - **acțiunile care SCRIU și confirmarea „Da/Nu" sunt scrise, dar neprobate cap-coadă** — prima
-     candidată firească e `comunicare.trimite_obiect` (trimiterea unei foi la o audiență);
+   - ✅ acțiunile care scriu + confirmarea sunt probate cap-coadă pe program (11.09, seara);
+     rămâne `comunicare.trimite_obiect` (trimiterea unei foi la o audiență) — a comunicării;
    - nimic nu e publicat pe staging: acolo trebuie `wrangler secret put SECRET_INTERN` la fiecare
      worker cu acțiuni (`program`, `calendar`, `tipic`, `chat`) și migrația bazei `xc-chat-staging`;
    - de probat cu ochii pe telefon: bula pe ecran mic (panoul ia toată lățimea sub 480 px).
@@ -217,6 +217,24 @@ propunerea automată, ca în V1.
 ## Jurnal
 
 ### 2026-09-11
+
+- **Partea EXECUTIVĂ: chatul scrie în program** (user, 19:00, cu poza chatului care spunea „nu pot
+  modifica"). Programul V2 n-avea NICIUN drum de scriere (`/admin` scos, propunerea din zbor). Acum
+  sunt cinci funcții în `depozit.ts` — `scrieSaptamana`, `modificaSlujba`, `adaugaSlujba`,
+  `stergeSlujba`, `valideazaSaptamana` — fiecare cu mutația + `istoric` + `outbox` în **același
+  batch**, și cinci acțiuni peste ele (`modifica_slujba`, `adauga_slujba`, `sterge_slujba`,
+  `scrie_propunerea`, `valideaza_saptamana`), cu `program.write` / `program.publish`.
+  **Previzualizarea** (`x-xc-previzualizare: 1` → validare + drept + `rezuma`, fără execuție) face ca
+  omul să confirme ceva concret și deja verificat: „Schimb «Utrenia și Sfânta Liturghie» de luni,
+  14 septembrie: ora 08:00 → 07:00. Săptămâna nu e scrisă încă — o scriu întâi din propunere."
+  Probat cap-coadă pe local: propunere → „Da" → săptămâna scrisă din propunere, ora schimbată,
+  două evenimente `program.week.changed.v1` publicate, istoricul cu „scris" + „schimbat".
+  Detalii: `docs/architecture/chat-si-actiuni.md` §8.
+- **Două lucruri măsurate pe drum**: (1) modelul cerea confirmarea ÎN TEXT („vrei să…?") în loc să
+  cheme unealta — regula scrisă: cheamă imediat, chemarea doar pregătește propunerea, confirmarea
+  e pe buton; (2) omul spune „luni", nu 2026-09-14 — `dataCeruta` înțelege acum numele zilelor
+  (următoarea zi cu numele acela, azi inclusiv), iar numele slujbei e opțional când ziua are una.
+  Citirile din acțiuni arată ce arată și pagina: săptămâna scrisă, altfel propunerea ei.
 
 - **API-ul programului știe de istoric** (user, 18:41–18:46: „trebuie să adaptăm api-ul și să știe de
   istoric" — la „Sfântul Maslu" chatul n-avea ce să cheme). Cinci acțiuni noi, toate învelișuri

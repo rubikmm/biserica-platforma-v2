@@ -1,9 +1,11 @@
 import {
   ANTET_ACTOR,
+  ANTET_PREVIZUALIZARE,
   ANTET_PRIN,
   ANTET_SECRET,
   CALE_ACTIUNI,
   type Actor,
+  type Previzualizare,
   type Rezultat,
 } from './contract.js'
 import type { Manifest } from './manifest.js'
@@ -28,7 +30,7 @@ export async function cereActiune<T = unknown>(
   nume: string,
   argumente: unknown,
   actor: Actor,
-  o: CereriInterne,
+  o: CereriInterne & { previzualizare?: boolean },
 ): Promise<Rezultat<T>> {
   try {
     const r = await serviciu.fetch(`https://actiuni.intern${CALE_ACTIUNI}/${encodeURIComponent(nume)}`, {
@@ -39,6 +41,7 @@ export async function cereActiune<T = unknown>(
         [ANTET_ACTOR]: JSON.stringify(actor),
         [ANTET_PRIN]: o.prin,
         'x-correlation-id': o.correlationId,
+        ...(o.previzualizare ? { [ANTET_PREVIZUALIZARE]: '1' } : {}),
       },
       body: JSON.stringify(argumente ?? {}),
     })
@@ -60,6 +63,21 @@ export async function cereActiune<T = unknown>(
       mesaj: e instanceof Error ? e.message : 'aplicația nu răspunde',
     }
   }
+}
+
+/**
+ * Ce AR face actiunea, fara s-o faca: argumente validate, drept verificat, rezumat pentru om.
+ * Chatul o cheama inainte sa propuna un „Da/Nu" — ca omul sa confirme ceva concret si deja
+ * verificat, nu o promisiune care poate cadea dupa.
+ */
+export function previzualizeaza(
+  serviciu: Fetcher,
+  nume: string,
+  argumente: unknown,
+  actor: Actor,
+  o: CereriInterne,
+): Promise<Rezultat<Previzualizare>> {
+  return cereActiune<Previzualizare>(serviciu, nume, argumente, actor, { ...o, previzualizare: true })
 }
 
 /**

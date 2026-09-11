@@ -5,12 +5,14 @@ import { egaleInTimpConstant } from '@xc/auth'
 import { Logger } from '@xc/observability'
 import {
   ANTET_ACTOR,
+  ANTET_PREVIZUALIZARE,
   ANTET_PRIN,
   ANTET_SECRET,
   CALE_ACTIUNI,
   type Actiune,
   type Actor,
   type CodEroare,
+  type Previzualizare,
   type Registru,
 } from './contract.js'
 import { manifest, type Manifest } from './manifest.js'
@@ -136,7 +138,7 @@ export function modulActiuni<E extends EnvActiuni>(cfg: {
     argumenteBrute: unknown,
     env: E,
     ctxExec: ExecutionContext,
-    o: { actor: Actor; correlationId: string; prin: string },
+    o: { actor: Actor; correlationId: string; prin: string; previzualizare?: boolean },
   ): Promise<{ ok: true; date: unknown } | { ok: false; cod: CodEroare; mesaj: string }> {
     const log = new Logger({ service: `actiuni-${cfg.aplicatie}`, correlationId: o.correlationId })
 
@@ -184,14 +186,22 @@ export function modulActiuni<E extends EnvActiuni>(cfg: {
       }
     }
 
+    const ctx = { env, actor: o.actor, correlationId: o.correlationId, ctxExec, prin: o.prin }
+
+    // Previzualizarea: argumentele sunt bune si dreptul e verificat — se spune ce AR urma, atat.
+    // O cerere fara sens („nu gasesc slujba") cade aici, cu motivul ei, si nu se propune nimic.
+    if (o.previzualizare) {
+      try {
+        const rezumat = a.rezuma ? await a.rezuma(argumente, ctx) : a.descriere.split('.')[0] ?? a.nume
+        const p: Previzualizare = { previzualizare: true, rezumat }
+        return { ok: true, date: p }
+      } catch (e) {
+        return { ok: false, cod: 'argumente_invalide', mesaj: e instanceof Error ? e.message : String(e) }
+      }
+    }
+
     try {
-      const date = await a.executa(argumente, {
-        env,
-        actor: o.actor,
-        correlationId: o.correlationId,
-        ctxExec,
-        prin: o.prin,
-      })
+      const date = await a.executa(argumente, ctx)
 
       // Contractul se verifica si la iesire. In dev o nepotrivire opreste cererea (asa se prinde
       // devreme o schema ramasa in urma); in public trece cu avertisment — un raspuns bun nu se
@@ -235,7 +245,9 @@ export function modulActiuni<E extends EnvActiuni>(cfg: {
           }),
         )
       }
-      return { ok: false, cod: 'eroare_interna', mesaj: 'acțiunea nu a putut fi dusă la capăt' }
+      // Motivul se da mai departe: mesajele sunt ale noastre, in romana, iar omul (si modelul)
+      // trebuie sa afle DE CE n-a mers, nu doar ca n-a mers.
+      return { ok: false, cod: 'eroare_interna', mesaj: mesaj || 'acțiunea nu a putut fi dusă la capăt' }
     }
   }
 
@@ -288,6 +300,7 @@ export function modulActiuni<E extends EnvActiuni>(cfg: {
         actor: actorParsat.data as Actor,
         correlationId,
         prin,
+        previzualizare: req.headers.get(ANTET_PREVIZUALIZARE) === '1',
       })
       if (r.ok) return json(r)
       const status =

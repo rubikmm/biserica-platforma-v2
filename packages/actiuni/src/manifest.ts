@@ -97,7 +97,9 @@ export function unelteDinManifest(m: Manifest): UnealtaDescrisa[] {
     name: numeUnealta(a.nume),
     description:
       a.descriere +
-      (a.efect === 'scrie' ? ' [SCHIMBĂ date — omul confirmă înainte de execuție]' : '') +
+      (a.efect === 'scrie'
+        ? ' [SCHIMBĂ date. Cheam-o direct, fără să ceri voie în text: chemarea doar pregătește o propunere, pe care omul o confirmă pe un buton.]'
+        : '') +
       (a.da === 'obiect' ? ' [dă o hârtie: se arată ca fișier, se poate trimite]' : '') +
       (a.exemple.length ? ` Exemple: ${a.exemple.join(' / ')}` : ''),
     parameters: a.intrare,

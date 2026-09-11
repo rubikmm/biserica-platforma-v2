@@ -598,9 +598,15 @@ export function oraBucuresti(acum: Date = new Date()): string {
  * aplicatii, iar de acum si actiunile le folosesc.
  */
 export function dataCeruta(text: string, azi: string): string | null {
-  if (text === 'azi') return azi
-  if (text === 'maine') return adaugaZile(azi, 1)
-  if (text === 'viitoare') return adaugaZile(azi, 7)
+  const t = faraDiacritice(text).toLowerCase().trim()
+  if (t === 'azi' || t === 'astazi') return azi
+  if (t === 'maine') return adaugaZile(azi, 1)
+  if (t === 'poimaine') return adaugaZile(azi, 2)
+  if (t === 'viitoare') return adaugaZile(azi, 7)
+  // Numele zilei („luni", „marti", „duminica"): urmatoarea zi cu numele asta, azi inclusiv —
+  // omul spune „slujba de luni" si intelege lunea care vine (11.09.2026).
+  const zi = ZILE_SAPTAMANA_COD.indexOf(t as (typeof ZILE_SAPTAMANA_COD)[number])
+  if (zi >= 0) return adaugaZile(azi, (zi - ziuaSaptamanii(azi) + 7) % 7)
   return eDataValida(text) ? text : null
 }
 

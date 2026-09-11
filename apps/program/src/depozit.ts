@@ -1,8 +1,9 @@
 /**
  * Citirile pe baza `xc-program-*`. Tot SQL-ul programului sta aici.
  */
-import type { IntrareVocabular, Saptamana, Slujba, StareSaptamana } from '@xc/contracts'
-import { toate, unul } from '@xc/db'
+import type { Actor as ActorEveniment, IntrareVocabular, Saptamana, Slujba, SlujbaDeScris, StareSaptamana } from '@xc/contracts'
+import { acum, batch, toate, unul } from '@xc/db'
+import { construiesteEnvelope, declaratieOutbox } from '@xc/events'
 import { adaugaZile, faraDiacritice, intervalLizibil, luneaSaptamanii } from '@xc/ui'
 
 export interface RandSaptamana {
@@ -275,4 +276,241 @@ export function cautaInVocabular(vocabular: IntrareVocabular[], text: string): I
       return cuvinte.length > 0 && cuvinte.every((c) => nume.includes(c) || v.cod_nume.includes(c))
     })
     .sort((a, b) => a.nume.length - b.nume.length)
+}
+
+// ---------------------------------------------------------------------------
+// SCRIEREA — partea executiva (11.09.2026)
+//
+// Pana azi programul V2 doar citea: pagina `/admin` a fost scoasa („nu vreau sa fac nimic
+// manual"), iar propunerea saptamanii se socoteste din zbor. Scrierea intra acum prin ACTIUNI
+// (chatul e primul care le cere), dar sta AICI, in domeniu — o actiune n-are logica proprie.
+//
+// Regula fiecarei scrieri: mutatia, randul de `istoric` si evenimentul din `outbox` pleaca in
+// ACELASI batch — ori exista toate, ori niciuna. Evenimentul il duce mai departe cron-ul
+// (`golesteOutbox`), plus un `waitUntil` de dupa commit.
+// ---------------------------------------------------------------------------
+
+export interface CineScrie {
+  /** `null` la masini si la import. */
+  userId: string | null
+  correlationId: string
+}
+
+const PRODUCATOR = 'app-program'
+
+function actorEveniment(cine: CineScrie): ActorEveniment {
+  return cine.userId ? { type: 'user', id: cine.userId } : { type: 'system' }
+}
+
+/** Randul de istoric al unei scrieri — ce s-a facut, de cine, in ce saptamana. */
+function declaratieIstoric(
+  db: D1Database,
+  cine: CineScrie,
+  ce: 'scris' | 'validat' | 'schimbat' | 'sters',
+  luni: string,
+  slujbaId: string | null,
+  detalii: unknown,
+): D1PreparedStatement {
+  return db
+    .prepare(`INSERT INTO istoric (moment, user_id, ce, luni, slujba_id, detalii) VALUES (?, ?, ?, ?, ?, ?)`)
+    .bind(acum(), cine.userId, ce, luni, slujbaId, JSON.stringify(detalii ?? null))
+}
+
+/**
+ * Evenimentul saptamanii, dupa schimbare. Starea si numarul de slujbe se DAU (nu se citesc):
+ * declaratia intra in acelasi batch cu mutatia, deci baza inca nu le stie.
+ */
+function declaratieEveniment(
+  db: D1Database,
+  tip: 'program.week.changed.v1' | 'program.week.validated.v1',
+  s: { luni: string; duminica: string; titlu: string; versiune_calendar: string | null },
+  stare: StareSaptamana,
+  numarSlujbe: number,
+  cine: CineScrie,
+): D1PreparedStatement {
+  const env = construiesteEnvelope({
+    type: tip,
+    producer: PRODUCATOR,
+    actor: actorEveniment(cine),
+    correlationId: cine.correlationId,
+    payload: {
+      luni: s.luni,
+      duminica: s.duminica,
+      stare,
+      titlu: s.titlu || intervalLizibil(s.luni, s.duminica),
+      versiuneCalendar: s.versiune_calendar,
+      slujbe: numarSlujbe,
+    },
+  })
+  return declaratieOutbox(db, env)
+}
+
+/** O saptamana validata care se atinge trece in `modificat_dupa_validare`; restul raman cum sunt. */
+function stareaDupaSchimbare(s: RandSaptamana): StareSaptamana {
+  return s.stare === 'validat' ? 'modificat_dupa_validare' : s.stare
+}
+
+async function numarSlujbe(db: D1Database, luni: string): Promise<number> {
+  const r = await unul<{ n: number }>(db, `SELECT COUNT(*) AS n FROM slujbe WHERE luni = ?`, [luni])
+  return r?.n ?? 0
+}
+
+/** Id stabil, ca la import: `2026-09-14-utrenia_liturghie`, iar a doua din zi `-2`, `-3`… */
+async function idNou(db: D1Database, data: string, codNume: string): Promise<string> {
+  const baza = `${data}-${codNume}`
+  const existente = await toate<{ id: string }>(db, `SELECT id FROM slujbe WHERE id = ? OR id LIKE ?`, [baza, `${baza}-%`])
+  if (!existente.length) return baza
+  for (let n = 2; n < 20; n++) if (!existente.some((e) => e.id === `${baza}-${n}`)) return `${baza}-${n}`
+  throw new Error(`prea multe slujbe cu acelasi nume in ${data}`)
+}
+
+function declaratieSlujbaNoua(db: D1Database, luni: string, id: string, s: SlujbaDeScris, nume: string, ordine: number): D1PreparedStatement {
+  const t = acum()
+  return db
+    .prepare(
+      `INSERT INTO slujbe (id, luni, data, ora, nume, cod_nume, slujitor, loc, detalii, observatii, curatenie, transmisie, ordine, creat, modificat)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .bind(id, luni, s.data, s.ora, nume, s.cod_nume, s.slujitor ?? null, s.loc, JSON.stringify(s.detalii), s.observatii ?? null, s.curatenie ? 1 : 0, s.transmisie ? 1 : 0, ordine, t, t)
+}
+
+/**
+ * SCRIE o saptamana intreaga: o creeaza daca nu e (stare `propus`, sursa `manual`) sau ii
+ * inlocuieste toate slujbele daca e. Asa se aseaza propunerea in baza inainte de a fi
+ * modificata sau validata — drumul din V1, propunere → validat.
+ */
+export async function scrieSaptamana(db: D1Database, luni: string, slujbe: SlujbaDeScris[], cine: CineScrie): Promise<RandSaptamana> {
+  const duminica = adaugaZile(luni, 6)
+  const existenta = await saptamana(db, luni)
+  const vocab = new Map((await vocabularul(db)).map((v) => [v.cod_nume, v.nume]))
+  const t = acum()
+  const declaratii: D1PreparedStatement[] = []
+
+  if (!existenta) {
+    declaratii.push(
+      db
+        .prepare(`INSERT INTO saptamani (luni, duminica, stare, titlu, sursa, creat, modificat) VALUES (?, ?, 'propus', ?, 'manual', ?, ?)`)
+        .bind(luni, duminica, intervalLizibil(luni, duminica), t, t),
+    )
+  } else {
+    declaratii.push(db.prepare(`DELETE FROM slujbe WHERE luni = ?`).bind(luni))
+    declaratii.push(db.prepare(`UPDATE saptamani SET stare = ?, modificat = ? WHERE luni = ?`).bind(stareaDupaSchimbare(existenta), t, luni))
+  }
+
+  // Id-urile se socotesc in memorie: baza nu vede insert-urile pana la batch.
+  const folosite = new Set<string>()
+  slujbe.forEach((s, i) => {
+    const nume = s.nume?.trim() || vocab.get(s.cod_nume) || s.cod_nume
+    let id = `${s.data}-${s.cod_nume}`
+    for (let n = 2; folosite.has(id); n++) id = `${s.data}-${s.cod_nume}-${n}`
+    folosite.add(id)
+    declaratii.push(declaratieSlujbaNoua(db, luni, id, s, nume, i))
+  })
+
+  const rand: RandSaptamana = existenta
+    ? { ...existenta, stare: stareaDupaSchimbare(existenta), modificat: t }
+    : { luni, duminica, stare: 'propus', titlu: intervalLizibil(luni, duminica), sursa: 'manual', sursa_id: null, sursa_link: null, versiune_calendar: null, validat_de: null, validat_la: null, creat: t, modificat: t }
+  declaratii.push(declaratieIstoric(db, cine, 'scris', luni, null, { slujbe: slujbe.length, din: existenta ? 'inlocuire' : 'propunere' }))
+  declaratii.push(declaratieEveniment(db, 'program.week.changed.v1', rand, rand.stare, slujbe.length, cine))
+  await batch(db, declaratii)
+  return rand
+}
+
+export interface SchimbariSlujba {
+  ora?: string
+  nume?: string
+  loc?: string
+  slujitor?: string | null
+  observatii?: string | null
+  detalii?: string[]
+  transmisie?: boolean
+  curatenie?: boolean
+}
+
+/** MODIFICA o slujba scrisa. Intoarce randul de dupa. Saptamana validata trece in `modificat_dupa_validare`. */
+export async function modificaSlujba(db: D1Database, id: string, schimbari: SchimbariSlujba, cine: CineScrie): Promise<RandSlujba> {
+  const r = await unul<RandSlujba>(db, `SELECT * FROM slujbe WHERE id = ?`, [id])
+  if (!r) throw new Error(`nu găsesc slujba ${id}`)
+  const s = await saptamana(db, r.luni)
+  if (!s) throw new Error(`săptămâna ${r.luni} nu e în bază`)
+
+  const set: string[] = []
+  const valori: Array<string | number | null> = []
+  const pune = (coloana: string, valoare: string | number | null) => {
+    set.push(`${coloana} = ?`)
+    valori.push(valoare)
+  }
+  if (schimbari.ora !== undefined) pune('ora', schimbari.ora)
+  if (schimbari.nume !== undefined) pune('nume', schimbari.nume)
+  if (schimbari.loc !== undefined) pune('loc', schimbari.loc)
+  if (schimbari.slujitor !== undefined) pune('slujitor', schimbari.slujitor)
+  if (schimbari.observatii !== undefined) pune('observatii', schimbari.observatii)
+  if (schimbari.detalii !== undefined) pune('detalii', JSON.stringify(schimbari.detalii))
+  if (schimbari.transmisie !== undefined) pune('transmisie', schimbari.transmisie ? 1 : 0)
+  if (schimbari.curatenie !== undefined) pune('curatenie', schimbari.curatenie ? 1 : 0)
+  if (!set.length) throw new Error('nu s-a cerut nicio schimbare')
+  const t = acum()
+  pune('modificat', t)
+
+  const stare = stareaDupaSchimbare(s)
+  await batch(db, [
+    db.prepare(`UPDATE slujbe SET ${set.join(', ')} WHERE id = ?`).bind(...valori, id),
+    db.prepare(`UPDATE saptamani SET stare = ?, modificat = ? WHERE luni = ?`).bind(stare, t, r.luni),
+    declaratieIstoric(db, cine, 'schimbat', r.luni, id, { inainte: { ora: r.ora, nume: r.nume, loc: r.loc }, schimbari }),
+    declaratieEveniment(db, 'program.week.changed.v1', s, stare, await numarSlujbe(db, r.luni), cine),
+  ])
+  return (await unul<RandSlujba>(db, `SELECT * FROM slujbe WHERE id = ?`, [id]))!
+}
+
+/** ADAUGA o slujba intr-o saptamana scrisa. */
+export async function adaugaSlujba(db: D1Database, s: SlujbaDeScris, cine: CineScrie): Promise<RandSlujba> {
+  const luni = luneaSaptamanii(s.data)
+  const sapt = await saptamana(db, luni)
+  if (!sapt) throw new Error(`săptămâna ${luni} nu e scrisă încă`)
+  const vocab = new Map((await vocabularul(db)).map((v) => [v.cod_nume, v.nume]))
+  if (!vocab.has(s.cod_nume)) throw new Error(`„${s.cod_nume}" nu e în vocabularul slujbelor`)
+  const id = await idNou(db, s.data, s.cod_nume)
+  const t = acum()
+  const stare = stareaDupaSchimbare(sapt)
+  const n = await numarSlujbe(db, luni)
+  await batch(db, [
+    declaratieSlujbaNoua(db, luni, id, s, s.nume?.trim() || vocab.get(s.cod_nume)!, n),
+    db.prepare(`UPDATE saptamani SET stare = ?, modificat = ? WHERE luni = ?`).bind(stare, t, luni),
+    declaratieIstoric(db, cine, 'scris', luni, id, { data: s.data, ora: s.ora, cod_nume: s.cod_nume }),
+    declaratieEveniment(db, 'program.week.changed.v1', sapt, stare, n + 1, cine),
+  ])
+  return (await unul<RandSlujba>(db, `SELECT * FROM slujbe WHERE id = ?`, [id]))!
+}
+
+/** STERGE o slujba scrisa. */
+export async function stergeSlujba(db: D1Database, id: string, cine: CineScrie): Promise<void> {
+  const r = await unul<RandSlujba>(db, `SELECT * FROM slujbe WHERE id = ?`, [id])
+  if (!r) throw new Error(`nu găsesc slujba ${id}`)
+  const s = await saptamana(db, r.luni)
+  if (!s) throw new Error(`săptămâna ${r.luni} nu e în bază`)
+  const t = acum()
+  const stare = stareaDupaSchimbare(s)
+  const n = await numarSlujbe(db, r.luni)
+  await batch(db, [
+    db.prepare(`DELETE FROM slujbe WHERE id = ?`).bind(id),
+    db.prepare(`UPDATE saptamani SET stare = ?, modificat = ? WHERE luni = ?`).bind(stare, t, r.luni),
+    declaratieIstoric(db, cine, 'sters', r.luni, id, { data: r.data, ora: r.ora, nume: r.nume }),
+    declaratieEveniment(db, 'program.week.changed.v1', s, stare, Math.max(0, n - 1), cine),
+  ])
+}
+
+/** VALIDEAZA o saptamana scrisa: de aici se poate tipari foaia de pe usa. */
+export async function valideazaSaptamana(db: D1Database, luni: string, cine: CineScrie, versiuneCalendar: string | null = null): Promise<RandSaptamana> {
+  const s = await saptamana(db, luni)
+  if (!s) throw new Error(`săptămâna ${luni} nu e scrisă încă`)
+  const t = acum()
+  const n = await numarSlujbe(db, luni)
+  await batch(db, [
+    db
+      .prepare(`UPDATE saptamani SET stare = 'validat', validat_de = ?, validat_la = ?, versiune_calendar = COALESCE(?, versiune_calendar), modificat = ? WHERE luni = ?`)
+      .bind(cine.userId ?? 'sistem', t, versiuneCalendar, t, luni),
+    declaratieIstoric(db, cine, 'validat', luni, null, { slujbe: n }),
+    declaratieEveniment(db, 'program.week.validated.v1', s, 'validat', n, cine),
+  ])
+  return { ...s, stare: 'validat', validat_de: cine.userId ?? 'sistem', validat_la: t, modificat: t }
 }

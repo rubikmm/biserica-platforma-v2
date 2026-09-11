@@ -76,6 +76,13 @@ export interface Actiune<I extends z.ZodType = z.ZodType, O extends z.ZodType = 
    * altfel un serviciu ar ocoli tacut drepturile. Actiunile fara permisiune sunt oricum deschise.
    */
   permiteServicii?: boolean
+  /**
+   * PREVIZUALIZAREA — ce se va intampla, spus omului INAINTE sa apese „Da". Doar pentru
+   * `efect: 'scrie'`: se cheama cu argumentele deja validate si cu dreptul deja verificat, poate
+   * citi baza (ca sa spuna „ora 08:00 → 07:00"), dar NU schimba nimic. Arunca daca cererea n-are
+   * sens („nu gasesc slujba") — atunci nu se propune nimic, iar omul afla de ce.
+   */
+  rezuma?: (argumente: z.infer<I>, c: ContextActiune<E>) => Promise<string>
   executa: (argumente: z.infer<I>, c: ContextActiune<E>) => Promise<z.infer<O>>
 }
 
@@ -126,6 +133,14 @@ export type Rezultat<T = unknown> =
 export const ANTET_SECRET = 'x-xc-intern'
 export const ANTET_ACTOR = 'x-xc-actor'
 export const ANTET_PRIN = 'x-xc-prin'
+/** Pus pe un POST de actiune: validare + drept + `rezuma`, FARA executie. */
+export const ANTET_PREVIZUALIZARE = 'x-xc-previzualizare'
+
+/** Ce intoarce o previzualizare. */
+export interface Previzualizare {
+  previzualizare: true
+  rezumat: string
+}
 
 /** Calea, sub care nimic nu se serveste de pe internet. */
 export const CALE_ACTIUNI = '/_actiuni'

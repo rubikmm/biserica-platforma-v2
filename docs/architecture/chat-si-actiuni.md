@@ -299,3 +299,49 @@ Atunci chatul ar minți cuviincios a doua zi după o corectură.
 5. Pagina „Module" din `apps/admin` + KV.
 6. Acțiuni care scriu, cu confirmare: întâi `comunicare.trimite_obiect` (trimiterea unei foi), care
    e și proba fluxului de confirmare cap-coadă.
+
+## 8. Partea executivă — cum scrie chatul (11.09.2026, seara)
+
+Programul V2 nu avea niciun drum de scriere (pagina `/admin` fusese scoasă, propunerea se socotea
+din zbor). Scrierea a intrat prin acțiuni, dar stă **în domeniu** (`depozit.ts`): `scrieSaptamana`,
+`modificaSlujba`, `adaugaSlujba`, `stergeSlujba`, `valideazaSaptamana`. Fiecare pune în **același
+batch** mutația, rândul de `istoric` și evenimentul din `outbox` (`program.week.changed.v1` /
+`program.week.validated.v1`) — ori toate, ori niciuna; outbox-ul se golește după commit și din cron.
+
+### Previzualizarea — omul confirmă ceva concret, deja verificat
+
+O acțiune care scrie poate declara `rezuma(argumente, ctx)`. Cu antetul `x-xc-previzualizare: 1`,
+`POST /_actiuni/<nume>` **validează argumentele, verifică dreptul și întoarce rezumatul, fără să
+execute nimic**. Chatul o cheamă înainte să propună „Da/Nu":
+
+```
+om: „mută liturghia de luni la 7"
+  → model: modifica_slujba { zi: "luni", ora: "08:00", schimbari: { ora: "07:00" } }
+  → chat-worker: previzualizare → „Schimb «Utrenia și Sfânta Liturghie» de luni, 14 septembrie:
+                  ora 08:00 → 07:00. Săptămâna nu e scrisă încă — o scriu întâi din propunere."
+  → om: [Da]  → chat-worker: cere acțiunea (drept verificat din nou) → „Gata. Am schimbat…"
+```
+
+Dacă cererea n-are sens („luni n-are nicio slujbă «acatist»"), previzualizarea cade cu motivul,
+nu se propune nimic, iar omul află de ce. Argumentele greșite cad **înainte** de rezumat.
+
+### Săptămâna care nu e scrisă se scrie întâi
+
+Săptămâna viitoare e propunere, nu rând în bază. Orice schimbare în ea **scrie întâi propunerea**
+(`scrieSaptamana`, stare `propus`, sursă `manual`), apoi aplică schimbarea — drumul din V1,
+propunere → scrisă → (modificată) → validată. Rezumatul o spune, ca omul să confirme știind.
+O săptămână validată care se atinge trece în `modificat_dupa_validare`.
+
+### Cum găsește chatul slujba din vorbele omului
+
+`gasesteSlujba(zi, nume?, ora?)`: ziua se poate spune și ca „luni" (`dataCeruta` înțelege numele
+zilelor — următoarea zi cu numele acela, azi inclusiv); numele e opțional (dacă ziua are o singură
+slujbă sau se dă ora ei de acum); se caută în ce se **vede** — săptămâna scrisă sau propunerea ei.
+Când sunt mai multe potriviri, unealta spune care sunt, și abia atunci modelul întreabă omul.
+
+### Ce a trebuit spus modelului, măsurat
+
+Cu descrierea „omul confirmă înainte", modelul **cerea confirmarea în text** („vrei să…?") în loc
+să cheme unealta. Regula scrisă: cheamă unealta imediat — chemarea nu execută nimic, ea pregătește
+propunerea, iar confirmarea e pe buton; nu pune întrebări de lămurire înainte, unealta spune ce
+lipsește.
