@@ -204,6 +204,15 @@ propunerea automată, ca în V1.
 
 ### 2026-09-11
 
+- **Săptămânile deschise DIN ARHIVĂ au drum de întoarcere** (user, 16:24). Linkurile din pagina
+  arhivei poartă acum **`?din=arhiva`**, iar de semnul ăsta atârnă două lucruri: **„← Înapoi la
+  arhivă"** deasupra titlului și **marcajul roșu rămas pe segmentul Arhivei** din pastilă (marcat, dar
+  tot apăsabil — neapăsabil e numai pe pagina arhivei însăși). Butonul e un **link adevărat** spre
+  `/arhiva`; JS-ul îl face să dea **pasul înapoi al browserului** atunci când chiar de acolo s-a venit
+  (`document.referrer` conține `/arhiva`), ca arhiva să se redeschidă derulată unde a rămas omul, nu
+  de sus. Fără JS, ori intrat de-a dreptul pe adresă (link trimis, semn de carte), linkul duce cinstit
+  la `/arhiva`. **De ce nu din `referer`**: acela lipsește des (și la trecerea https→http, și la unele
+  telefoane), deci pagina ar arăta altfel de la o deschidere la alta — cu tot cu cache-ul de muchie.
 - **Antetul pe telefon are acum DOUĂ înfățișări, după drepturi** (patru cereri ale userului, 16:02).
   Pastila omului **fără** drepturi de admin poartă clasa **`larga`** (o decide `ctx.eAdmin`) și, sub
   600 px: **se întinde cât rândul** („cele două butoane de la stânga… să fie dispuse pe toată

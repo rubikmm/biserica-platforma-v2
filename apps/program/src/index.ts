@@ -207,7 +207,9 @@ export default {
             cal: s.cal,
             dinCalendar: s.dinCalendar,
             azi,
-            meniu: { luni, foaie, azi },
+            // `?din=arhiva` — pus de linkurile din pagina arhivei; de el atarna butonul „Înapoi la
+            // arhivă" si marcajul ramas pe segmentul Arhivei (user, 11.09.2026, 16:24)
+            meniu: { luni, foaie, azi, dinArhiva: url.searchParams.get('din') === 'arhiva' },
             nelamuriri: s.propunere?.nelamuriri,
           }),
           200,

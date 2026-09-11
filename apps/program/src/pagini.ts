@@ -68,6 +68,13 @@ export interface Meniu {
   /** pagina deschisa e Arhiva (butonul ei din pastila ramane aprins) */
   arhiva?: boolean
   /**
+   * Saptamana a fost deschisa DIN arhiva (`?din=arhiva`, pus de linkurile de acolo — user, 11.09.2026,
+   * 16:24). Doua urmari: deasupra titlului se scrie butonul „Înapoi la arhivă", iar segmentul Arhivei
+   * din pastila ramane marcat, ca omul sa vada de unde a venit. Nu se ghiceste din `referer`: acela
+   * lipseste des si ar face pagina sa arate altfel de la o deschidere la alta, cu tot cu cache.
+   */
+  dinArhiva?: boolean
+  /**
    * Calendarul se POATE aprinde pe pagina asta — adica se scrie intrerupatorul, iar coloana zilei
    * liturgice sta in pagina, gata sa iasa la iveala. Adevarat pe saptamana de azi si pe cea viitoare
    * (alegerea userului, 11.09.2026, ora 10:47), fals pe saptamanile din arhiva: acolo calendarul
@@ -127,6 +134,9 @@ const IC_ARHIVA = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" s
  */
 const IC_INAINTE = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12h14"/><path d="m12.5 6 6 6-6 6"/></svg>`
 
+/** Săgeata „înapoi", a butonului de deasupra titlului la săptămânile deschise din arhivă. */
+const IC_INAPOI = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19.5 12h-14"/><path d="m11.5 6-6 6 6 6"/></svg>`
+
 // ---------------------------------------------------------------------------
 // Stilul local — V1 src/stil.ts, ca atare; adaugirile V2 sunt marcate
 // ---------------------------------------------------------------------------
@@ -148,6 +158,17 @@ export const STIL = `
 .sapt-cap .moment { display:block; font:600 10.5px/1 ui-sans-serif,system-ui; letter-spacing:.12em;
                     text-transform:uppercase; color:var(--faint); margin:0 0 7px }
 .sapt-cap .moment.acum { color:var(--rosu) }
+/* „Înapoi la arhivă" (user, 11.09.2026), deasupra titlului, numai pe saptamanile deschise din arhiva.
+   Sta ca un buton mic si stins, de aceeasi masura cu cele din randul de unelte — e un drum inapoi,
+   nu o unealta a saptamanii, deci n-are ce cauta printre ele. */
+.rand-inapoi { margin:22px 0 0 }
+.inapoi { display:inline-flex; align-items:center; gap:7px; font:600 12.5px/1 ui-sans-serif,system-ui;
+          letter-spacing:.06em; color:var(--soft); text-decoration:none; background:var(--tinta);
+          border:1px solid var(--rule); border-radius:10px; padding:9px 13px }
+.inapoi:hover { color:var(--rosu); border-color:var(--rosu) }
+.inapoi svg { vertical-align:0 }
+/* cu butonul deasupra, titlul n-are nevoie de tot spatiul lui de sus */
+.rand-inapoi + .sapt-cap { margin-top:14px }
 .stare { font:600 10.5px/1 ui-sans-serif,system-ui; letter-spacing:.12em; text-transform:uppercase;
          padding:5px 9px; border-radius:999px; border:1px solid var(--rule); color:var(--soft); white-space:nowrap }
 .stare.validat { border-color:var(--azi); color:var(--ink); background:var(--azi-fund) }
@@ -460,6 +481,18 @@ export const SCRIPT = `
     try { localStorage.setItem(CHEIE, pornit ? "1" : "0"); } catch (e) {}
   });
 })();
+(function(){
+  // „Înapoi la arhivă" (user, 11.09.2026): daca omul chiar vine din pagina arhivei, butonul face
+  // PASUL INAPOI al browserului — arhiva se redeschide derulata unde a ramas, cu anul si luna pe
+  // care le rasfoia. Daca a intrat de-a dreptul pe adresa (link trimis, semn de carte), pasul inapoi
+  // l-ar duce aiurea, asa ca linkul ramane cum e scris si duce la /arhiva.
+  var b = document.getElementById("b-inapoi");
+  if (!b) return;
+  b.addEventListener("click", function(e){
+    var vineDinArhiva = document.referrer && document.referrer.indexOf("/arhiva") > -1;
+    if (vineDinArhiva && history.length > 1) { e.preventDefault(); history.back(); }
+  });
+})();
 `
 
 // ---------------------------------------------------------------------------
@@ -557,11 +590,15 @@ function navigarea(ctx: Ctx, m: Meniu): string {
       + ` title="Ești pe săptămâna de azi" aria-label="săptămâna de azi"></button>`
     : `<a class="btn punct" href="${p}/saptamana/${aAzi}" title="Treci la săptămâna de azi"`
       + ` aria-label="săptămâna de azi"></a>`
+  // ⚠️ Pe o saptamana deschisa DIN arhiva, segmentul ramane MARCAT (user, 11.09.2026, 16:24: „să se
+  // vadă rămas încercuit butonul pe care am apăsat"), dar ramane si APASABIL — altfel omul ar avea
+  // marcajul si n-ar avea drumul. Rosu plin, ca pe pagina arhivei; neapasabil e numai acolo.
   const arhiva = !ctx.eAdmin ? ''
     : m.arhiva
       ? `<button type="button" class="btn arh activ" aria-disabled="true" aria-current="page"`
         + ` title="Ești în arhiva programelor" aria-label="Arhiva programelor">${IC_ARHIVA}</button>`
-      : `<a class="btn arh" href="${p}/arhiva" title="Arhiva programelor — alege săptămâna"`
+      : `<a class="btn arh${m.dinArhiva ? ' activ' : ''}" href="${p}/arhiva"`
+        + ` title="${m.dinArhiva ? 'Săptămâna asta e deschisă din arhivă — întoarce-te la ea' : 'Arhiva programelor — alege săptămâna'}"`
         + ` aria-label="Arhiva programelor">${IC_ARHIVA}</a>`
   // ⚠️ `larga` = pastila omului FARA drepturi de admin: doua segmente (bulina si „viitoare"), iar in
   // randul de unelte nu mai e nimic in afara de intrerupator. Acolo pastila se intinde cat randul, iar
@@ -894,7 +931,15 @@ export function paginaSaptamana(o: OptiuniSaptamana): string {
     : o.luni === adaugaZile(aAzi, -7) ? 'Săptămâna trecută'
     : o.luni === adaugaZile(aAzi, 7) ? 'Săptămâna viitoare'
     : ''
-  const cap = `<div class="sapt-cap"><div>${moment ? `<span class="moment${o.luni === aAzi ? ' acum' : ''}">${moment}</span>` : ''}<h2>${esc(o.titlu)}</h2></div>${eticheta}</div>`
+  // ⚠️ ÎNAPOI LA ARHIVĂ (user, 11.09.2026, 16:24: „un buton de back în partea de sus care să fie
+  // back-ul de la browser"). Se scrie doar pe saptamanile deschise din arhiva. E LINK adevarat catre
+  // pagina arhivei, iar JS-ul il face sa dea pasul inapoi al browserului cand chiar de acolo s-a venit
+  // — asa arhiva se redeschide unde a ramas omul, derulata la anul si luna pe care le rasfoia, nu de
+  // sus. Fara JS, ori intrat de-a dreptul pe adresa, linkul duce cinstit la /arhiva.
+  const inapoi = o.meniu.dinArhiva
+    ? `<p class="rand-inapoi"><a class="inapoi" id="b-inapoi" href="${esc(o.ctx.prefix)}/arhiva">${IC_INAPOI}Înapoi la arhivă</a></p>`
+    : ''
+  const cap = `${inapoi}<div class="sapt-cap"><div>${moment ? `<span class="moment${o.luni === aAzi ? ' acum' : ''}">${moment}</span>` : ''}<h2>${esc(o.titlu)}</h2></div>${eticheta}</div>`
   const gol = o.slujbe.length ? '' : `<p class="gol">${o.stare === 'propunere' ? 'Nimic de propus — istoricul nu spune nimic despre această săptămână.' : 'Săptămână fără slujbe înregistrate.'}</p>`
   const nelamuriri = o.nelamuriri?.length
     ? `<div class="nelamuriri"><b>Nelămuriri</b><ul>${o.nelamuriri.map((n) => `<li>${esc(n)}</li>`).join('')}</ul></div>`
@@ -1052,7 +1097,9 @@ export function paginaArhiva(o: { ctx: Ctx; an: number; ani: number[]; saptamani
     .map(([l, lista]) => {
       const nume = LUNI[l - 1] ?? ''
       const zone = lista
-        .map((s) => `<a href="${p}/saptamana/${s.luni}"><b>${esc(perioadaScurta(s.luni, s.duminica))}</b>`
+        // ⚠️ `?din=arhiva` spune paginii saptamanii de unde a fost deschisa: de acolo ies butonul
+        // „Înapoi la arhivă" si marcajul ramas pe segmentul Arhivei (user, 11.09.2026, 16:24).
+        .map((s) => `<a href="${p}/saptamana/${s.luni}?din=arhiva"><b>${esc(perioadaScurta(s.luni, s.duminica))}</b>`
           + `<span>${s.nr_slujbe} ${s.nr_slujbe === 1 ? 'slujbă' : 'slujbe'}</span>`
           + (s.stare === 'validat' ? '' : `<i>${esc(STARE[s.stare] ?? s.stare)}</i>`) + `</a>`)
         .join('')
