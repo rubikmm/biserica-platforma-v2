@@ -438,9 +438,9 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
   actiune({
     nume: 'program.modifica_slujba',
     descriere:
-      'Schimbă o slujbă din program: ora, locul, slujitorul, observațiile sau rândurile de ' +
-      'detalii. Slujba se găsește după zi („luni") și, dacă ziua are mai multe, după nume sau ' +
-      'ora de acum. Cheam-o direct, fără să întrebi: dacă e nevoie de mai mult, îți spune ea.',
+      'Schimbă o slujbă care EXISTĂ în program: ora, locul, slujitorul, observațiile sau rândurile ' +
+      'de detalii. Slujba se găsește după zi („luni") și, dacă ziua are mai multe, după nume sau ' +
+      'ora de acum. Pentru o slujbă NOUĂ folosește adauga_slujba. Cheam-o direct, fără să întrebi.',
     efect: 'scrie',
     permisiune: 'program.write',
     intrare: z.object({
@@ -457,7 +457,14 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
       }),
     }),
     iesire: Slujba,
-    exemple: ['mută liturghia de luni la 7', 'schimbă ora vecerniei de sâmbătă la 17:00', 'slujba de marți e în capelă'],
+    exemple: [
+      { fraza: 'mută liturghia de luni la 7', argumente: { zi: 'luni', slujba: 'liturghie', schimbari: { ora: '07:00' } } },
+      { fraza: 'slujba de luni începe la 7, nu la 8', argumente: { zi: 'luni', ora: '08:00', schimbari: { ora: '07:00' } } },
+      { fraza: 'schimbă ora vecerniei de sâmbătă la 17:00', argumente: { zi: 'sambata', slujba: 'vecernia', schimbari: { ora: '17:00' } } },
+      { fraza: 'slujba de marți e în capelă', argumente: { zi: 'marti', schimbari: { loc: 'capela' } } },
+      { fraza: 'la liturghia de duminică slujește părintele Ioan', argumente: { zi: 'duminica', slujba: 'liturghie', schimbari: { slujitor: 'Pr. Ioan' } } },
+      { fraza: 'pune la liturghia de duminică rândul: Sfântul Ilie', argumente: { zi: 'duminica', slujba: 'liturghie', schimbari: { detalii: ['Sfântul Ilie'] } } },
+    ],
     async rezuma({ zi, slujba, ora, schimbari }, c) {
       const g = await gasesteSlujba(c.env, zi, slujba, ora)
       const parti: string[] = []
@@ -483,8 +490,9 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
   actiune({
     nume: 'program.adauga_slujba',
     descriere:
-      'Adaugă o slujbă în program, într-o zi și la o oră, cu numele din vocabularul închis al ' +
-      'slujbelor. Omul confirmă înainte.',
+      'Adaugă o slujbă NOUĂ în program, într-o zi și la o oră, cu numele din vocabularul închis al ' +
+      'slujbelor (liturghie, vecernia, acatist, sfântul maslu, parastas…). Pentru una care există deja ' +
+      'folosește modifica_slujba. Cheam-o direct, fără să întrebi.',
     efect: 'scrie',
     permisiune: 'program.write',
     intrare: z.object({
@@ -496,7 +504,12 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
       observatii: z.string().trim().max(1000).optional(),
     }),
     iesire: Slujba,
-    exemple: ['pune un acatist joi la 18', 'adaugă Sfântul Maslu marți la 18:00'],
+    exemple: [
+      { fraza: 'pune un acatist joi la 18', argumente: { zi: 'joi', slujba: 'acatist', ora: '18:00' } },
+      { fraza: 'adaugă Sfântul Maslu marți la 18:00', argumente: { zi: 'marti', slujba: 'sfantul maslu', ora: '18:00' } },
+      { fraza: 'miercuri seara, la 18, vecernie în capelă', argumente: { zi: 'miercuri', slujba: 'vecernia', ora: '18:00', loc: 'capela' } },
+      { fraza: 'sâmbătă la 8 liturghie cu parastas', argumente: { zi: 'sambata', slujba: 'liturghie si parastas', ora: '08:00' } },
+    ],
     async rezuma({ zi, slujba, ora, loc }, c) {
       const data = ziua(zi)
       const v = await numeleDinVocabular(c.env, slujba)

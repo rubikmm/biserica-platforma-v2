@@ -221,6 +221,27 @@ propunerea automată, ca în V1.
 
 ### 2026-09-11
 
+- **„Antrenamentul" pentru modelele gratuite** (user, 21:04–21:08: „un câmp de instrucțiuni pe care
+  să-l pot scrie eu… ai putea să faci tu acest antrenament?… scurtează lista de unelte, pune
+  restricții… practic doar trebuie adăugate slujbe și modificate"). Nu e reantrenare — sunt patru
+  hățuri, toate din panoul de Module:
+  1. **Îndrumări** (`indrumari`, text liber, ≤ 8000): intră în instrucțiuni la fiecare mesaj, sub
+     regulile fixe. Le-am umplut din **tiparele măsurate** („Sfântul Maslu: de obicei marți, la
+     18:00") + patru reguli de lucru — userul le corectează de acolo;
+  2. **Uneltele permise** (`unelte`, un nume canonic pe rând; gol = toate): chatul vede DOAR ce e pe
+     listă; pe staging și local: `program.modifica_slujba`, `program.adauga_slujba`. Registrul
+     aplicațiilor rămâne întreg pentru alte aplicații. Regula 9 în instrucțiuni: „aici poți DOAR
+     atât; pentru altceva spune că nu e de aici";
+  3. **Exemple cu argumente** la acțiuni (`exemple: [{ fraza, argumente }]`) — antrenament în
+     context: modelul vede „mută liturghia de luni la 7" → `{zi:"luni", slujba:"liturghie",
+     schimbari:{ora:"07:00"}}`. Puse la `modifica_slujba` (6) și `adauga_slujba` (4);
+  4. **Setul de probe** `infrastructure/eval/chat.mjs`: 14 fraze (adăugări, modificări, ambigue,
+     „nu e de aici") prin bucla reală, pe local, model cu model (`node infrastructure/eval/chat.mjs
+     @cf/openai/gpt-oss-120b claude-opus-4-8`); măsoară unealta chemată + propunerea. Răspunsul
+     chatului poartă acum `unelte: string[]` (ce a chemat). În dev comutatorul se recitește la 3 s.
+  **Propunerea săptămânii** e fără model (`propunere.ts`: obiceiul ultimelor 52 de săptămâni,
+  aceeași dată în anii trecuți, praznicele) — de aceea modelului îi rămân doar retușuri.
+
 - **Selecția de modele în panoul de Module** (user, 20:56: „o selecție de modele - cele free și cele
   cu plată… aș vrea să mă mai joc cu ele puțin"). Lista stă într-un singur loc, `@xc/chat/modele.ts`,
   pe două grupuri: **gratuite** = Workers AI (10.000 neuroni/zi fără plată — poarta e pusă înapoi pe

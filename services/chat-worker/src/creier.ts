@@ -153,6 +153,10 @@ export function instructiuni(
   azi: { data: string; zi: string },
   /** Cunoștințele de fundal ale aplicațiilor (acțiunile cu `fundal: true`), gata scrise. */
   fundal: string[] = [],
+  /** Îndrumările scrise de administrator în panou — obiceiuri, ton, ce să nu facă. */
+  indrumari = '',
+  /** Numele uneltelor pe care le are de fapt (după îngustarea din panou). */
+  unelteDisponibile: string[] = [],
 ): string {
   return [
     'Ești asistentul platformei parohiei „Sfântul Ilie — Hanul Colței".',
@@ -182,6 +186,26 @@ export function instructiuni(
     '   NU pune întrebări de lămurire înainte de a chema unealta: cheam-o cu ce ai (ziua se poate da',
     '   și ca „luni", „marți"; numele slujbei se poate lăsa gol) — dacă lipsește ceva, unealta îți',
     '   spune exact ce, și abia atunci întrebi omul.',
+    '8. Cum alegi unealta: o ZI anume → slujbele_zilei; o SĂPTĂMÂNĂ → slujbele_saptamanii; „următoarea"',
+    '   sau „acum" → slujba_urmatoare / slujba_curenta; „când se face X" (o slujbă după nume) →',
+    '   cauta_slujba; „ce sărbătoare / ce zi e" → calendar.ziua; „cine sunt sfinții" → tipic.sfintii_zilei;',
+    '   „foaia / PDF / poză" → foaia_* / poza_paginii. Fiecare unealtă are exemple cu argumentele',
+    '   gata scrise — potrivește fraza omului cu cel mai apropiat exemplu și copiază-i forma.',
+    ...(unelteDisponibile.length
+      ? [
+          `9. AICI POȚI FACE DOAR ATÂT: ${unelteDisponibile.join(', ')}. Pentru orice altceva (rapoarte,`,
+          '   liste, întrebări despre arhivă, alte aplicații) spune într-o frază că nu e de aici și ce',
+          '   POȚI face — nu încerca să răspunzi din memorie și nu inventa o unealtă.',
+        ]
+      : []),
+    ...(indrumari.trim()
+      ? [
+          '',
+          'ÎNDRUMĂRI DE LA ADMINISTRATORUL PAROHIEI — au întâietate față de obiceiurile de mai jos, nu față',
+          'de regulile de mai sus:',
+          indrumari.trim(),
+        ]
+      : []),
     ...(fundal.length
       ? [
           '',

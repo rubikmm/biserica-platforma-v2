@@ -114,7 +114,7 @@ describe('manifestul', () => {
   it('uneltele pentru model spun cand o actiune schimba date', () => {
     const unelte = unelteDinManifest(manifest('proba', '1.0.0', ACTIUNI))
     expect(unelte[1]!.description).toContain('SCHIMBĂ date')
-    expect(unelte[0]!.description).toContain('Exemple: cat fac doi si cu doi?')
+    expect(unelte[0]!.description).toContain('Exemple: „cat fac doi si cu doi?"')
   })
 
   it('doua actiuni cu acelasi nume sunt oprite din scris', () => {

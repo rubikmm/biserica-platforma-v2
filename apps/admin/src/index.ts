@@ -121,6 +121,17 @@ ${o.salvat ? alerta('buna', 'Am salvat. Schimbarea se vede în cel mult un minut
     </optgroup>
   </select>
 
+  <h4>Îndrumări pentru model</h4>
+  <p class="ajutor">Text liber, încărcat în instrucțiunile modelului la fiecare mesaj, sub regulile fixe: obiceiurile parohiei,
+  cum să vorbească, ce să nu facă. Scurt și concret merge cel mai bine („Sfântul Maslu se face marți la 18:00; nu propune altă zi").</p>
+  <textarea name="indrumari" class="indrumari" rows="8" maxlength="8000" placeholder="Ex.: Vorbește la persoana a doua, scurt. Programul se validează doar joi. Liturghia de duminică e mereu la 08:00.">${esc(o.c.indrumari)}</textarea>
+
+  <h4>Uneltele permise</h4>
+  <p class="ajutor">Ce poate face modelul în chat, un nume pe rând (<code>aplicatie.actiune</code>). Gol = toate acțiunile
+  publicate. Cu cât lista e mai scurtă, cu atât un model mic nimerește mai bine: pentru „adaug și modific slujbe" ajung două rânduri.</p>
+  <textarea name="unelte" class="indrumari" rows="4" spellcheck="false" placeholder="program.modifica_slujba
+program.adauga_slujba">${esc(o.c.unelte.join('\n'))}</textarea>
+
   <h4>Cine îl vede</h4>
   <div class="trepte">
     ${treapta('admini', 'Doar adminii', 'costul rămâne mărginit; se probează întâi')}
@@ -185,6 +196,8 @@ export default {
           aplicatii,
           cineVede: String(formular.get('cineVede') ?? 'admini'),
           model: String(formular.get('model') ?? ''),
+          indrumari: String(formular.get('indrumari') ?? ''),
+          unelte: String(formular.get('unelte') ?? ''),
         })
         await scrieConfigChat(env, nou)
         log.info('module: comutator schimbat', { activ: nou.activ, cineVede: nou.cineVede, model: nou.model, aplicatii: Object.keys(nou.aplicatii) })
@@ -311,6 +324,8 @@ const STIL = `
              text-transform:uppercase; color:var(--faint) }
 /* ⚠️ Carcasa are stiluri GLOBALE pe form si label (rand de cautare): formularul si le scoate aici. */
 form.module { display:block }
+.module textarea.indrumari { width:100%; padding:9px 11px; border:1px solid var(--rule); border-radius:8px;
+                             background:var(--paper); color:var(--ink); font:15px/1.45 ui-sans-serif,system-ui; resize:vertical }
 .module select.model { max-width:100%; padding:8px 10px; border:1px solid var(--rule); border-radius:8px;
                        background:var(--paper); color:var(--ink); font:15px/1.3 ui-sans-serif,system-ui }
 .module label.bifa { display:flex; align-items:baseline; gap:8px; font:15px/1.5 inherit;

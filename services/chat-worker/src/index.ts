@@ -105,8 +105,10 @@ const TAIERE_FUNDAL = 8000
 
 async function adunaUneltele(
   env: Env,
-  o: { secret: string; correlationId: string },
+  o: { secret: string; correlationId: string; permise: string[] },
 ): Promise<{ unelte: UnealtaDescrisa[]; harta: Map<string, UndeStaActiunea>; fundal: string[] }> {
+  // Lista din panou ingusteaza ce vede modelul; goala = tot ce publica aplicatiile.
+  const permis = (nume: string) => !o.permise.length || o.permise.includes(nume)
   const harta = new Map<string, UndeStaActiunea>()
   const unelte: UnealtaDescrisa[] = []
   const fundal: string[] = []
@@ -122,6 +124,7 @@ async function adunaUneltele(
   for (const { a, m } of manifeste) {
     if (!m) continue
     for (const descriere of (m as Manifest).actiuni) {
+      if (descriere.fundal || !permis(descriere.nume)) continue
       harta.set(numeUnealta(descriere.nume), {
         nume: descriere.nume,
         aplicatie: a.nume,
@@ -130,7 +133,7 @@ async function adunaUneltele(
         descriere: descriere.descriere,
       })
     }
-    unelte.push(...unelteDinManifest(m as Manifest))
+    unelte.push(...unelteDinManifest({ ...(m as Manifest), actiuni: (m as Manifest).actiuni.filter((a) => permis(a.nume)) }))
 
     // Fundalul: actiunile marcate asa se cheama ACUM, ca serviciu, si rezultatul lor intra in
     // instructiuni. Cine tace nu opreste nimic — se raspunde cu ce e.
@@ -185,6 +188,8 @@ interface RaspunsChat {
   text: string
   obiecte: Obiect[]
   propunere: { id: string; rezumat: string } | null
+  /** Uneltele chemate pentru raspunsul asta, in ordine. Pentru probe si pentru curiosi. */
+  unelte: string[]
 }
 
 async function poarta(req: Request, env: Env): Promise<{ actor: Actor; cid: string } | Response> {
@@ -306,14 +311,14 @@ export default {
           'Deocamdată sunt doar interfața: nu sunt legat la niciun model, deci nu pot răspunde la ' +
           'întrebări. Se aprinde din panoul de administrare, la Module.'
         await scrieMesaj(env.DB, { conversatie_id: c.id, rol: 'agent', text })
-        return json({ conversatieId: c.id, text, obiecte: [], propunere: null } satisfies RaspunsChat)
+        return json({ conversatieId: c.id, text, obiecte: [], propunere: null, unelte: [] } satisfies RaspunsChat)
       }
 
-      const { unelte, harta, fundal } = await adunaUneltele(env, { secret, correlationId: cid })
+      const { unelte, harta, fundal } = await adunaUneltele(env, { secret, correlationId: cid, permise: comutator.unelte })
       const istoric = await mesajeleDin(env.DB, c.id)
 
       const mesaje: MesajModel[] = [
-        { rol: 'sistem', text: instructiuni(cerere.aplicatie ?? '', cerere.numeleOmului ?? null, ziuaDeAzi(), fundal) },
+        { rol: 'sistem', text: instructiuni(cerere.aplicatie ?? '', cerere.numeleOmului ?? null, ziuaDeAzi(), fundal, comutator.indrumari, unelte.map((x) => x.name)) },
         ...istoric.map((m) => ({
           rol: m.rol === 'om' ? ('om' as const) : m.rol === 'agent' ? ('agent' as const) : ('unealta' as const),
           text: m.text,
@@ -321,6 +326,7 @@ export default {
       ]
 
       const obiecte: Obiect[] = []
+      const unelteChemate: string[] = []
       let propunere: RaspunsChat['propunere'] = null
       let textFinal = ''
 
@@ -335,6 +341,7 @@ export default {
         mesaje.push({ rol: 'agent', text: r.text, apeluri: r.cereri, brut: r.brut })
 
         for (const cerut of r.cereri) {
+          unelteChemate.push(cerut.nume)
           // Numele traduse (cu `__`) sunt cele trimise modelului, dar unele modele raspund
           // totusi cu numele canonic — se cauta si asa, ca sa nu cada cererea degeaba.
           const unde = harta.get(cerut.nume) ?? harta.get(numeUnealta(cerut.nume))
@@ -419,7 +426,7 @@ export default {
         date: { obiecte, propunere },
       })
 
-      const raspuns: RaspunsChat = { conversatieId: c.id, text: textFinal, obiecte, propunere }
+      const raspuns: RaspunsChat = { conversatieId: c.id, text: textFinal, obiecte, propunere, unelte: unelteChemate }
       return json(raspuns)
     } catch (e) {
       log.error('chat cazut', { eroare: e instanceof Error ? e.message : String(e) })

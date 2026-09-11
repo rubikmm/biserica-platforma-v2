@@ -15,6 +15,12 @@ import { Obiect, type Permisiune, type Principal, type Scope } from '@xc/contrac
  * publica. Semnul rau: o actiune care isi cheama prin HTTP propriul `/v1`.
  */
 
+/** Un exemplu cu argumente: cum se traduce o fraza a omului in campurile actiunii. */
+export interface ExempluActiune {
+  fraza: string
+  argumente: Record<string, unknown>
+}
+
 export const EFECTE = ['citeste', 'scrie'] as const
 export const Efect = z.enum(EFECTE)
 export type Efect = z.infer<typeof Efect>
@@ -61,8 +67,12 @@ export interface Actiune<I extends z.ZodType = z.ZodType, O extends z.ZodType = 
    * e chiar `Obiect`; se scrie de mana doar pentru formele invelite (`Obiect.array()` etc.).
    */
   felIesirii?: 'date' | 'obiect'
-  /** Fraze omenesti care duc la ea: ajuta modelul sa aleaga si omul sa inteleaga. */
-  exemple?: string[]
+  /**
+   * Fraze omenesti care duc la ea: ajuta modelul sa aleaga si omul sa inteleaga. Cu argumente
+   * (`{ fraza, argumente }`) devin ANTRENAMENT IN CONTEXT: modelul vede ce se pune in fiecare camp
+   * pentru o fraza ca a omului — pentru modelele mici e diferenta dintre 3/5 si 5/5.
+   */
+  exemple?: Array<string | ExempluActiune>
   /**
    * CUNOSTINTE DE FUNDAL: actiunea (fara argumente, de citire) se cheama INAINTE de orice raspuns,
    * iar rezultatul ei intra in contextul modelului — nu e o unealta pe care s-o aleaga, e ce stie

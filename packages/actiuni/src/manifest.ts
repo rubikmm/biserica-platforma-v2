@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { Obiect, type Actiune, type Efect, type Registru } from './contract.js'
+import { Obiect, type Actiune, type Efect, type ExempluActiune, type Registru } from './contract.js'
 
 /**
  * MANIFESTUL — lista aplicatiei, gata de citit de un model sau de o alta aplicatie.
@@ -18,7 +18,7 @@ export interface DescriereActiune {
   da: 'date' | 'obiect'
   intrare: Record<string, unknown>
   iesire: Record<string, unknown>
-  exemple: string[]
+  exemple: Array<string | ExempluActiune>
   /** Se cheama inainte de orice raspuns si intra in context (vezi `Actiune.fundal`). */
   fundal: boolean
 }
@@ -101,7 +101,11 @@ export function unelteDinManifest(m: Manifest): UnealtaDescrisa[] {
         ? ' [SCHIMBĂ date. Cheam-o direct, fără să ceri voie în text: chemarea doar pregătește o propunere, pe care omul o confirmă pe un buton.]'
         : '') +
       (a.da === 'obiect' ? ' [dă o hârtie: se arată ca fișier, se poate trimite]' : '') +
-      (a.exemple.length ? ` Exemple: ${a.exemple.join(' / ')}` : ''),
+      (a.exemple.length
+        ? ` Exemple: ${a.exemple
+            .map((e) => (typeof e === 'string' ? `„${e}"` : `„${e.fraza}" → ${JSON.stringify(e.argumente)}`))
+            .join(' | ')}`
+        : ''),
     parameters: a.intrare,
   }))
 }

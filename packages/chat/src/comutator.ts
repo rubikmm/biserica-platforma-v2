@@ -42,16 +42,31 @@ export interface ConfigChat {
   model: string
   /** Dedus din `model`: pe ce drum merge cererea. Ținut aici ca chat-worker să nu mai deducă. */
   creier: Creier
+  /**
+   * ÎNDRUMĂRILE administratorului (user, 11.09.2026, 21:04: „un câmp de instrucțiuni pe care să-l pot
+   * scrie eu și modelul când începe să lucreze să-l încarce"). Text liber, intră în instrucțiunile
+   * modelului la fiecare mesaj, sub regulile fixe — obiceiurile parohiei, cum să vorbească, ce să nu
+   * facă. Se schimbă din panou, fără publicare de cod.
+   */
+  indrumari: string
+  /**
+   * UNELTELE pe care le vede chatul, cu numele canonic (`program.modifica_slujba`), una pe rând în
+   * panou. Goală = toate. Registrul aplicațiilor rămâne întreg pentru alte aplicații; aici se
+   * îngustează doar ce vede modelul — pentru un model mic, două unelte limpezi bat paisprezece.
+   * Acțiunile de fundal nu sunt unelte și nu trec pe aici.
+   */
+  unelte: string[]
 }
 
 /**
  * STINS peste tot. Un modul nou nu se aprinde singur nicăieri: fiecare aplicație se deschide
  * anume, din admin. (Și: fiecare mesaj costă bani la fiecare apăsare.)
  */
-export const CONFIG_STINS: ConfigChat = { activ: false, aplicatii: {}, cineVede: 'admini', model: MODEL_IMPLICIT, creier: 'claude' }
+export const CONFIG_STINS: ConfigChat = { activ: false, aplicatii: {}, cineVede: 'admini', model: MODEL_IMPLICIT, creier: 'claude', indrumari: '', unelte: [] }
 
 export interface EnvComutator {
   CONFIG?: KVNamespace
+  MEDIU?: string
 }
 
 /** Un minut în memoria izolatului: destul cât să nu întrebăm KV la fiecare pagină, prea puțin ca
@@ -61,7 +76,9 @@ const VIATA = 60_000
 
 export async function configChat(env: EnvComutator): Promise<ConfigChat> {
   const acum = Date.now()
-  if (tinut && acum - tinut.la < VIATA) return tinut.c
+  // In dev se reciteste la 3 s: probele schimba modelul si indrumarile des, si vor sa le vada acum.
+  const viata = env.MEDIU === 'dev' ? 3_000 : VIATA
+  if (tinut && acum - tinut.la < viata) return tinut.c
   if (!env.CONFIG) return CONFIG_STINS
   try {
     const scris = await env.CONFIG.get(CHEIE_CONFIG, 'json')
@@ -98,7 +115,13 @@ export function normalizeaza(brut: unknown): ConfigChat {
   else if (scrisCreier === 'workers-ai' || scrisCreier === 'gateway') model = '@cf/openai/gpt-oss-120b'
   else model = MODEL_IMPLICIT
   const creier: Creier = model === '' ? 'fara' : felDupaId(model)
-  return { activ: Boolean(o.activ), aplicatii, cineVede, model, creier }
+  const indrumari = typeof o.indrumari === 'string' ? o.indrumari.trim().slice(0, 8000) : ''
+  // Din panou vine text cu un nume pe rand; din KV, lista. Se primesc amandoua.
+  const brutUnelte = (o as { unelte?: unknown }).unelte
+  const unelte = (Array.isArray(brutUnelte) ? brutUnelte.map(String) : typeof brutUnelte === 'string' ? brutUnelte.split(/[\n,;]+/) : [])
+    .map((u) => u.trim())
+    .filter((u) => /^[a-z0-9_]+\.[a-z0-9_]+$/.test(u))
+  return { activ: Boolean(o.activ), aplicatii, cineVede, model, creier, indrumari, unelte: [...new Set(unelte)] }
 }
 
 /**
