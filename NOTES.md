@@ -221,6 +221,19 @@ propunerea automată, ca în V1.
 
 ### 2026-09-11
 
+- **Din joaca userului pe staging** (21:32–21:42), trei lucruri:
+  1. „a modificat corect programul dar nu a reîncărcat pagina" → după un „Da" executat, bula
+     **reîncarcă pagina** peste o clipă; discuția stă pe server, panoul se redeschide unde era;
+  2. „să ții minte toate conversațiile — și de referință și pentru training… chiar și erorile" →
+     migrația `chat/0002` (`conversatii.stearsa_la`): coșul din bulă doar **ascunde**, nimic nu se
+     șterge; în `date_json` al mesajului agentului se păstrează **modelul și apelurile** (nume,
+     argumente, rezultat), iar o cădere a chatului se scrie și ea. Export JSONL:
+     `node infrastructure/eval/discutii.mjs --remote --env staging`. Iconiță de **discuție nouă**;
+  3. **două discuții adevărate, ambele 100%** (GLM 5.3 Flash): „Slujba de luni să fie de la ora 7"
+     și „Adaugă marți la 18 slujba Sfântul Maslu" → intrate în setul de probe (16 acum), cu sursa.
+     **Drumul de acum înainte**: joacă → export → ce a mers intră în probe → orice schimbare se
+     măsoară și pe vorbirea omului. (Prima încercare picase cu 402 — Claude fără credite.)
+
 - **Toate discuțiile se păstrează, și erorile** (user, 21:33–21:34: „să ții minte toate
   conversațiile — și de referință și ca să mai facem training… le-aș salva pe toate, chiar și
   erorile"). Migrația `chat/0002_pastrare.sql`: `conversatii.stearsa_la` — coșul din bulă **ascunde**
