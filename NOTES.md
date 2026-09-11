@@ -211,7 +211,12 @@ propunerea automată, ca în V1.
   de săgeată să scrie «Săptămâna următoare»+săgeată"), iar **bulina stă lată** — 22 px în laturi, „să
   fie mai ușor de apăsat". La **admin**, unde rândul e plin, butoanele-iconiță s-au făcut **pătrate**:
   padding de 9 px în laturi, cât cel de sus din carcasă, deci ținte de ~36×36 („să fie atâta spațiu
-  sus cât este stânga dreapta").
+  sus cât este stânga dreapta"). **Și pastila lui ia spațiul rămas** (cerere de la 16:20: „butonul cu
+  săgeata pentru admini cât tot spațiul disponibil rămas") — `flex:1 1 auto` pe pastilă și pe `.viit`,
+  deci prisosul se adună tot în segmentul săgeții. Acolo măsura de pornire rămâne `auto`, nu 0:
+  înăuntru sunt numai iconițe, deci nu umflă nimic, iar rândul se rupe cinstit când chiar nu mai
+  încape, în loc să le taie. Se vede pe ecranele late (la 430 px pastila crește de la 115 la 159);
+  la 390 px prisosul e de 4 px, deci abia se simte.
   ⚠️ Două capcane, de ținut minte: **`flex:1 1 0`, nu `1 1 auto`** pe pastila largă — cu măsura de
   pornire `auto`, cuvintele o umflau peste lățimea ecranului și întrerupătorul sărea pe rândul doi,
   exact lucrul de care scăpaserăm; și **fără backtick în comentariile CSS**, fiindcă stilul e un

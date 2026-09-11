@@ -245,7 +245,12 @@ body.cu-calendar .btns .poza-2 { display:flex }
 @media (max-width:600px) {
   .btns { gap:5px; flex-wrap:wrap }
   .btns .btn { flex:0 0 auto; white-space:nowrap }
-  .btns .pastila { flex:0 0 auto }
+  /* ⚠️ Pastila ia si pe telefon spatiul ramas dupa grupul din dreapta (user, 11.09.2026, 16:20: „să
+     faci butonul cu săgeata pentru admini cât tot spațiul disponibil rămas"), iar prisosul il ia
+     segmentul sagetii — mai jos, .viit. Aici masura de pornire ramane auto (nu 0, ca la pastila
+     larga): la admin inauntru sunt numai iconite, deci masura lor nu umfla nimic, iar randul se rupe
+     cinstit cand chiar nu mai incape, in loc sa taie iconitele. */
+  .btns .pastila { flex:1 1 auto }
   .btns .mic .fel { display:none }
   /* ⚠️ BUTOANELE-ICONITA SUNT PATRATE (user, 11.09.2026, 16:02: „să fie atâta spațiu sus cât este
      stânga dreapta"). Padingul de sus e cel al carcasei (9px, din .btn), deci se scrie 9px si in
@@ -264,7 +269,7 @@ body.cu-calendar .btns .poza-2 { display:flex }
      capat al pastilei, ca cele doua capete sa cantareasca la fel */
   .btns .viit .cuv { display:none }
   .btns .viit .sgt { display:block }
-  .btns .pastila .viit { flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+  .btns .pastila .viit { flex:1 1 auto; display:flex; align-items:center; justify-content:center;
                          padding:9px }
   .btns .pastila .viit svg { vertical-align:0 }
   /* ⚠️ PASTILA LARGA — omul FARA drepturi de admin (user, 11.09.2026, 16:02: „cele două butoane de la
