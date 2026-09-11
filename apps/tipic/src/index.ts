@@ -223,7 +223,10 @@ export default {
       spre: url.toString(),
     }
     // In dev nu se tine cache: cei cinci minute faceau schimbarile sa para nefacute (10.09.2026).
-    const cachePagina = { 'cache-control': ctx.utilizator ? 'private, no-store' : env.MEDIU === 'dev' ? 'no-store' : CACHE_PAGINI }
+  // Sub masca „vezi ca" pagina e personala chiar cand n-are niciun nume pe ea (masca
+      // „neautentificat"): cu `public, max-age=300` browserul o servea din propriul cache si dupa
+      // ce masca fusese scoasa, deci butonul benzii de jos parea ca nu face nimic (user, 11.09.2026).
+    const cachePagina = { 'cache-control': ctx.utilizator || ctx.veziCa ? 'private, no-store' : env.MEDIU === 'dev' ? 'no-store' : CACHE_PAGINI }
 
     try {
       // Adresa unei zile e chiar data ei: /2026-09-13 (decizie user, 30 aug. 2026, adusa din V1).

@@ -679,12 +679,14 @@ export function pozaSaptamaniiHtml(o: {
   // Ziua de azi NU se marcheaza in poza (user, 10.09.2026): poza pleaca pe WhatsApp si se uita la ea
   // si peste trei zile — un semn „azi" ar minti. Pe pagina, unde se vede acum, marcajul ramane.
   const zile = o.randuri.map(({ r, d, zi }) => randZi(o.ctx, r, d, zi, false)).join("")
-  return `<!doctype html><html lang="ro" data-tema="dark"><head><meta charset="utf-8"><title>Calendarul săptămânii ${esc(o.eticheta)}</title>
+  return `<!doctype html><html lang="ro" data-tema="light"><head><meta charset="utf-8"><title>Calendarul săptămânii ${esc(o.eticheta)}</title>
 <style>${STIL_COMUN}${LOCAL}
-/* Poza iese pe temă închisă (cerere user, 10.09.2026): se trimite pe WhatsApp și se citește pe
-   telefon, unde fundalul alb bate la ochi. Culorile sunt cele ale temei de noapte a platformei —
-   data-tema="dark" pe html —, deci roșul sărbătorilor și albastrul sfinților locali rămân
-   aceleași cu ce se vede pe site noaptea. */
+/* Poza iese pe FUNDAL DESCHIS (user, 11.09.2026: „toate generările de imagini să fie cu fundal
+   deschis, deci nu dark. M-am răzgândit"). Pe 10.09 o ceruse închisă, ca să nu bată albul la ochi pe
+   telefon — dacă vine vorba iar, asta a fost pricina. Tema se scrie pe html (data-tema="light"), nu se
+   lasă la voia telefonului: altfel aceeași săptămână ar ieși altfel de la un om la altul. Culorile sunt
+   ale temei de zi a platformei, deci roșul sărbătorilor și albastrul sfinților locali rămân aceleași
+   cu ce se vede pe site ziua. */
 body { margin: 0; background: var(--paper); color: var(--ink); }
 /* Lata cat un telefon (user, 10.09.2026: „la 50% din cat e acum") — poza se trimite pe WhatsApp si se
    citeste tot pe telefon; la doi pixeli pe punct iese oricum de 900 px adevarati. */

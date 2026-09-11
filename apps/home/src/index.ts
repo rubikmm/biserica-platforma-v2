@@ -101,6 +101,10 @@ export default {
     }
 
     log.info('home')
-    return html(pagina({ ...comune, corp: corp(nav) }), 200, { 'cache-control': 'public, max-age=300' })
+    // Usa platformei purta `public, max-age=300` chiar si cand era cineva intrat sau sub masca
+    // „vezi ca": browserul servea pagina veche (cu banda) si dupa ce masca fusese scoasa, deci
+    // butonul „Revino la super admin" parea ca nu face nimic (user, 11.09.2026).
+    const cachePagina = utilizator || sesiune.veziCa ? 'private, no-store' : 'public, max-age=300'
+    return html(pagina({ ...comune, corp: corp(nav) }), 200, { 'cache-control': cachePagina })
   },
 }

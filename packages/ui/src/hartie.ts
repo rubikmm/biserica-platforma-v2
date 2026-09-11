@@ -70,19 +70,41 @@ export async function jpgDin(legatura: Fetcher, html: string): Promise<ArrayBuff
 }
 
 /**
- * PNG dintr-o pagină de lungime necunoscută: se fotografiază elementul `.poza` dacă există, altfel
- * toată pagina (`fullPage`). Lățimea se dă din afară — poza săptămânii e citită pe telefon, deci se
+ * Poza unei pagini de lungime NEȘTIUTĂ: se fotografiază elementul `.poza` dacă există, altfel toată
+ * pagina (`fullPage`). Lățimea se dă din afară — poza săptămânii e citită pe telefon, deci se
  * randează îngustă și la doi pixeli pe punct, ca scrisul să rămână curat.
+ *
+ * Deosebirea față de `jpgDin`: acolo se fotografiază foaia A4 (`.pagina`), a cărei înălțime e știută
+ * dinainte; aici pagina e lungă cât o fac datele.
  */
-export async function pngDin(legatura: Fetcher, html: string, latime = 900): Promise<ArrayBuffer> {
+async function pozaDin(legatura: Fetcher, html: string, tip: 'png' | 'jpeg', latime: number): Promise<ArrayBuffer> {
   return cuBrowser(legatura, async (browser) => {
     const page = await incarca(browser, html)
     await page.setViewport({ width: latime, height: 1400, deviceScaleFactor: 2 })
     const el = await page.$('.poza')
-    const poza = el ? await el.screenshot({ type: 'png' }) : await page.screenshot({ type: 'png', fullPage: true })
+    const poza = tip === 'jpeg'
+      ? el
+        ? await el.screenshot({ type: 'jpeg', quality: 90 })
+        : await page.screenshot({ type: 'jpeg', quality: 90, fullPage: true })
+      : el
+        ? await el.screenshot({ type: 'png' })
+        : await page.screenshot({ type: 'png', fullPage: true })
     await page.close()
     return new Uint8Array(poza).buffer as ArrayBuffer
   })
+}
+
+/** Poza paginii în PNG — poza săptămânii din calendar. */
+export function pngDin(legatura: Fetcher, html: string, latime = 900): Promise<ArrayBuffer> {
+  return pozaDin(legatura, html, 'png', latime)
+}
+
+/**
+ * Aceeași poză, în JPEG — pentru ce pleacă pe WhatsApp: la o pagină lungă, cu mult scris, JPEG-ul
+ * iese de câteva ori mai mic decât PNG-ul, iar pierderea nu se vede la text negru pe fundal plin.
+ */
+export function jpgPozaDin(legatura: Fetcher, html: string, latime = 900): Promise<ArrayBuffer> {
+  return pozaDin(legatura, html, 'jpeg', latime)
 }
 
 /** Amprenta HTML-ului: cheia din cache a hartiei; orice schimbare de date sau asezare da alt fisier. */

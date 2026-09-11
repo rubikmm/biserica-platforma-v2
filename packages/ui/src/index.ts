@@ -290,6 +290,15 @@ export const ICOANE = {
   calendar: `<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg>`,
   foaie: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>`,
   arhiva: `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/></svg>`,
+  /*
+   * Iconițele fișierelor (cerere user, 11.09.2026): aceeași foaie cu colțul îndoit ca la `foaie`, dar
+   * cu semnul a CE e înăuntru — rânduri de text la PDF (o hârtie de citit/tipărit), o poză la JPEG.
+   * Se deosebesc dintr-o ochire, fără litere: „PDF" scris în 24 de puncte ar ieși pâclă la 17 px.
+   * Trasătura e puțin mai subțire decât la celelalte iconițe (1,7 față de 2), fiindcă desenul dinăuntru
+   * ar îmbâcsi foaia la grosimea obișnuită.
+   */
+  pdf: `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M8.5 13.5h7M8.5 17h4.5"/></svg>`,
+  jpg: `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><circle cx="9.5" cy="13" r="1"/><path d="m7.4 18.3 3.1-3.4 2 2.1 1.7-1.8 2.4 2.7"/></svg>`,
 }
 
 // ---------------------------------------------------------------------------

@@ -235,7 +235,10 @@ export default {
       const { versiune } = await versiuneaCalendarului(env.DB)
       const aniCalculati = ani.length ? [Math.max(...ani) + 1, Math.max(...ani) + 2] : []
       const aniDisponibili = [...ani, ...aniCalculati]
-      const cachePagina = { 'cache-control': ctx.utilizator ? 'private, no-store' : CACHE_PAGINI }
+      // Sub masca „vezi ca" pagina e personala chiar cand n-are niciun nume pe ea (masca
+      // „neautentificat"): cu `public, max-age=300` browserul o servea din propriul cache si dupa
+      // ce masca fusese scoasa, deci butonul benzii de jos parea ca nu face nimic (user, 11.09.2026).
+      const cachePagina = { 'cache-control': ctx.utilizator || ctx.veziCa ? 'private, no-store' : CACHE_PAGINI }
 
       // lista lunii: `/`, `/2026`, `/2026-08`
       const mLuna = /^\/(\d{4})(?:-(\d{2}))?$/.exec(cale)

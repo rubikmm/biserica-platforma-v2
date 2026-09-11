@@ -425,7 +425,7 @@ ${sinaxar}
 // departe de aici, ca `index.ts` sa nu-si schimbe importurile.
 // ---------------------------------------------------------------------------
 
-export { amprenta, hartieDinCache, jpgDin, pdfDin, pngDin } from '@xc/ui'
+export { amprenta, hartieDinCache, jpgDin, jpgPozaDin, pdfDin, pngDin } from '@xc/ui'
 
 export function titluSaptamanii(luni: string): string {
   return intervalLizibil(luni, adaugaZile(luni, 6))

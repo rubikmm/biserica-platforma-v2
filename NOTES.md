@@ -90,6 +90,10 @@ propunerea automată, ca în V1.
    butoane, apoi patru (neautentificat / utilizator / admin / super-admin), alegerea în cookie-ul `proba_rol`, ruta
    `GET /proba/<rol>`. **Merge doar în dev**; pe staging și în producție e inert. Tot ce ține de el
    poartă marcajul `⚠️ TEMPORAR` în `apps/program/src/{index,pagini}.ts`.
+   Din 11.09 cutia are **X** (`/proba/inchis`): rolul împrumutat cade — pagina se vede cu contul și
+   drepturile tale adevărate — iar cutia se strânge într-o **pastilă „probă"**, care o deschide la
+   loc prin `/proba/deschis` (acolo cookie-ul chiar se șterge). Nota „se șterge când nu mai trebuie"
+   a ieșit, iar pe telefon (sub 600 px) rămân doar butoanele și X-ul.
 2. **PDF-urile cărților tipicului în R2** — Anuarul (41 MB), Mineiul pe noiembrie (67 MB) și ROEA
    stau în R2-ul V1 și n-au fost copiate. Fără ele, cardul care duce la pagina zilei din carte nu
    se scrie (codul îl așteaptă). De întrebat utilizatorul dacă le vrea.
@@ -139,6 +143,17 @@ propunerea automată, ca în V1.
 
 ## Capcane de ținut minte
 
+- **Sub masca „vezi ca", pagina e personală chiar dacă n-are niciun nume pe ea.** Regula de cache
+  se uita doar la `ctx.utilizator`, deci sub masca „neautentificat" pagina ieșea cu
+  `public, max-age=300` — iar `home` o dădea așa **întotdeauna**. Browserul o servea din propriul
+  cache și după ce masca fusese scoasă, așa că butonul „Revino la super admin" părea că nu face
+  nimic (reclamat de user, 11.09.2026). Din 11.09 condiția e `ctx.utilizator || ctx.veziCa` în
+  program / calendar / tipic / home. La orice aplicație nouă: **masca intră în decizia de cache**.
+- **Întoarcerea de la „vezi ca" trece printr-o listă albă de origini.** `intoarcereSigura`
+  (`apps/account/src/index.ts`) acceptă doar originile din `navigatieDin(cfg)`, deci o aplicație
+  fără `URL_<APP>` în varsurile **contului** nu e o destinație validă: omul ajungea pe pagina
+  contului, nu înapoi de unde apăsase (pățit cu calendar și tipic pe staging, reparat 11.09).
+  La orice subdomeniu nou: adaugă-i `URL_<APP>` și în `apps/account/wrangler.jsonc`.
 - **`--persist-to .wrangler/state`** e obligatoriu la toate comenzile locale. Fără el, fiecare
   configurație își face propria bază și migrațiile ajung unde aplicația nu citește.
 - **`pnpm approve-builds --all --yes`** după fiecare schimbare de `package.json` — esbuild și
@@ -172,6 +187,23 @@ propunerea automată, ca în V1.
   error"), dar deploy-ul cu `send_email` merge — verificarea e pe Workers API.
 
 ## Jurnal
+
+### 2026-09-11
+
+- **Cutia de probă locală are ieșire.** X în dreapta (`/proba/inchis`): scoate rolul împrumutat —
+  antetul și drepturile revin la contul adevărat — și strânge cutia într-o pastilă „probă", care
+  o deschide la loc (`/proba/deschis` șterge cookie-ul). Nota de sub butoane a ieșit, iar pe
+  telefon rămân doar butoanele și X-ul. Probat cap-coadă local, cu un cont adevărat: sub
+  `proba_rol=admin` antetul zice „Admin de probă" și apare Arhiva; după X zice `rubikmm@gmail.com`
+  și Arhiva rămâne (drepturile reale ale super-adminului).
+- **Banda „vezi ca" de pe staging: butonul „Revino la super admin" nu răspundea.** Două cauze,
+  amândouă reparate și publicate (`account` 0.1.1, `home` 0.1.1, `tipic` 0.1.1, `calendar` 0.1.1,
+  `program` 0.3.1): (1) pagina purtată sub mască era cacheabilă public — `home` întotdeauna, restul
+  sub masca „neautentificat" — deci browserul o servea înapoi cu banda cu tot după ce masca fusese
+  scoasă; (2) `apps/account/wrangler.jsonc` n-avea `URL_CALENDAR` / `URL_TIPIC` / `URL_CURATENIE`,
+  așa că întoarcerea spre calendar și tipic era refuzată de `intoarcereSigura` și omul ajungea pe
+  pagina contului. Lanțul complet (pun masca → banda apare → „Revino" → banda dispare) probat pe
+  local cu sesiune de super-admin.
 
 ### 2026-09-10
 

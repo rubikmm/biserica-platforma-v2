@@ -36,10 +36,10 @@ import {
   vocabularul,
   type RandSaptamana,
 } from './depozit.js'
-import { foaieHtml, hartieDinCache, jpgDin, pdfDin, sfintiiHtml, titluSaptamanii } from './foaie.js'
+import { foaieHtml, hartieDinCache, jpgDin, jpgPozaDin, pdfDin, sfintiiHtml, titluSaptamanii } from './foaie.js'
 import { propune } from './propunere.js'
 import { sfintiiDinCarti } from './tipic.js'
-import { type Ctx, type Meniu, type RolProba, paginaArhiva, paginaMesaj, paginaSaptamana } from './pagini.js'
+import { LATIME_POZA, type Ctx, type Meniu, type StareProba, paginaArhiva, paginaMesaj, paginaSaptamana, pozaSaptamaniiHtml } from './pagini.js'
 
 export interface Env {
   DB: D1Database
@@ -147,11 +147,16 @@ export default {
     }
 
     // ⚠️ TEMPORAR (vezi „MODUL DE PROBA" mai jos): butoanele bannerului. Numai in dev.
-    const mProba = /^\/proba\/(anonim|user|admin|super)$/.exec(cale)
+    // `inchis` = X-ul cutiei: rolul imprumutat cade, cutia se strange in pastila.
+    // `deschis` = pastila: sterge cookie-ul cu totul si desface cutia la loc.
+    const mProba = /^\/proba\/(anonim|user|admin|super|inchis|deschis)$/.exec(cale)
     if (eDev && mProba && req.method === 'GET') {
       const spre = url.searchParams.get('spre') ?? `${prefix}/`
       const spreSigur = spre.startsWith('/') && !spre.startsWith('//') ? spre : `${prefix}/`
-      return redirect(spreSigur, { 'set-cookie': `proba_rol=${mProba[1]}; Path=/; Max-Age=86400; SameSite=Lax` })
+      const cookie = mProba[1] === 'deschis'
+        ? 'proba_rol=; Path=/; Max-Age=0; SameSite=Lax'
+        : `proba_rol=${mProba[1]}; Path=/; Max-Age=86400; SameSite=Lax`
+      return redirect(spreSigur, { 'set-cookie': cookie })
     }
 
     // Meniul paginilor care nu tin de o saptamana anume (arhiva, adresele gresite): `luni: null`, deci
@@ -177,9 +182,11 @@ export default {
     // productie `rolProba` e mereu null, deci nimic din blocul asta nu poate deschide o portita.
     // DE STERS la cerere: blocul de mai jos, ruta `/proba/<rol>`, campurile `proba`/`caleAcum` din Ctx
     // si bannerul din pagini.ts.
-    const rolProba = eDev
-      ? (/(?:^|;\s*)proba_rol=(anonim|user|admin|super)(?:;|$)/.exec(req.headers.get('cookie') ?? '')?.[1] as RolProba | undefined)
+    const stareProba = eDev
+      ? (/(?:^|;\s*)proba_rol=(anonim|user|admin|super|inchis)(?:;|$)/.exec(req.headers.get('cookie') ?? '')?.[1] as StareProba | undefined)
       : undefined
+    // `inchis` nu e rol: cutia e doar stransa, iar pagina se vede cu drepturile tale adevarate.
+    const rolProba = stareProba === 'inchis' ? undefined : stareProba
     const ctx: Ctx = {
       prefix,
       nav,
@@ -195,7 +202,7 @@ export default {
       veziCa: sesiune.veziCa,
       poateVedeaCa: sesiune.poateVedeaCa,
       spre: url.toString(),
-      proba: eDev ? (rolProba ?? (eSuperAdminReal ? 'super' : eAdminReal ? 'admin' : utilizatorReal ? 'user' : 'anonim')) : null,
+      proba: eDev ? (stareProba ?? (eSuperAdminReal ? 'super' : eAdminReal ? 'admin' : utilizatorReal ? 'user' : 'anonim')) : null,
       caleAcum: `${prefix}${cale}`,
     }
 
@@ -203,7 +210,10 @@ export default {
       const { harta } = await vocabularHarta(env)
       // In dev nu se tine cache: la o schimbare de afisare, pagina veche mai statea cinci minute in
       // browser si parea ca n-am facut nimic (patit pe 10.09.2026). Pe staging si in productie ramane cum era.
-      const cachePagina = { 'cache-control': ctx.utilizator ? 'private, no-store' : eDev ? 'no-store' : CACHE_PAGINI }
+      // Sub masca „vezi ca" pagina e personala chiar cand n-are niciun nume pe ea (masca
+      // „neautentificat"): cu `public, max-age=300` browserul o servea din propriul cache si dupa
+      // ce masca fusese scoasa, deci butonul benzii de jos parea ca nu face nimic (user, 11.09.2026).
+      const cachePagina = { 'cache-control': ctx.utilizator || ctx.veziCa ? 'private, no-store' : eDev ? 'no-store' : CACHE_PAGINI }
 
       // ---------------------------------------------------------- saptamana
       const mSapt = /^\/saptamana\/([^/]+)$/.exec(cale)
@@ -303,6 +313,7 @@ async function api(req: Request, env: Env, ctxExec: ExecutionContext, cale: stri
         { adresa: '/v1/slujbe/vocabular', ce_da: 'cele 29 de nume, cu cod_nume, categorie, activ' },
         { adresa: '/v1/foaie/<data>.pdf|.jpg|.html', ce_da: 'foaia A4 de pe ușă — numai săptămâni validate' },
         { adresa: '/v1/propunere/<data>.pdf|.jpg|.html', ce_da: 'aceeași foaie, din propunerea săptămânii' },
+        { adresa: '/v1/poza/saptamana/<data>.jpg|.html', ce_da: 'poza paginii: programul și calendarul, în două coloane' },
         { adresa: '/v1/sfintii-zilei/<data>.pdf|.html', ce_da: 'sfinții zilei, din datele calendarului' },
       ],
       reguli: ['ora e de perete, Europe/București', 'cod_nume nu e niciodată null', 'nimeni nu tipărește ce nu e validat'],
@@ -391,6 +402,61 @@ async function api(req: Request, env: Env, ctxExec: ExecutionContext, cale: stri
       return await hartieDinCache(req, ctxExec, corp, format, nume, () => (format === 'pdf' ? pdfDin(env.BROWSER, corp) : jpgDin(env.BROWSER, corp)))
     } catch (e) {
       return eroareApi(503, 'pdf_indisponibil', 'Tiparul nu e disponibil acum; încearcă peste un minut sau ia varianta .html.', { detaliu: e instanceof Error ? e.message.slice(0, 200) : '' })
+    }
+  }
+
+  /*
+   * POZA SAPTAMANII — pagina cu cele DOUA COLOANE (programul la stanga, calendarul la dreapta), asa
+   * cum se vede cand intrerupatorul „Calendar" e aprins (cerere user, 11.09.2026). Se face la cerere,
+   * prin Browser Rendering, si sta in cache-ul de muchie cu cheia pe amprenta HTML-ului — deci se
+   * reface singura cand se schimba programul sau calendarul, si n-are nimic de intretinut.
+   *
+   * Sursa e aceeasi ca a paginii (`saptamanaOriPropunere`): saptamana scrisa, iar daca nu e — propunerea
+   * ei. De aceea poza NU cere saptamana „validata", cum cere foaia A4 de pe usa: ea arata pagina, iar
+   * pagina se vede oricum. Ce nu e gata isi poarta eticheta („propunere"), ca pe ecran.
+   *
+   * Varianta `.html` e pentru probe: Browser Rendering nu merge in container (lipsesc bibliotecile
+   * Chrome), deci local poza se compara cu pagina asa.
+   */
+  const mPoza = /^\/v1\/poza\/saptamana\/([^/]+)\.(jpg|html)$/.exec(cale)
+  if (mPoza) {
+    const data = dataDin(mPoza[1]!, azi)
+    const format = mPoza[2] as 'jpg' | 'html'
+    if (!data) return eroareApi(400, 'data_invalida', 'Data se scrie AAAA-LL-ZZ (sau azi / maine / viitoare).')
+    const luni = luneaSaptamanii(data)
+    const s = await saptamanaOriPropunere(env, luni, harta)
+    // Ctx-ul pozei: fara om si fara drepturi. In poza nu se apasa nimic, deci butoanele adminului
+    // (foaia „Sfinții zilei") nici nu apuca sa se scrie.
+    const ctxPoza: Ctx = {
+      prefix,
+      nav: navigatieDin(citesteConfig(env)),
+      utilizator: null,
+      eAdmin: false,
+      versiune: pkg.version,
+      modificata: dataVersiunii(env.VERSIUNE),
+    }
+    const corp = pozaSaptamaniiHtml({
+      ctx: ctxPoza,
+      luni,
+      // Pe POZA intervalul se scrie calculat, ca pe foaia A4 si ca pe poza calendarului (user, 11.09.2026,
+      // dupa ce cele doua poze ale aceleiasi saptamani s-au vazut una langa alta): titlurile importate din
+      // V1 au cratima in loc de linie de dialog, si se vede. In PAGINA ramane titlul din baza, asa cum a
+      // fost scris — acolo n-a cerut nimeni altfel.
+      titlu: titluSaptamanii(luni),
+      stare: s.rand?.stare ?? 'propunere',
+      slujbe: s.slujbe,
+      vocabular: harta,
+      cal: s.cal,
+      dinCalendar: s.dinCalendar,
+      azi,
+      // pe negru doar daca se cere anume; implicit fundal deschis, ca la poza calendarului (user, 11.09)
+      tema: url.searchParams.get('tema') === 'dark' ? 'dark' : 'light',
+    })
+    if (format === 'html') return new Response(corp, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300', ...ANTETE_APP } })
+    try {
+      return await hartieDinCache(req, ctxExec, corp, 'jpg', `program-calendar-${luni}`, () => jpgPozaDin(env.BROWSER, corp, LATIME_POZA))
+    } catch (e) {
+      return eroareApi(503, 'poza_indisponibila', 'Poza nu se poate face acum; încearcă peste un minut sau ia varianta .html.', { detaliu: e instanceof Error ? e.message.slice(0, 200) : '' })
     }
   }
 
