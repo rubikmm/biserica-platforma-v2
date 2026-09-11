@@ -134,6 +134,9 @@ const IC_ARHIVA = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" s
  */
 const IC_INAINTE = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12h14"/><path d="m12.5 6 6 6-6 6"/></svg>`
 
+/** Plicul abonării — aceeași măsură cu iconițele hârtiilor, ca butoanele din rând să se lege. */
+const IC_PLIC = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="m3.5 7 8.5 6 8.5-6"/></svg>`
+
 /** Săgeata „înapoi", a butonului de deasupra titlului la săptămânile deschise din arhivă. */
 const IC_INAPOI = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19.5 12h-14"/><path d="m11.5 6-6 6 6 6"/></svg>`
 
@@ -298,10 +301,12 @@ body.cu-calendar .btns .poza-2 { display:flex }
      pastila doar bulina si „viitoare", iar in dreapta doar intrerupatorul: e loc destul, deci pastila
      se intinde cat randul, prisosul il ia segmentul cu scris, iar cuvintele stau LANGA sageata, nu in
      locul ei. Bulina, si ea, se face si mai lata: acolo latimea nu mai e disputata de nimeni. */
-  /* ⚠️ flex:1 1 0, nu 1 1 auto: cu masura de pornire 0, pastila nu mai cere randul dupa cat scris
-     are in ea, ci ia ce ramane dupa intrerupator — altfel cuvintele o umflau peste latimea ecranului
-     si intrerupatorul sarea pe randul urmator, tocmai lucrul de care scapam. */
-  .btns .pastila.larga { flex:1 1 0; min-width:0 }
+  /* ⚠️ Masura de pornire e a CONTINUTULUI (1 1 auto), nu 0, de cand in rand a intrat si abonarea
+     (11.09.2026, 16:36): cu 0, pastila se strangea sub cuvintele ei si textul „Săptămâna viitoare"
+     iesea TAIAT. Asa, daca cele patru lucruri (bulina, saptamana viitoare, abonarea, intrerupatorul)
+     nu incap pe un rand — la telefoanele sub ~420 px nu incap —, randul se rupe cinstit: pastila sus,
+     cat ecranul, abonarea si intrerupatorul dedesubt, lipite la dreapta. Nimic nu se taie. */
+  .btns .pastila.larga { flex:1 1 auto }
   .btns .pastila.larga .viit { flex:1 1 auto; gap:9px }
   .btns .pastila.larga .viit .cuv { display:inline }
   .btns .pastila.larga .punct { padding-left:22px; padding-right:22px }
@@ -421,24 +426,54 @@ body:not(.cu-calendar) .zi.ultima { border-bottom:0 }
 .baton { display:grid; grid-template-columns:repeat(auto-fit,minmax(128px,1fr));
          background:var(--paper); border:1px solid var(--rule); border-radius:10px; overflow:hidden }
 .baton a { padding:9px 8px 10px; text-align:center; text-decoration:none; color:var(--ink);
-           box-shadow:1px 0 0 var(--rule), 0 1px 0 var(--rule);
-           /* conturul sta scris de pe acum, TRANSPARENT, ca sa aiba ce colora :visited — vezi jos */
-           outline:2px solid transparent; outline-offset:-2px }
+           box-shadow:1px 0 0 var(--rule), 0 1px 0 var(--rule) }
 .baton a:hover { background:var(--tinta); color:var(--rosu) }
-/* ⚠️ SAPTAMANILE DESCHISE se vad marcate (user, 11.09.2026, 16:32) — semnul ca „aici am fost deja",
-   cand te intorci in arhiva cu pasul inapoi. Se face din :visited, adica din istoricul browserului:
-   nimic de tinut minte de noi, si merge si dupa ce omul inchide telefonul. ⚠️ Browserele lasa la
-   :visited NUMAI proprietati de culoare (color, background-color, border-color, outline-color) —
-   ca sa nu se poata citi istoricul masurand pagina. De aceea conturul e scris mai sus transparent si
-   aici doar se coloreaza; un chenar sau un semn adaugat acum n-ar avea niciun efect.
-   Doua semne deodata, dinadins: conturul (se vede si pe fundal colorat) si fundalul stins (se vede si
-   acolo unde browserul face nazuri la contur). */
-.baton a:visited { outline-color:var(--faint); background-color:var(--tinta); color:var(--soft) }
-.baton a:visited:hover { outline-color:var(--rosu); color:var(--rosu) }
+/* ⚠️ SAPTAMANA PE CARE TOCMAI AI APASAT se vede incercuita cand te intorci cu pasul inapoi (user,
+   11.09.2026, 16:38: „vreau doar ca, atunci când dau înapoi, să se vadă unde am apăsat… doar pe
+   moment, atunci"). Semnul il pune JS-ul (vezi SCRIPT), pe zona apasata — NU din :visited, care
+   tine minte din istoricul browserului zile intregi si ar innegri arhiva cu tot ce s-a deschis
+   vreodata. Conturul e rosu: e acelasi rost ca rosul din pastila — „aici esti/aici ai fost acum". */
+.baton a.vazuta { outline:2px solid var(--rosu); outline-offset:-2px; background:var(--tinta) }
+.baton a.vazuta b { color:var(--rosu) }
 .baton b { display:block; font-size:15.5px; font-weight:600; white-space:nowrap }
 .baton span { display:block; margin-top:2px; font:12.5px ui-sans-serif,system-ui; color:var(--faint) }
 .baton i { display:block; margin-top:4px; font:600 9px/1 ui-sans-serif,system-ui; font-style:normal;
            letter-spacing:.12em; text-transform:uppercase; color:var(--albastru) }
+
+/* FEREASTRA DE ABONARE (user, 11.09.2026) — dialog nativ: fundalul intunecat, focusul si Escape vin
+   de la browser, noi scriem doar cum arata. Cutia nu creste peste ecran (min cu latimea lui, minus o
+   margine), ca pe telefon sa nu iasa in afara. */
+.modal { border:0; padding:0; border-radius:14px; width:min(420px, calc(100vw - 32px));
+         background:var(--paper); color:var(--ink); box-shadow:0 18px 50px rgba(0,0,0,.22) }
+.modal::backdrop { background:rgba(10,12,16,.45) }
+/* ⚠️ display:block si margin:0 nu sunt de prisos: carcasa are o regula pe TOATE formularele
+   (form { display:flex; gap:8px; flex-wrap:wrap; margin:14px 0 }), facuta pentru randurile de
+   cautare. Fara ele, titlul, textul si bifele ferestrei se insirau ca niste jetoane, fiecare cat
+   scrisul lui, iar X-ul ramanea lipit de titlu in loc sa stea in coltul din dreapta. */
+.modal-cutie { display:block; margin:0; padding:20px 22px 22px }
+.modal-cap { display:flex; align-items:flex-start; justify-content:space-between; gap:14px }
+.modal-cap h2 { margin:0; font-size:23px; font-weight:400 }
+.modal-x { flex:0 0 auto; width:34px; height:34px; display:flex; align-items:center; justify-content:center;
+           font:400 21px/1 ui-sans-serif,system-ui; color:var(--faint); background:transparent;
+           border:1px solid var(--rule); border-radius:9px; cursor:pointer }
+.modal-x:hover { color:var(--rosu); border-color:var(--rosu) }
+.modal-spune { margin:10px 0 18px; color:var(--soft) }
+.camp { display:block; margin:0 0 16px }
+.camp span { display:block; font:600 10.5px/1 ui-sans-serif,system-ui; letter-spacing:.12em;
+             text-transform:uppercase; color:var(--faint); margin:0 0 7px }
+.camp input { width:100%; box-sizing:border-box; padding:11px 12px; font:15px ui-sans-serif,system-ui;
+              color:var(--ink); background:var(--tinta); border:1px solid var(--rule); border-radius:10px }
+/* scrisul bifelor e NORMAL, nu ingrosat: carcasa face din toate etichetele capete de camp
+   (label { font:600 12px … }), potrivite deasupra unei casute, nu langa o bifa */
+.bifa { display:flex; align-items:center; gap:10px; margin:0 0 11px;
+        font:400 14.5px/1.4 ui-sans-serif,system-ui; color:var(--soft) }
+.bifa input { flex:0 0 auto; width:17px; height:17px; accent-color:var(--rosu) }
+.modal-jos { display:flex; justify-content:flex-end; margin:20px 0 0 }
+/* butonul plin: singurul loc din pagina unde rosul e fundal, nu scris — e fapta ferestrei */
+.btn-plin { font:600 13px/1 ui-sans-serif,system-ui; letter-spacing:.06em; padding:13px 22px;
+            color:var(--paper); background:var(--rosu); border:1px solid var(--rosu); border-radius:10px;
+            cursor:pointer }
+.btn-plin:hover { filter:brightness(1.08) }
 
 /* propunerea */
 .nelamuriri { border-left:3px solid var(--rosu); padding:2px 0 2px 16px; margin:22px 0; color:var(--soft) }
@@ -504,6 +539,42 @@ export const SCRIPT = `
     var vineDinArhiva = document.referrer && document.referrer.indexOf("/arhiva") > -1;
     if (vineDinArhiva && history.length > 1) { e.preventDefault(); history.back(); }
   });
+})();
+(function(){
+  // ARHIVA: saptamana pe care tocmai ai apasat ramane incercuita cand te intorci cu pasul inapoi
+  // (user, 11.09.2026: „doar pe moment, atunci" — nu tinut minte zile, deci nici vorba de :visited).
+  // Semnul se pune la apasare, pe loc: daca browserul intoarce pagina din bfcache — cazul obisnuit la
+  // „inapoi" — el e deja acolo, cu tot cu derularea paginii. Daca pagina se incarca din nou, semnul se
+  // reface din sessionStorage, o SINGURA data: cheia se sterge indata ce a fost folosita, ca la o
+  // reincarcare facuta de om sa nu mai ramana nimic.
+  var zone = document.querySelectorAll(".baton a");
+  if (!zone.length) return;
+  var CHEIE = "program_arhiva_ultima";
+  function marcheaza(href){
+    for (var i = 0; i < zone.length; i++) {
+      zone[i].classList.toggle("vazuta", zone[i].getAttribute("href") === href);
+    }
+  }
+  for (var i = 0; i < zone.length; i++) {
+    zone[i].addEventListener("click", function(){
+      var href = this.getAttribute("href");
+      marcheaza(href);
+      try { sessionStorage.setItem(CHEIE, href); } catch (e) {}
+    });
+  }
+  window.addEventListener("pageshow", function(){
+    var href = null;
+    try { href = sessionStorage.getItem(CHEIE); sessionStorage.removeItem(CHEIE); } catch (e) {}
+    if (href) marcheaza(href);
+  });
+})();
+(function(){
+  // ABONAREA: butonul deschide fereastra. Inchiderea n-are nevoie de JS — formularul dinauntru e
+  // method="dialog", deci si „Abonare", si X-ul o inchid singure (si Escape, de la browser).
+  var b = document.getElementById("b-abonare");
+  var d = document.getElementById("d-abonare");
+  if (!b || !d || !d.showModal) return;
+  b.addEventListener("click", function(){ d.showModal(); });
 })();
 `
 
@@ -645,7 +716,9 @@ function intrerupatorCalendar(): string {
  */
 function unelte(ctx: Ctx, m: Meniu): string {
   const dreapta = (m.calendar ? intrerupatorCalendar() : '') + pozaPaginii(ctx, m) + hartiile(ctx, m)
-  return navigarea(ctx, m)
+  // Abonarea sta indata dupa pastila („după săptămâna viitoare, abonare" — user, 11.09.2026), deci
+  // inaintea barei si a uneltelor saptamanii. E a omului fara drepturi; la admin nu se scrie deloc.
+  return navigarea(ctx, m) + butonAbonare(ctx)
     + (dreapta ? `<span class="unelte-dr"><span class="desparte" aria-hidden="true"></span>${dreapta}</span>` : '')
 }
 
@@ -734,11 +807,51 @@ function pozaPaginii(ctx: Ctx, m: Meniu): string {
 }
 
 /**
+ * ABONAREA — butonul din rand si fereastra care se deschide din el (cerere user, 11.09.2026, 16:36).
+ *
+ * Cine il vede: **omul fara drepturi de admin** — si cel neintrat, si utilizatorul simplu („pentru cei
+ * neautentificați, dar și pentru userii simpli autentificați"). Adminul nu-l are: lui randul ii e plin
+ * de uneltele saptamanii, iar abonarea nu e treaba lui.
+ *
+ * ⚠️ DEOCAMDATA NU FACE NIMIC (cerut anume: „momentan, să nu facă nimic acest câmp, dar să fie făcut").
+ * Fereastra e un `<dialog>` nativ, cu `<form method="dialog">` inauntru: asa ORICE buton din ea — si
+ * „Abonare", si X-ul — doar o inchide, fara sa trimita nimic si fara o linie de JS pentru inchidere.
+ * Cand abonarea se leaga cu adevarat, formularul capata `action`/`method` catre `POST /abonare`, ruta
+ * care a ramas intreaga tot timpul (vezi index.ts); pana atunci nu se pierde nimic pe drum, fiindca
+ * nimic nu pleaca.
+ */
+function butonAbonare(ctx: Ctx): string {
+  if (ctx.eAdmin) return ''
+  return `<button type="button" class="btn mic abon" id="b-abonare"`
+    + ` title="Primește programul pe email">${IC_PLIC}<span class="fel">Abonare</span></button>`
+}
+
+function fereastraAbonare(ctx: Ctx): string {
+  if (ctx.eAdmin) return ''
+  return `<dialog class="modal" id="d-abonare" aria-labelledby="t-abonare">
+  <form method="dialog" class="modal-cutie">
+    <div class="modal-cap">
+      <h2 id="t-abonare">Abonare</h2>
+      <button value="inchide" class="modal-x" aria-label="Închide fereastra">&times;</button>
+    </div>
+    <p class="modal-spune">Pentru a vă abona, completați câmpul cu adresa de mail.</p>
+    <label class="camp"><span>Adresa de e-mail</span>
+      <input type="email" name="email" autocomplete="email" placeholder="nume@exemplu.ro"></label>
+    <label class="bifa"><input type="checkbox" name="cont"> Vreau să fac cont.</label>
+    <label class="bifa"><input type="checkbox" name="termeni"> Sunt de acord cu termenii și condițiile.</label>
+    <div class="modal-jos"><button value="abonare" class="btn-plin">Abonare</button></div>
+  </form>
+</dialog>`
+}
+
+/**
  * Antetul intreg al paginilor de om: randul de unelte (cu amandoua grupurile) si JS-ul intrerupatorului.
- * Slotul `subantet` a ramas gol de la 11.09.2026 — hartiile au urcat in rand, iar casuta a disparut.
+ * In `subantet` sta fereastra de abonare — inchisa, deci nevazuta; `<dialog>`-ul se deschide peste
+ * pagina, asa ca locul lui in pagina nu conteaza, numai sa fie scris o data. (Slotul statea gol de la
+ * 11.09.2026, de cand hartiile au urcat in rand si casuta de sub antet a disparut.)
  */
 function antetul(ctx: Ctx, m: Meniu) {
-  return { unelte: unelte(ctx, m), scripturi: SCRIPT }
+  return { unelte: unelte(ctx, m), subantet: fereastraAbonare(ctx), scripturi: SCRIPT }
 }
 
 /** „Luni, 7 septembrie" — cu majuscula, ca in V1. */

@@ -213,13 +213,31 @@ propunerea automată, ca în V1.
   de sus. Fără JS, ori intrat de-a dreptul pe adresă (link trimis, semn de carte), linkul duce cinstit
   la `/arhiva`. **De ce nu din `referer`**: acela lipsește des (și la trecerea https→http, și la unele
   telefoane), deci pagina ar arăta altfel de la o deschidere la alta — cu tot cu cache-ul de muchie.
-  **Și în pagina arhivei, săptămânile deschise rămân marcate** (user, 16:32: „`:visited` trebuie și el
-  marcat cumva"): `.baton a:visited` capătă contur, fundal stins și scris mai șters — semnul vine din
-  **istoricul browserului**, deci nu ținem noi nimic minte și se vede și după ce omul închide
-  telefonul. ⚠️ La `:visited` browserele lasă NUMAI proprietăți de culoare (`color`,
-  `background-color`, `border-color`, `outline-color`), ca istoricul să nu se poată citi măsurând
-  pagina: de aceea conturul e scris dinainte **transparent** pe `.baton a`, iar `:visited` doar îl
-  colorează. Se pun două semne deodată (contur ȘI fundal), fiindcă browserele mai fac nazuri la unul.
+  **Și în pagina arhivei, săptămâna pe care tocmai ai apăsat se vede încercuită roșu la întoarcere**
+  (`.baton a.vazuta`). ⚠️ **NU din `:visited`**: așa fusese făcut întâi, iar userul a respins-o la
+  16:38 — „vreau doar ca, atunci când dau înapoi, să se vadă unde am apăsat… doar pe moment, atunci.
+  Nu vreau să fie ținut minte nu știu câte zile sau ore" — și, pe deasupra, nici nu se vedea: la
+  „înapoi" pagina vine din **bfcache**, iar browserul nu repictează starea „vizitat".
+  Cum merge acum: clasa se pune **la apăsare**, deci la întoarcerea din bfcache e deja în DOM, cu tot
+  cu derularea paginii; dacă pagina chiar se reîncarcă, semnul se reface din `sessionStorage`, **o
+  singură dată** — cheia se șterge la folosire, ca la un refresh făcut de om să nu mai rămână nimic.
+- **ABONAREA a revenit în interfață, dar goală pe dinăuntru** (user, 16:36 — cerut anume: „momentan,
+  să nu facă nimic"). Buton cu plic în rândul de unelte, **îndată după pastilă** („după săptămâna
+  viitoare, abonare"), numai la omul **fără** drepturi de admin — și cel neintrat, și utilizatorul
+  simplu. Fereastra e un `<dialog>` nativ: titlu „Abonare", textul cerut, câmp de e-mail și două bife
+  („Vreau să fac cont.", „Sunt de acord cu termenii și condițiile."). Formularul dinăuntru e
+  `method="dialog"`, deci **orice buton din el doar închide** fereastra, fără să trimită nimic — și
+  „Abonare", și X-ul; Escape vine de la browser. Când abonarea se leagă cu adevărat, formularul capătă
+  `action` către `POST /abonare` — ruta a rămas întreagă tot timpul, doar bucata de interfață lipsea.
+  ⚠️ **Pe telefon, la utilizatorul simplu, rândul se rupe acum în două**: cele patru lucruri (bulina,
+  „Săptămâna viitoare" scrisă, abonarea, întrerupătorul) cer ~380 px, iar un telefon de 390 px are 335
+  de folosit. Nimic nu se taie — pastila rămâne sus, cât ecranul, iar abonarea și întrerupătorul
+  coboară, lipite la dreapta. Ca să încapă tot pe un rând ar trebui prescurtat textul („Săpt.
+  viitoare") sau strâmtată bulina; userul știe și alege.
+- **⚠️ Carcasa are stiluri GLOBALE pe `form` și `label`** (`form { display:flex; gap:8px; flex-wrap:wrap }`,
+  `label { font:600 12px … }`), făcute pentru rândurile de căutare. Orice formular nou trebuie să și
+  le scoată: fără `display:block` pe formular, titlul, textul și bifele ferestrei se înșirau ca niște
+  jetoane, fiecare cât scrisul lui, iar X-ul rămânea lipit de titlu.
 - **Antetul pe telefon are acum DOUĂ înfățișări, după drepturi** (patru cereri ale userului, 16:02).
   Pastila omului **fără** drepturi de admin poartă clasa **`larga`** (o decide `ctx.eAdmin`) și, sub
   600 px: **se întinde cât rândul** („cele două butoane de la stânga… să fie dispuse pe toată
