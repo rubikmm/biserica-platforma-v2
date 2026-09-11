@@ -43,6 +43,8 @@ export const STIL_CHAT = `
                 transition:transform .15s ease, box-shadow .15s ease }
 .xc-chat-cerc:hover { transform:translateY(-1px); box-shadow:0 5px 18px rgba(0,0,0,.2) }
 .xc-chat.deschis .xc-chat-cerc { display:none }
+/* cat e panoul deschis, pagina de dedesubt nu se deruleaza (user, 11.09.2026) */
+html.xc-chat-deschis, html.xc-chat-deschis body { overflow:hidden }
 
 /* panoul */
 .xc-chat-panou { display:none; width:min(374px, calc(100vw - 28px));
@@ -145,9 +147,15 @@ export const JS_CHAT = `(function(){
   var form = document.getElementById('xc-chat-form');
   var camp = document.getElementById('xc-chat-text');
   var buton = form.querySelector('button[type=submit]');
-  var CHEIE_ID = 'xc-chat-id', CHEIE_DESCHIS = 'xc-chat-deschis';
-  var idConv = null, incarcat = false, ocupat = false;
-  try { idConv = localStorage.getItem(CHEIE_ID); } catch (e) {}
+  var CHEIE_ID = 'xc-chat-id', CHEIE_DESCHIS = 'xc-chat-deschis', CHEIE_LA = 'xc-chat-la';
+  var VIATA = 6 * 60 * 60 * 1000; // discutia expira dupa sase ore de la ultimul mesaj
+  var idConv = null, incarcat = false, ocupat = false, deReincarcat = false;
+  try {
+    idConv = localStorage.getItem(CHEIE_ID);
+    var la = Number(localStorage.getItem(CHEIE_LA) || 0);
+    if (idConv && la && Date.now() - la > VIATA) { idConv = null; localStorage.removeItem(CHEIE_ID); }
+  } catch (e) {}
+  function atinge(){ try { localStorage.setItem(CHEIE_LA, String(Date.now())); } catch(e){} }
 
   function jos(){ fir.scrollTop = fir.scrollHeight; }
   function esc(t){ var d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; }
@@ -184,16 +192,19 @@ export const JS_CHAT = `(function(){
       method:'POST', credentials:'same-origin', headers:{'content-type':'application/json'},
       body: JSON.stringify({ propunereId: id, raspuns: raspuns })
     }).then(function(x){ return x.json(); }).then(function(j){
-      cutie.remove();
+      cutie.remove(); atinge();
       mesaj(j.ok ? 'agent' : 'rea', j.text || (j.ok ? 'Gata.' : 'N-a mers.'));
-      // Pagina de dedesubt e desenata la incarcare: dupa o schimbare facuta, se reincarca, ca omul
-      // sa vada programul nou (user, 11.09.2026, 21:32: „dupa modificare nu a reincarcat pagina").
-      // Discutia nu se pierde — sta pe server, iar panoul se redeschide unde era.
-      if (j.ok) setTimeout(function(){ location.reload(); }, 900);
+      if (j.reincarca) deReincarcat = true;
+      // Urmarea („validez saptamana?"): inca o propunere, tot cu Da/Nu — reincarcarea asteapta.
+      if (j.propunere) { propunere(j.propunere); return; }
+      // Pagina de dedesubt e desenata la incarcare: dupa o schimbare facuta se reincarca, cu panoul
+      // STRANS (user, 21:48); la click se vede ultima discutie — sta pe server.
+      if (deReincarcat) { strange(); setTimeout(function(){ location.reload(); }, 600); }
     }).catch(function(){ cutie.remove(); mesaj('rea', 'Nu am putut trimite confirmarea.'); });
   }
 
   function raspunsul(j){
+    atinge();
     if (j.conversatieId){ idConv = j.conversatieId; try { localStorage.setItem(CHEIE_ID, idConv); } catch(e){} }
     if (j.text) mesaj('agent', j.text);
     (j.obiecte || []).forEach(card);
@@ -219,12 +230,14 @@ export const JS_CHAT = `(function(){
 
   function deschide(){
     r.classList.add('deschis');
+    document.documentElement.classList.add('xc-chat-deschis');
     try { localStorage.setItem(CHEIE_DESCHIS, '1'); } catch(e){}
     incarcaDiscutia();
     setTimeout(function(){ camp.focus(); jos(); }, 30);
   }
   function strange(){
     r.classList.remove('deschis');
+    document.documentElement.classList.remove('xc-chat-deschis');
     try { localStorage.setItem(CHEIE_DESCHIS, '0'); } catch(e){}
   }
 

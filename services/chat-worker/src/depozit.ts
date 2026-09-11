@@ -39,6 +39,9 @@ export interface Propunere {
 const acum = () => new Date().toISOString()
 
 /** Discuția cerută, dacă e a omului; altfel una nouă. Nimeni nu intră în discuția altuia. */
+/** O discutie EXPIRA dupa sase ore de la ultimul mesaj (user, 11.09.2026): urmatorul mesaj deschide alta. */
+export const VIATA_DISCUTIEI_MS = 6 * 60 * 60_000
+
 export async function conversatia(
   db: D1Database,
   userId: string,
@@ -50,7 +53,7 @@ export async function conversatia(
       .prepare('SELECT * FROM conversatii WHERE id = ?1 AND user_id = ?2 AND stearsa_la IS NULL')
       .bind(id, userId)
       .first<Conversatie>()
-    if (gasita) return gasita
+    if (gasita && Date.now() - Date.parse(gasita.ultimul_la) < VIATA_DISCUTIEI_MS) return gasita
   }
   const noua: Conversatie = {
     id: crypto.randomUUID(),

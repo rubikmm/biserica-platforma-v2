@@ -221,6 +221,20 @@ propunerea automată, ca în V1.
 
 ### 2026-09-11
 
+- **Trei cereri de la joacă** (user, 21:48): (1) cât e panoul deschis, pagina de dedesubt nu se
+  derulează (`html.xc-chat-deschis { overflow:hidden }`); (2) după o schimbare făcută, panoul se
+  STRÂNGE și pagina se reîncarcă; la click se vede ultima discuție; discuțiile **expiră după 6 h**
+  de la ultimul mesaj (server: `conversatia()` deschide alta; client: `xc-chat-la`); (3) după
+  fiecare schimbare confirmată, chatul întreabă **deterministic** „Îl validez?" — nu la voia
+  modelului. Mecanismul e generic, în contract: **`urmare`** pe acțiune (`{ actiune, argumente:
+  { câmpul urmării: câmpul de aici } }`); chat-worker previzualizează urmarea (dacă săptămâna e deja
+  validată, previzualizarea cade și nu întreabă) și o propune ca a doua propunere cu Da/Nu;
+  reîncărcarea așteaptă până se răspunde. Programul: `modifica/adauga/sterge_slujba` și
+  `scrie_propunerea` au urmarea `valideaza_saptamana`; `program.valideaza_saptamana` intră în
+  uneltele permise. Probat cap-coadă pe local: adăugare → Da → validez? → Da → `stare: validat`.
+  ⚠️ De urmărit: „acatist" a nimerit „Denia Acatistului Bunei Vestiri" (cel mai scurt nume care
+  conține cuvântul) — vocabularul n-are un „Acatist" generic; de lămurit cu userul ce vrea.
+
 - **Din joaca userului pe staging** (21:32–21:42), trei lucruri:
   1. „a modificat corect programul dar nu a reîncărcat pagina" → după un „Da" executat, bula
      **reîncarcă pagina** peste o clipă; discuția stă pe server, panoul se redeschide unde era;

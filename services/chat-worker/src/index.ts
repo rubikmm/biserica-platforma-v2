@@ -87,6 +87,8 @@ interface UndeStaActiunea {
   fetcher: Fetcher
   efect: 'citeste' | 'scrie'
   descriere: string
+  /** Ce se propune dupa ce s-a facut (vezi `Actiune.urmare`). */
+  urmare: { actiune: string; argumente: Record<string, string> } | null
 }
 
 /**
@@ -131,6 +133,7 @@ async function adunaUneltele(
         fetcher: a.fetcher,
         efect: descriere.efect,
         descriere: descriere.descriere,
+        urmare: descriere.urmare ?? null,
       })
     }
     unelte.push(...unelteDinManifest({ ...(m as Manifest), actiuni: (m as Manifest).actiuni.filter((a) => permis(a.nume)) }))
@@ -285,9 +288,38 @@ export default {
         const laTrecut = p.rezumat
           .replace(/^(Schimb|Adaug|Scot|Scriu|Validez)\b/, (v) => ({ Schimb: 'Am schimbat', Adaug: 'Am adăugat', Scot: 'Am scos', Scriu: 'Am scris', Validez: 'Am validat' })[v] ?? v)
           .replace(/\s*Săptămâna nu e scrisă încă — o scriu întâi din propunere\.|\s*Nu e scrisă încă — o scriu întâi din propunere\./, ' Săptămâna a fost scrisă din propunere.')
-        const text = r.ok ? `Gata. ${laTrecut}` : `N-am putut: ${r.mesaj}`
-        await scrieMesaj(env.DB, { conversatie_id: p.conversatie_id, rol: 'agent', text })
-        return json({ ok: r.ok, text })
+        let text = r.ok ? `Gata. ${laTrecut}` : `N-am putut: ${r.mesaj}`
+
+        // URMAREA (user, 11.09.2026, 21:48): dupa fiecare schimbare confirmata, chatul intreaba —
+        // deterministic, nu la voia modelului — daca valideaza saptamana. Se previzualizeaza intai
+        // (daca e deja validata, previzualizarea cade si nu se intreaba nimic) si se propune cu Da/Nu.
+        let urmare: RaspunsChat['propunere'] = null
+        if (r.ok) {
+          const comutator = await configChat(env)
+          const { harta } = await adunaUneltele(env, { secret, correlationId: cid, permise: comutator.unelte })
+          const facuta = harta.get(numeUnealta(p.actiune))
+          const tinta = facuta?.urmare ? harta.get(numeUnealta(facuta.urmare.actiune)) : undefined
+          if (facuta?.urmare && tinta) {
+            const argumenteFacute = JSON.parse(p.argumente_json) as Record<string, unknown>
+            const argumente: Record<string, unknown> = {}
+            for (const [al, din] of Object.entries(facuta.urmare.argumente)) argumente[al] = argumenteFacute[din]
+            const prev = await previzualizeaza(tinta.fetcher, tinta.nume, argumente, actor, { secret, correlationId: cid, prin: 'chat' })
+            if (prev.ok) {
+              const p2 = await scriePropunere(env.DB, {
+                conversatie_id: p.conversatie_id,
+                aplicatie: tinta.aplicatie,
+                actiune: tinta.nume,
+                argumente,
+                rezumat: prev.date.rezumat,
+              })
+              urmare = { id: p2.id, rezumat: p2.rezumat }
+              text += ' Programul săptămânii e acum „propus". Îl validez?'
+            }
+          }
+        }
+
+        await scrieMesaj(env.DB, { conversatie_id: p.conversatie_id, rol: 'agent', text, date: { propunere: urmare } })
+        return json({ ok: r.ok, text, propunere: urmare, reincarca: r.ok })
       }
 
       // -------------------------------------------------------------- mesajul

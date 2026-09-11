@@ -87,6 +87,13 @@ export interface Actiune<I extends z.ZodType = z.ZodType, O extends z.ZodType = 
    */
   permiteServicii?: boolean
   /**
+   * URMAREA: ce se propune omului DUPĂ ce acțiunea asta s-a făcut. Exemplu: după orice schimbare
+   * în program, „validez săptămâna?". `argumente` spune cum se umplu câmpurile urmării din
+   * argumentele acțiunii făcute: { câmpul urmării: câmpul de aici }. Chatul previzualizează urmarea
+   * (deci dacă n-are sens — săptămâna e deja validată — nu întreabă nimic) și o propune cu Da/Nu.
+   */
+  urmare?: { actiune: string; argumente: Record<string, string> }
+  /**
    * PREVIZUALIZAREA — ce se va intampla, spus omului INAINTE sa apese „Da". Doar pentru
    * `efect: 'scrie'`: se cheama cu argumentele deja validate si cu dreptul deja verificat, poate
    * citi baza (ca sa spuna „ora 08:00 → 07:00"), dar NU schimba nimic. Arunca daca cererea n-are

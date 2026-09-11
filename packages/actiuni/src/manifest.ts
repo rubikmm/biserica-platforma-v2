@@ -21,6 +21,8 @@ export interface DescriereActiune {
   exemple: Array<string | ExempluActiune>
   /** Se cheama inainte de orice raspuns si intra in context (vezi `Actiune.fundal`). */
   fundal: boolean
+  /** Ce se propune dupa ce actiunea s-a facut (vezi `Actiune.urmare`). */
+  urmare: { actiune: string; argumente: Record<string, string> } | null
 }
 
 export interface Manifest {
@@ -53,6 +55,7 @@ export function descrie(a: Actiune): DescriereActiune {
     iesire: schema(a.iesire, 'output'),
     exemple: a.exemple ?? [],
     fundal: Boolean(a.fundal),
+    urmare: a.urmare ?? null,
   }
 }
 

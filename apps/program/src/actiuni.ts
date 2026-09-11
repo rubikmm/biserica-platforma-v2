@@ -437,6 +437,7 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
 
   actiune({
     nume: 'program.modifica_slujba',
+    urmare: { actiune: 'program.valideaza_saptamana', argumente: { saptamana: 'zi' } },
     descriere:
       'Schimbă o slujbă care EXISTĂ în program: ora, locul, slujitorul, observațiile sau rândurile ' +
       'de detalii. Slujba se găsește după zi („luni") și, dacă ziua are mai multe, după nume sau ' +
@@ -489,6 +490,7 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
 
   actiune({
     nume: 'program.adauga_slujba',
+    urmare: { actiune: 'program.valideaza_saptamana', argumente: { saptamana: 'zi' } },
     descriere:
       'Adaugă o slujbă NOUĂ în program, într-o zi și la o oră, cu numele din vocabularul închis al ' +
       'slujbelor (liturghie, vecernia, acatist, sfântul maslu, parastas…). Pentru una care există deja ' +
@@ -533,6 +535,7 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
 
   actiune({
     nume: 'program.sterge_slujba',
+    urmare: { actiune: 'program.valideaza_saptamana', argumente: { saptamana: 'zi' } },
     descriere: 'Scoate o slujbă din program. Slujba se găsește după zi și nume. Omul confirmă înainte.',
     efect: 'scrie',
     permisiune: 'program.write',
@@ -559,6 +562,7 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
 
   actiune({
     nume: 'program.scrie_propunerea',
+    urmare: { actiune: 'program.valideaza_saptamana', argumente: { saptamana: 'saptamana' } },
     descriere:
       'Scrie în bază propunerea unei săptămâni (calculată din istoric și calendar), ca să poată fi ' +
       'apoi modificată și validată. Fără asta, săptămâna viitoare e doar o propunere din zbor.',
