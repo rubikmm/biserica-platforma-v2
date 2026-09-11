@@ -39,7 +39,7 @@ import {
 import { foaieHtml, hartieDinCache, jpgDin, jpgPozaDin, pdfDin, sfintiiHtml, titluSaptamanii } from './foaie.js'
 import { propune } from './propunere.js'
 import { sfintiiDinCarti } from './tipic.js'
-import { LATIME_POZA, type Ctx, type Meniu, type StareProba, paginaArhiva, paginaMesaj, paginaSaptamana, pozaSaptamaniiHtml } from './pagini.js'
+import { LATIME_POZA, type Ctx, type Meniu, paginaArhiva, paginaMesaj, paginaSaptamana, pozaSaptamaniiHtml } from './pagini.js'
 
 export interface Env {
   DB: D1Database
@@ -132,7 +132,7 @@ export default {
     const { prefix, cale } = prefixSiCale(url, '/program')
     const nav = navigatieDin(cfg)
     const azi = aziBucuresti()
-    /** ⚠️ TEMPORAR — poarta modului de proba: tot ce tine de el se stinge singur in afara dev-ului. */
+    /** Singura deosebire ramasa fata de public: in dev paginile nu se cacheaza (vezi `cachePagina`). */
     const eDev = env.MEDIU === 'dev'
 
     if (eAdresaDeMasina(cale)) {
@@ -144,19 +144,6 @@ export default {
         log.error('eroare api', { eroare: e instanceof Error ? e.message : String(e) })
         return eroareApi(500, 'eroare_interna', 'A apărut o eroare neașteptată.')
       }
-    }
-
-    // ⚠️ TEMPORAR (vezi „MODUL DE PROBA" mai jos): butoanele bannerului. Numai in dev.
-    // `inchis` = X-ul cutiei: rolul imprumutat cade, cutia se strange in pastila.
-    // `deschis` = pastila: sterge cookie-ul cu totul si desface cutia la loc.
-    const mProba = /^\/proba\/(anonim|user|admin|super|inchis|deschis)$/.exec(cale)
-    if (eDev && mProba && req.method === 'GET') {
-      const spre = url.searchParams.get('spre') ?? `${prefix}/`
-      const spreSigur = spre.startsWith('/') && !spre.startsWith('//') ? spre : `${prefix}/`
-      const cookie = mProba[1] === 'deschis'
-        ? 'proba_rol=; Path=/; Max-Age=0; SameSite=Lax'
-        : `proba_rol=${mProba[1]}; Path=/; Max-Age=86400; SameSite=Lax`
-      return redirect(spreSigur, { 'set-cookie': cookie })
     }
 
     // Meniul paginilor care nu tin de o saptamana anume (arhiva, adresele gresite): `luni: null`, deci
@@ -175,35 +162,20 @@ export default {
     const eSuperAdminReal = sesiune.roles.some((r) => r.role === 'super-admin')
     const eAdminReal = eSuperAdminReal || sesiune.roles.some((r) => r.role === 'admin')
     const utilizatorReal = sesiune.user?.displayName ?? sesiune.user?.email ?? null
-    // ⚠️ TEMPORAR — MODUL DE PROBA (user, 10.09.2026, 18:06: „nu se poate testa local autentificarea").
-    // Patru butoane in banner comuta afisarea intre neautentificat / utilizator / admin / super-admin
-    // (al patrulea, de la 19:39, fiindca hartiile se vad altfel la admin decat la super-admin); alegerea
-    // sta intr-un cookie, ca sa tina de la o pagina la alta. Merge DOAR in dev — pe staging si in
-    // productie `rolProba` e mereu null, deci nimic din blocul asta nu poate deschide o portita.
-    // DE STERS la cerere: blocul de mai jos, ruta `/proba/<rol>`, campurile `proba`/`caleAcum` din Ctx
-    // si bannerul din pagini.ts.
-    const stareProba = eDev
-      ? (/(?:^|;\s*)proba_rol=(anonim|user|admin|super|inchis)(?:;|$)/.exec(req.headers.get('cookie') ?? '')?.[1] as StareProba | undefined)
-      : undefined
-    // `inchis` nu e rol: cutia e doar stransa, iar pagina se vede cu drepturile tale adevarate.
-    const rolProba = stareProba === 'inchis' ? undefined : stareProba
+    // Cine esti si ce poti vine DOAR din sesiune — la fel pe local si pe public. Rolurile sosesc
+    // deja trecute prin masca „vezi ca", asa ca aici nu mai e nimic de deosebit (user, 11.09.2026:
+    // „să nu fie nicio diferență între testare și public"; modul de proba local a fost scos atunci).
     const ctx: Ctx = {
       prefix,
       nav,
-      utilizator: rolProba === 'anonim' ? null
-        : rolProba === 'user' ? 'Utilizator de probă'
-        : rolProba === 'admin' ? 'Admin de probă'
-        : rolProba === 'super' ? 'Super-admin de probă'
-        : utilizatorReal,
-      eAdmin: rolProba ? rolProba === 'admin' || rolProba === 'super' : eAdminReal,
-      eSuperAdmin: rolProba ? rolProba === 'super' : eSuperAdminReal,
+      utilizator: utilizatorReal,
+      eAdmin: eAdminReal,
+      eSuperAdmin: eSuperAdminReal,
       versiune: pkg.version,
       modificata: dataVersiunii(env.VERSIUNE),
       veziCa: sesiune.veziCa,
       poateVedeaCa: sesiune.poateVedeaCa,
       spre: url.toString(),
-      proba: eDev ? (stareProba ?? (eSuperAdminReal ? 'super' : eAdminReal ? 'admin' : utilizatorReal ? 'user' : 'anonim')) : null,
-      caleAcum: `${prefix}${cale}`,
     }
 
     try {

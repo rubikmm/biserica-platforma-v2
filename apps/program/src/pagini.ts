@@ -27,11 +27,6 @@ import type { CalendarSaptamana, ZiPeProgram } from './calendar.js'
 import { ziRosie } from './calendar.js'
 import { PAROHIA, randurileSlujbei } from './foaie.js'
 
-/** ⚠️ TEMPORAR — rolurile modului de proba local (vezi `bannerProba`). */
-export type RolProba = 'anonim' | 'user' | 'admin' | 'super'
-/** ⚠️ TEMPORAR — starea cutiei de proba: un rol incercat, sau `inchis` (stransa in pastila). */
-export type StareProba = RolProba | 'inchis'
-
 export interface Ctx {
   prefix: string
   nav: Navigatie
@@ -45,12 +40,6 @@ export interface Ctx {
   veziCa?: string | null
   poateVedeaCa?: boolean
   spre?: string
-  /** ⚠️ TEMPORAR — ce arata cutia de proba: un rol, `inchis` (stransa) sau `null` in afara dev-ului. */
-  proba?: StareProba | null
-  /** ⚠️ TEMPORAR — calea paginii de acum (cu prefix), ca butoanele probei sa se intoarca aici. */
-  caleAcum?: string
-  /** ⚠️ PROBA 11.09.2026 — varianta navigarii: `date` = datele pe toate trei; lipsa = bulina, ca acum. */
-  navProba?: 'date' | null
 }
 
 /** Ce-i trebuie antetului ca sa se aseze: navigarea si intrerupatorul calendarului. Il umple index.ts. */
@@ -119,30 +108,6 @@ const IC_ARHIVA = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" s
 export const STIL = `
 .marunt { font-size:14px; color:var(--faint) }
 
-/* ⚠️ TEMPORAR — bannerul modului de proba (vezi functia bannerProba). Chenar punctat, ca sa se vada
-   dintr-o ochire ca nu e parte din pagina adevarata. DE STERS odata cu el. */
-.proba { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:8px 0 0; padding:6px 10px;
-         border:1px dashed var(--rosu); border-radius:10px;
-         font:12.5px ui-sans-serif,system-ui; color:var(--soft) }
-.proba b { font:600 10.5px/1 ui-sans-serif,system-ui; letter-spacing:.12em; text-transform:uppercase; color:var(--rosu) }
-.proba .pr-btn { padding:4px 11px; border:1px solid var(--rule); border-radius:999px;
-                 background:var(--paper); color:var(--ink); text-decoration:none }
-.proba .pr-btn:hover { border-color:var(--rosu); color:var(--rosu) }
-.proba .pr-btn.activ { border-color:var(--rosu); color:var(--rosu); font-weight:600; background:var(--azi-fund) }
-/* X-ul: iese din proba (drepturile tale adevarate) si strange cutia in pastila de mai jos. */
-.proba .pr-x { margin-left:auto; padding:0 2px 2px; line-height:1; font-size:17px;
-               color:var(--faint); text-decoration:none }
-.proba .pr-x:hover { color:var(--rosu) }
-/* Stransa: nu mai e o cutie, ci o pastila cat un cuvant, care o deschide la loc. */
-.proba.stransa { display:inline-flex; padding:1px 3px; border-radius:999px }
-.proba.stransa a { padding:1px 9px; color:var(--faint); text-decoration:none;
-                   font:600 10.5px/1.6 ui-sans-serif,system-ui; letter-spacing:.12em; text-transform:uppercase }
-.proba.stransa a:hover { color:var(--rosu) }
-/* Pe telefon raman doar butoanele si X-ul: cuvintele din fata mancau tot randul (user, 11.09.2026). */
-@media (max-width:600px) {
-  .proba b, .proba .pr-cuv { display:none }
-  .proba { gap:6px; padding:6px 8px }
-}
 
 /* capul saptamanii: titlul + starea (navigarea si hartiile au urcat in meniul din antet, 8 sept. 2026) */
 /* Eticheta („propunere") se aseaza pe MIJLOCUL titlului, nu pe linia lui de baza: pastila are chenar
@@ -207,11 +172,9 @@ body:has(.nav-jos) main { padding-top:34px }
 .btns .punct { flex:0 0 auto; display:flex; align-items:center; justify-content:center; padding-left:20px; padding-right:20px }
 .btns .punct::before { content:""; width:9px; height:9px; border-radius:50%; background:currentColor }
 .btns .punct:hover { color:var(--rosu); border-color:var(--rosu) }
-/* ⚠️ PROBA (11.09.2026) — PASTILA navigarii: cele trei trepte lipite intr-un singur corp, ca sa se
-   citeasca drept UN obiect cu o pozitie, nu trei destinatii deosebite. Chenarul si rotunjirea trec de
-   pe butoane pe pastila; intre segmente ramane o linie de 1 px, iar segmentul pe care esti e PLIN
-   (pana acum se vedea doar conturul rosu). Daca proba nu prinde: se sterge blocul asta si span-ul
-   cu clasa pastila din functia navigarea(), si totul se intoarce la trei butoane despartite. */
+/* PASTILA navigarii (aleasa de user, 11.09.2026): cele trei trepte lipite intr-un singur corp, ca sa
+   se citeasca drept UN obiect cu o pozitie, nu trei destinatii deosebite. Chenarul si rotunjirea stau
+   pe pastila, nu pe butoane; intre segmente ramane o linie de 1 px, iar segmentul pe care esti e PLIN. */
 .btns .pastila { display:flex; flex:0 0 auto; border:1px solid var(--rule); border-radius:10px;
                  background:var(--tinta); overflow:hidden }
 .btns .pastila .btn { flex:0 0 auto; border:0; border-radius:0; background:transparent }
@@ -220,11 +183,6 @@ body:has(.nav-jos) main { padding-top:34px }
 .btns .pastila .btn.activ { color:var(--rosu); font-weight:600;
                             background:color-mix(in srgb, var(--rosu) 11%, transparent) }
 .btns .pastila .btn[aria-disabled="true"]:focus { background:color-mix(in srgb, var(--rosu) 18%, transparent) }
-/* ANCORA „azi" (varianta cu datele pe toate trei): un punct mic, inaintea datei din mijloc. El spune
-   unde e PREZENTUL si nu se misca niciodata; rosul spune unde te afli TU. */
-.btns .pastila .ancora { display:inline-block; width:5px; height:5px; border-radius:50%; margin-right:7px;
-                         background:currentColor; opacity:.45; vertical-align:middle }
-.btns .pastila .btn.activ .ancora { opacity:1 }
 /* bara verticala dintre navigare si butoanele saptamanii (cerere user, 8 sept. 2026) */
 .btns .desparte { flex:0 0 1px; align-self:stretch; background:var(--rule); margin:0 3px }
 /* butoanele mici: nu cresc, stau cat le tine continutul — iconita Arhivei, apoi PDF si JPG */
@@ -361,7 +319,7 @@ body:not(.cu-calendar) .zi.ultima { border-bottom:0 }
 /* foaia A4 de pe usa: doar programul, fara antet, subsol si navigare */
 @media print {
   header.sus, .subsol-linie, .versiune, footer.subsol, .btns, .nav-jos, .zi-cap .sfintii,
-  .zi.goala, .cine, .marunt, .nelamuriri, .cal, .proba { display:none !important }
+  .zi.goala, .cine, .marunt, .nelamuriri, .cal { display:none !important }
   body { padding:0; font-size:14pt; color:#000; background:#fff }
   main { padding-top:0 !important }
   /* pe hartie merge doar programul, intr-o coloana — calendarul ramane pe ecran */
@@ -401,36 +359,6 @@ export const SCRIPT = `
 })();
 `
 
-/**
- * ⚠️ TEMPORAR — BANNERUL MODULUI DE PROBA (user, 10.09.2026, 18:06: „nu se poate testa local
- * autentificarea"). Trei butoane — neautentificat / utilizator / admin — care schimba pe loc ce vede
- * pagina; cel apasat ramane marcat. Alegerea sta intr-un cookie (`proba_rol`), pusa de ruta
- * `/proba/<rol>` din index.ts, deci tine de la o pagina la alta.
- *
- * X-ul din dreapta (user, 11.09.2026: „as vrea sa pot sa ies din el") pune `proba_rol=inchis`:
- * rolul imprumutat cade — pagina se vede cu contul si drepturile TALE adevarate — iar cutia se
- * strange intr-o pastila `proba`. Pastila duce la `/proba/deschis`, care STERGE cookie-ul si
- * desface cutia la loc, cu rolul tau adevarat marcat. Nota „se sterge cand nu mai trebuie" a
- * iesit tot atunci, ca sa fie cutia mai ingusta.
- *
- * Se scrie DOAR in dev: `ctx.proba` vine null din index.ts in orice alt mediu. DE STERS la cererea
- * userului — functia asta, apelul ei din `comune`, stilul `.proba` din STIL, campurile `proba` si
- * `caleAcum` din Ctx, plus blocul si ruta din index.ts.
- */
-function bannerProba(ctx: Ctx): string {
-  if (!ctx.proba) return ''
-  const spre = encodeURIComponent(ctx.caleAcum ?? `${ctx.prefix}/`)
-  const catre = (ce: string) => `${esc(ctx.prefix)}/proba/${ce}?spre=${spre}`
-  if (ctx.proba === 'inchis') {
-    return `<p class="proba stransa"><a href="${catre('deschis')}" title="Deschide proba locală">probă</a></p>`
-  }
-  const buton = (rol: RolProba, text: string) =>
-    `<a class="pr-btn${ctx.proba === rol ? ' activ' : ''}" href="${catre(rol)}">${text}</a>`
-  return `<p class="proba"><b>probă locală</b><span class="pr-cuv">vezi pagina ca:</span>`
-    + buton('anonim', 'neautentificat') + buton('user', 'utilizator') + buton('admin', 'admin')
-    + buton('super', 'super-admin')
-    + `<a class="pr-x" href="${catre('inchis')}" title="Ieși din probă — revii la contul și drepturile tale" aria-label="Ieși din probă">×</a></p>`
-}
 
 // ---------------------------------------------------------------------------
 // Bucati comune
@@ -459,7 +387,6 @@ function comune(ctx: Ctx) {
     cont: contDin(ctx),
     versiune: ctx.versiune,
     modificata: ctx.modificata,
-    personal: bannerProba(ctx), // ⚠️ TEMPORAR — vezi bannerProba
   }
 }
 
@@ -502,25 +429,16 @@ function intervalScurt(luni: string): string {
  * ⚠️ PROBA (11.09.2026) — cele trei stau acum intr-o PASTILA: un singur chenar in jurul lor, fara
  * spatii intre segmente, iar treapta pe care esti e plina, nu doar conturata. Motivul: trei butoane
  * despartite se citesc ca trei destinatii deosebite, iar aici e acelasi lucru in trei momente.
- * A doua varianta, doar in dev, cu `?nav=date`: pe toate trei stau datele (deci si pe mijloc), iar
- * „azi" capata semnul lui — un punct mic inaintea datei, care nu se misca niciodata, spre deosebire
- * de rosu, care arata unde te afli tu. In varianta implicita mijlocul ramane bulina, ca acum.
- * De sters odata cu proba: `cuDate`, `q` si campul `navProba` din Ctx.
  */
 function navigarea(ctx: Ctx, m: Meniu): string {
   const p = esc(ctx.prefix)
   const aAzi = luneaSaptamanii(m.azi)
-  /** ⚠️ TEMPORAR — varianta cu datele pe toate trei; `q` o duce mai departe la clic, ca sa poata fi probata. */
-  const cuDate = ctx.navProba === 'date'
-  const q = cuDate ? '?nav=date' : ''
   const treapta = (luni: string, launtru: string, unde: string, clase = '', extra = '') => (m.luni === luni
     ? `<button type="button" class="btn ${clase}activ" aria-disabled="true" aria-current="page" title="Ești pe ${unde}"${extra}>${launtru}</button>`
-    : `<a class="${`btn ${clase}`.trim()}" href="${p}/saptamana/${luni}${q}" title="Treci la ${unde}"${extra}>${launtru}</a>`)
+    : `<a class="${`btn ${clase}`.trim()}" href="${p}/saptamana/${luni}" title="Treci la ${unde}"${extra}>${launtru}</a>`)
   const trecuta = adaugaZile(aAzi, -7)
   const urmatoarea = adaugaZile(aAzi, 7)
-  const mijloc = cuDate
-    ? treapta(aAzi, `<span class="ancora" aria-hidden="true"></span>${intervalScurt(aAzi)}`, 'săptămâna de azi', '', ` aria-label="săptămâna de azi, ${intervalScurt(aAzi)}"`)
-    : treapta(aAzi, '', 'săptămâna de azi', 'punct ', ' aria-label="săptămâna de azi"')
+  const mijloc = treapta(aAzi, '', 'săptămâna de azi', 'punct ', ' aria-label="săptămâna de azi"')
   return `<span class="pastila">`
     + treapta(trecuta, intervalScurt(trecuta), 'săptămâna trecută', '', ` aria-label="săptămâna trecută, ${intervalScurt(trecuta)}"`)
     + mijloc

@@ -85,15 +85,15 @@ propunerea automată, ca în V1.
 
 ## NEXT
 
-1. ⚠️ **De șters la cererea userului: modul de probă din `program`** (pus 10.09.2026, 18:06, ca să se
-   poată vedea local ce vede un admin — autentificarea nu se poate proba local). Banner cu trei
-   butoane, apoi patru (neautentificat / utilizator / admin / super-admin), alegerea în cookie-ul `proba_rol`, ruta
-   `GET /proba/<rol>`. **Merge doar în dev**; pe staging și în producție e inert. Tot ce ține de el
-   poartă marcajul `⚠️ TEMPORAR` în `apps/program/src/{index,pagini}.ts`.
-   Din 11.09 cutia are **X** (`/proba/inchis`): rolul împrumutat cade — pagina se vede cu contul și
-   drepturile tale adevărate — iar cutia se strânge într-o **pastilă „probă"**, care o deschide la
-   loc prin `/proba/deschis` (acolo cookie-ul chiar se șterge). Nota „se șterge când nu mai trebuie"
-   a ieșit, iar pe telefon (sub 600 px) rămân doar butoanele și X-ul.
+1. **Ce a mai rămas deosebit între local și public** (user, 11.09.2026: „să nu fie nicio diferență
+   între testare și public"). Modul de probă a fost **scos de tot** atunci; local se intră cu cont
+   adevărat și masca „vezi ca" se pune din meniul contului, exact ca pe staging. Mai rămân trei
+   deosebiri, toate **structurale**, nu de afișare:
+   - **emailul nu poate pleca din `wrangler dev`** (binding-ul `send_email` nu funcționează acolo) —
+     de aceea codul apare în pagină și `123456` merge oricând pentru super-admin;
+   - **un singur host, cu căi** (`/program`, `/cont`) față de subdomenii pe staging;
+   - **cache**: în dev paginile ies `no-store`, pe staging `max-age=300` — dinadins, altfel
+     schimbările par nefăcute cinci minute. (`calendar` n-are ramura asta: și local cachează 5 min.)
 2. **PDF-urile cărților tipicului în R2** — Anuarul (41 MB), Mineiul pe noiembrie (67 MB) și ROEA
    stau în R2-ul V1 și n-au fost copiate. Fără ele, cardul care duce la pagina zilei din carte nu
    se scrie (codul îl așteaptă). De întrebat utilizatorul dacă le vrea.
@@ -199,6 +199,12 @@ propunerea automată, ca în V1.
 
 ### 2026-09-11
 
+- **Modul de probă local a ieșit de tot** (user: „scoate-o de tot... să fie la fel ca pe staging").
+  Scoase din `program`: bannerul `.proba` cu tot cu stil și media query, tipurile `RolProba`/
+  `StareProba`, câmpurile `proba`/`caleAcum`/`navProba` din `Ctx`, ruta `GET /proba/<rol>`, blocul
+  `rolProba` și varianta de navigare `?nav=date` (era cod mort — `navProba` nu se punea nicăieri).
+  `eDev` a rămas doar pentru cache. Probat local, intrat cu `123456`: fără cutie, meniul „Vezi ca"
+  cu trei măști, banda jos sub fiecare mască, iar „Revino la super admin" o scoate. Program 0.3.2.
 - **Intrarea pe local, reparată în două locuri.** (1) POST-urile locale cădeau cu „origine
   neacceptată" când pagina era deschisă de pe alt nume decât `rubik` — lista albă de origini se
   sare acum în dev. (2) `123456` e cod de casă permanent pentru adresa super-adminului, tot numai
