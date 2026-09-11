@@ -134,6 +134,10 @@ propunerea automată, ca în V1.
 
 - **Local**: `https://rubik:8474` (container `biserica-platforma-v2`). 11 workeri prin
   `wrangler dev`, gateway pe `/`. Email în sandbox: codul apare în pagină.
+- **Modulul de chat pe staging** (11.09.2026, seara): publicat și **aprins** — `xc-chat-staging`
+  (nou), plus program, calendar, tipic, admin și authz republicate. Pornit pentru **program**, treapta
+  **„doar adminii"**, creier `workers-ai`. ⚠️ Lanțul întreg **n-a fost probat pe staging** (codul de
+  intrare vine pe email, `123456` merge doar în dev); proba cap-coadă e făcută numai pe local.
 - **Staging**: `cont.` / `calendar.` / `admin.` `.staging.sfantul-ilie.ro` (custom domains,
   DNS creat automat; certificatul TLS se emite de Cloudflare la primul deploy — poate dura
   minute). Serviciile interne **nu** au adresă publică (`workers_dev: false` peste tot).
@@ -277,6 +281,22 @@ propunerea automată, ca în V1.
      fiecare potrivire; tăiat la 2500 de caractere înainte de model, JSON-ul se rupea la mijloc și
      modelul tăcea la fel. Acum dă doar data, denumirea și rangul, cel mult zece zile. **Regula
      pentru acțiunile noi: răspunde cu ce se poate citi, nu cu tot ce ai.**
+
+- **⚠️ O CHEIE NOUĂ DE PERMISIUNE CERE REPUBLICAREA LUI `xc-authz-staging`** (pățit cu
+  `modules.manage`, 11.09.2026): cheia trăiește în `@xc/contracts`, deci un `authorization-worker`
+  publicat mai demult n-o recunoaște, o respinge la validare, iar `ClientAutorizare` traduce orice
+  răspuns prost în **REFUZ**. Semnul: un super-admin vede „Îți trebuie permisiunea X" pe o pagină
+  nou-nouță. Nu căuta în aplicație — republică întâi authz.
+
+- **⚠️ Secretul intern nu se poate citi înapoi de la Cloudflare.** La adăugarea unui worker nou cu
+  acțiuni se generează altul și se pune pe **toți** deodată, altfel jumătate din platformă nu se mai
+  recunoaște: `head -c 32 /dev/urandom | od -An -tx1 | tr -d " "` → `wrangler secret put SECRET_INTERN
+  --env staging -c <worker>/wrangler.jsonc`, la fiecare worker cu acțiuni.
+
+- **Comutatorul de creier** (panoul de Module): `workers-ai` (acum), `gateway` — prin **AI Gateway**,
+  pasul următor cerut de utilizator: codul îl așteaptă, mai trebuie doar creată poarta și scris
+  numele ei în varsa `AI_GATEWAY` a lui `chat-worker` — sau `fara`, când vrei doar interfața, fără
+  niciun ban cheltuit. **Implicit CONECTAT**: modulul pornit înseamnă modul care răspunde.
 
 - **⚠️ `wrangler dev` nu se mai vede ca „wrangler dev" în `ps`** — procesul se numește
   **`MainThread`** (`ps -eo pid,ppid,comm`). Verificarea veche (`ps -ef | grep -c "[w]rangler dev"`)
