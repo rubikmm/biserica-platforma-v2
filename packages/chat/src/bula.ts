@@ -182,6 +182,10 @@ export const JS_CHAT = `(function(){
     }).then(function(x){ return x.json(); }).then(function(j){
       cutie.remove();
       mesaj(j.ok ? 'agent' : 'rea', j.text || (j.ok ? 'Gata.' : 'N-a mers.'));
+      // Pagina de dedesubt e desenata la incarcare: dupa o schimbare facuta, se reincarca, ca omul
+      // sa vada programul nou (user, 11.09.2026, 21:32: „dupa modificare nu a reincarcat pagina").
+      // Discutia nu se pierde — sta pe server, iar panoul se redeschide unde era.
+      if (j.ok) setTimeout(function(){ location.reload(); }, 900);
     }).catch(function(){ cutie.remove(); mesaj('rea', 'Nu am putut trimite confirmarea.'); });
   }
 
