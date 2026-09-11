@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { curataCanalele, desface } from '../services/chat-worker/src/creier.js'
+import { curataCanalele, desface, instructiuni } from '../services/chat-worker/src/creier.js'
 
 /**
  * Ce n-am voie să aflu greșit mai târziu: că o pagină de gândire a modelului (canalul `analysis`
@@ -52,5 +52,19 @@ describe('desfacerea răspunsului', () => {
   it('curăță și textul venit în forma simplă Workers AI', () => {
     const r = desface({ response: '<|channel|>analysis bla<|channel|>final<|message|>Marți, la 18:00.' })
     expect(r.text).toBe('Marți, la 18:00.')
+  })
+})
+
+describe('regula uneltelor disponibile', () => {
+  it('spune modelului că aici poate face doar atât, când lista e îngustată din panou', () => {
+    const t = instructiuni('program', null, { data: '2026-09-11', zi: 'vineri' }, [], '', ['program__modifica_slujba', 'program__adauga_slujba'])
+    expect(t).toContain('AICI POȚI FACE DOAR ATÂT: program__modifica_slujba, program__adauga_slujba')
+  })
+
+  it('fără îngustare, regula nu apare, iar îndrumările administratorului intră sub reguli', () => {
+    const t = instructiuni('program', null, { data: '2026-09-11', zi: 'vineri' }, [], 'Sfântul Maslu e marți la 18:00.')
+    expect(t).not.toContain('AICI POȚI FACE DOAR')
+    expect(t).toContain('ÎNDRUMĂRI DE LA ADMINISTRATORUL PAROHIEI')
+    expect(t).toContain('Sfântul Maslu e marți la 18:00.')
   })
 })

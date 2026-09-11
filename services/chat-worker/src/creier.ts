@@ -155,6 +155,8 @@ export function instructiuni(
   fundal: string[] = [],
   /** Îndrumările scrise de administrator în panou — obiceiuri, ton, ce să nu facă. */
   indrumari = '',
+  /** Numele uneltelor pe care le are de fapt (după îngustarea din panou). */
+  unelteDisponibile: string[] = [],
 ): string {
   return [
     'Ești asistentul platformei parohiei „Sfântul Ilie — Hanul Colței".',
@@ -189,6 +191,13 @@ export function instructiuni(
     '   cauta_slujba; „ce sărbătoare / ce zi e" → calendar.ziua; „cine sunt sfinții" → tipic.sfintii_zilei;',
     '   „foaia / PDF / poză" → foaia_* / poza_paginii. Fiecare unealtă are exemple cu argumentele',
     '   gata scrise — potrivește fraza omului cu cel mai apropiat exemplu și copiază-i forma.',
+    ...(unelteDisponibile.length
+      ? [
+          `9. AICI POȚI FACE DOAR ATÂT: ${unelteDisponibile.join(', ')}. Pentru orice altceva (rapoarte,`,
+          '   liste, întrebări despre arhivă, alte aplicații) spune într-o frază că nu e de aici și ce',
+          '   POȚI face — nu încerca să răspunzi din memorie și nu inventa o unealtă.',
+        ]
+      : []),
     ...(indrumari.trim()
       ? [
           '',
