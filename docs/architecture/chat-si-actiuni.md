@@ -345,3 +345,22 @@ Cu descrierea „omul confirmă înainte", modelul **cerea confirmarea în text*
 să cheme unealta. Regula scrisă: cheamă unealta imediat — chemarea nu execută nimic, ea pregătește
 propunerea, iar confirmarea e pe buton; nu pune întrebări de lămurire înainte, unealta spune ce
 lipsește.
+
+## 9. Creierul, de la 11.09.2026 seara: Claude prin AI Gateway, o singură factură
+
+Cererea utilizatorului a fixat trei lucruri: **Claude Opus 4.8** („nici mai sus, nici mai jos"),
+**totul prin AI Gateway** („nu ocoli această cale") și **fără SDK-uri** („o singură factură foarte
+clară"). De aici:
+
+- poarta `xc-chat` e drumul tuturor modelelor — Claude *și* Workers AI. Fără poartă configurată,
+  `creier.ts` nu cheamă nimic și spune de ce;
+- Claude se cheamă cu cereri simple (`fetch`) către `…/xc-chat/anthropic/v1/messages`, cu
+  **Unified Billing**: nicio cheie Anthropic, doar `cf-aig-authorization` cu un token Cloudflare.
+  Cloudflare plătește furnizorul din creditele contului; parohia vede o singură factură;
+- forma cererii e cea a Messages API: `system`, `messages`, `tools` (cu `input_schema`),
+  `thinking: adaptive`, `output_config.effort`. Tura asistentului se pune înapoi în istoric cu
+  blocurile brute — gândirea trebuie să însoțească apelul de unealtă căruia i-a dat naștere;
+  rezultatele uneltelor merg într-un singur mesaj `user`;
+- cerințe pe poartă: `authentication: true` (altfel tokenul e ignorat și cererea pleacă fără cheie —
+  „x-api-key header is required"), `workers_ai_billing_mode: unified`, **credite încărcate** (altfel
+  `402`).

@@ -2,11 +2,20 @@
  * CREIERUL — singura bucată din modul care știe cu cine vorbim.
  *
  * Restul chatului lucrează cu `MesajModel` / `RaspunsModel` și nu bănuiește ce e dincolo de ușa
- * asta. Azi e Workers AI (alegerea utilizatorului, 11.09.2026, pentru cost). Modelele deschise
- * sunt vizibil mai slabe la ales și înlănțuit unelte decât Claude; dacă se vede că greșește ce
- * funcție cheamă, se schimbă AICI, într-un singur loc — nu în modul.
+ * asta. Două drumuri, alese din panoul de Module (`creier`):
  *
- * Numele modelului stă în varsa `MODEL_CHAT`, deci se poate proba altul fără publicare de cod.
+ * - **Claude** (Anthropic Claude Opus 4.8) — alegerea utilizatorului, 11.09.2026, seara: „prefer să
+ *   folosim Claude 4.8… nu trebuie să ne ducem mai sus, dar parcă nici mai jos". Modelul: varsa
+ *   `MODEL_CLAUDE`, efortul: `EFORT_CLAUDE`.
+ * - **Workers AI** (Cloudflare, gpt-oss-120b) — drumul de la început, ținut ca rezervă. `MODEL_CHAT`.
+ *
+ * ⚠️ AMÂNDOUĂ TREC PRIN AI GATEWAY, FĂRĂ OCOL ȘI FĂRĂ SDK-uri (user, 19:52–19:56: „vreau tot prin
+ * AI Gateway… nu ocoli această cale… nu facem nimic prin SDK propriu… o singură factură foarte
+ * clară"). Claude se cheamă cu cereri simple către poarta `xc-chat`, cu **Unified Billing**: nicio
+ * cheie Anthropic, doar tokenul Cloudflare (`cf-aig-authorization`) — Cloudflare plătește furnizorul,
+ * parohia plătește Cloudflare. Fără poartă configurată nu se cheamă niciun model.
+ *
+ * Schimbarea furnizorului e o alegere din panou, nu o rescriere — pentru asta există fișierul.
  */
 
 export interface EnvCreier {
@@ -23,24 +32,61 @@ export interface EnvCreier {
    * cererile trec pe acolo: loguri, cache si plafoane de cost, fara schimbare de cod.
    */
   AI_GATEWAY?: string
+  /**
+   * Tokenul Cloudflare cu „AI Gateway – Read/Edit”, pentru Unified Billing: poarta plateste
+   * furnizorul din creditele contului, deci NU se trimite nicio cheie Anthropic. Secret, niciodata
+   * in fisier — local `.dev.vars`, pe staging `wrangler secret put AI_GATEWAY_TOKEN`.
+   */
+  AI_GATEWAY_TOKEN?: string
+  /** Contul Cloudflare — intra in adresa portii pentru Anthropic. Nu e secret. */
+  CLOUDFLARE_ACCOUNT_ID?: string
+  MODEL_CLAUDE?: string
+  EFORT_CLAUDE?: string
+}
+
+/** Un bloc de continut Anthropic (text, tool_use, thinking…). Se pastreaza asa cum vine. */
+export interface BlocClaude {
+  type: string
+  [cheie: string]: unknown
+}
+interface MesajParamClaude {
+  role: 'user' | 'assistant'
+  content: string | BlocClaude[]
+}
+interface RaspunsClaude {
+  content: BlocClaude[]
+  stop_reason: string | null
+}
+const VERSIUNE_ANTHROPIC = '2023-06-01'
+
+export type FelCreier = 'claude' | 'workers-ai'
+
+/**
+ * ⚠️ TOTUL TRECE PRIN AI GATEWAY — fara ocol (user, 11.09.2026, 19:52: „vreau tot prin AI Gateway…
+ * nu ocoli această cale"). Poarta da loguri, cache si plafoane de cost intr-un singur loc, pentru
+ * ambele drumuri. De aceea NU exista aici o adresa directa spre api.anthropic.com: cand poarta nu
+ * e configurata, modelul nu se cheama deloc, si omul afla de ce.
+ */
+function adresaPortiiAnthropic(env: EnvCreier): string | null {
+  if (!env.AI_GATEWAY || !env.CLOUDFLARE_ACCOUNT_ID) return null
+  return `https://gateway.ai.cloudflare.com/v1/${env.CLOUDFLARE_ACCOUNT_ID}/${env.AI_GATEWAY}/anthropic`
+}
+
+const FARA_POARTA: RaspunsModel = {
+  text: 'Poarta AI nu e configurată (AI_GATEWAY / CLOUDFLARE_ACCOUNT_ID la chat-worker), iar modelul nu se cheamă pe alt drum.',
+  cereri: [],
+  taiat: false,
 }
 
 /**
- * Implicitul, ales pe MĂSURĂTORI, nu pe reputație (11.09.2026). Cinci întrebări omenești, aceleași
- * unelte, aceeași instrucțiune, șase modele din contul parohiei — câte a nimerit fiecare:
- *
- *   @cf/openai/gpt-oss-120b                    5/5   ← implicitul
- *   @cf/meta/llama-4-scout-17b-16e-instruct    3/5
- *   @cf/zai-org/glm-5.3                        3/5
- *   @cf/zai-org/glm-5.3-flash                  3/5
- *   @cf/deepseek-ai/deepseek-v4-flash-0731     3/5
- *   @cf/qwen/qwen3-30b-a3b-fp8                 2/5
- *
- * Greșeala tipică a celorlalte: confundă „slujbele zilei" cu „slujbele săptămânii" și cheamă
- * „următoarea slujbă" când li se cere o foaie. gpt-oss-120b a fost singurul care a și socotit
- * data duminicii, nu doar a ales unealta.
+ * Implicitul Workers AI, ales pe MĂSURĂTORI (11.09.2026): cinci întrebări omenești, aceleași unelte —
+ * gpt-oss-120b 5/5, llama-4-scout / glm-5.3 / glm-5.3-flash / deepseek-v4-flash 3/5, qwen3-30b 2/5.
+ * Greșeala tipică a celorlalte: confundă „slujbele zilei" cu „slujbele săptămânii".
  */
 export const MODEL_IMPLICIT = '@cf/openai/gpt-oss-120b'
+
+/** Claude 4.8 — cerut anume de utilizator. Opus 5 e o schimbare de varsă, nu de cod. */
+export const MODEL_CLAUDE_IMPLICIT = 'claude-opus-4-8'
 
 export type RolMesaj = 'sistem' | 'om' | 'agent' | 'unealta'
 
@@ -59,6 +105,12 @@ export interface MesajModel {
   idApel?: string
   /** Numai la `rol: 'agent'`: apelurile pe care le-a cerut, puse înapoi în istoric ca atare. */
   apeluri?: CerereUnealta[]
+  /**
+   * Numai la `rol: 'agent'`, pe drumul Claude: blocurile de conținut ale turei, EXACT cum au venit
+   * (text, tool_use, gândire). Se pun înapoi neschimbate — gândirea trebuie să însoțească apelul
+   * de unealtă căruia i-a dat naștere, altfel API-ul respinge tura.
+   */
+  brut?: BlocClaude[]
 }
 
 export interface UnealtaModel {
@@ -70,15 +122,17 @@ export interface UnealtaModel {
 export interface CerereUnealta {
   nume: string
   argumente: Record<string, unknown>
-  /** Id-ul dat de model apelului; se dă înapoi la răspuns (`tool_call_id`). */
+  /** Id-ul dat de model apelului; se dă înapoi la răspuns (`tool_call_id` / `tool_use_id`). */
   id?: string
 }
 
 export interface RaspunsModel {
   text: string
   cereri: CerereUnealta[]
-  /** Modelul a fost oprit de `max_tokens` inainte sa termine (`finish_reason: length`). */
+  /** Modelul a fost oprit de `max_tokens` inainte sa termine. */
   taiat: boolean
+  /** Drumul Claude: blocurile turei, de pus înapoi în istoric (vezi `MesajModel.brut`). */
+  brut?: BlocClaude[]
 }
 
 const ROLURI: Record<RolMesaj, string> = {
@@ -144,6 +198,171 @@ export function instructiuni(
     .join('\n')
 }
 
+// ===========================================================================
+// Drumul CLAUDE
+// ===========================================================================
+
+/**
+ * Istoricul nostru, în forma API-ului Anthropic. Regulile care contează:
+ * - instrucțiunile („sistem") ies din listă și merg în `system`;
+ * - tura asistentului se pune înapoi cu blocurile ei BRUTE când le avem (gândire + tool_use), iar
+ *   când nu (istoricul din baza de date, sau o tură venită de pe drumul Workers AI) se reface din
+ *   text și apeluri;
+ * - răspunsurile uneltelor care se țin lanț intră într-un SINGUR mesaj `user`, cu câte un
+ *   `tool_result` fiecare — despărțite, modelul se dezvață să ceară mai multe unelte deodată;
+ * - primul mesaj trebuie să fie al omului; un mesaj gol nu se trimite.
+ */
+export function spreClaude(mesaje: MesajModel[]): { system: string; messages: MesajParamClaude[] } {
+  const system = mesaje.filter((m) => m.rol === 'sistem').map((m) => m.text).join('\n\n')
+  const messages: MesajParamClaude[] = []
+  let rezultateInAsteptare: BlocClaude[] = []
+
+  const varsaRezultatele = () => {
+    if (rezultateInAsteptare.length) {
+      messages.push({ role: 'user', content: rezultateInAsteptare })
+      rezultateInAsteptare = []
+    }
+  }
+
+  for (const m of mesaje) {
+    if (m.rol === 'sistem') continue
+
+    if (m.rol === 'unealta') {
+      if (!m.idApel) continue
+      rezultateInAsteptare.push({ type: 'tool_result', tool_use_id: m.idApel, content: m.text || '(gol)' })
+      continue
+    }
+    varsaRezultatele()
+
+    if (m.rol === 'om') {
+      if (m.text.trim()) messages.push({ role: 'user', content: m.text })
+      continue
+    }
+
+    // agent
+    if (!messages.length) continue // o tură a asistentului nu poate deschide discuția
+    if (m.brut?.length) {
+      messages.push({ role: 'assistant', content: m.brut })
+      continue
+    }
+    const blocuri: BlocClaude[] = []
+    if (m.text.trim()) blocuri.push({ type: 'text', text: m.text })
+    for (const [i, a] of (m.apeluri ?? []).entries()) {
+      blocuri.push({ type: 'tool_use', id: a.id ?? `apel-${messages.length}-${i}`, name: a.nume, input: a.argumente ?? {} })
+    }
+    if (blocuri.length) messages.push({ role: 'assistant', content: blocuri })
+  }
+  varsaRezultatele()
+  return { system, messages }
+}
+
+/** Uneltele noastre, în forma Anthropic. `$schema` din zod nu are ce căuta în `input_schema`. */
+function unelteClaude(unelte: UnealtaModel[]): Array<{ name: string; description: string; input_schema: Record<string, unknown> }> {
+  return unelte.map((u) => {
+    const { $schema: _s, ...schema } = u.parameters as Record<string, unknown> & { $schema?: unknown }
+    return { name: u.name, description: u.description, input_schema: { ...schema, type: 'object' } }
+  })
+}
+
+/** Răspunsul lui Claude, în forma noastră. Gândirea nu ajunge la om; blocurile se păstrează brute. */
+export function desfaceClaude(raspuns: RaspunsClaude): RaspunsModel {
+  const text = raspuns.content
+    .filter((b) => b.type === 'text' && typeof b.text === 'string')
+    .map((b) => b.text as string)
+    .join('')
+    .trim()
+  const cereri: CerereUnealta[] = raspuns.content
+    .filter((b) => b.type === 'tool_use' && typeof b.name === 'string')
+    .map((b) => ({
+      nume: b.name as string,
+      argumente: (b.input && typeof b.input === 'object' ? b.input : {}) as Record<string, unknown>,
+      ...(typeof b.id === 'string' ? { id: b.id } : {}),
+    }))
+  return {
+    text: raspuns.stop_reason === 'refusal' ? 'Nu pot răspunde la asta.' : text,
+    cereri,
+    taiat: raspuns.stop_reason === 'max_tokens',
+    brut: raspuns.content,
+  }
+}
+
+/**
+ * Cererea către poartă, fără SDK. Forma e cea a Messages API (`/v1/messages`), iar poarta o duce
+ * mai departe la Anthropic. Cu Unified Billing nu se trimite `x-api-key` — trimiterea ei ar face
+ * cererea să cadă —, doar `cf-aig-authorization` cu tokenul Cloudflare.
+ */
+async function intreabaClaude(
+  env: EnvCreier,
+  mesaje: MesajModel[],
+  unelte: UnealtaModel[],
+  o: { faraApeluri?: boolean },
+): Promise<RaspunsModel> {
+  const poarta = adresaPortiiAnthropic(env)
+  if (!poarta) return FARA_POARTA
+  if (!env.AI_GATEWAY_TOKEN) {
+    return { text: 'Poarta AI n-are tokenul Cloudflare (AI_GATEWAY_TOKEN la chat-worker), deci nu poate plăti modelul.', cereri: [], taiat: false }
+  }
+  const { system, messages } = spreClaude(mesaje)
+  const tools = unelteClaude(unelte)
+  const efort = env.EFORT_CLAUDE || 'medium'
+
+  const corp = {
+    model: env.MODEL_CLAUDE || MODEL_CLAUDE_IMPLICIT,
+    // Gândirea se plătește din bugetul ăsta; un plafon mic ar tăia-o la mijloc, ca la gpt-oss.
+    max_tokens: 16000,
+    thinking: { type: 'adaptive' },
+    output_config: { effort: efort },
+    system,
+    messages,
+    // Când istoricul are tool_use, uneltele trebuie declarate chiar dacă nu mai vrem apeluri —
+    // API-ul le cere. `tool_choice: none` spune „vorbește, nu chema".
+    ...(tools.length ? { tools, ...(o.faraApeluri ? { tool_choice: { type: 'none' } } : {}) } : {}),
+  }
+
+  let r: Response
+  try {
+    r = await fetch(`${poarta}/v1/messages`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'anthropic-version': VERSIUNE_ANTHROPIC,
+        'cf-aig-authorization': `Bearer ${env.AI_GATEWAY_TOKEN}`,
+      },
+      body: JSON.stringify(corp),
+    })
+  } catch {
+    return { text: 'Nu ajung la poarta AI acum. Mai încearcă peste puțin.', cereri: [], taiat: false }
+  }
+
+  if (!r.ok) {
+    // De la cel mai anume la cel mai larg: fiecare are alt înțeles pentru om.
+    const detaliu = await r.text().catch(() => '')
+    let mesaj = ''
+    try {
+      const j = JSON.parse(detaliu) as { error?: { message?: string }; errors?: Array<{ message?: string }> }
+      mesaj = j.error?.message ?? j.errors?.[0]?.message ?? ''
+    } catch {
+      mesaj = detaliu.slice(0, 200)
+    }
+    if (r.status === 401 || r.status === 403) {
+      return { text: `Poarta AI nu primește tokenul (${r.status}): ${mesaj || 'de verificat AI_GATEWAY_TOKEN și drepturile lui'}.`, cereri: [], taiat: false }
+    }
+    if (r.status === 402) {
+      return { text: `Creditele AI Gateway s-au terminat sau nu sunt pornite (${mesaj || '402'}).`, cereri: [], taiat: false }
+    }
+    if (r.status === 429) {
+      return { text: 'Modelul e ocupat chiar acum. Mai încearcă peste un minut.', cereri: [], taiat: false }
+    }
+    throw new Error(`poarta AI a răspuns ${r.status}: ${mesaj || 'fără detalii'}`)
+  }
+
+  return desfaceClaude((await r.json()) as RaspunsClaude)
+}
+
+// ===========================================================================
+// Drumul WORKERS AI
+// ===========================================================================
+
 /**
  * gpt-oss vorbeste in „canale" (Harmony): `analysis` e gandirea, `final` e raspunsul. Workers AI
  * le desparte de obicei (`reasoning` / `content`), dar cand modelul e oprit de `max_tokens` in
@@ -164,7 +383,7 @@ export function curataCanalele(text: string): string {
   return curat
 }
 
-/** Ce a răspuns modelul, indiferent de forma în care a răspuns. */
+/** Ce a răspuns modelul Workers AI, indiferent de forma în care a răspuns. */
 export function desface(brut: unknown): RaspunsModel {
   const r = (brut ?? {}) as Record<string, unknown>
   const alegere = (r.choices as Array<{ finish_reason?: string }> | undefined)?.[0]
@@ -217,15 +436,17 @@ export function desface(brut: unknown): RaspunsModel {
   return { text: curataCanalele(text), cereri, taiat }
 }
 
-export async function intreabaModelul(
+async function intreabaWorkersAi(
   env: EnvCreier,
   mesaje: MesajModel[],
   unelte: UnealtaModel[],
-  prin: 'workers-ai' | 'gateway' = 'workers-ai',
+  o: { faraApeluri?: boolean },
 ): Promise<RaspunsModel> {
   const model = env.MODEL_CHAT || MODEL_IMPLICIT
-  // Poarta AI se cere doar daca e si aleasa, si scrisa; altfel mergem de-a dreptul, ca pana acum.
-  const poarta = prin === 'gateway' && env.AI_GATEWAY ? { gateway: { id: env.AI_GATEWAY } } : undefined
+  // Si Workers AI trece prin poarta, mereu — fara ea nu se cheama nimic (vezi mai sus).
+  if (!env.AI_GATEWAY) return FARA_POARTA
+  const poarta = { gateway: { id: env.AI_GATEWAY } }
+  const uneltele = o.faraApeluri ? [] : unelte
 
   const cerere = (maxTokens: number): Record<string, unknown> => ({
     messages: mesaje.map((m) => ({
@@ -246,9 +467,9 @@ export async function intreabaModelul(
           }
         : {}),
     })),
-    ...(unelte.length
+    ...(uneltele.length
       ? {
-          tools: unelte.map((u) => ({
+          tools: uneltele.map((u) => ({
             type: 'function',
             function: { name: u.name, description: u.description, parameters: u.parameters },
           })),
@@ -265,4 +486,19 @@ export async function intreabaModelul(
   let r = desface(await env.AI.run(model, cerere(2500), poarta))
   if (r.taiat && !r.cereri.length) r = desface(await env.AI.run(model, cerere(6000), poarta))
   return r
+}
+
+// ===========================================================================
+// Ușa
+// ===========================================================================
+
+export async function intreabaModelul(
+  env: EnvCreier,
+  mesaje: MesajModel[],
+  unelte: UnealtaModel[],
+  prin: FelCreier = 'claude',
+  o: { faraApeluri?: boolean } = {},
+): Promise<RaspunsModel> {
+  if (prin === 'claude') return intreabaClaude(env, mesaje, unelte, o)
+  return intreabaWorkersAi(env, mesaje, unelte, o)
 }

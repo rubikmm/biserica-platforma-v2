@@ -17,15 +17,19 @@ export type CineVede = 'admini' | 'conturi' | 'toti'
  * DE UNDE VINE RĂSPUNSUL. Despărțit de „activ" dinadins (user, 11.09.2026: „doar grafica,
  * afișarea, panoul de control de activare-dezactivare și, abia apoi, cu AI Gateway"):
  *
+ * - `claude`     — Claude (Anthropic), prin SDK-ul oficial; modelul din varsa `MODEL_CLAUDE`
+ *                  (implicit claude-opus-4-8 — alegerea userului, 11.09.2026: „prefer să folosim
+ *                  Claude 4.8… putem să folosim ceva mai bun"). Cere `ANTHROPIC_API_KEY` la chat-worker.
  * - `fara`       — bula, panoul și discuția merg, dar nimeni nu întreabă niciun model. Chatul
  *                  spune limpede că nu e legat încă. **Zero bani cheltuiți.** Implicit.
- * - `workers-ai` — Workers AI de-a dreptul, cum a fost probat pe local.
- * - `gateway`    — tot Workers AI, dar prin AI Gateway (loguri, cache, plafoane de cost).
- *                  Cere `AI_GATEWAY` scris la chat-worker; până atunci se poartă ca `workers-ai`.
+ * - `workers-ai` — Workers AI (Cloudflare), ținut ca rezervă.
  *
- * Implicit: `workers-ai` — modulul pornit înseamnă modul care răspunde.
+ * ⚠️ AMÂNDOUĂ trec prin AI Gateway, mereu (user, 11.09.2026: „vreau tot prin AI Gateway… nu ocoli
+ * această cale"). Nu e o opțiune, e drumul; fără poartă configurată nu se cheamă niciun model.
+ *
+ * Implicit: `claude` — modulul pornit înseamnă modul care răspunde, cu cel mai bun creier.
  */
-export type Creier = 'fara' | 'workers-ai' | 'gateway'
+export type Creier = 'claude' | 'fara' | 'workers-ai'
 
 export interface ConfigChat {
   activ: boolean
@@ -39,7 +43,7 @@ export interface ConfigChat {
  * STINS peste tot. Un modul nou nu se aprinde singur nicăieri: fiecare aplicație se deschide
  * anume, din admin. (Și: fiecare mesaj costă bani la fiecare apăsare.)
  */
-export const CONFIG_STINS: ConfigChat = { activ: false, aplicatii: {}, cineVede: 'admini', creier: 'workers-ai' }
+export const CONFIG_STINS: ConfigChat = { activ: false, aplicatii: {}, cineVede: 'admini', creier: 'claude' }
 
 export interface EnvComutator {
   CONFIG?: KVNamespace
@@ -77,9 +81,12 @@ export function normalizeaza(brut: unknown): ConfigChat {
   for (const [nume, pornit] of Object.entries(o.aplicatii ?? {})) aplicatii[nume] = Boolean(pornit)
   const cineVede: CineVede =
     o.cineVede === 'toti' || o.cineVede === 'conturi' || o.cineVede === 'admini' ? o.cineVede : 'admini'
-  // Implicit CONECTAT (user, 11.09.2026: „nu am cerut deconectarea - lasă conectat"). `fara` se
-  // cere anume, din panou, cand vrei interfata fara niciun model si fara niciun ban cheltuit.
-  const creier: Creier = o.creier === 'fara' || o.creier === 'gateway' ? o.creier : 'workers-ai'
+  // Implicit CONECTAT, pe Claude (user, 11.09.2026: „lasă conectat", apoi „prefer Claude 4.8").
+  // `fara` se cere anume, din panou, cand vrei interfata fara niciun model si fara niciun ban.
+  // `gateway` (valoare veche, scrisa de un panou mai vechi) inseamna Workers AI — poarta e
+  // oricum drumul tuturor. De aceea se citeste ca text, nu ca `Creier`.
+  const scris = String((o as { creier?: unknown }).creier ?? '')
+  const creier: Creier = scris === 'fara' ? 'fara' : scris === 'workers-ai' || scris === 'gateway' ? 'workers-ai' : 'claude'
   return { activ: Boolean(o.activ), aplicatii, cineVede, creier }
 }
 

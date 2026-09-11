@@ -332,7 +332,7 @@ export default {
 
         // Apelurile cerute intra in istoric ca mesaj al agentului: raspunsurile uneltelor trebuie
         // sa atarne de ele, altfel modelul primeste rezultate fara intrebare si tace.
-        mesaje.push({ rol: 'agent', text: r.text, apeluri: r.cereri })
+        mesaje.push({ rol: 'agent', text: r.text, apeluri: r.cereri, brut: r.brut })
 
         for (const cerut of r.cereri) {
           // Numele traduse (cu `__`) sunt cele trimise modelului, dar unele modele raspund
@@ -401,7 +401,7 @@ export default {
         if (propunere) {
           // Un ultim rand de la model, ca sa spuna omului ce a pregatit — fara unelte, ca sa nu
           // mai ceara altceva pana nu s-a raspuns la asta.
-          const ultim = await intreabaModelul(env, mesaje, [], comutator.creier)
+          const ultim = await intreabaModelul(env, mesaje, unelte, comutator.creier, { faraApeluri: true })
           textFinal = ultim.text || textFinal || 'Am pregătit schimbarea. O fac dacă îmi confirmi.'
           break
         }

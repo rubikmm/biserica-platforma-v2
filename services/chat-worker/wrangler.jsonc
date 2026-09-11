@@ -19,6 +19,13 @@
     // contul parohiei: @cf/meta/llama-4-scout-17b-16e-instruct,
     // @cf/mistralai/mistral-small-3.1-24b-instruct, @cf/qwen/qwen3-30b-a3b-fp8.
     "MODEL_CHAT": "@cf/openai/gpt-oss-120b",
+    // Claude (Anthropic) — alegerea userului, 11.09.2026. Cheia NU sta aici: local in `.dev.vars`
+    // (ANTHROPIC_API_KEY=…), pe staging cu `wrangler secret put ANTHROPIC_API_KEY --env staging`.
+    "MODEL_CLAUDE": "claude-opus-4-8",
+    "EFORT_CLAUDE": "medium",
+    // Poarta AI prin care trece TOT (Claude si Workers AI) — fara ea nu se cheama niciun model.
+    "AI_GATEWAY": "xc-chat",
+    "CLOUDFLARE_ACCOUNT_ID": "5d487c9612d6ebf0ef63b7f3047a316d",
     "SECRET_INTERN": "dev-actiuni-local"
   },
 
@@ -54,7 +61,11 @@
       "version_metadata": { "binding": "VERSIUNE" },
       "vars": {
         "MEDIU": "staging",
-        "MODEL_CHAT": "@cf/openai/gpt-oss-120b"
+        "MODEL_CHAT": "@cf/openai/gpt-oss-120b",
+        "MODEL_CLAUDE": "claude-opus-4-8",
+        "EFORT_CLAUDE": "medium",
+        "AI_GATEWAY": "xc-chat",
+        "CLOUDFLARE_ACCOUNT_ID": "5d487c9612d6ebf0ef63b7f3047a316d"
         // SECRET_INTERN se pune cu `wrangler secret put SECRET_INTERN --env staging`
       },
       "ai": { "binding": "AI" },

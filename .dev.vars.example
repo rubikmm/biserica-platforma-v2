@@ -7,3 +7,6 @@
 # services/identity-worker/wrangler.jsonc pe staging/production) — fara chei de tinut aici.
 # Singura conditie: subdomeniul `posta.sfantul-ilie.ro` sa fie imbarcat la Email Sending
 # (deja facut pentru V1, 8 sept. 2026).
+
+# Poarta AI cu Unified Billing (services/chat-worker/.dev.vars, NU in repo): token Cloudflare cu AI Gateway Read/Edit
+AI_GATEWAY_TOKEN=

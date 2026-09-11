@@ -91,6 +91,9 @@ propunerea automată, ca în V1.
 ## NEXT
 
 1. **Modulul de Chat, ce a rămas** (11.09.2026):
+   - ⚠️ **credite AI Gateway** — fără ele nici Claude, nici Workers AI nu răspund (402). Dashboard:
+     AI Gateway → Credits Available → Manage → Top-up. Apoi un token dedicat cu „AI Gateway – Run"
+     în locul celui mare (`wrangler secret put AI_GATEWAY_TOKEN --env staging`);
    - bula e montată doar pe `program`; `calendar` și `tipic` au acțiuni, dar nu și bulă (aceleași
      trei linii: `modulChat`, `ruteaza`, `chat` în opțiunile comune ale paginilor);
    - ✅ acțiunile care scriu + confirmarea sunt probate cap-coadă pe program (11.09, seara);
@@ -217,6 +220,27 @@ propunerea automată, ca în V1.
 ## Jurnal
 
 ### 2026-09-11
+
+- **Creierul: Claude Opus 4.8, prin AI Gateway, cu factura la Cloudflare** (user, 19:48–19:56:
+  „prefer să folosim Claude 4.8… putem să folosim ceva mai bun… vreau tot prin AI Gateway, nu ocoli
+  această cale… nu facem nimic prin SDK propriu… o singură factură foarte clară… nu trebuie să ne
+  ducem mai sus, dar parcă nici mai jos"). Făcut așa:
+  - poarta **`xc-chat`** creată în cont (loguri pornite, 120 cereri/min), **autentificată**
+    (`authentication: true`), cu `workers_ai_billing_mode: unified` — totul din creditele AI Gateway;
+  - drumul Claude = **cereri simple** către `…/xc-chat/anthropic/v1/messages` (fără SDK, fără cheie
+    Anthropic): antetul `cf-aig-authorization: Bearer <token Cloudflare>` — **Unified Billing**,
+    Cloudflare plătește Anthropic, parohia plătește Cloudflare. `thinking: adaptive`, efort
+    `EFORT_CLAUDE` (medium), `max_tokens` 16000; tura asistentului se pune înapoi cu blocurile brute
+    (gândirea trebuie să însoțească apelul de unealtă); rezultatele uneltelor într-un singur mesaj;
+  - **și Workers AI trece prin poartă**, mereu; fără poartă configurată nu se cheamă niciun model;
+  - panoul de Module: „Claude (Anthropic)" implicit, „Workers AI" rezervă, „Fără model";
+  - secretul `AI_GATEWAY_TOKEN` pus la chat-worker (staging + `.dev.vars` local); varsurile
+    `AI_GATEWAY`, `CLOUDFLARE_ACCOUNT_ID`, `MODEL_CLAUDE`, `EFORT_CLAUDE`.
+  ⚠️ **Blocat pe credite**: proba dă `402` — contul n-are credite AI Gateway. Se cumpără din
+  dashboard: AI Gateway → *Credits Available* → *Manage* → *Top-up credits*. Până atunci chatul
+  răspunde limpede că nu are credite. Tokenul din `cf-aig-authorization` e deocamdată cel mare al
+  proiectului; mai curat ar fi unul cu doar „AI Gateway – Run" (se face din dashboard).
+  95 de teste (7 noi pe traducerea istoricului în forma Anthropic).
 
 - **⚠️ Gândirea modelului scursă la om** (user, 19:27, cu exemplu: „<|channel|>analysis We need to
   modify slujba of Monday…"). gpt-oss vorbește în canale (Harmony): `analysis` = gândirea, `final` =

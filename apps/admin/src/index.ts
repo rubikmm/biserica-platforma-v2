@@ -111,9 +111,10 @@ ${o.salvat ? alerta('buna', 'Am salvat. Schimbarea se vede în cel mult un minut
   <p class="ajutor">Bifa are efect numai acolo unde modulul e montat în cod. Azi: <code>program</code>.</p>
 
   <h4>De unde vine răspunsul</h4>
+  <p class="ajutor">Oricare ar fi, cererile trec prin <strong>AI Gateway</strong> (poarta <code>xc-chat</code>): loguri, cache și plafon de cost într-un singur loc.</p>
   <div class="trepte">
-    ${creierul('workers-ai', 'Workers AI', 'modelul de la Cloudflare, de-a dreptul')}
-    ${creierul('gateway', 'Workers AI prin AI Gateway', 'aceleași răspunsuri, dar cu loguri, cache și plafon de cost')}
+    ${creierul('claude', 'Claude (Anthropic)', 'Claude Opus 4.8 — cel mai bun la ales uneltele și la română')}
+    ${creierul('workers-ai', 'Workers AI', 'modelul de la Cloudflare (gpt-oss-120b), ținut ca rezervă')}
     ${creierul('fara', 'Fără model', 'doar interfața: bula se deschide, dar nu răspunde nimeni — zero cost')}
   </div>
 
@@ -180,7 +181,7 @@ export default {
           activ: formular.get('activ') === 'on',
           aplicatii,
           cineVede: String(formular.get('cineVede') ?? 'admini'),
-          creier: String(formular.get('creier') ?? 'workers-ai'),
+          creier: String(formular.get('creier') ?? 'claude'),
         })
         await scrieConfigChat(env, nou)
         log.info('module: comutator schimbat', { activ: nou.activ, cineVede: nou.cineVede, creier: nou.creier, aplicatii: Object.keys(nou.aplicatii) })
