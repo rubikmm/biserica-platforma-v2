@@ -221,6 +221,19 @@ propunerea automată, ca în V1.
 
 ### 2026-09-11
 
+- **Arhiva: întrerupătorul „Calendar" și butonul de download se DEZACTIVEAZĂ, nu se mai ascund**
+  (user, 23:23: „când intru pe Arhivă, întrerupătorul doar se dezactivează și la fel și butonul lui
+  de download, acum se ascund și strică interfața"). Până acum lipseau cu totul — pe Arhivă amândouă,
+  pe săptămânile vechi întrerupătorul —, iar rândul de unelte se scurta de la o pagină la alta. Acum
+  se scriu stinse, cu același `.gol` ca hârtiile PDF/JPG (`<span>` pălit, `pointer-events:none`):
+  `intrerupatorCalendar(m)` când `m.calendar` e fals, `pozaPaginii` când `m.luni` e null. Vizibilitatea
+  rămâne a drepturilor: download-ul stins tot pe cele două trepte (pe Arhivă — doar super-adminul),
+  întrerupătorul stins îl vede toată lumea, ca și cel viu. ⚠️ **`id="b-calendar"` numai pe cel viu** —
+  JS-ul se leagă de id și ar pune `cu-calendar` pe body, iar pe săptămânile vechi clasa aceea scoate
+  la iveală zilele goale (`body:not(.cu-calendar) .zi.goala`). Măsura pe telefon n-a trebuit refăcută:
+  rândul Arhivei are acum exact butoanele rândului unei săptămâni, deci nu apare un caz mai lat decât
+  cel deja măsurat (331 px din 335, la super-admin pe un telefon de 390). Publicat pe staging, 0.4.8.
+
 - **Trei cereri de la joacă** (user, 21:48): (1) cât e panoul deschis, pagina de dedesubt nu se
   derulează (`html.xc-chat-deschis { overflow:hidden }`); (2) după o schimbare făcută, panoul se
   STRÂNGE și pagina se reîncarcă; la click se vede ultima discuție; discuțiile **expiră după 6 h**

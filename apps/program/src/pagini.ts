@@ -698,15 +698,29 @@ function navigarea(ctx: Ctx, m: Meniu): string {
 
 /**
  * Intrerupatorul „Calendar" — primul din grupul din dreapta. Aprins, aduce langa program coloana zilei
- * liturgice (si schimba, o data cu ea, butonul de descarcare de langa el). Se scrie doar pe saptamana
+ * liturgice (si schimba, o data cu ea, butonul de descarcare de langa el). Lucreaza doar pe saptamana
  * de azi si pe cea viitoare — „ON/OFF are sens doar pe ultima săptămână și pe săptămâna următoare"
  * (user, 10.09.2026; reconfirmat 11.09, intrebat anume) —, fiindca doar acolo calendarul are ce spune.
  *
  * N-are cuvant, ci ICONITA ecranului impartit (user, 11.09.2026: „în loc de cuvântul «calendar», pune
  * iconița"). Becul care aluneca ramane — el spune daca e aprins sau stins; ce face butonul spun
  * `title` si `aria-label`, fiindca o rama despicata singura n-ar zice „calendar".
+ *
+ * ⚠️ UNDE NU LUCREAZA, SE SCRIE STINS, NU SE ASCUNDE (user, 11.09.2026: „când intru pe Arhivă,
+ * întrerupătorul doar se dezactivează și la fel și butonul lui de download, acum se ascund și strică
+ * interfața"). Pana atunci, pe Arhiva si pe saptamanile vechi randul de unelte ramanea fara el si
+ * asezarea sarea de la o pagina la alta. Stins inseamna aici acelasi `.gol` ca hartiile: un `<span>`,
+ * palit si fara click.
+ * ⚠️ `id="b-calendar"` se scrie DOAR pe cel viu: JS-ul se leaga de id si pune `cu-calendar` pe body,
+ * iar pe saptamanile vechi clasa aceea ar scoate la iveala zilele goale (`body:not(.cu-calendar)
+ * .zi.goala`), desi coloana calendarului nici nu e scrisa acolo.
  */
-function intrerupatorCalendar(): string {
+function intrerupatorCalendar(m: Meniu): string {
+  if (!m.calendar) {
+    const spune = 'Calendarul zilei se poate aprinde doar pe săptămâna de acum și pe cea viitoare'
+    return `<span class="btn mic com-cal gol" title="${spune}" aria-label="Calendarul zilei, lângă program — ${spune}">`
+      + `${IC_DOUA_COLOANE}<span class="bec" aria-hidden="true"></span></span>`
+  }
   return `<button type="button" class="btn mic com-cal" id="b-calendar" aria-pressed="true"`
     + ` title="Ascunde calendarul zilei" aria-label="Calendarul zilei, lângă program">`
     + `${IC_DOUA_COLOANE}<span class="bec" aria-hidden="true"></span></button>`
@@ -717,11 +731,13 @@ function intrerupatorCalendar(): string {
  * spatiul ramas; la dreapta, lipite de margine, bara verticala si apoi intrerupatorul, descarcarea
  * paginii si hartiile PDF/JPG.
  *
- * Grupul din dreapta se scrie doar daca are ce pune in el: la enorias, pe saptamanile din arhiva,
- * ramane doar pastila si atunci nu se mai deseneaza nici bara.
+ * Grupul din dreapta se scrie doar daca are ce pune in el. ⚠️ De la 11.09.2026 intrerupatorul se
+ * scrie pe TOATE paginile de om — viu pe saptamana de azi si pe cea viitoare, stins in rest —, deci
+ * grupul (si bara lui) nu mai dispare de sub ochii omului cand trece pe Arhiva ori pe o saptamana
+ * veche. Verificarea a ramas: paginile de serviciu (mesajele) n-au nici macar atat.
  */
 function unelte(ctx: Ctx, m: Meniu): string {
-  const dreapta = (m.calendar ? intrerupatorCalendar() : '') + pozaPaginii(ctx, m) + hartiile(ctx, m)
+  const dreapta = intrerupatorCalendar(m) + pozaPaginii(ctx, m) + hartiile(ctx, m)
   // Abonarea sta indata dupa pastila („după săptămâna viitoare, abonare" — user, 11.09.2026), deci
   // inaintea barei si a uneltelor saptamanii. E a omului fara drepturi; la admin nu se scrie deloc.
   return navigarea(ctx, m) + butonAbonare(ctx)
@@ -791,17 +807,27 @@ function hartiile(ctx: Ctx, m: Meniu): string {
  * ⚠️ Se scriu AMANDOUA infatisarile, iar CSS-ul o arata pe cea potrivita dupa clasa `cu-calendar` de pe
  * body (vezi `.poza-1`/`.poza-2` din STIL). Asa butonul se schimba in aceeasi clipa cu coloana, fara ca
  * JS-ul intrerupatorului sa stie de el si fara sa apuce sa se vada vreodata semnul care nu trebuie.
- * Unde intrerupatorul nu se scrie (saptamanile din arhiva), `m.calendar` e fals si ramane doar varianta
+ * Unde intrerupatorul e stins (saptamanile din arhiva), `m.calendar` e fals si ramane doar varianta
  * simpla — alta nici nu se poate vedea acolo.
+ *
+ * ⚠️ PE ARHIVA SE SCRIE STINS, NU SE ASCUNDE (user, 11.09.2026, o data cu intrerupatorul): acolo nicio
+ * saptamana nu e in context (`m.luni` e null), deci n-are ce poza sa aduca — dar dispariti amandoua
+ * lasau randul de unelte mai scurt decat pe pagina de unde venise omul. Stins = acelasi `.gol` ca
+ * hartiile de langa, cu sageata simpla (a doua infatisare n-ar avea cum sa iasa la iveala, `cu-calendar`
+ * nu se pune pe body acolo).
  *
  * Deosebirea de JPG-ul de langa: acela e foaia A4 de pe usa, fotografiata; asta e PAGINA, cu grafica ei.
  * Amandoua pleaca pe WhatsApp, de aceea stau despartite si ca iconita.
  *
  * E tot o hartie a saptamanii, deci se vede dupa ACELEASI DOUA TREPTE ca celelalte (alegerea userului,
- * 11.09.2026): enoriasul si utilizatorul simplu n-o vad deloc.
+ * 11.09.2026): enoriasul si utilizatorul simplu n-o vad deloc — nici stinsa.
  */
 function pozaPaginii(ctx: Ctx, m: Meniu): string {
-  if (!m.luni || !vedeHartiile(ctx, m)) return ''
+  if (!vedeHartiile(ctx, m)) return ''
+  if (!m.luni) {
+    const spune = 'Poza paginii se descarcă de pe pagina unei săptămâni'
+    return `<span class="btn mic gol" title="${spune}" aria-label="Pagina ca poză (JPEG) — ${spune}">${IC_DESCARCA}</span>`
+  }
   const adresa = (coloane: 1 | 2) => `${esc(ctx.prefix)}/v1/poza/saptamana/${esc(m.luni)}.jpg?coloane=${coloane}`
   const buton = (clasa: string, href: string, spune: string, iconita: string) =>
     `<a class="btn mic ${clasa}" href="${href}" target="_blank" rel="noopener"`
