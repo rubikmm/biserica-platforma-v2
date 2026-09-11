@@ -205,10 +205,10 @@ export const STIL = `
                  background:var(--tinta); overflow:hidden }
 .btns .pastila .btn { flex:0 0 auto; border:0; border-radius:0; background:transparent }
 .btns .pastila .viit { flex:1 1 auto; min-width:0 }
-/* „Săptămâna viitoare" are DOUA infatisari scrise amandoua in pagina: cuvintele si sageata-dreapta.
-   Pe larg se vad cuvintele; pe telefon ramane doar semnul (vezi media query). Ca la butonul de
-   descarcare — alegerea o face CSS-ul, nu JS-ul, deci nu apuca sa se vada infatisarea nepotrivita. */
-.btns .viit .scurt { display:none }
+/* „Săptămâna viitoare" poarta si cuvintele (.cuv), si sageata (.sgt), amandoua scrise in pagina.
+   Pe larg se vad cuvintele singure; pe telefon, vezi media query. Ca la butonul de descarcare —
+   alegerea o face CSS-ul, nu JS-ul, deci nu apuca sa se vada infatisarea nepotrivita. */
+.btns .viit .sgt { display:none }
 .btns .pastila .btn + .btn { border-left:1px solid var(--rule) }
 .btns .pastila a.btn:hover { color:var(--rosu); background:var(--paper) }
 .btns .pastila .btn.activ { color:var(--rosu); font-weight:600;
@@ -246,27 +246,49 @@ body.cu-calendar .btns .poza-2 { display:flex }
   .btns { gap:5px; flex-wrap:wrap }
   .btns .btn { flex:0 0 auto; white-space:nowrap }
   .btns .pastila { flex:0 0 auto }
-  .btns .mic { padding-left:7px; padding-right:7px }
   .btns .mic .fel { display:none }
-  .btns .punct { padding-left:10px; padding-right:10px }
-  .btns .com-cal { gap:5px; padding-left:8px; padding-right:8px }
-  .btns .pastila .arh { padding-left:9px; padding-right:9px }
+  /* ⚠️ BUTOANELE-ICONITA SUNT PATRATE (user, 11.09.2026, 16:02: „să fie atâta spațiu sus cât este
+     stânga dreapta"). Padingul de sus e cel al carcasei (9px, din .btn), deci se scrie 9px si in
+     laturi: iconita de 17–18 px iese intr-o tinta de ~36×36, mai usor de nimerit cu degetul decat
+     dreptunghiul ingust de pana acum. Se aplica la TOATE cele din rand — si la cele din pastila. */
+  .btns .mic { padding:9px }
+  .btns .com-cal { gap:5px; padding:9px }
+  .btns .pastila .arh { padding:9px }
   .btns .unelte-dr { gap:5px }
   .btns .desparte { margin:0 2px }
+  /* BULINA sta mai larga decat celelalte (user, 11.09.2026: „să aibă un spațiu mai mare stânga-dreapta
+     … să fie mai ușor de apăsat"): punctul ei are 9 px, deci fara spatiu in plus tinta ar fi cea mai
+     mica din rand, desi e drumul inapoi la saptamana de azi. */
+  .btns .punct { padding-left:15px; padding-right:15px }
   /* segmentul „viitoare", strans la semn: centrat si tot atat de lat ca iconita Arhivei din celalalt
      capat al pastilei, ca cele doua capete sa cantareasca la fel */
-  .btns .viit .lung { display:none }
-  .btns .viit .scurt { display:block }
+  .btns .viit .cuv { display:none }
+  .btns .viit .sgt { display:block }
   .btns .pastila .viit { flex:0 0 auto; display:flex; align-items:center; justify-content:center;
-                         padding-left:9px; padding-right:9px }
+                         padding:9px }
   .btns .pastila .viit svg { vertical-align:0 }
+  /* ⚠️ PASTILA LARGA — omul FARA drepturi de admin (user, 11.09.2026, 16:02: „cele două butoane de la
+     stânga pentru un utilizator obișnuit… să fie dispuse pe toată lungimea meniului"). El are in
+     pastila doar bulina si „viitoare", iar in dreapta doar intrerupatorul: e loc destul, deci pastila
+     se intinde cat randul, prisosul il ia segmentul cu scris, iar cuvintele stau LANGA sageata, nu in
+     locul ei. Bulina, si ea, se face si mai lata: acolo latimea nu mai e disputata de nimeni. */
+  /* ⚠️ flex:1 1 0, nu 1 1 auto: cu masura de pornire 0, pastila nu mai cere randul dupa cat scris
+     are in ea, ci ia ce ramane dupa intrerupator — altfel cuvintele o umflau peste latimea ecranului
+     si intrerupatorul sarea pe randul urmator, tocmai lucrul de care scapam. */
+  .btns .pastila.larga { flex:1 1 0; min-width:0 }
+  .btns .pastila.larga .viit { flex:1 1 auto; gap:9px }
+  .btns .pastila.larga .viit .cuv { display:inline }
+  .btns .pastila.larga .punct { padding-left:22px; padding-right:22px }
 }
-/* Telefoanele inguste (Android de 360 px si mai jos): acolo randul cere 309 px din 305 — lipsesc
-   patru. Cade bara verticala dintre grupuri (pastila se vede oricum ca un corp, deci granita nu se
-   pierde) si se mai string butoanele cu un pixel: 298, cu ceva loc de rezerva. */
+/* Telefoanele inguste (Android de 360 px si mai jos): acolo randul admin-ului cere cativa pixeli mai
+   mult decat are. Cade bara verticala dintre grupuri (pastila se vede oricum ca un corp, deci granita
+   nu se pierde) si butoanele lasa un pixel din laturi — nu mai sunt patrate la milimetru, dar randul
+   ramane intreg. Pe pastila larga nu se atinge nimic: acolo n-a fost niciodata strans. */
 @media (max-width:380px) {
   .btns .desparte { display:none }
-  .btns .mic { padding-left:6px; padding-right:6px }
+  .btns .mic, .btns .com-cal, .btns .pastila .arh, .btns .pastila .viit { padding-left:7px; padding-right:7px }
+  .btns .punct { padding-left:12px; padding-right:12px }
+  .btns .pastila.larga .punct { padding-left:22px; padding-right:22px }
 }
 
 /* o zi din program */
@@ -511,12 +533,15 @@ function navigarea(ctx: Ctx, m: Meniu): string {
   const aAzi = luneaSaptamanii(m.azi)
   const urmatoarea = adaugaZile(aAzi, 7)
   const zile = intervalScurt(urmatoarea)
-  // ⚠️ Segmentul se scrie in AMANDOUA infatisarile, iar CSS-ul o alege pe cea potrivita latimii
-  // ecranului — ca la butonul de descarcare, fara JS: pe larg cuvintele, pe TELEFON doar
-  // sageata-dreapta (user, 11.09.2026: „nu încap restul butoanelor pe aceeași linie… săgeată-dreapta").
-  // Numele accesibil NU se strange o data cu scrisul: `aria-label` spune intreg „săptămâna viitoare,
-  // <zile>" la amandoua, deci la cititorul de ecran nu se schimba nimic dupa latimea ecranului.
-  const scris = `<span class="lung">Săptămâna viitoare</span><span class="scurt">${IC_INAINTE}</span>`
+  // Segmentul poarta si CUVINTELE, si SAGEATA; care se vad, alege CSS-ul dupa latime si dupa cati
+  // sunt in rand — fara JS, ca la butonul de descarcare. Trei infatisari:
+  //   - pe larg, cuvintele singure (ca pana acum);
+  //   - pe telefon la ADMIN, doar sageata — randul lui e plin de butoane si altfel se rupe;
+  //   - pe telefon la omul fara drepturi, cuvintele SI sageata (user, 11.09.2026, 16:02: „înainte de
+  //     săgeată să scrie «Săptămâna următoare»+săgeată") — acolo pastila e singura in rand.
+  // Numele accesibil nu se schimba niciodata dupa latime: `aria-label` spune intreg „săptămâna
+  // viitoare, <zile>" la toate trei.
+  const scris = `<span class="cuv">Săptămâna viitoare</span><span class="sgt">${IC_INAINTE}</span>`
   const viitoare = m.luni === urmatoarea
     ? `<button type="button" class="btn viit activ" aria-disabled="true" aria-current="page"`
       + ` title="Ești pe săptămâna viitoare, ${zile}" aria-label="săptămâna viitoare, ${zile}">${scris}</button>`
@@ -533,7 +558,11 @@ function navigarea(ctx: Ctx, m: Meniu): string {
         + ` title="Ești în arhiva programelor" aria-label="Arhiva programelor">${IC_ARHIVA}</button>`
       : `<a class="btn arh" href="${p}/arhiva" title="Arhiva programelor — alege săptămâna"`
         + ` aria-label="Arhiva programelor">${IC_ARHIVA}</a>`
-  return `<span class="pastila">${arhiva}${bulina}${viitoare}</span>`
+  // ⚠️ `larga` = pastila omului FARA drepturi de admin: doua segmente (bulina si „viitoare"), iar in
+  // randul de unelte nu mai e nimic in afara de intrerupator. Acolo pastila se intinde cat randul, iar
+  // segmentul „viitoare" isi tine si cuvintele (user, 11.09.2026, 16:02). La admin, cu arhiva in
+  // pastila si cu hartiile in dreapta, nu incape asa ceva — vezi media query.
+  return `<span class="pastila${ctx.eAdmin ? '' : ' larga'}">${arhiva}${bulina}${viitoare}</span>`
 }
 
 /**

@@ -204,6 +204,22 @@ propunerea automată, ca în V1.
 
 ### 2026-09-11
 
+- **Antetul pe telefon are acum DOUĂ înfățișări, după drepturi** (patru cereri ale userului, 16:02).
+  Pastila omului **fără** drepturi de admin poartă clasa **`larga`** (o decide `ctx.eAdmin`) și, sub
+  600 px: **se întinde cât rândul** („cele două butoane de la stânga… să fie dispuse pe toată
+  lungimea meniului"), segmentul „viitoare" scrie **cuvintele ȘI săgeata**, în ordinea asta („înainte
+  de săgeată să scrie «Săptămâna următoare»+săgeată"), iar **bulina stă lată** — 22 px în laturi, „să
+  fie mai ușor de apăsat". La **admin**, unde rândul e plin, butoanele-iconiță s-au făcut **pătrate**:
+  padding de 9 px în laturi, cât cel de sus din carcasă, deci ținte de ~36×36 („să fie atâta spațiu
+  sus cât este stânga dreapta").
+  ⚠️ Două capcane, de ținut minte: **`flex:1 1 0`, nu `1 1 auto`** pe pastila largă — cu măsura de
+  pornire `auto`, cuvintele o umflau peste lățimea ecranului și întrerupătorul sărea pe rândul doi,
+  exact lucrul de care scăpaserăm; și **fără backtick în comentariile CSS**, fiindcă stilul e un
+  template literal și un backtick în comentariu închide șirul (erori `tsc` fără legătură cu locul).
+  Cifrele de acum, la un super-admin: 331 px din 335 la un telefon de 390, 292 din 305 la unul de 360
+  (acolo butoanele lasă câte 2 px și cade bara verticală). **Cuvântul a rămas „viitoare"**, cel ales
+  dimineață; userul scrisese „următoare", l-am întrebat dacă vrea schimbarea (ar fi în două locuri:
+  butonul și momentul din pagină).
 - **Antetul, pe TELEFON, încape acum pe o singură linie** (user: „nu încap restul butoanelor pe
   aceeași linie… săgeată-dreapta"). Sub 600 px, două lucruri își lasă scrisul și rămân doar cu
   semnul: **„Săptămâna viitoare" devine o săgeată-dreapta** (`IC_INAINTE`; amândouă înfățișările se
