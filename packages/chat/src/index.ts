@@ -20,6 +20,7 @@ import { bulaHtml, JS_CHAT, STIL_CHAT } from './bula.js'
 import { configChat, poateVedea, type EnvComutator } from './comutator.js'
 
 export * from './comutator.js'
+export * from './modele.js'
 export { IC_BULA, SALUT } from './bula.js'
 
 export interface EnvChat extends EnvComutator {

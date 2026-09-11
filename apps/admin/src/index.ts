@@ -2,7 +2,7 @@ import { SCOPE_GLOBAL, SESIUNE_ANONIMA, type SesiuneCurenta } from '@xc/contract
 import { ClientAutorizare } from '@xc/authorization'
 import { asiguraCsrf, principalDin, sesiuneCurenta, verificaCsrf, verificaTokenCsrf } from '@xc/auth'
 import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
-import { configChat, normalizeaza, scrieConfigChat, type ConfigChat } from '@xc/chat'
+import { configChat, MODELE, normalizeaza, scrieConfigChat, type ConfigChat, type ModelDeAles } from '@xc/chat'
 import { Logger, correlationId } from '@xc/observability'
 import { alerta, dataVersiunii, esc, html, pagina } from '@xc/ui'
 import pkg from '../package.json'
@@ -86,10 +86,8 @@ function paginaModule(o: {
       <input type="radio" name="cineVede" value="${valoare}" ${o.c.cineVede === valoare ? 'checked' : ''}>
       <span>${scris} <small>${lamurire}</small></span>
     </label>`
-  const creierul = (valoare: string, scris: string, lamurire: string) => `<label class="bifa">
-      <input type="radio" name="creier" value="${valoare}" ${o.c.creier === valoare ? 'checked' : ''}>
-      <span>${scris} <small>${lamurire}</small></span>
-    </label>`
+  const optiune = (m: ModelDeAles) =>
+    `<option value="${esc(m.id)}" ${o.c.model === m.id ? 'selected' : ''}>${esc(m.nume)} — ${esc(m.nota)}</option>`
 
   return pagina({
     ...o.comune,
@@ -110,13 +108,18 @@ ${o.salvat ? alerta('buna', 'Am salvat. Schimbarea se vede în cel mult un minut
   <table><tbody>${APLICATII_CU_CHAT.map(rand).join('')}</tbody></table>
   <p class="ajutor">Bifa are efect numai acolo unde modulul e montat în cod. Azi: <code>program</code>.</p>
 
-  <h4>De unde vine răspunsul</h4>
-  <p class="ajutor">Oricare ar fi, cererile trec prin <strong>AI Gateway</strong> (poarta <code>xc-chat</code>): loguri, cache și plafon de cost într-un singur loc.</p>
-  <div class="trepte">
-    ${creierul('claude', 'Claude (Anthropic)', 'Claude Opus 4.8 — cel mai bun la ales uneltele și la română')}
-    ${creierul('workers-ai', 'Workers AI', 'modelul de la Cloudflare (gpt-oss-120b), ținut ca rezervă')}
-    ${creierul('fara', 'Fără model', 'doar interfața: bula se deschide, dar nu răspunde nimeni — zero cost')}
-  </div>
+  <h4>Modelul</h4>
+  <p class="ajutor">Oricare ar fi, cererile trec prin <strong>AI Gateway</strong> (poarta <code>xc-chat</code>), pe factura Cloudflare.
+  Cele <strong>gratuite</strong> au 10.000 de neuroni pe zi fără plată; cele <strong>cu plată</strong> se plătesc din creditele AI Gateway (prețul e cel de listă al furnizorului, orientativ).</p>
+  <select name="model" class="model">
+    <option value="" ${o.c.model === '' ? 'selected' : ''}>Fără model — doar interfața, zero cost</option>
+    <optgroup label="Cu plată — Anthropic (Claude), din credite">
+      ${MODELE.filter((m) => m.grup === 'platit').map(optiune).join('')}
+    </optgroup>
+    <optgroup label="Gratuite — Workers AI (Cloudflare)">
+      ${MODELE.filter((m) => m.grup === 'gratuit').map(optiune).join('')}
+    </optgroup>
+  </select>
 
   <h4>Cine îl vede</h4>
   <div class="trepte">
@@ -181,10 +184,10 @@ export default {
           activ: formular.get('activ') === 'on',
           aplicatii,
           cineVede: String(formular.get('cineVede') ?? 'admini'),
-          creier: String(formular.get('creier') ?? 'claude'),
+          model: String(formular.get('model') ?? ''),
         })
         await scrieConfigChat(env, nou)
-        log.info('module: comutator schimbat', { activ: nou.activ, cineVede: nou.cineVede, creier: nou.creier, aplicatii: Object.keys(nou.aplicatii) })
+        log.info('module: comutator schimbat', { activ: nou.activ, cineVede: nou.cineVede, model: nou.model, aplicatii: Object.keys(nou.aplicatii) })
         return html(paginaModule({ comune: comuneAici, c: nou, csrf: csrf.jeton, salvat: true, prefix }))
       }
 
@@ -308,6 +311,8 @@ const STIL = `
              text-transform:uppercase; color:var(--faint) }
 /* ⚠️ Carcasa are stiluri GLOBALE pe form si label (rand de cautare): formularul si le scoate aici. */
 form.module { display:block }
+.module select.model { max-width:100%; padding:8px 10px; border:1px solid var(--rule); border-radius:8px;
+                       background:var(--paper); color:var(--ink); font:15px/1.3 ui-sans-serif,system-ui }
 .module label.bifa { display:flex; align-items:baseline; gap:8px; font:15px/1.5 inherit;
                      color:var(--ink); text-transform:none; letter-spacing:normal; padding:4px 0 }
 .module label.bifa.mare { font-size:17px }

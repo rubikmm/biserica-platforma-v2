@@ -295,7 +295,7 @@ async function intreabaClaude(
   env: EnvCreier,
   mesaje: MesajModel[],
   unelte: UnealtaModel[],
-  o: { faraApeluri?: boolean },
+  o: { faraApeluri?: boolean; model?: string },
 ): Promise<RaspunsModel> {
   const poarta = adresaPortiiAnthropic(env)
   if (!poarta) return FARA_POARTA
@@ -307,7 +307,8 @@ async function intreabaClaude(
   const efort = env.EFORT_CLAUDE || 'medium'
 
   const corp = {
-    model: env.MODEL_CLAUDE || MODEL_CLAUDE_IMPLICIT,
+    // Modelul ales din panou bate varsa; varsa e doar plasa de siguranță.
+    model: o.model || env.MODEL_CLAUDE || MODEL_CLAUDE_IMPLICIT,
     // Gândirea se plătește din bugetul ăsta; un plafon mic ar tăia-o la mijloc, ca la gpt-oss.
     max_tokens: 16000,
     thinking: { type: 'adaptive' },
@@ -440,9 +441,9 @@ async function intreabaWorkersAi(
   env: EnvCreier,
   mesaje: MesajModel[],
   unelte: UnealtaModel[],
-  o: { faraApeluri?: boolean },
+  o: { faraApeluri?: boolean; model?: string },
 ): Promise<RaspunsModel> {
-  const model = env.MODEL_CHAT || MODEL_IMPLICIT
+  const model = o.model || env.MODEL_CHAT || MODEL_IMPLICIT
   // Si Workers AI trece prin poarta, mereu — fara ea nu se cheama nimic (vezi mai sus).
   if (!env.AI_GATEWAY) return FARA_POARTA
   const poarta = { gateway: { id: env.AI_GATEWAY } }
@@ -497,7 +498,8 @@ export async function intreabaModelul(
   mesaje: MesajModel[],
   unelte: UnealtaModel[],
   prin: FelCreier = 'claude',
-  o: { faraApeluri?: boolean } = {},
+  /** `model`: id-ul ales din panoul de Module; fără el, varsa workerului. */
+  o: { faraApeluri?: boolean; model?: string } = {},
 ): Promise<RaspunsModel> {
   if (prin === 'claude') return intreabaClaude(env, mesaje, unelte, o)
   return intreabaWorkersAi(env, mesaje, unelte, o)

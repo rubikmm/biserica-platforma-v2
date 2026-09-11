@@ -9,6 +9,8 @@
  * cine știe adresa — iar un chat stins care totuși răspunde la `/chat/mesaj` costă bani la fel.
  */
 
+import { felDupaId, MODEL_IMPLICIT } from './modele.js'
+
 export const CHEIE_CONFIG = 'modul:chat'
 
 export type CineVede = 'admini' | 'conturi' | 'toti'
@@ -36,6 +38,9 @@ export interface ConfigChat {
   /** Pe ce aplicații se arată. O aplicație nescrisă aici e stinsă. */
   aplicatii: Record<string, boolean>
   cineVede: CineVede
+  /** Id-ul modelului ales din panou (vezi `MODELE`); gol = fără model. */
+  model: string
+  /** Dedus din `model`: pe ce drum merge cererea. Ținut aici ca chat-worker să nu mai deducă. */
   creier: Creier
 }
 
@@ -43,7 +48,7 @@ export interface ConfigChat {
  * STINS peste tot. Un modul nou nu se aprinde singur nicăieri: fiecare aplicație se deschide
  * anume, din admin. (Și: fiecare mesaj costă bani la fiecare apăsare.)
  */
-export const CONFIG_STINS: ConfigChat = { activ: false, aplicatii: {}, cineVede: 'admini', creier: 'claude' }
+export const CONFIG_STINS: ConfigChat = { activ: false, aplicatii: {}, cineVede: 'admini', model: MODEL_IMPLICIT, creier: 'claude' }
 
 export interface EnvComutator {
   CONFIG?: KVNamespace
@@ -83,11 +88,17 @@ export function normalizeaza(brut: unknown): ConfigChat {
     o.cineVede === 'toti' || o.cineVede === 'conturi' || o.cineVede === 'admini' ? o.cineVede : 'admini'
   // Implicit CONECTAT, pe Claude (user, 11.09.2026: „lasă conectat", apoi „prefer Claude 4.8").
   // `fara` se cere anume, din panou, cand vrei interfata fara niciun model si fara niciun ban.
-  // `gateway` (valoare veche, scrisa de un panou mai vechi) inseamna Workers AI — poarta e
-  // oricum drumul tuturor. De aceea se citeste ca text, nu ca `Creier`.
-  const scris = String((o as { creier?: unknown }).creier ?? '')
-  const creier: Creier = scris === 'fara' ? 'fara' : scris === 'workers-ai' || scris === 'gateway' ? 'workers-ai' : 'claude'
-  return { activ: Boolean(o.activ), aplicatii, cineVede, creier }
+  // Modelul, din panou. O configurare mai veche avea doar `creier` (claude / workers-ai /
+  // gateway / fara) — se traduce in modelul implicit al drumului aceluia, ca sa nu se piarda nimic.
+  const scrisCreier = String((o as { creier?: unknown }).creier ?? '')
+  const scrisModel = typeof o.model === 'string' ? o.model.trim() : ''
+  let model: string
+  if (o.model !== undefined) model = scrisModel
+  else if (scrisCreier === 'fara') model = ''
+  else if (scrisCreier === 'workers-ai' || scrisCreier === 'gateway') model = '@cf/openai/gpt-oss-120b'
+  else model = MODEL_IMPLICIT
+  const creier: Creier = model === '' ? 'fara' : felDupaId(model)
+  return { activ: Boolean(o.activ), aplicatii, cineVede, model, creier }
 }
 
 /**

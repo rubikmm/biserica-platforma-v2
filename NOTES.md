@@ -221,6 +221,15 @@ propunerea automată, ca în V1.
 
 ### 2026-09-11
 
+- **Selecția de modele în panoul de Module** (user, 20:56: „o selecție de modele - cele free și cele
+  cu plată… aș vrea să mă mai joc cu ele puțin"). Lista stă într-un singur loc, `@xc/chat/modele.ts`,
+  pe două grupuri: **gratuite** = Workers AI (10.000 neuroni/zi fără plată — poarta e pusă înapoi pe
+  `workers_ai_billing_mode: postpaid`, ca gratuitul să fie gratuit), cu scorul MĂSURAT la proba
+  uneltelor lângă fiecare; **cu plată** = Claude (Opus 4.8 implicit, Opus 5, Sonnet 5, Sonnet 4.6,
+  Haiku 4.5), din creditele AI Gateway, cu prețul de listă orientativ. Configul ține acum
+  **`model`** (id), iar `creier` se deduce din el (`@cf/…` = Workers AI, restul = Claude); o
+  configurare veche cu doar `creier` se traduce fără pierdere. 100 de teste.
+
 - **Creierul: Claude Opus 4.8, prin AI Gateway, cu factura la Cloudflare** (user, 19:48–19:56:
   „prefer să folosim Claude 4.8… putem să folosim ceva mai bun… vreau tot prin AI Gateway, nu ocoli
   această cale… nu facem nimic prin SDK propriu… o singură factură foarte clară… nu trebuie să ne

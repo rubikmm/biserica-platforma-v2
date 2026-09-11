@@ -325,7 +325,7 @@ export default {
       let textFinal = ''
 
       for (let pas = 0; pas < PASI_MAXIM; pas++) {
-        const r = await intreabaModelul(env, mesaje, unelte, comutator.creier)
+        const r = await intreabaModelul(env, mesaje, unelte, comutator.creier, { model: comutator.model })
         textFinal = r.text || textFinal
 
         if (!r.cereri.length) break
@@ -401,7 +401,7 @@ export default {
         if (propunere) {
           // Un ultim rand de la model, ca sa spuna omului ce a pregatit — fara unelte, ca sa nu
           // mai ceara altceva pana nu s-a raspuns la asta.
-          const ultim = await intreabaModelul(env, mesaje, unelte, comutator.creier, { faraApeluri: true })
+          const ultim = await intreabaModelul(env, mesaje, unelte, comutator.creier, { faraApeluri: true, model: comutator.model })
           textFinal = ultim.text || textFinal || 'Am pregătit schimbarea. O fac dacă îmi confirmi.'
           break
         }
