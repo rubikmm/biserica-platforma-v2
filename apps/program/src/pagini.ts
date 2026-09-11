@@ -120,6 +120,13 @@ const IC_DOUA_COLOANE = `<svg viewBox="0 0 24 24" width="21" height="21" fill="n
 /** Iconita Arhivei: cutie cu capac — exact cea din V1 (18px, cu manerul desenat separat). */
 const IC_ARHIVA = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></svg>`
 
+/**
+ * SAGEATA-DREAPTA: „Săptămâna viitoare", stransa la un semn pe TELEFON (user, 11.09.2026 — cele doua
+ * grupuri ale randului de unelte nu mai incapeau pe un rand la un admin, care le are pe toate).
+ * Aceleasi masuri ca iconita Arhivei, ca cele doua capete ale pastilei sa cantareasca la fel.
+ */
+const IC_INAINTE = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12h14"/><path d="m12.5 6 6 6-6 6"/></svg>`
+
 // ---------------------------------------------------------------------------
 // Stilul local — V1 src/stil.ts, ca atare; adaugirile V2 sunt marcate
 // ---------------------------------------------------------------------------
@@ -198,6 +205,10 @@ export const STIL = `
                  background:var(--tinta); overflow:hidden }
 .btns .pastila .btn { flex:0 0 auto; border:0; border-radius:0; background:transparent }
 .btns .pastila .viit { flex:1 1 auto; min-width:0 }
+/* „Săptămâna viitoare" are DOUA infatisari scrise amandoua in pagina: cuvintele si sageata-dreapta.
+   Pe larg se vad cuvintele; pe telefon ramane doar semnul (vezi media query). Ca la butonul de
+   descarcare — alegerea o face CSS-ul, nu JS-ul, deci nu apuca sa se vada infatisarea nepotrivita. */
+.btns .viit .scurt { display:none }
 .btns .pastila .btn + .btn { border-left:1px solid var(--rule) }
 .btns .pastila a.btn:hover { color:var(--rosu); background:var(--paper) }
 .btns .pastila .btn.activ { color:var(--rosu); font-weight:600;
@@ -221,20 +232,41 @@ export const STIL = `
 .btns .poza-2 { display:none }
 body.cu-calendar .btns .poza-1 { display:none }
 body.cu-calendar .btns .poza-2 { display:flex }
-/* Pe telefon cele doua grupuri nu mai incap pe acelasi rand: randul se rupe, pastila ramane sus, iar
-   grupul din dreapta trece dedesubt — tot lipit de dreapta, ca margin-left:auto tine si acolo.
-   Butoanele stau cat le tine continutul, si pastila se string la masura ei: intinsa pe un rand numai
-   al ei ar fi doua cuvinte pierdute intr-o bara cat ecranul. */
+/* ⚠️ PE TELEFON, TOT RANDUL DE UNELTE INCAPE PE O LINIE (cerere user, 11.09.2026: „nu încap restul
+   butoanelor pe aceeași linie"). Pana atunci randul se rupea in doua, cu pastila sus si hartiile
+   dedesubt. Ca sa incapa, doua lucruri isi lasa scrisul si raman doar semnul lor: „Săptămâna
+   viitoare" se face SAGEATA-DREAPTA (chiar cuvantul userului), iar PDF/JPG raman iconitele felului.
+   Restul segmentelor se string putin la padding.
+   Cifrele, masurate pe pagina unui super-admin (el are cele mai multe butoane: arhiva, bulina,
+   Calendar, descarcarea, PDF, JPG): randul cerea 431 px, iar un telefon de 390 px are 335 de
+   folosit, unul de 360 doar 305. Numai cu sageata ar fi cerut 346 — inca prea mult; cu hartiile
+   strunse cere 294 si incape pe amandoua. Ruperea randului (flex-wrap) ramane, ca plasa de siguranta la ecrane si
+   mai inguste ori la scrisul marit din setarile telefonului. */
 @media (max-width:600px) {
-  .btns { gap:7px; flex-wrap:wrap }
+  .btns { gap:5px; flex-wrap:wrap }
   .btns .btn { flex:0 0 auto; white-space:nowrap }
   .btns .pastila { flex:0 0 auto }
-  .btns .pastila .viit { flex:0 0 auto }
-  .btns .mic { padding-left:10px; padding-right:10px }
-  .btns .punct { padding-left:14px; padding-right:14px }
-  .btns .com-cal { gap:6px; padding-left:10px; padding-right:10px }
-  .btns .pastila .arh { padding-left:12px; padding-right:12px }
-  .btns .unelte-dr { gap:7px }
+  .btns .mic { padding-left:7px; padding-right:7px }
+  .btns .mic .fel { display:none }
+  .btns .punct { padding-left:10px; padding-right:10px }
+  .btns .com-cal { gap:5px; padding-left:8px; padding-right:8px }
+  .btns .pastila .arh { padding-left:9px; padding-right:9px }
+  .btns .unelte-dr { gap:5px }
+  .btns .desparte { margin:0 2px }
+  /* segmentul „viitoare", strans la semn: centrat si tot atat de lat ca iconita Arhivei din celalalt
+     capat al pastilei, ca cele doua capete sa cantareasca la fel */
+  .btns .viit .lung { display:none }
+  .btns .viit .scurt { display:block }
+  .btns .pastila .viit { flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+                         padding-left:9px; padding-right:9px }
+  .btns .pastila .viit svg { vertical-align:0 }
+}
+/* Telefoanele inguste (Android de 360 px si mai jos): acolo randul cere 309 px din 305 — lipsesc
+   patru. Cade bara verticala dintre grupuri (pastila se vede oricum ca un corp, deci granita nu se
+   pierde) si se mai string butoanele cu un pixel: 298, cu ceva loc de rezerva. */
+@media (max-width:380px) {
+  .btns .desparte { display:none }
+  .btns .mic { padding-left:6px; padding-right:6px }
 }
 
 /* o zi din program */
@@ -479,11 +511,17 @@ function navigarea(ctx: Ctx, m: Meniu): string {
   const aAzi = luneaSaptamanii(m.azi)
   const urmatoarea = adaugaZile(aAzi, 7)
   const zile = intervalScurt(urmatoarea)
+  // ⚠️ Segmentul se scrie in AMANDOUA infatisarile, iar CSS-ul o alege pe cea potrivita latimii
+  // ecranului — ca la butonul de descarcare, fara JS: pe larg cuvintele, pe TELEFON doar
+  // sageata-dreapta (user, 11.09.2026: „nu încap restul butoanelor pe aceeași linie… săgeată-dreapta").
+  // Numele accesibil NU se strange o data cu scrisul: `aria-label` spune intreg „săptămâna viitoare,
+  // <zile>" la amandoua, deci la cititorul de ecran nu se schimba nimic dupa latimea ecranului.
+  const scris = `<span class="lung">Săptămâna viitoare</span><span class="scurt">${IC_INAINTE}</span>`
   const viitoare = m.luni === urmatoarea
     ? `<button type="button" class="btn viit activ" aria-disabled="true" aria-current="page"`
-      + ` title="Ești pe săptămâna viitoare, ${zile}">Săptămâna viitoare</button>`
+      + ` title="Ești pe săptămâna viitoare, ${zile}" aria-label="săptămâna viitoare, ${zile}">${scris}</button>`
     : `<a class="btn viit" href="${p}/saptamana/${urmatoarea}" title="Treci la săptămâna viitoare, ${zile}"`
-      + ` aria-label="săptămâna viitoare, ${zile}">Săptămâna viitoare</a>`
+      + ` aria-label="săptămâna viitoare, ${zile}">${scris}</a>`
   const bulina = m.luni === aAzi
     ? `<button type="button" class="btn punct activ" aria-disabled="true" aria-current="page"`
       + ` title="Ești pe săptămâna de azi" aria-label="săptămâna de azi"></button>`
@@ -566,9 +604,14 @@ function vedeHartiile(ctx: Ctx, m: Meniu): boolean {
 function hartiile(ctx: Ctx, m: Meniu): string {
   if (!vedeHartiile(ctx, m)) return ''
   const p = esc(ctx.prefix)
+  // ⚠️ Numele felului (`.fel`) CADE pe telefon, ca tot randul de unelte sa incapa pe o linie (user,
+  // 11.09.2026) — raman iconitele, care sunt desenate anume ca sa se deosebeasca. De aceea numele
+  // hartiei se scrie si in `aria-label`: fara el, cu scrisul ascuns, butonul ar ramane fara nume.
   const hartie = (ext: 'pdf' | 'jpg', iconita: string, titlu: string) => (m.foaie
-    ? `<a class="btn mic" href="${p}${m.foaie}.${ext}" target="_blank" rel="noopener" title="${titlu}">${iconita}<span>${ext.toUpperCase()}</span></a>`
-    : `<span class="btn mic gol" title="Foaia se deschide de pe pagina unei săptămâni cu program validat">${iconita}<span>${ext.toUpperCase()}</span></span>`)
+    ? `<a class="btn mic" href="${p}${m.foaie}.${ext}" target="_blank" rel="noopener" title="${titlu}"`
+      + ` aria-label="${titlu}">${iconita}<span class="fel">${ext.toUpperCase()}</span></a>`
+    : `<span class="btn mic gol" title="Foaia se deschide de pe pagina unei săptămâni cu program validat"`
+      + ` aria-label="${titlu} — se deschide de pe pagina unei săptămâni cu program validat">${iconita}<span class="fel">${ext.toUpperCase()}</span></span>`)
   return hartie('pdf', ICOANE.pdf, 'Foaia A4, de tipărit')
     + hartie('jpg', ICOANE.jpg, 'Foaia ca poză, de trimis pe WhatsApp')
 }

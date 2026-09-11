@@ -204,6 +204,17 @@ propunerea automată, ca în V1.
 
 ### 2026-09-11
 
+- **Antetul, pe TELEFON, încape acum pe o singură linie** (user: „nu încap restul butoanelor pe
+  aceeași linie… săgeată-dreapta"). Sub 600 px, două lucruri își lasă scrisul și rămân doar cu
+  semnul: **„Săptămâna viitoare" devine o săgeată-dreapta** (`IC_INAINTE`; amândouă înfățișările se
+  scriu — `.lung` și `.scurt` — iar CSS-ul o alege pe cea potrivită, ca la butonul de descărcare) și
+  **PDF/JPG rămân doar iconițele felului** (`.fel` ascuns; de aceea au primit `aria-label`, altfel
+  butoanele ar fi rămas fără nume). Restul segmentelor se strâng la padding, iar sub **380 px** cade
+  și bara verticală dintre grupuri. Pe desktop nu se schimbă nimic.
+  **Cifrele** (măsurate pe pagina unui super-admin, care are cele mai multe butoane): rândul cerea
+  **431 px**, iar un telefon de 390 px are 335 de folosit, unul de 360 doar 305. Numai cu săgeata ar
+  fi cerut 346 — încă se rupea; de aceea au căzut și textele hârtiilor. Acum cere 307 la 390 px și
+  288 la 360. Sub ~330 px tot se rupe: `flex-wrap` a rămas dinadins, ca plasă de siguranță.
 - **Zilele roșii cu slujbe nu se mai împart în două coloane** (user: „la vizualizarea dublată a zilei
   de duminică să nu se mai afișeze text deloc în partea dreaptă… la fel și la sărbătorile cu cruce
   roșie, care în mod sigur deja au slujba setată"). Duminicile și zilele cu cruce roșie **care au
