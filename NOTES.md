@@ -2,6 +2,11 @@
 
 Memoria proiectului. Călătorește cu repo-ul.
 
+⚠️ **Aici stau amănuntele**: cum arată interfața fiecărei aplicații și de ce, ce s-a portat și cu ce
+deosebiri, capcanele tehnice, rețetele de lucru, jurnalul. Memoria agentului (`memory/repere.md`)
+ține doar **regulile care se aplică mai departe** și trimite încoace. Curățenia asta s-a făcut pe
+12.09.2026, la cererea utilizatorului, fiindcă `repere.md` ajunsese la 65 KB cu istoric de interfață.
+
 ## PLAN
 
 Rescrierea de la zero a platformei parohiei, cu migrarea treptată a celor 12 aplicații V1.
@@ -216,6 +221,375 @@ propunerea automată, ca în V1.
   `principalDin` stă într-un singur loc, în pachet, nu copiat în fiecare aplicație.
 - **Tokenul Cloudflare nu citește Email Routing / certificate** (API răspunde „Authentication
   error"), dar deploy-ul cu `send_email` merge — verificarea e pe Workers API.
+
+## Programul (A2) — interfața, așa cum a cerut-o utilizatorul
+
+Baza afișării e **V1 verbatim** (10.09.2026: „identice ca program.sfantul-ilie.ro"): stilul, markup-ul
+și textele din `stil.ts` + `pagini.ts` ale V1. Ce urmează sunt **abaterile cerute explicit** — nu le
+„repara" înapoi spre V1.
+
+### Rândul de unelte din antet (refăcut 11.09.2026, trei runde într-o oră — starea finală)
+
+Două grupuri, despărțite de bara verticală:
+
+- **STÂNGA — pastila navigării**, care ia tot spațiul rămas (`flex:1`; prisosul îl ia doar segmentul
+  cu scris). Trei segmente: **Arhiva** (iconița cutiei, numai la admini), **bulina** săptămânii de azi
+  și **„Săptămâna viitoare"** scris în litere (datele au trecut în `title`/`aria-label`). Segmentul pe
+  care ești e roșu și neapăsabil. Navigarea „săptămâna trecută" a ieșit: „nu se mai deschide săptămâna
+  trecută, se poate selecta din pagina arhivei".
+- **DREAPTA, lipit de margine** (`.unelte-dr`, `margin-left:auto` — 10:48: „tot ce este după bara
+  verticală… să fie aliniate la dreapta, dar restul spațiului să fie folosit de butoanele celelalte"):
+  **întrerupătorul „Calendar"**, **butonul de download**, **PDF**, **JPG**. Numai pentru admini.
+- **Abonarea** stă îndată după pastilă, la omul FĂRĂ drepturi de admin.
+- **Căsuța `.nav-jos` a dispărut cu totul** — PDF și JPG au urcat în rând. A căzut și golul de 34 px
+  de sub antet.
+
+**⚠️ Butoanele se sting, nu se ascund** (11.09, 23:23: „când intru pe Arhivă, întrerupătorul doar se
+dezactivează și la fel și butonul lui de download, acum se ascund și strică interfața"; 12.09, 00:06:
+„la fel și pentru admini… să fie doar dezactivate"). Stins = `.gol` (un `<span>` pălit,
+`pointer-events:none`), cu pricina scrisă în `title` (`deCeStinsa`). Cele două trepte au rămas drept
+de **FOLOSIRE** (`poateLuaHartiile`, fost `vedeHartiile`); **vederea** s-a despărțit de ele: orice
+admin vede tot grupul pe orice pagină. Enoriașul tot nu vede hârtiile.
+
+**⚠️ Săptămânile deschise din arhivă poartă `?din=arhiva`** (11.09, 16:24). De el atârnă două lucruri:
+butonul **„← Înapoi la arhivă"** deasupra titlului (link adevărat spre `/arhiva`, dar JS-ul îl face să
+dea **pasul înapoi al browserului** când chiar de acolo s-a venit — `document.referrer` conține
+`/arhiva` —, ca arhiva să se redeschidă derulată unde a rămas omul) și **marcajul roșu rămas pe
+segmentul Arhivei** (marcat, dar tot apăsabil; neapăsabil e numai pe pagina arhivei). Nu se ghicește
+din `referer`: acela lipsește des și ar face pagina să arate altfel de la o deschidere la alta.
+
+**⚠️ Săptămâna pe care tocmai ai apăsat se vede încercuită roșu la întoarcere** (`.baton a.vazuta`),
+pusă de JS. **NU din `:visited`** — încercat 11.09 la 16:32 și respins la 16:38: „vreau doar ca,
+atunci când dau înapoi, să se vadă unde am apăsat… doar pe moment". `:visited` nici nu se vedea la
+„înapoi": pagina vine din **bfcache** și browserul nu repictează starea vizitat. Acum clasa se pune
+**la apăsare**, deci la întoarcerea din bfcache e deja în DOM; dacă pagina chiar se reîncarcă, se
+reface din `sessionStorage`, **o singură dată** (cheia se șterge la folosire).
+
+**Pagina arhivei se cheamă doar „Arhiva"** (nu „Arhiva programelor"); sub titlu a rămas doar
+numărătoarea („654 săptămâni, din 2014 până azi") — propoziția despre importul din situl vechi a ieșit
+la cererea utilizatorului. Nu o readuce.
+
+### Pe telefon
+
+**⚠️ TOT RÂNDUL STĂ PE O LINIE** (11.09, 15:43: „nu încap restul butoanelor pe aceeași linie"). Două
+lucruri își lasă scrisul sub 600 px: **„Săptămâna viitoare" devine o săgeată-dreapta** (`IC_INAINTE`,
+clasele `.cuv`/`.sgt` scrise amândouă, alege CSS-ul) și **PDF/JPG rămân doar iconițele** (`.fel`
+ascuns; de aceea au căpătat `aria-label`). Restul se strânge la padding; sub **380 px** cade și bara
+verticală. **Cifre măsurate** pe pagina unui super-admin: rândul cerea **431 px**, un telefon de 390
+are 335 de folosit, unul de 360 doar 305. Sub ~330 px tot se rupe — `flex-wrap` a rămas dinadins, ca
+plasă. Pe desktop nu s-a schimbat nimic.
+
+**⚠️ ANTETUL ARE DOUĂ ÎNFĂȚIȘĂRI, după drepturi** (11.09, 16:02). Pastila omului **fără** drepturi
+poartă clasa **`larga`** (`ctx.eAdmin` o decide) și, sub 600 px: se întinde cât rândul, segmentul
+„viitoare" scrie **cuvintele ȘI săgeata** (cerute anume în ordinea asta), iar **bulina stă lată**
+(22 px în laturi, „să fie mai ușor de apăsat"). ⚠️ `flex:1 1 0`, NU `1 1 auto`: cu măsura de pornire
+`auto` cuvintele umflau pastila peste ecran și întrerupătorul sărea pe rândul doi.
+
+**Și pastila adminului ia spațiul rămas** (16:20): `flex:1 1 auto` pe pastilă (măsura de pornire rămâne
+`auto` — înăuntru sunt numai iconițe, deci rândul se rupe cinstit când nu încape, în loc să le taie) și
+`1 1 auto` pe `.viit`. La admin butoanele-iconiță s-au făcut **pătrate** (padding 9 px în laturi, cât
+cel de sus din carcasă → ținte de ~36×36; „să fie atâta spațiu sus cât este stânga dreapta"), iar
+bulina 15 px. Rămâne strâmt: 331 px din 335 la un telefon de 390.
+
+**⚠️ Dacă adaugi ceva în rândul de unelte, măsoară din nou** (rețeta e mai jos).
+
+⚠️ **La utilizatorul simplu rândul se rupe în două**: bulina + „Săptămâna viitoare" scrisă + abonarea +
+întrerupătorul cer ~380 px. Nimic nu se taie — pastila rămâne sus, abonarea și întrerupătorul coboară.
+Ca să încapă ar trebui prescurtat textul („Săpt. viitoare") sau strâmtată bulina; utilizatorul știe.
+
+### Întrerupătorul „Calendar" și butonul de download
+
+- **Pornește APRINS** (11.09, 11:14: „starea implicită este On"; la 10:47 ceruse invers — dacă revine
+  vorba, asta e istoria). Clasa `cu-calendar` vine **de pe server** (`clasaCorp` în `paginaSaptamana`),
+  iar JS-ul o scoate doar dacă omul a stins-o — altfel pagina ar clipi pe o coloană la fiecare
+  încărcare. localStorage se citește „aprins dacă nu scrie anume «0»".
+- **⚠️ Lucrează pe orice săptămână pentru care CHIAR avem calendarul** (12.09.2026: „să fie activ pe
+  toate săptămânile din anul curent… unde știm că avem calendarul, dar și pe anii care trec, adică
+  anul viitor. Dacă mă uit în arhivă și văd 2026, să pot să văd ecranul împărțit în două coloane").
+  Regula e **a datelor, nu a anilor** (`areCalendarulSaptamanii`): niciun an scris în cod, deci când
+  calendarul (A1) mai capătă un an, săptămânile lui se aprind singure. ⚠️ `calendarulIntervalului`
+  răspunde **mereu** cu șapte zile — ce lipsește îl **împrumută** din anul curent, însemnat
+  `aproximativ` (așa se colorează roșu sărbătorile din arhiva veche) —, deci întrebarea nu e „a venit
+  ceva?", ci „a venit măcar o zi **adevărată**?". „Măcar una", nu toate șapte: săptămâna călare pe 31
+  decembrie e pe jumătate adevărată și e tot o săptămână a anului curent. Azi A1 acoperă **2025–2028**;
+  2024 în jos rămâne stins.
+- ⚠️ `id="b-calendar"` se scrie **doar pe cel viu**: JS-ul se leagă de id și ar pune `cu-calendar` pe
+  body, iar pe săptămânile fără calendar clasa aceea scoate la iveală zilele goale
+  (`body:not(.cu-calendar) .zi.goala`).
+- ⚠️ A fost scos la 10:01 și repus la 10:47 — utilizatorul lămurise că „fără buton în meniu" se referea
+  la **bulină**, nu la el. Nu-l scoate decât la o cerere care-l numește.
+- **Becul aprins NU e roșu** (11:14: „întrerupătorul să fie alb"): pista se umple cu `--soft`, bila se
+  face `--paper`. Roșul e rezervat locului în care te afli (pastila, masca din meniu).
+- **Butonul de download** dă exact ce se vede: aprins → săgeată **dublă** + `?coloane=2`, stins →
+  săgeată **simplă** + `?coloane=1`. Se scriu **amândouă înfățișările** (`.poza-1`/`.poza-2`), iar
+  CSS-ul o alege pe cea potrivită după `cu-calendar` — JS-ul nu umblă la `href`, deci nu clipește.
+  Implicitul rutei a rămas `coloane=2`. Poza calendarului de la A1 a ieșit din antet, definitiv.
+
+### Pagina săptămânii
+
+- **Două coloane**: program stânga, calendar paralel dreapta (zilele fără slujbe apar doar pe dreapta).
+- **⚠️ ZILELE ROȘII CU SLUJBE NU SE ÎMPART** (11.09.2026): duminicile și sărbătorile cu cruce roșie
+  rămân pe **o singură coloană, cât e pagina de lată** — programul lor spune deja sărbătoarea și
+  sfinții, pe rândurile „→" ale slujbei de dimineață, iar coloana din dreapta le-ar scrie a doua oară.
+  Coloana **nici nu se mai scrie** (`ziuaHtml` → `cuCal`), iar secțiunea poartă clasa `fara-cal`, care
+  desface grila. Zilele roșii **fără** slujbe rămân împărțite. Regula era până atunci doar pe telefon;
+  acum e peste tot, **și în poza JPEG** (aceeași `zileleSaptamanii`).
+- **Coloana calendarului** arată **sfinții, unul sub altul, cu săgeată în față**, deasupra lor
+  denumirea zilei roșie-îngroșată; **fără** pericope (Ap./Ev.), glas și voscreasnă — „cel mai mult mă
+  interesează sfinții" (10.09, 17:34). Se construiește din câmpurile zilei (`denumire` + `sfinti`),
+  **nu** din `titlu_html`. Culoarea e a rangului, sfânt cu sfânt.
+- Deasupra datelor, momentul scrie **„Săptămâna viitoare"** (nu „următoare"), ca butonul.
+- În stânga, zilele fără slujbe rămân **complet goale** (fără titlu) — numele zilei se vede în capul
+  listei din dreapta.
+- **În dev paginile nu se cachează** (`no-store`; pe staging `max-age=300`) — cele 5 minute făceau
+  schimbările să pară nefăcute. (`calendar` n-are ramura asta: și local cachează 5 min.)
+
+### Hârtiile
+
+Trei, toate pe aceleași două trepte: **PDF** (foaia A4) și **JPG** (foaia ca poză) în rândul de
+unelte, plus **poza paginii** — `GET /v1/poza/saptamana/<luni>.jpg?coloane=1|2` (`.html` pentru probe
+locale), la 680 px (măsura `.w`). `zileleSaptamanii` e aceeași și pentru pagină, și pentru poză — nu
+le despărți. Fiecare hârtie poartă **iconița felului** ei (`ICOANE.pdf` / `ICOANE.jpg`).
+
+**Toate imaginile generate ies pe fundal DESCHIS** (11.09: „m-am răzgândit"; pe 10.09 ceruse invers) —
+și poza programului, și PNG-ul săptămânii din calendar; tema se scrie pe `html`. Titlul pozei e
+intervalul **calculat** (`titluSaptamanii`), ca pe foaia A4 — nu cel din bază, care vine din V1 cu
+cratimă în loc de linie de dialog. În pagină rămâne cel din bază.
+
+**Foaia „Sfinții zilei"** — butonul e **numai al adminilor**. Foaia **nu mai e identică cu V1**
+(10.09, 21:05): subsolul (parohia + adresa sitului) a ieșit cu totul, iar Ap./Ev. au ieșit de pe rândul
+mărunt — rămân glasul/voscreasna, postul și notele, iar rândul nu se mai scrie dacă rămâne gol. Restul
+hârtiilor rămân verbatim V1.
+
+**Sfinții grupați după sursă** (publicat 11.09): foaia scrie **două liste, fiecare cu cartea ei
+deasupra** — „Calendarul bisericesc" și pomenirile Mineiului (volumul, ediția și creditul culegătorului
+— condiția sursei). Capul de grup se scrie doar când chiar sunt două liste. Pomenirile se cer de la
+`tipic /v1/sfinti/<data>` (binding-ul TIPIC + `src/tipic.ts`), nu se țin în program.
+**În cascadă, fără repetări** („Calendarul și apoi Mineiul și Tipicul, doar sfinți care nu au fost
+menționați mai sus"): potrivirea se face pe **numele proprii** (cuvintele cu literă mare, fără ranguri),
+cu toleranță la ortografia altei ediții — Cornelie/Corneliu, Macrovie/Macrobie, Ili/Ilie,
+Joachim/Ioachim. Regula greșește **deliberat păstrând**: o pomenire cade doar dacă TOATE numele ei
+s-au scris deja.
+**Anuarul aproape nu adaugă nimic** și e bine să știi de ce: titlul lui e practic titlul calendarului
+oficial (aceeași editură). Grupul lui apare la ~24 de zile pe an, mai ales cu **odovaniile și
+înainte-prăznuirile**, pe care calendarul le ține în `titlu` dar NU în `sfinti`. Singurul sfânt în plus
+din tot 2026: Sf. Mc. Lup din Tesalonic, 27 octombrie. Textul Anuarului e OCR de pe o scanare, deci
+trece printr-o sită — **n-o slăbi**.
+
+### Abonarea
+
+A revenit în interfață (11.09, 16:36), dar **deocamdată nu face nimic** — cerut anume. Buton cu plic
+îndată după pastilă, numai la omul fără drepturi de admin; fereastra e un `<dialog>` nativ cu câmp de
+e-mail și două bife. Formularul e `method="dialog"`, deci **orice buton din el doar închide** fereastra.
+Când se leagă cu adevărat, capătă `action` către `POST /abonare` (ruta a rămas întreagă tot timpul).
+
+### API-ul programului
+
+`slujba_urmatoare`, `slujba_curenta` (în curs = începută de cel mult **3 ore**), `slujbele_zilei`,
+`slujbele_saptamanii`, `text_saptamanii`, `cauta_slujba` (fără diacritice, pe vocabular), `paternuri`
+(fundal), `arhiva` (JSON, 1,28 MB), `foaia_sfintilor`, `foaia_saptamanii`, `poza_paginii`. Perechile
+publice: `/v1/curenta`, `/v1/saptamana/<data>.txt`, `/v1/cauta?slujba=`, `/v1/paternuri`,
+`/v1/arhiva.json`. `Slujba` rămâne obiectul întreg („lasă-le așa acum").
+
+**Partea executivă** stă în `depozit.ts` (`scrieSaptamana`, `modificaSlujba`, `adaugaSlujba`,
+`stergeSlujba`, `valideazaSaptamana`), fiecare cu mutația + `istoric` + `outbox` în ACELAȘI batch.
+⚠️ Săptămâna viitoare NU e scrisă (propunere din zbor): orice schimbare o scrie întâi
+(`scrisa: false` → `scrieSaptamana`). Validată atinsă → `modificat_dupa_validare`. `dataCeruta`
+înțelege numele zilelor („luni" = lunea care vine, azi inclusiv).
+
+## Modulul de Chat (AI) și acțiunile interne
+
+**Două lucruri separate, nu unul** — pe larg în `docs/architecture/chat-si-actiuni.md` și
+`docs/adr/0007-actiuni-interne-si-chat.md`:
+
+1. **Registrul de acțiuni** — `@xc/actiuni`; fiecare aplicație își declară verbele în `src/actiuni.ts`
+   și le publică la `GET /_actiuni` (manifest din zod) / `POST /_actiuni/<nume>`.
+2. **Chatul** — `services/chat-worker` (creierul, D1 `xc-chat-staging`,
+   `a3d30428-fba0-46bf-9895-1ed0478a7039`) + `@xc/chat` (bula, rutele `/chat/*`, comutatorul). E
+   **primul client** al registrului, nu proprietarul lui.
+
+**Întrerupătorul are două niveluri**: (a) în cod — 3 linii + `actiuni.ts` în aplicație; (b) din
+`apps/admin` → `/module`, scris în KV `xc-config-staging` (`4fb91926da484c4395160390d5348950`), cheia
+`modul:chat` = `{activ, aplicatii:{…}, cineVede}`. **Stingerea oprește ȘI rutele**, nu doar bula.
+Implicit: STINS peste tot. Permisiunea cerută: `modules.manage` (doar super-admin). Chatul cere CONT
+chiar la treapta „toți" (discuția se ține pe `user_id`).
+
+**Creierul**: Claude prin AI Gateway, o singură factură, fără SDK. `fetch` la
+`…/xc-chat/anthropic/v1/messages` cu **Unified Billing**: `cf-aig-authorization: Bearer <token CF>`,
+FĂRĂ `x-api-key`. Poarta: `authentication: true` (altfel „x-api-key header is required"),
+`workers_ai_billing_mode: unified`, **credite încărcate** (altfel `402`). Secretul `AI_GATEWAY_TOKEN`
+la chat-worker; local în `services/chat-worker/.dev.vars` (gitignored). Modelul/efortul: varsurile
+`MODEL_CLAUDE` / `EFORT_CLAUDE`. Modelele gratuite (Workers AI, `postpaid`) merg fără credite; lista e
+în `@xc/chat/modele.ts`, `creier` se deduce din id (`@cf/…` = Workers AI).
+
+**Hățurile, toate din panoul de Module, nimic în cod**: `indrumari` (text liber, în instrucțiuni),
+`unelte` (lista canonică a ce vede modelul — pe program doar `modifica_slujba`, `adauga_slujba`,
+`valideaza_saptamana`, `sterge_slujba`; „fără rapoarte, enumerări, arhivă"), exemple cu argumente la
+acțiuni (`{fraza, argumente}`), setul de probe `infrastructure/eval/chat.mjs`. **Dacă cineva lărgește
+lista de unelte, să reruleze probele** — modelele mici cad exact la alegerea între unelte.
+
+**Drumul de antrenament, convenit prin practică**: utilizatorul se joacă pe staging → export
+(`node infrastructure/eval/discutii.mjs --remote --env staging`) → fiecare discuție dusă la capăt intră
+în probe, cu fraza LUI și sursa notată → orice schimbare la instrucțiuni/unelte/model se rulează pe
+probe înainte de deploy. Când spune „am discuții bune", asta așteaptă.
+
+**Măsurători**: 6 modele × 5 întrebări (11.09) — `@cf/openai/gpt-oss-120b` 5/5; llama-4-scout,
+glm-5.3, glm-5.3-flash, deepseek-v4-flash 3/5; qwen3-30b 2/5. Pe 14 fraze: **GLM 5.3 Flash 14/14**,
+gpt-oss-120b 13/14. Temperatura la Workers AI e 0. Utilizatorul vrea să se joace cu modelele — nu bate
+unul în cuie fără el.
+
+**Urmarea deterministă** (11.09, 21:48): după fiecare schimbare confirmată, întrebarea „validez
+săptămâna?" o pune CHATUL, nu modelul. Mecanism generic în `@xc/actiuni`: `urmare: { actiune,
+argumente: {câmp urmare: câmp de aici} }`; chat-worker previzualizează urmarea (deja validată → tace)
+și o propune cu Da/Nu; reîncărcarea paginii așteaptă până se răspunde. Discuțiile expiră după **6 h**;
+panoul se strânge după o schimbare și pagina se reîncarcă.
+
+**Previzualizarea**: `rezuma` în acțiune; antet `x-xc-previzualizare: 1` → validare + drept + rezumat,
+FĂRĂ execuție. Chat-worker o cheamă înainte de „Da/Nu".
+
+**Cunoștințe de FUNDAL**: o acțiune cu `fundal: true` (fără argumente, de citire) se cheamă ÎNAINTE de
+orice răspuns, ca serviciu, și intră în instrucțiuni. Ține o oră în memoria izolatului; rezultatul
+trebuie să rămână MIC (se plătește la fiecare mesaj). Prima: `program.paternuri` (~4 KB). Regula scrisă
+modelului: **obiceiul nu e programare** — dacă „următoarea" lipsește, spune că nu e pusă încă.
+
+**Capcane măsurate:**
+
+- **⚠️ Numele de acțiune cu PUNCT rup apelarea uneltelor.** Cu `program.slujbele_zilei` modelul alege
+  bine dar scrie apelul ca TEXT și nu se execută nimic; cu `__` în loc de punct, `tool_calls` curat.
+  Traducerea stă doar în `numeUnealta`/`actiuneaDupaUnealta`; numele canonic rămâne cu punct.
+- **⚠️ Bucla model→unealtă→model**: rezultatul unei unelte trebuie să poarte `tool_call_id`, iar
+  apelurile cerute se pun înapoi în istoric ca mesaj al agentului — altfel modelul primește rezultate
+  fără întrebare și **tace**. Și: **un răspuns prea mare taie tot** — tăiat la 2500 de caractere,
+  JSON-ul se rupe la mijloc și modelul tace la fel. Regula pentru acțiunile noi: **răspunde cu ce se
+  poate citi, nu cu tot ce ai** (`calendar.cauta` dă cel mult 10 zile).
+- **⚠️ gpt-oss: gândirea (canalul `analysis`) poate ajunge în răspuns** când modelul e oprit de
+  `max_tokens` în mijlocul ei. Modelul GÂNDEȘTE din bugetul de `max_tokens`; cu fundal + zece unelte +
+  română, 800 nu ajung. Apărările în `creier.ts`: `curataCanalele` (doar canalul `final`), buget 2500 +
+  reîncercare la 6000 când e tăiat fără unealtă, `reasoning` niciodată luat drept text. **Fundalul
+  intră ca TEXT, nu JSON** (JSON-ul cu diacritice îl încurca). Dacă apare bolboroseală: întâi
+  `finish_reason`, apoi bugetul.
+- **Fără ziua de azi în instrucțiuni, „duminică" nu se poate socoti** — se dă în system.
+
+**Probat cap-coadă pe local** (sesiune adevărată): întrebare → acțiune → date reale; „trimite-mi foaia
+cu sfinții de duminică" → PDF 54 KB prin Browser Rendering, în R2, descărcabil prin
+`/program/chat/fisier/<cheie>`. **Neprobate**: bula pe calendar și tipic (au acțiuni, n-au bulă).
+
+## Aplicațiile portate — amănunte
+
+- **`calendar`** (A1): D1 `xc-calendar-staging`, 730 de zile (2025+2026) + sinaxare, `/v1` în forma
+  contractului, **Pascalie proprie** (2027–2028 calculați), corecturi cu audit, abonare prin comunicare.
+  Șirul lunilor: doar anul curent + „Ian <an+1>" (alți ani „nu ne ajută la nimic").
+  **Poza săptămânii**: `GET <calendar>/v1/poza/saptamana/<zi>` — PNG cu antetul intervalului și cele 7
+  zile. E a CALENDARULUI, se face **la cerere** prin Browser Rendering și stă în cache-ul de muchie, cu
+  cheia pe amprenta HTML-ului. În V1 se generau dinainte pentru tot anul și stăteau în R2.
+- **`program`** (A2): 654 săptămâni / 2619 slujbe copiate din V1, vocabularul închis de 29 de nume,
+  propunerea săptămânii. Interfața: secțiunea de mai sus.
+- **`tipic`** (A9): D1 `xc-tipic-staging` (`8c5ab60e-d3d8-4e96-aa89-f52492fdd83e`), trei cărți copiate
+  din V1 — ROEA 97 zile, Anuarul 365, Mineiul 366. **Mineiul nu ține de an**: cheia e (luna, zi).
+  **API-ul sfinților**: `GET /v1/sfinti/<data>|azi|maine` și `/v1/sfinti/minei/<luna>/<zi>` — 2041 de
+  pomeniri pe an (5,6/zi); Mineiul dă 5–10 nume în plus față de calendar, dar **nu-i are pe sfinții
+  români canonizați după ediție** (Prislop, Antim, Stăniloae).
+- **`home`**: afișarea de la `website.sfantul-ilie.ro` din V1, fără textul de jos și cu **toate
+  butoanele la fel** — nimic șters, nimic punctat. O aplicație intră în listă abia când adresa ei
+  răspunde.
+- **`curatenie`** (A6): D1 `xc-curatenie-staging` creată. **Urmează la rând.**
+- **Legătura V2 → V1, singura de acum**: calendarul cere textul pericopelor de la Biblia din V1
+  (`URL_BIBLIA`), la afișare, cu cache de o zi. E doar citire și dispare la portarea lui A10.
+  Referința e a noastră; textul nu se stochează niciodată.
+- **Curățenii făcute pe drum** (nu le redescoperi ca lipsă): `dataCeruta` era copiată în calendar,
+  program și tipic → acum în `@xc/ui`; `asiguraCsrf`/`jetonCsrfNou` erau în `apps/account` → acum în
+  `@xc/auth`; `saptamanaOriPropunere` și facerea hârtiilor au ieșit din rute în
+  `apps/program/src/hartii.ts`, iar compunerea zilei tipicului în `apps/tipic/src/zi.ts`. **Hârtiile**
+  sunt în `@xc/ui` (`packages/ui/src/hartie.ts`) — nu le copia înapoi într-o aplicație.
+
+## Rețete de lucru
+
+### Cum vezi o pagină de admin la lățime de telefon (drum bătut 11.09.2026 — a luat jumătate de oră)
+
+Trei pași, fără sesiune și fără browser:
+
+1. **HTML-ul** — un test vitest de o clipă (`tests/zz-probe.test.ts`, se șterge după) care cheamă
+   `paginaSaptamana` cu `ctx.eAdmin/eSuperAdmin: true` și scrie rezultatul în `/tmp`. ⚠️ `npx tsx` NU
+   merge: `foaie.ts` importă un font `.otf` și Node se împiedică; vitest îl tratează ca asset.
+2. **Poza** — `POST api.cloudflare.com/client/v4/accounts/<id>/browser-rendering/screenshot` cu
+   `{html, viewport:{width,height,deviceScaleFactor}}` și tokenul din `/backup/_setup/cloudflare.env`.
+3. **Măsurătorile** (mai bune decât ochiul la „încape/nu încape") — același API, ruta `/content`, cu un
+   `<script>` injectat care scrie lățimile în DOM; `/content` întoarce HTML-ul **după** ce a rulat
+   scriptul, deci cifrele se citesc din răspuns (JSON, câmpul `result`).
+
+⚠️ **Login prin curl pe local NU merge**: cookie-urile sunt `Secure`, iar `http://127.0.0.1:8787` nu le
+păstrează; Apache-ul de pe 8474 nu e în container. Mergi pe `https://127.0.0.1` din container și **nu
+forța antetul `Host`**.
+
+### Browser Rendering
+
+- **MERGE în container** (probat 11.09.2026: JPEG-ul ecranului împărțit în ~0,9 s). Nota mai veche
+  „doar pe staging" e depășită — pozele se pot vedea cu ochii pe local.
+- ⚠️ La fotografierea paginii programului: randarea pe HTML brut n-are localStorage, iar scriptul
+  întrerupătorului scoate clasa la încărcare — ca să vezi starea „aprins", scoate scriptul din HTML și
+  pune tu `cu-calendar` pe `body`.
+- ⚠️ Serviciul de screenshot **cachează** după conținut: schimbă înălțimea cu 1 px ca să-l ocolești.
+
+### Capcane tehnice
+
+- **⚠️ Copiile din `tmp/` se desincronizează de container** (pățit 11.09, 21:18). Editez uneori direct
+  în container și alteori în copia locală, apoi `docker cp` peste — când copia locală e mai veche,
+  **suprascrierea șterge editările din container**. Așa s-a pierdut o regulă din `creier.ts` și a trecut
+  în commit și pe staging: **esbuild NU verifică tipurile la deploy**, doar `tsc` o prinde.
+- **⚠️ `wrangler dev` se vede în `ps` ca `MainThread`, nu ca „wrangler dev".** Verificarea veche
+  (`ps -ef | grep -c "[w]rangler dev"`) dă **0** deși sesiunea rulează, iar pornirea următoare cade cu
+  „Address already in use (8787)". Caută `MainThread` ȘI `workerd`, omoară întâi părintele, apoi copiii.
+- **DOUĂ sesiuni `pnpm dev` deodată = container sufocat.** Dacă s-a întâmplat: nu te grăbi să ceri
+  `docker restart` — pkill-urile trimise „în gol" plus OOM killer-ul au curățat singure în câteva
+  minute. Staging-ul nu e atins (rulează la Cloudflare).
+- **Când `docker exec` nu răspunde**, întâi `docker stats --no-stream` și `docker top` din afară (nu cer
+  exec): memorie la limită = container sufocat, nu „lent". Comenzile omorâte de unealtă la timeout NU
+  omoară procesele din container.
+- **⚠️ Carcasa are stiluri GLOBALE pe `form` și `label`** (`form { display:flex; gap:8px; flex-wrap:wrap }`),
+  făcute pentru rândurile de căutare. Orice formular nou trebuie să și le scoată: fără `display:block`,
+  titlul, textul și bifele se înșiră ca niște jetoane.
+- **⚠️ Fără backtick în comentariile CSS** — `STIL`/`STIL_COMUN` sunt template literals; un accent grav
+  într-un `/* … */` închide șirul și `tsc` scoate erori fără legătură cu locul vinovat („Property 'cuv'
+  does not exist on type…", `TS1005`). Pățit de trei ori într-o seară.
+- **Capcană DNS**: un subdomeniu `*.staging` nou răspunde public în câteva minute, dar de pe NAS rămâne
+  nerezolvat mult mai mult (cache negativ). Probează cu
+  `curl --resolve <host>:443:188.114.97.8`.
+- **Diacriticele stricate la export (U+FFFD)**: exportul programului din V1 a transformat cinci litere
+  cu diacritice în semne de înlocuire, iar V1 era curat — deci vina e a exportului. `insereazaLoturi`
+  strigă acum la orice import; **repară exportul, nu baza**.
+- **Foaia A4 se compară cu V1 punând imaginile una lângă alta**, nu doar textul: textele pot fi
+  identice și liniile tabelului nu. `docker exec biserica-program …/v1/foaie/<luni>.jpg` dă foaia V1.
+- **Import în D1**: `infrastructure/import/d1.mjs` — `wrangler d1 execute --file` refuză instrucțiunile
+  peste 100 KB (SQLITE_TOOBIG). Se scrie cu parametri legați: local prin `node:sqlite` pe
+  `.wrangler/state`, pe staging prin API-ul D1.
+- `ruleaza.mjs --doar <baze>`: pe remote, o migrație care schimbă o bază citită de un worker deja
+  publicat îl strică până la publicarea celui nou.
+- **Gateway-ul de preview** are doar aplicațiile pornite în sesiune — în `wrangler dev`, un binding
+  către un worker nepornit oprește toată sesiunea.
+- **Nu pune `| tail -N` după o comandă lungă** — nu se vede nimic până la sfârșit; scrie în fișier.
+  Shell-ul uneltei nu e bash: `$SECONDS` e gol.
+
+## Istoric — ce a fost și a ieșit (nu le readuce)
+
+- **Modul de probă local** (10–11.09): banner cu trei butoane (neautentificat / utilizator / admin) care
+  schimba afișarea, cu rolul în cookie-ul `proba_rol`. **Scos de tot pe 11.09, 09:45**: „scoate bara cu
+  probă locală… să fie la fel ca pe staging". Au ieșit bannerul `.proba`, `bannerProba`, tipurile
+  `RolProba`/`StareProba`, câmpurile `proba`/`caleAcum`/`navProba` din `Ctx`, ruta `/proba/<rol>` și
+  blocul `rolProba`. Pe local se intră acum cu cont adevărat (`123456`), masca se pune din meniul
+  contului.
+- **Banda roșie de jos a măștii „vezi ca"** — scoasă 11.09 („să dispară banner-ul de jos. Nu am nevoie
+  de el"). Au rămas două semne, amândouă în antet: **numele contului scris roșu** cât timp masca e pusă
+  și, în meniu, cele trei rânduri „Vezi ca …" ca **comutatoare** (rândul măștii purtate e roșu și,
+  apăsat a doua oară, scoate masca). Butonul „Revino la super admin" nu mai există. ⚠️ Sub masca
+  „neautentificat" antetul scrie tot „Cont", dar cuvântul deschide un meniu cu un singur lucru în el —
+  **acela e singurul drum de întoarcere**; scăparea de urgență e `/cont/vezi-ca?ca=real`.
+- **Ce a mai rămas deosebit între local și public** (întrebarea lui: „putem să nu fie nicio
+  diferență?") — trei lucruri, toate structurale: emailul nu poate pleca din `wrangler dev` (de aici
+  sandbox-ul și `123456`); local e un singur host cu căi (`/program`) față de subdomenii; cache-ul e
+  `no-store` în dev, dinadins.
+- **Tiparul V1, de unde vine problema de scalare**: fiecare aplicație e un worker de sine stătător, cu
+  `wrangler.jsonc`, custom domain, D1 și R2 proprii; codul partajat (`src/comun/`) e **duplicat prin
+  copiere în fiecare aplicație** — de aici costul oricărei schimbări transversale (antetul în 12 locuri).
 
 ## Jurnal
 
