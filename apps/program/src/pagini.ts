@@ -10,15 +10,30 @@
  * la cererea userului (10.09.2026, 16:36: „nu vreau să fac nimic manual") — programul are saptamanile
  * importate din V1 si propunerea automata, ca in V1.
  *
- * Antetul, refacut la 10.09.2026 (cerere user — navigarea si abonarea si-au schimbat locul):
- *   - pe randul de unelte (`.btns` al carcasei) sta NAVIGAREA saptamanii — sageata dinainte, bulina,
- *     sageata urmatoarea — iar in capat, dupa o liniuta verticala, intrerupatorul „Calendar" (on/off),
- *     care a luat locul meniului „Informații utile" (avea oricum o singura functie);
- *   - ABONAREA a iesit cu totul, momentan („abonează-te iese de tot momentan", user 10.09, 17:01).
- *     Rutele `POST /abonare` · `/dezabonare` si audienta comunicarii raman intacte — se readuce
- *     doar bucata de interfata;
- *   - in casuta atarnata sub linia antetului (`navJos`, slotul `subantet`) raman doar hartiile
- *     saptamanii — Arhiva, PDF, JPG — si numai pentru ADMINI (user, 10.09, 17:01).
+ * ⚠️ ANTETUL, REFACUT LA 11.09.2026 (trei runde de cereri intr-o ora; asta e starea finala).
+ * Randul de unelte (`.btns` al carcasei) are acum DOUA GRUPURI, despartite de bara verticala:
+ *
+ *   STANGA — pastila navigarii, care ia tot spatiul ramas („restul spațiului să fie folosit de
+ *   butoanele celelalte", user 10:48). Trei segmente:
+ *     - ARHIVA (numai la admini), in locul datelor saptamanii trecute — „nu se mai deschide
+ *       săptămâna trecută. Se poate selecta din pagina arhivei";
+ *     - BULINA saptamanii de azi, fara text (e din 8 sept.; a iesit la 10:01 si s-a intors la 10:47,
+ *       cand userul a lamurit ca „fără buton în meniu" se referea la ea, nu la intrerupator);
+ *     - „SĂPTĂMÂNA VIITOARE", scris in litere (user, 10:01 — dimineata ceruse invers, date scurte).
+ *       Datele au trecut in `title`/`aria-label`, ca sa se stie despre care saptamana e vorba.
+ *
+ *   DREAPTA, lipit de marginea din dreapta (user, 10:48: „să fie aliniate la dreapta… tot ce este
+ *   după bara verticală"): INTRERUPATORUL „Calendar", butonul de DESCARCARE a paginii, apoi
+ *   hartiile PDF si JPG. Ultimele trei se scriu numai pentru ADMINI, pe cele doua trepte
+ *   (`vedeHartiile`); enoriasul ramane cu navigarea si intrerupatorul.
+ *
+ * PDF si JPG au URCAT aici din casuta care atarna sub linia antetului (user, 10:48: „să urci sus
+ * cele două butoane"). Casuta (`.nav-jos`, slotul `subantet`) a disparut cu totul — daca cineva o
+ * cere inapoi, se reface, dar atunci se intoarce si golul de 34 px pe care-l cerea sub antet.
+ *
+ * ABONAREA a iesit cu totul, momentan („abonează-te iese de tot momentan", user 10.09, 17:01).
+ * Rutele `POST /abonare` · `/dezabonare` si audienta comunicarii raman intacte — se readuce doar
+ * bucata de interfata.
  */
 import type { IntrareVocabular, Slujba, StareSaptamana } from '@xc/contracts'
 import type { Navigatie } from '@xc/config'
@@ -50,13 +65,15 @@ export interface Meniu {
   foaie: string | null
   /** ziua de azi (Bucuresti) — din ea ies cele trei trepte ale navigarii */
   azi: string
-  /** pagina deschisa e Arhiva (butonul ei ramane aprins) */
+  /** pagina deschisa e Arhiva (butonul ei din pastila ramane aprins) */
   arhiva?: boolean
   /**
-   * Calendarul se poate aprinde pe pagina asta — adica saptamana de pe ecran e una dintre cele trei
-   * ale navigarii (trecuta, de azi, urmatoare). Cat tine navigarea, tine si calendarul (user,
-   * 10.09.2026: „să fie permanent afișat dacă este on pe tot ce este afișat în pagină").
-   * Fals => nici intrerupatorul, nici coloana calendarului nu se scriu.
+   * Calendarul se POATE aprinde pe pagina asta — adica se scrie intrerupatorul, iar coloana zilei
+   * liturgice sta in pagina, gata sa iasa la iveala. Adevarat pe saptamana de azi si pe cea viitoare
+   * (alegerea userului, 11.09.2026, ora 10:47), fals pe saptamanile din arhiva: acolo calendarul
+   * n-are ce spune despre ziua de azi, deci nici intrerupator, nici coloana.
+   *
+   * Fals => si butonul de descarcare da mereu varianta pe O COLOANA, fiindca alta nu se poate vedea.
    */
   calendar?: boolean
 }
@@ -68,15 +85,19 @@ const STARE: Record<string, string> = {
   propunere: 'propunere',
 }
 
-/** Iconita descarcarii: sageata in jos peste o talpa — pentru poza calendarului (user, 10.09.2026). */
+/**
+ * Iconita descarcarii: sageata in jos peste o talpa. E semnul pozei paginii ASA CUM SE VEDE ACUM,
+ * pe o singura coloana — adica ori de cate ori intrerupatorul „Calendar" e stins.
+ */
 const IC_DESCARCA = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v11"/><path d="m7 10 5 5 5-5"/><path d="M4 20h16"/></svg>`
 
 /**
- * Aceeasi descarcare, dar cu DOUA sageti una langa alta, pe aceeasi talpa — pentru poza ecranului
- * impartit (user, 11.09.2026: „în felul ăsta diferă de iconița din stânga și seamănă mai mult cu ce
- * urmează să vadă omul"). Doua sageti = doua coloane: semnul spune si ce face butonul (descarca), si
- * ce iese din el. Talpa e aceeasi (`M4 20h16`), ca cele doua butoane vecine sa se vada din aceeasi
- * familie; sagetile sunt construite ca cea singura — tija pana la 14, varful la 15.
+ * Aceeasi descarcare, dar cu DOUA sageti una langa alta, pe aceeasi talpa — pentru poza paginii cand
+ * pagina e DUBLATA, adica atunci cand intrerupatorul „Calendar" e aprins (user, 11.09.2026: „dacă
+ * este dublat, butonul de download își schimbă iconița în două săgeți în jos și descarcă acea
+ * imagine"). Doua sageti = doua coloane: semnul spune si ce face butonul (descarca), si ce iese din
+ * el. Talpa e aceeasi (`M4 20h16`), ca cele doua infatisari ale aceluiasi buton sa se recunoasca una
+ * pe alta; sagetile sunt construite ca cea singura — tija pana la 14, varful la 15.
  *
  * Masurile sunt stranse dinadins: fiecare sageata e mai ingusta decat cea singura (±2,8 in loc de ±5),
  * iar cele doua stau la 4 unitati una de alta. La prima incercare erau mai late si varfurile lor se
@@ -86,15 +107,13 @@ const IC_DESCARCA_DUBLU = `<svg viewBox="0 0 24 24" width="17" height="17" fill=
 
 /**
  * Iconita ECRANULUI IMPARTIT: o rama despicata in doua, cu cate un rand scris in fiecare jumatate —
- * programul la stanga, calendarul la dreapta. E semnul INTRERUPATORULUI „Calendar", in locul cuvantului
- * (user, 11.09.2026): butonul chiar asta face, imparte ecranul in doua. A stat o jumatate de ora pe
- * butonul pozei, de unde userul a mutat-o aici.
+ * programul la stanga, calendarul la dreapta. E semnul INTRERUPATORULUI „Calendar", in locul
+ * cuvantului (user, 11.09.2026): butonul chiar asta face, imparte ecranul in doua.
  *
- * MAI MARE decat celelalte — 21 px fata de 17 (user, 11.09.2026: „un pic mai mare; nu se înțelege ce
- * este acolo"). Desenul are inauntru rama, despicatura si patru randuri scurte: la 17 px toate astea
- * se faceau o pata. Randurile sunt acum egale si mai lungi, ca sa se citeasca a doua coloane de scris,
- * si trasatura ceva mai groasa. Restul iconitelor raman cum erau — asta una singura trebuie inteleasa
- * dintr-o ochire, fiindca e singurul buton care schimba pagina sub ochii omului.
+ * MAI MARE decat celelalte — 21 px fata de 17 (user: „un pic mai mare; nu se înțelege ce este
+ * acolo"). Desenul are inauntru rama, despicatura si patru randuri scurte: la 17 px toate astea se
+ * faceau o pata. Restul iconitelor raman cum erau — asta una singura trebuie inteleasa dintr-o
+ * ochire, fiindca e singurul buton care schimba pagina sub ochii omului.
  */
 const IC_DOUA_COLOANE = `<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="4.5" width="19" height="15" rx="2.5"/><path d="M12 4.5v15"/><path d="M5.6 9.2h3.6M5.6 13h3.6M14.8 9.2h3.6M14.8 13h3.6"/></svg>`
 
@@ -127,13 +146,12 @@ export const STIL = `
 .stare.validat { border-color:var(--azi); color:var(--ink); background:var(--azi-fund) }
 .stare.propus { border-color:var(--albastru); color:var(--albastru) }
 
-/* ANTETUL, refacut la 10.09.2026 (cerere user): pe randul de unelte (.btns al carcasei) a URCAT la loc
-   NAVIGAREA saptamanii, in locul abonarii — care a iesit momentan cu totul — iar in capat, dupa o liniuta
-   verticala, sta intrerupatorul „Calendar". Sub linia antetului, in .nav-jos, au ramas doar hartiile
-   saptamanii, si numai pentru admini. Regulile scrise pe .btns tin de amandoua: casuta de jos poarta
-   aceeasi clasa dinadins, ca sa nu se scrie de doua ori acelasi lucru. */
+/* ANTETUL, refacut la 11.09.2026 (ultima cerere, ora 10:48): randul de unelte (.btns al carcasei) are
+   DOUA GRUPURI — pastila navigarii la stanga, care ia tot spatiul ramas, si restul lipit de marginea
+   din DREAPTA: intrerupatorul, descarcarea, PDF, JPG. Casuta care atarna sub linia antetului (.nav-jos)
+   a disparut: hartiile au urcat aici. */
 /* V2: carcasa comuna lasa .btns sa se rupa (flex-wrap:wrap); in V1 randul nu se rupea pe desktop —
-   sagetile se string, nu sar pe randul urmator. Pe telefon se rupe (mai jos). */
+   butoanele se string, nu sar pe randul urmator. Pe telefon se rupe (mai jos). */
 .btns { flex-wrap:nowrap }
 .btns .gol { opacity:.35; pointer-events:none }
 /* treapta pe care CHIAR esti (aria-disabled): nu duce nicaieri, dar se apasa — atunci ia focusul si
@@ -142,68 +160,81 @@ export const STIL = `
 .btns .btn[aria-disabled="true"] { cursor:default }
 .btns .btn[aria-disabled="true"]:focus { outline:none; background:var(--azi-fund) }
 /* INTRERUPATORUL „Calendar" (user, 10.09.2026: „informații utile să fie «Calendar» și să fie un
-   întrerupător on-off") — a luat locul meniului „Informații utile", care avea oricum o singura functie.
-   E un buton adevarat, cu bec care aluneca: aprins = calendarul se vede in coloana din dreapta.
-   Cere JS (ca si meniul de dinainte); fara el ramane stins, iar programul se citeste ca si pana acum. */
+   întrerupător on-off"). E un buton adevarat, cu bec care aluneca: aprins = calendarul se vede in
+   coloana din dreapta. Cere JS; fara el ramane stins, iar programul se citeste ca si pana acum.
+   ⚠️ A fost scos la 10:01 si repus la 10:47 — userul lamurise ca „fără buton în meniu" se referea la
+   bulina, nu la el. Nu-l mai scoate fara o cerere care sa-i spuna pe nume. */
 .btns .com-cal { cursor:pointer; gap:8px }
 .btns .com-cal .bec { flex:none; position:relative; width:30px; height:16px; border-radius:999px;
                       border:1px solid var(--rule); background:var(--tinta) }
 .btns .com-cal .bec::after { content:""; position:absolute; top:1px; left:1px; width:12px; height:12px;
                              border-radius:50%; background:var(--soft) }
-.btns .com-cal[aria-pressed="true"] { border-color:var(--rosu); color:var(--rosu) }
-.btns .com-cal[aria-pressed="true"] .bec { border-color:var(--rosu); background:var(--azi-fund) }
-.btns .com-cal[aria-pressed="true"] .bec::after { left:auto; right:1px; background:var(--rosu) }
-/* HARTIILE saptamanii: casuta atarna de linia antetului (.sus e sticky, deci pozitionat — ii e si
-   bloc de referinta), centrata, cu colturile de sus DREPTE si cele de jos rotunde (cerere user,
-   9 sept. 2026). N-are chenar sus: linia antetului ii tine loc de capac. Din 10.09.2026 o vad
-   doar adminii — pentru ceilalti nu se scrie deloc, si atunci nici pagina n-are de ce sa-i faca loc. */
-.nav-jos { position:absolute; left:50%; top:calc(100% + 1px); transform:translateX(-50%); z-index:5 }
-.nav-jos .cutie { margin:0; padding:7px 12px 8px; max-width:calc(100vw - 24px);
-                  background:var(--paper); border:1px solid var(--rule); border-top:0;
-                  border-radius:0 0 12px 12px; box-shadow:0 8px 18px rgba(0,0,0,.07) }
-/* casuta e cat continutul ei, nu cat randul: butoanele nu mai cresc si nu-si mai rup cuvintele
-   in doua (in antet crescusera, ca sa umple randul — aici randul e al casutei) */
-.nav-jos .btn { flex:0 0 auto; white-space:nowrap; padding-left:14px; padding-right:14px }
-/* casuta pluteste peste inceputul paginii — ii face loc, dar numai cand exista (adica la admini) */
-body:has(.nav-jos) main { padding-top:34px }
+/* ⚠️ Aprins, becul NU mai e rosu (user, 11.09.2026: „să nu mai fie roșu; întrerupătorul să fie alb").
+   Rosul e culoarea locului in care te afli — pastila navigarii, masca din meniu — si se irosea pe o
+   stare care acum e cea obisnuita. Aprins, becul se umple cu cerneala si bila se face alba, ca hartia
+   (in tema de noapte se intorc amandoua, fiindca cerneala si hartia isi schimba locul); stins,
+   pista ramane palida si bila cenusie. Ce s-a schimbat spune tot bila care a alunecat in dreapta. */
+.btns .com-cal[aria-pressed="true"] .bec { border-color:var(--soft); background:var(--soft) }
+.btns .com-cal[aria-pressed="true"] .bec::after { left:auto; right:1px; background:var(--paper) }
 .btns .btn { min-width:0 }
-/* bulina din mijloc (user, 8 sept. 2026: „doar o bulină pe centru"): un punct, fara text, la fel de inalta
-   ca sagetile; duce la saptamana de azi */
+/* GRUPUL DIN DREAPTA (user, 11.09.2026, 10:48: „tot ce este după bara verticală… să fie aliniate la
+   dreapta, dar restul spațiului să fie folosit de butoanele celelalte"). margin-left:auto il impinge
+   in capat, iar pastila ramane cu tot ce prisoseste. Bara verticala calatoreste cu el, ca sa ramana
+   granita dintre cele doua grupuri. */
+.btns .unelte-dr { display:flex; align-items:stretch; gap:10px; flex:0 0 auto; margin-left:auto }
+/* bulina din mijloc (user, 8 sept. 2026: „doar o bulină pe centru"): un punct, fara text, la fel de
+   inalt ca segmentele de langa el; duce la saptamana de azi */
 .btns .punct { flex:0 0 auto; display:flex; align-items:center; justify-content:center; padding-left:20px; padding-right:20px }
 .btns .punct::before { content:""; width:9px; height:9px; border-radius:50%; background:currentColor }
 .btns .punct:hover { color:var(--rosu); border-color:var(--rosu) }
-/* PASTILA navigarii (aleasa de user, 11.09.2026): cele trei trepte lipite intr-un singur corp, ca sa
-   se citeasca drept UN obiect cu o pozitie, nu trei destinatii deosebite. Chenarul si rotunjirea stau
-   pe pastila, nu pe butoane; intre segmente ramane o linie de 1 px, iar segmentul pe care esti e PLIN. */
-.btns .pastila { display:flex; flex:0 0 auto; border:1px solid var(--rule); border-radius:10px;
+/* PASTILA navigarii (aleasa de user, 11.09.2026): segmentele lipite intr-un singur corp, ca sa se
+   citeasca drept UN obiect cu o pozitie, nu destinatii deosebite. Chenarul si rotunjirea stau pe
+   pastila, nu pe butoane; intre segmente ramane o linie de 1 px, iar segmentul pe care esti e PLIN.
+   Inauntru: Arhiva (numai la admini), bulina de azi si „Săptămâna viitoare".
+   CRESTE cat o tine randul (flex:1), fiindca userul a cerut ca spatiul ramas dupa grupul din dreapta
+   sa fie al ei. Ca sa nu se latteasca urat, prisosul il ia DOAR segmentul cu scris — arhiva si bulina
+   raman cat le tine desenul. */
+.btns .pastila { display:flex; flex:1 1 auto; min-width:0; border:1px solid var(--rule); border-radius:10px;
                  background:var(--tinta); overflow:hidden }
 .btns .pastila .btn { flex:0 0 auto; border:0; border-radius:0; background:transparent }
+.btns .pastila .viit { flex:1 1 auto; min-width:0 }
 .btns .pastila .btn + .btn { border-left:1px solid var(--rule) }
 .btns .pastila a.btn:hover { color:var(--rosu); background:var(--paper) }
 .btns .pastila .btn.activ { color:var(--rosu); font-weight:600;
                             background:color-mix(in srgb, var(--rosu) 11%, transparent) }
 .btns .pastila .btn[aria-disabled="true"]:focus { background:color-mix(in srgb, var(--rosu) 18%, transparent) }
+/* segmentul ARHIVEI: n-are text, doar cutia cu capac, deci se centreaza singur si sta mai stramt decat
+   unul cu scris (11.09.2026 — a luat locul datelor saptamanii trecute) */
+.btns .pastila .arh { display:flex; align-items:center; justify-content:center;
+                      padding-left:16px; padding-right:16px }
+.btns .pastila .arh svg { vertical-align:0 }
 /* bara verticala dintre navigare si butoanele saptamanii (cerere user, 8 sept. 2026) */
 .btns .desparte { flex:0 0 1px; align-self:stretch; background:var(--rule); margin:0 3px }
-/* butoanele mici: nu cresc, stau cat le tine continutul — iconita Arhivei, apoi PDF si JPG */
+/* butoanele mici: nu cresc, stau cat le tine continutul — intrerupatorul, descarcarea, PDF si JPG */
 .btns .mic { flex:0 0 auto; display:flex; align-items:center; justify-content:center; gap:6px;
              padding-left:14px; padding-right:14px; font:600 12.5px/1 ui-sans-serif,system-ui; letter-spacing:.06em }
 .btns .mic svg { vertical-align:0 }
-/* Pe telefon, din 11.09.2026, randul nu mai are ce sa ascunda: butoanele navigarii poarta DATELE, si
-   alea scurte („14–20.09"), iar sagetile au iesit — ascunse, ar ramane doua butoane goale. Ca „31.08–6.09"
-   sa nu se rupa in doua randuri, butoanele stau cat le tine textul: nu se mai intind si nu se mai string,
-   iar daca nu incap toate, se rupe randul intreg, curat, sub ele. */
+/* BUTONUL DE DESCARCARE are doua infatisari scrise amandoua in pagina, iar CSS-ul o alege pe cea
+   potrivita dupa cu-calendar (user, 11.09.2026: „să descarce varianta care se vede"). Asa iconita si
+   tinta se schimba in aceeasi clipa cu coloana, fara ca JS-ul sa umble la adresa — si nu apuca sa se
+   vada niciodata semnul care nu trebuie. */
+.btns .poza-2 { display:none }
+body.cu-calendar .btns .poza-1 { display:none }
+body.cu-calendar .btns .poza-2 { display:flex }
+/* Pe telefon cele doua grupuri nu mai incap pe acelasi rand: randul se rupe, pastila ramane sus, iar
+   grupul din dreapta trece dedesubt — tot lipit de dreapta, ca margin-left:auto tine si acolo.
+   Butoanele stau cat le tine continutul, si pastila se string la masura ei: intinsa pe un rand numai
+   al ei ar fi doua cuvinte pierdute intr-o bara cat ecranul. */
 @media (max-width:600px) {
   .btns { gap:7px; flex-wrap:wrap }
   .btns .btn { flex:0 0 auto; white-space:nowrap }
+  .btns .pastila { flex:0 0 auto }
+  .btns .pastila .viit { flex:0 0 auto }
   .btns .mic { padding-left:10px; padding-right:10px }
   .btns .punct { padding-left:14px; padding-right:14px }
   .btns .com-cal { gap:6px; padding-left:10px; padding-right:10px }
-  /* casuta de jos NU se rupe pe doua randuri: ar creste cat un antet si ar acoperi titlul */
-  .nav-jos .cutie { padding-left:8px; padding-right:8px }
-  .nav-jos .btns { flex-wrap:nowrap; gap:6px }
-  .nav-jos .btn { padding-left:10px; padding-right:10px }
-  .nav-jos .mic { padding-left:8px; padding-right:8px }
+  .btns .pastila .arh { padding-left:12px; padding-right:12px }
+  .btns .unelte-dr { gap:7px }
 }
 
 /* o zi din program */
@@ -224,9 +255,11 @@ body:has(.nav-jos) main { padding-top:34px }
 .zi-cap .sfintii:hover { border-color:var(--rosu); color:var(--rosu) }
 /* CALENDARUL zilei de la A1, in COLOANA LUI (user, 10.09.2026: „Programul nu mai vreau să fie
    întrepătruns cu Sfinții — Calendarul"; „Programul să fie într-o coloană pe stânga și Calendarul
-   apare paralel și cu linii în plus pe dreapta"). Sta in pagina, dar ascuns; il aprinde intrerupatorul
-   „Calendar" din antet (clasa cu-calendar pe body, tinuta minte in localStorage).
-   Cand se aprinde, ziua se face doua coloane: la stanga programul (.prog), la dreapta ziua liturgica.
+   apare paralel și cu linii în plus pe dreapta"). Sta in pagina si se aprinde din intrerupatorul
+   „Calendar" din antet (clasa cu-calendar pe body, tinuta minte in localStorage). PORNESTE APRINS
+   (user, 11.09.2026: „starea implicită este On"; dimineata ceruse invers) si se scrie doar pe
+   saptamana de azi si pe cea viitoare. Aprins, ziua se face doua coloane: la stanga programul
+   (.prog), la dreapta ziua liturgica.
    Coloanele se aliniaza SUS, nu rand cu rand — calendarul are de obicei mai multe randuri decat
    programul, iar zilele fara slujbe ies si ele la iveala, ca linii numai pe dreapta. */
 .cal { display:none }
@@ -318,7 +351,7 @@ body:not(.cu-calendar) .zi.ultima { border-bottom:0 }
 
 /* foaia A4 de pe usa: doar programul, fara antet, subsol si navigare */
 @media print {
-  header.sus, .subsol-linie, .versiune, footer.subsol, .btns, .nav-jos, .zi-cap .sfintii,
+  header.sus, .subsol-linie, .versiune, footer.subsol, .btns, .zi-cap .sfintii,
   .zi.goala, .cine, .marunt, .nelamuriri, .cal { display:none !important }
   body { padding:0; font-size:14pt; color:#000; background:#fff }
   main { padding-top:0 !important }
@@ -333,10 +366,19 @@ body:not(.cu-calendar) .zi.ultima { border-bottom:0 }
 
 /**
  * JS-ul paginilor de om (slotul `scripturi`): intrerupatorul „Calendar" din antet — aprinde si stinge
- * coloana calendarului (clasa `cu-calendar` pe body). Scris ca JS-ul comun al carcasei — fara sageti,
- * fara let/const — ca sa mearga si pe telefoanele vechi ale enoriasilor. Alegerea se tine in
- * localStorage, deci ramane de la o pagina la alta; pe paginile fara intrerupator (arhiva, saptamanile
- * vechi) nu se aprinde nimic, dar alegerea se pastreaza pentru cand omul se intoarce la saptamana lui.
+ * coloana calendarului (clasa `cu-calendar` pe body) si, o data cu ea, infatisarea butonului de
+ * descarcare, care se schimba singur din CSS. Scris ca JS-ul comun al carcasei — fara sageti, fara
+ * let/const — ca sa mearga si pe telefoanele vechi ale enoriasilor.
+ *
+ * Alegerea se tine in localStorage, deci ramane de la o pagina la alta; pe paginile fara intrerupator
+ * (arhiva, saptamanile vechi) nu se aprinde nimic, dar alegerea se pastreaza pentru cand omul se
+ * intoarce la saptamana lui.
+ *
+ * ⚠️ PORNESTE APRINS (user, 11.09.2026: „să înceapă direct cu întrerupătorul pe On… starea implicită
+ * este On"; dimineata alesese invers). De aceea clasa `cu-calendar` vine DE PE SERVER, pusa din capul
+ * locului pe `body` (`clasaCorp`, vezi paginaSaptamana), iar JS-ul de aici doar o SCOATE daca omul a
+ * stins-o vreodata — asa coloana nu clipeste la incarcare in cazul obisnuit. Cheia se citeste ca
+ * „aprins daca nu scrie anume «0»": un localStorage gol inseamna implicitul, nu „stins".
  */
 export const SCRIPT = `
 (function(){
@@ -348,8 +390,8 @@ export const SCRIPT = `
     buton.setAttribute("aria-pressed", pornit ? "true" : "false");
     buton.setAttribute("title", pornit ? "Ascunde calendarul zilei" : "Arată calendarul zilei");
   }
-  var pornit = false;
-  try { pornit = localStorage.getItem(CHEIE) === "1"; } catch (e) {}
+  var pornit = true;
+  try { pornit = localStorage.getItem(CHEIE) !== "0"; } catch (e) {}
   pune(pornit);
   buton.addEventListener("click", function(){
     pornit = !pornit;
@@ -358,7 +400,6 @@ export const SCRIPT = `
   });
 })();
 `
-
 
 // ---------------------------------------------------------------------------
 // Bucati comune
@@ -405,94 +446,84 @@ function intervalScurt(luni: string): string {
 }
 
 /**
- * NAVIGAREA saptamanii — randul de unelte din antet (`.btns` al carcasei). A urcat aici la 10.09.2026,
- * in locul abonarii (cerere user: „schimbă locul dintre «Abonează-te» și «Text» și navigarea săptămânilor…
+ * NAVIGAREA — randul de unelte din antet (`.btns` al carcasei). A urcat aici la 10.09.2026, in locul
+ * abonarii (cerere user: „schimbă locul dintre «Abonează-te» și «Text» și navigarea săptămânilor…
  * să fie sus, înainte de informații utile").
  *
- * Trei TREPTE, nu pasi (user, 10.09.2026: „este o navigare, dar nu este un istoric"): saptamana trecuta,
- * bulina saptamanii de azi, saptamana urmatoare. Fiecare buton duce la locul LUI, socotit fata de ziua
- * de azi — de pe saptamana trecuta, „săptămâna următoare" sare drept la ea, nu inapoi la cea de azi
- * (cerere explicita a userului). Inapoi nu se merge mai departe de saptamana trecuta; istoricul intreg
- * a ramas la Arhiva. Bulina din mijloc n-are text (user, 8 sept. 2026).
+ * ⚠️ REFACUTA LA 11.09.2026, ora 10. Din cele trei trepte de dinainte (saptamana trecuta · bulina
+ * saptamanii de azi · saptamana urmatoare) au ramas DOUA segmente, si niciunul nu mai e o treapta:
  *
- * Butonul treptei pe care CHIAR esti nu mai duce nicaieri: e marcat rosu („bulina cu conturul roșu
- * semnifică mă aflu pe săptămâna curentă" — user) si ramane apasabil, ca la atingere sa primeasca
- * focusul si sa se vada unde esti; de aceea e `<button aria-disabled>`, nu link stins (`.gol` n-ar
- * primi nici click, nici focus).
+ *   - ARHIVA, in locul datelor saptamanii trecute (user: „în loc de textul de la săptămâna trecută,
+ *     adică data și intervalul, să punem butonul de arhivă… nu se mai deschide săptămâna trecută.
+ *     Se poate selecta din pagina arhivei"). Inapoi nu se mai merge dintr-un pas: se alege din arhiva.
+ *     E numai a ADMINILOR (alegere a userului, 11.09.2026, intrebat anume) — deci pentru enorias
+ *     pastila are un singur segment, iar istoricul ramane, ca pana acum, al adminilor.
+ *   - BULINA saptamanii de azi, fara text (user, 8 sept. 2026: „doar o bulină pe centru"). A iesit la
+ *     10:01 si s-a INTORS la 10:47, cand userul a lamurit ca „fără buton în meniu" se referea la ea,
+ *     nu la intrerupator: „aș vrea să adaug și bulina înapoi".
+ *   - „SĂPTĂMÂNA VIITOARE", scrisa in litere (user: „în antet punem «Săptămâna viitoare»") — dupa ce
+ *     pe 11.09, dimineata, ceruse invers: date scurte in loc de cuvinte. Datele au trecut acum in
+ *     `title` si `aria-label`, ca omul sa poata vedea DESPRE CARE saptamana e vorba. Segmentul asta ia
+ *     si prisosul de latime al pastilei (`.viit`), fiindca e singurul cu scris.
  *
- * Pe butoane stau DOAR DATELE saptamanii (user, 11.09.2026: „în loc de săptămâna trecută și săptămâna
- * următoare, pune datele săptămânilor"; „textul să fie cât mai scurt"; „scoate săgețile de la aceste
- * două butoane"). Cuvintele au trecut in `title` si in `aria-label`, ca „14–20.09" sa nu ramana o cifra
- * fara noima nici la soarece, nici la cititorul de ecran. Fara sageti, datele se vad si pe telefon —
- * n-ar mai ramane nimic in buton daca s-ar ascunde (vezi media query-ul din STIL).
+ * Segmentul pe care CHIAR esti nu duce nicaieri: e marcat rosu si ramane apasabil, ca la atingere sa
+ * primeasca focusul si sa se vada unde esti; de aceea e `<button aria-disabled>`, nu link stins
+ * (`.gol` n-ar primi nici click, nici focus). Bulina rosie inseamna „sunt pe saptamana de azi".
  *
- * ⚠️ PROBA (11.09.2026) — cele trei stau acum intr-o PASTILA: un singur chenar in jurul lor, fara
- * spatii intre segmente, iar treapta pe care esti e plina, nu doar conturata. Motivul: trei butoane
- * despartite se citesc ca trei destinatii deosebite, iar aici e acelasi lucru in trei momente.
+ * Inapoi nu se mai merge dintr-un pas: saptamana trecuta se alege din Arhiva.
  */
 function navigarea(ctx: Ctx, m: Meniu): string {
   const p = esc(ctx.prefix)
   const aAzi = luneaSaptamanii(m.azi)
-  const treapta = (luni: string, launtru: string, unde: string, clase = '', extra = '') => (m.luni === luni
-    ? `<button type="button" class="btn ${clase}activ" aria-disabled="true" aria-current="page" title="Ești pe ${unde}"${extra}>${launtru}</button>`
-    : `<a class="${`btn ${clase}`.trim()}" href="${p}/saptamana/${luni}" title="Treci la ${unde}"${extra}>${launtru}</a>`)
-  const trecuta = adaugaZile(aAzi, -7)
   const urmatoarea = adaugaZile(aAzi, 7)
-  const mijloc = treapta(aAzi, '', 'săptămâna de azi', 'punct ', ' aria-label="săptămâna de azi"')
-  return `<span class="pastila">`
-    + treapta(trecuta, intervalScurt(trecuta), 'săptămâna trecută', '', ` aria-label="săptămâna trecută, ${intervalScurt(trecuta)}"`)
-    + mijloc
-    + treapta(urmatoarea, intervalScurt(urmatoarea), 'săptămâna următoare', '', ` aria-label="săptămâna următoare, ${intervalScurt(urmatoarea)}"`)
-    + `</span>`
+  const zile = intervalScurt(urmatoarea)
+  const viitoare = m.luni === urmatoarea
+    ? `<button type="button" class="btn viit activ" aria-disabled="true" aria-current="page"`
+      + ` title="Ești pe săptămâna viitoare, ${zile}">Săptămâna viitoare</button>`
+    : `<a class="btn viit" href="${p}/saptamana/${urmatoarea}" title="Treci la săptămâna viitoare, ${zile}"`
+      + ` aria-label="săptămâna viitoare, ${zile}">Săptămâna viitoare</a>`
+  const bulina = m.luni === aAzi
+    ? `<button type="button" class="btn punct activ" aria-disabled="true" aria-current="page"`
+      + ` title="Ești pe săptămâna de azi" aria-label="săptămâna de azi"></button>`
+    : `<a class="btn punct" href="${p}/saptamana/${aAzi}" title="Treci la săptămâna de azi"`
+      + ` aria-label="săptămâna de azi"></a>`
+  const arhiva = !ctx.eAdmin ? ''
+    : m.arhiva
+      ? `<button type="button" class="btn arh activ" aria-disabled="true" aria-current="page"`
+        + ` title="Ești în arhiva programelor" aria-label="Arhiva programelor">${IC_ARHIVA}</button>`
+      : `<a class="btn arh" href="${p}/arhiva" title="Arhiva programelor — alege săptămâna"`
+        + ` aria-label="Arhiva programelor">${IC_ARHIVA}</a>`
+  return `<span class="pastila">${arhiva}${bulina}${viitoare}</span>`
 }
 
 /**
- * Intrerupatorul „Calendar" — in capatul randului de navigare, dupa o liniuta verticala; a luat locul
- * meniului „Informații utile" (user, 10.09.2026). Aprins, aduce langa program coloana zilei liturgice.
- * Se scrie DOAR pe saptamana de acum si pe cea urmatoare — „ON/OFF are sens doar pe ultima săptămână
- * și pe săptămâna următoare" (user) —, fiindca doar acolo calendarul are ce spune despre ziua de azi.
+ * Intrerupatorul „Calendar" — primul din grupul din dreapta. Aprins, aduce langa program coloana zilei
+ * liturgice (si schimba, o data cu ea, butonul de descarcare de langa el). Se scrie doar pe saptamana
+ * de azi si pe cea viitoare — „ON/OFF are sens doar pe ultima săptămână și pe săptămâna următoare"
+ * (user, 10.09.2026; reconfirmat 11.09, intrebat anume) —, fiindca doar acolo calendarul are ce spune.
  *
- * Din 11.09.2026 n-are cuvant, ci ICONITA ecranului impartit (user: „în loc de cuvântul «calendar»,
- * pune iconița"). Becul care aluneca ramane — el spune daca e aprins sau stins; ce face butonul spun
+ * N-are cuvant, ci ICONITA ecranului impartit (user, 11.09.2026: „în loc de cuvântul «calendar», pune
+ * iconița"). Becul care aluneca ramane — el spune daca e aprins sau stins; ce face butonul spun
  * `title` si `aria-label`, fiindca o rama despicata singura n-ar zice „calendar".
  */
 function intrerupatorCalendar(): string {
-  return `<button type="button" class="btn mic com-cal" id="b-calendar" aria-pressed="false"`
-    + ` title="Arată calendarul zilei" aria-label="Calendarul zilei, lângă program">`
+  return `<button type="button" class="btn mic com-cal" id="b-calendar" aria-pressed="true"`
+    + ` title="Ascunde calendarul zilei" aria-label="Calendarul zilei, lângă program">`
     + `${IC_DOUA_COLOANE}<span class="bec" aria-hidden="true"></span></button>`
 }
 
 /**
- * Randul din antet: navigarea saptamanii, o liniuta verticala si, dupa ea, butoanele saptamanii —
- * intrerupatorul „Calendar" cu poza calendarului si, numai la admini, poza paginii in doua coloane.
- * Liniuta se scrie doar daca are ce desparti: pe saptamanile vechi calendarul nu se aprinde, dar
- * super-adminul are acolo poza paginii.
+ * Randul din antet, in doua grupuri (user, 11.09.2026, 10:48). La stanga pastila navigarii, care ia
+ * spatiul ramas; la dreapta, lipite de margine, bara verticala si apoi intrerupatorul, descarcarea
+ * paginii si hartiile PDF/JPG.
+ *
+ * Grupul din dreapta se scrie doar daca are ce pune in el: la enorias, pe saptamanile din arhiva,
+ * ramane doar pastila si atunci nu se mai deseneaza nici bara.
  */
 function unelte(ctx: Ctx, m: Meniu): string {
-  const dupaLiniuta = (m.calendar ? intrerupatorCalendar() + pozaCalendarului(ctx, m) : '') + pozaProgramului(ctx, m)
-  return navigarea(ctx, m) + (dupaLiniuta ? `<span class="desparte" aria-hidden="true"></span>${dupaLiniuta}` : '')
-}
-
-/**
- * Poza calendarului saptamanii — butonul de langa intrerupator, cu sageata in jos (user, 10.09.2026).
- * Deschide PNG-ul facut de CALENDAR (`/v1/poza/saptamana/<luni>`): poza e a lui, programul doar o
- * cere — ca la orice altceva care tine de ziua liturgica. In V1 pozele se faceau dinainte, cu un
- * script, pentru tot anul; in V2 se fac la cerere si stau in cache.
- *
- * Se scrie doar unde se aprinde si calendarul (cele trei saptamani ale navigarii), fiindca aceeasi
- * saptamana o arata si poza.
- *
- * DOAR PENTRU ADMINI de la 11.09.2026 (user: „utilizator neautentificat sau autentificat, utilizator
- * simplu — nu se vede butonul de descărcat imaginea cu săptămâna"). Aici e de ajuns `eAdmin`, nu cele
- * doua trepte ale hartiilor: userul a cerut doar sa iasa de sub ochii enoriasului, iar butonul se scrie
- * oricum numai pe cele trei saptamani ale navigarii. Ruta ramane deschisa, ca toate celelalte.
- */
-function pozaCalendarului(ctx: Ctx, m: Meniu): string {
-  if (!m.luni || !ctx.eAdmin) return ''
-  const adresa = `${ctx.nav.calendar}/v1/poza/saptamana/${esc(m.luni)}`
-  return `<a class="btn mic poza-cal" href="${adresa}" target="_blank" rel="noopener"`
-    + ` title="Calendarul săptămânii ca poză — de trimis pe WhatsApp" aria-label="Calendarul săptămânii ca poză">`
-    + `${IC_DESCARCA}</a>`
+  const dreapta = (m.calendar ? intrerupatorCalendar() : '') + pozaPaginii(ctx, m) + hartiile(ctx, m)
+  return navigarea(ctx, m)
+    + (dreapta ? `<span class="unelte-dr"><span class="desparte" aria-hidden="true"></span>${dreapta}</span>` : '')
 }
 
 /**
@@ -501,8 +532,12 @@ function pozaCalendarului(ctx: Ctx, m: Meniu): string {
  * **super-adminul** pe TOT istoricul, deci si pe saptamanile vechi si pe pagina Arhivei (unde nicio
  * saptamana nu e in context, deci `m.luni` e null).
  *
- * Regula e a TUTUROR hartiilor: casuta de sub antet (Arhiva, PDF, JPG) si poza cu doua coloane din
- * randul de unelte (user, 11.09.2026). Rutele raman deschise ca pana acum — „totul la liber".
+ * Regula e a TUTUROR hartiilor din grupul din dreapta: descarcarea paginii, PDF-ul si JPG-ul
+ * (user, 11.09.2026). Rutele raman deschise ca pana acum — „totul la liber".
+ *
+ * ⚠️ Butonul ARHIVEI nu mai trece pe aici. Din 11.09.2026 sta in pastila navigarii si se scrie dupa
+ * `ctx.eAdmin` simplu: el nu e o hartie a unei saptamani, deci n-are de ce sa se stinga pe saptamanile
+ * vechi — dimpotriva, tocmai acolo e singurul drum inapoi.
  */
 function vedeHartiile(ctx: Ctx, m: Meniu): boolean {
   if (!ctx.eAdmin) return false
@@ -512,18 +547,19 @@ function vedeHartiile(ctx: Ctx, m: Meniu): boolean {
 }
 
 /**
- * HARTIILE saptamanii — sub linia antetului, intr-o casuta centrata, lipita de linie, cu colturile de sus
- * drepte si cele de jos rotunde (cerere user, 9 sept. 2026). Casuta atarna de antet (`position:absolute`
- * in `.sus`, care e sticky), deci merge cu el la derulare. Inauntru au ramas doar butoanele mici ale
- * saptamanii din context: Arhiva (doar iconita) si hartiile ei — PDF de tiparit, JPG de trimis pe WhatsApp.
+ * HARTIILE saptamanii — PDF de tiparit si JPG de trimis pe WhatsApp, in capatul din dreapta al randului
+ * de unelte. ⚠️ Au URCAT aici la 11.09.2026 (user, 10:48: „să urci sus cele două butoane: PDF, JPEG,
+ * și să fie aliniate la dreapta"); pana atunci stateau intr-o casuta atarnata sub linia antetului, care
+ * a disparut cu totul o data cu mutarea.
  *
  * Fiecare hartie isi poarta ICONITA FELULUI ei (user, 11.09.2026): foaia cu randuri scrise la PDF, foaia
  * cu poza la JPG. Numele scurt ramane langa iconita — aici el ESTE felul fisierului, deci nu se repeta
  * degeaba, iar doua foi cu coltul indoit una langa alta s-ar deosebi greu la 17 px.
  *
  * Se scrie DOAR pentru admini (user, 10.09.2026: „care se văd doar pentru admini") — enoriasul are in
- * antet doar navigarea si calendarul. Rutele (`/arhiva`, `/v1/foaie/…`) raman deschise ca pana acum:
- * deocamdata nimic din ce se citeste nu cere cont.
+ * antet navigarea si intrerupatorul. Rutele (`/v1/foaie/…`) raman deschise ca pana acum: deocamdata
+ * nimic din ce se citeste nu cere cont. Pe pagina Arhivei nicio saptamana nu e in context (`m.foaie` e
+ * null), deci hartiile se scriu stinse — asa erau si in casuta.
  */
 function hartiile(ctx: Ctx, m: Meniu): string {
   if (!vedeHartiile(ctx, m)) return ''
@@ -531,40 +567,50 @@ function hartiile(ctx: Ctx, m: Meniu): string {
   const hartie = (ext: 'pdf' | 'jpg', iconita: string, titlu: string) => (m.foaie
     ? `<a class="btn mic" href="${p}${m.foaie}.${ext}" target="_blank" rel="noopener" title="${titlu}">${iconita}<span>${ext.toUpperCase()}</span></a>`
     : `<span class="btn mic gol" title="Foaia se deschide de pe pagina unei săptămâni cu program validat">${iconita}<span>${ext.toUpperCase()}</span></span>`)
-  return `<nav class="nav-jos"><div class="btns cutie">`
-    + `<a class="btn mic${m.arhiva ? ' activ' : ''}" href="${p}/arhiva" title="Arhiva programelor" aria-label="Arhiva programelor">${IC_ARHIVA}</a>`
-    + hartie('pdf', ICOANE.pdf, 'Foaia A4, de tipărit')
+  return hartie('pdf', ICOANE.pdf, 'Foaia A4, de tipărit')
     + hartie('jpg', ICOANE.jpg, 'Foaia ca poză, de trimis pe WhatsApp')
-    + `</div></nav>`
 }
 
 /**
- * POZA PAGINII, cu cele doua coloane — programul la stanga, calendarul la dreapta, exact ce se vede
- * cand intrerupatorul „Calendar" e aprins (cerere user, 11.09.2026). Butonul sta in randul de unelte,
- * langa poza calendarului, si deschide `/v1/poza/saptamana/<luni>.jpg`.
+ * POZA PAGINII — butonul de descarcare de langa intrerupator. Da MEREU EXACT CE SE VEDE PE ECRAN
+ * (cerere user, 11.09.2026: „butonul de download… să descarce varianta care se vede"):
  *
- * Deosebirea de JPG-ul din casuta de jos: acela e foaia A4 de pe usa, fotografiata; asta e PAGINA, cu
- * grafica ei si cu sfintii zilei alaturi. Amandoua pleaca pe WhatsApp, de aceea stau despartite si ca
- * iconita.
+ *   - cu intrerupatorul APRINS, iconita e sageata DUBLA si butonul aduce poza pe doua coloane
+ *     (`?coloane=2`) — „dacă este dublat, butonul de download își schimbă iconița în două săgeți în
+ *     jos și descarcă acea imagine";
+ *   - cu el STINS, iconita e sageata SIMPLA si butonul aduce poza pe o singura coloana (`?coloane=1`)
+ *     — „dacă este varianta doar cu programul, o singură coloană, doar acea variantă de JPEG".
+ *
+ * ⚠️ Se scriu AMANDOUA infatisarile, iar CSS-ul o arata pe cea potrivita dupa clasa `cu-calendar` de pe
+ * body (vezi `.poza-1`/`.poza-2` din STIL). Asa butonul se schimba in aceeasi clipa cu coloana, fara ca
+ * JS-ul intrerupatorului sa stie de el si fara sa apuce sa se vada vreodata semnul care nu trebuie.
+ * Unde intrerupatorul nu se scrie (saptamanile din arhiva), `m.calendar` e fals si ramane doar varianta
+ * simpla — alta nici nu se poate vedea acolo.
+ *
+ * Deosebirea de JPG-ul de langa: acela e foaia A4 de pe usa, fotografiata; asta e PAGINA, cu grafica ei.
+ * Amandoua pleaca pe WhatsApp, de aceea stau despartite si ca iconita.
  *
  * E tot o hartie a saptamanii, deci se vede dupa ACELEASI DOUA TREPTE ca celelalte (alegerea userului,
  * 11.09.2026): enoriasul si utilizatorul simplu n-o vad deloc.
- *
- * Poarta tot o SAGEATA DE DESCARCARE, ca poza calendarului de langa ea (user, 11.09.2026: „pune tot
- * iconița de download") — semnul ecranului impartit s-a mutat pe intrerupator. Ca sa nu ramana doua
- * semne identice unul langa altul, sageata e DUBLA (a doua cerere a userului, la un sfert de ora):
- * doua sageti pe aceeasi talpa, adica doua coloane — „seamănă mai mult cu ce urmează să vadă omul".
  */
-function pozaProgramului(ctx: Ctx, m: Meniu): string {
+function pozaPaginii(ctx: Ctx, m: Meniu): string {
   if (!m.luni || !vedeHartiile(ctx, m)) return ''
-  return `<a class="btn mic poza-prog" href="${esc(ctx.prefix)}/v1/poza/saptamana/${esc(m.luni)}.jpg" target="_blank" rel="noopener"`
-    + ` title="Ecranul împărțit — programul și calendarul, în două coloane, ca poză (JPEG)"`
-    + ` aria-label="Ecranul împărțit ca poză">${IC_DESCARCA_DUBLU}</a>`
+  const adresa = (coloane: 1 | 2) => `${esc(ctx.prefix)}/v1/poza/saptamana/${esc(m.luni)}.jpg?coloane=${coloane}`
+  const buton = (clasa: string, href: string, spune: string, iconita: string) =>
+    `<a class="btn mic ${clasa}" href="${href}" target="_blank" rel="noopener"`
+    + ` title="${spune}" aria-label="${spune}">${iconita}</a>`
+  const simplu = buton('poza-1', adresa(1), 'Pagina ca poză (JPEG) — programul, într-o coloană', IC_DESCARCA)
+  if (!m.calendar) return simplu
+  return simplu
+    + buton('poza-2', adresa(2), 'Pagina ca poză (JPEG) — programul și calendarul, în două coloane', IC_DESCARCA_DUBLU)
 }
 
-/** Antetul intreg al paginilor de om: randul de unelte, casuta hartiilor (doar la admini), JS-ul lor. */
+/**
+ * Antetul intreg al paginilor de om: randul de unelte (cu amandoua grupurile) si JS-ul intrerupatorului.
+ * Slotul `subantet` a ramas gol de la 11.09.2026 — hartiile au urcat in rand, iar casuta a disparut.
+ */
 function antetul(ctx: Ctx, m: Meniu) {
-  return { unelte: unelte(ctx, m), subantet: hartiile(ctx, m), scripturi: SCRIPT }
+  return { unelte: unelte(ctx, m), scripturi: SCRIPT }
 }
 
 /** „Luni, 7 septembrie" — cu majuscula, ca in V1. */
@@ -737,12 +783,12 @@ function zileleSaptamanii(o: {
 }
 
 export function paginaSaptamana(o: OptiuniSaptamana): string {
-  // Calendarul tine exact cat navigarea: cele trei trepte — saptamana trecuta, cea de azi, cea
-  // urmatoare (user, 10.09.2026). Pe saptamanile din arhiva nu se scrie nici intrerupatorul, nici
-  // coloana lui; zilele raman insa colorate dupa calendar (rosul sarbatorilor) si randurile „→" ale
-  // slujbelor sunt tot de acolo.
+  // Calendarul se poate aprinde pe saptamana de azi si pe cea viitoare (alegerea userului, 11.09.2026,
+  // 10:47, intrebat anume). Pe saptamanile din arhiva nu se scrie nici intrerupatorul, nici coloana lui;
+  // zilele raman insa colorate dupa calendar (rosul sarbatorilor) si randurile „→" ale slujbelor sunt
+  // tot de acolo. `cuCalendar` inseamna „coloana STA in pagina", nu „se vede": aprinsul e al omului.
   const aAzi = luneaSaptamanii(o.azi)
-  const cuCalendar = o.luni === adaugaZile(aAzi, -7) || o.luni === aAzi || o.luni === adaugaZile(aAzi, 7)
+  const cuCalendar = o.luni === aAzi || o.luni === adaugaZile(aAzi, 7)
   const zile = zileleSaptamanii({ ...o, cuCalendar })
   // Eticheta de langa titlu spune doar ce NU e gata: „propunere" (si, daca s-ar ivi, „propus" ori
   // „modificat după validare"). Pe programul validat nu se mai scrie nimic — user, 10.09.2026:
@@ -751,12 +797,13 @@ export function paginaSaptamana(o: OptiuniSaptamana): string {
   const eticheta = o.stare === 'validat' ? ''
     : `<span class="stare ${esc(clasaStare)}">${esc(STARE[o.stare] ?? o.stare)}</span>`
   // ⚠️ PROBA (11.09.2026) — MOMENTUL, scris in pagina deasupra datelor: „săptămâna trecută / aceasta /
-  // următoare". Cele trei pagini arata acelasi lucru in trei momente, iar pana acum singurul semn al
-  // momentului era in antet, pe butonul rosu. Se scrie doar pe cele trei trepte; pe saptamanile din
-  // arhiva ramane doar titlul, ca pana acum. Rosu la „aceasta", ca sa se lege de rosul din pastila.
+  // viitoare". Paginile arata acelasi lucru in momente diferite, iar pana acum singurul semn al
+  // momentului era in antet, pe butonul rosu. Se scrie doar pe cele trei saptamani de langa azi; pe
+  // restul, venite din arhiva, ramane doar titlul. Rosu la „aceasta", ca sa se lege de rosul din pastila.
+  // „Viitoare", nu „următoare": acelasi cuvant cu butonul din antet (user, 11.09.2026, ora 10).
   const moment = o.luni === aAzi ? 'Săptămâna aceasta'
     : o.luni === adaugaZile(aAzi, -7) ? 'Săptămâna trecută'
-    : o.luni === adaugaZile(aAzi, 7) ? 'Săptămâna următoare'
+    : o.luni === adaugaZile(aAzi, 7) ? 'Săptămâna viitoare'
     : ''
   const cap = `<div class="sapt-cap"><div>${moment ? `<span class="moment${o.luni === aAzi ? ' acum' : ''}">${moment}</span>` : ''}<h2>${esc(o.titlu)}</h2></div>${eticheta}</div>`
   const gol = o.slujbe.length ? '' : `<p class="gol">${o.stare === 'propunere' ? 'Nimic de propus — istoricul nu spune nimic despre această săptămână.' : 'Săptămână fără slujbe înregistrate.'}</p>`
@@ -768,6 +815,10 @@ export function paginaSaptamana(o: OptiuniSaptamana): string {
     ...comune(o.ctx),
     titluPagina: o.stare === 'propunere' ? `Propunere · ${o.titlu}` : o.titlu,
     indexabil: true,
+    // Intrerupatorul porneste APRINS (user, 11.09.2026), deci coloana calendarului sta pe pagina de la
+    // server, nu de la JS: altfel s-ar vedea o clipa pagina pe o coloana, apoi ar sari in doua. JS-ul
+    // scoate clasa numai daca omul a stins intrerupatorul cu mana lui.
+    clasaCorp: cuCalendar ? 'cu-calendar' : '',
     ...antetul(o.ctx, meniu),
     corp: `${cap}${gol}${zile.join('\n')}
 ${nelamuriri}`,
@@ -780,8 +831,12 @@ ${nelamuriri}`,
 
 /**
  * Latimea pozei, in puncte CSS: exact masura paginii (`.w` din carcasa, 680 px), ca poza sa iasa leit
- * cu ce se vede pe ecran — aceleasi doua coloane, de aceeasi latime, nu o asezare facuta anume pentru
+ * cu ce se vede pe ecran — aceleasi coloane, de aceeasi latime, nu o asezare facuta anume pentru
  * poza. Fotografia se face la doi pixeli pe punct, deci fisierul iese de 1360 px.
+ *
+ * Aceeasi masura la amandoua variantele, si la cea pe o coloana: poza trebuie sa fie pagina, iar
+ * pagina are latimea asta oricum ar fi asezata inauntru. Ingustand-o la varianta simpla, randurile
+ * s-ar rupe altfel decat pe ecran si cele doua poze n-ar mai arata a acelasi lucru.
  */
 export const LATIME_POZA = 680
 
@@ -797,18 +852,28 @@ export interface OptiuniPoza {
   azi: string
   /** tema pozei; implicit cea de ZI, ca la poza calendarului (user, 11.09.2026) */
   tema?: 'dark' | 'light'
+  /**
+   * Cu coloana calendarului langa program (implicit) sau doar programul, pe o coloana. Butonul din
+   * antet cere varianta care se vede pe ecranul de sub el (user, 11.09.2026): pe prima pagina cea
+   * dublata, pe celelalte saptamani cea simpla.
+   */
+  cuCalendar?: boolean
 }
 
 /**
- * POZA SAPTAMANII — pagina intreaga, cu calendarul deschis, gata de trimis (cerere user, 11.09.2026:
- * „un JPEG și cu calendarul împărțit, adică așa cum se vede când este întrerupătorul Calendar pe On").
+ * POZA SAPTAMANII — pagina intreaga, gata de trimis (cerere user, 11.09.2026: „un JPEG și cu calendarul
+ * împărțit, adică așa cum se vede când este întrerupătorul Calendar pe On").
  *
- * Nu e o asezare noua: e PAGINA, cu stilul ei (`STIL_COMUN` + `STIL`), cu `cu-calendar` pus din capul
- * locului pe `body` — adica intrerupatorul aprins, fara JS si fara localStorage — si cu zilele scrise
- * de aceeasi `zileleSaptamanii`. Ce cade sunt doar lucrurile care se apasa: antetul, subsolul,
- * navigarea, butonul „Sfinții zilei" (nici n-ajunge sa se scrie: poza cere pagina cu `eAdmin: false`).
- * Coloana calendarului se scrie MEREU, si pe saptamanile vechi — regula celor trei trepte tine de
- * navigare, nu de poza; daca A1 n-are zilele acelea, coloana ramane goala si poza e doar programul.
+ * Are DOUA VARIANTE, si amandoua sunt PAGINA, nu o asezare facuta anume pentru poza: aceeasi
+ * `zileleSaptamanii`, acelasi stil (`STIL_COMUN` + `STIL`), aceeasi latime. Se deosebesc doar prin
+ * clasa `cu-calendar` de pe `body` — pusa din capul locului, ca in pagina (de la 11.09.2026 nici acolo
+ * nu mai vine din JS). Ce cade sunt doar lucrurile care se apasa: antetul, subsolul, navigarea, butonul
+ * „Sfinții zilei" (nici n-ajunge sa se scrie: poza cere pagina cu `eAdmin: false`).
+ *
+ * Varianta se CERE, nu se ghiceste din saptamana: poza trebuie sa iasa la fel ori de unde ar fi ceruta,
+ * iar cine o cere (butonul din antet) stie deja ce are pe ecran. Cu `cuCalendar`, zilele fara slujbe
+ * apar sau nu — exact ca in pagina. Daca A1 n-are zilele cerute, coloana ramane goala si poza dublata
+ * se vede ca una simpla, cu o dunga pe dreapta.
  *
  * Capul e cel al pozei calendarului (numele aplicatiei, parohia, saptamana), ca cele doua poze ale
  * aceleiasi saptamani sa se recunoasca una pe alta pe WhatsApp. Tema e tot a ei: FUNDAL DESCHIS
@@ -821,7 +886,8 @@ export interface OptiuniPoza {
  * ceruta.
  */
 export function pozaSaptamaniiHtml(o: OptiuniPoza): string {
-  const zile = zileleSaptamanii({ ...o, cuCalendar: true })
+  const cuCalendar = o.cuCalendar !== false
+  const zile = zileleSaptamanii({ ...o, cuCalendar })
   // ca in pagina: se scrie doar ce NU e gata („propunere"), programul validat nu poarta eticheta
   const clasaStare = o.stare === 'propunere' ? 'propus' : o.stare
   const eticheta = o.stare === 'validat' ? ''
@@ -848,7 +914,7 @@ body { margin:0; padding:0; background:var(--paper); color:var(--ink) }
 .poza .zi.azi h3::after { content:none }
 /* ultima zi n-are linie dedesubt: poza se termina cu scrisul, nu cu o dunga in aer */
 .poza .zi:last-child { border-bottom:0; padding-bottom:0 }
-</style></head><body class="cu-calendar">
+</style></head><body${cuCalendar ? ' class="cu-calendar"' : ''}>
 <div class="poza">
   <header class="cap">
     <p class="nume">PROGRAMUL</p>

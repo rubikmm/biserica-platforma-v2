@@ -69,6 +69,10 @@ h1 + .eyebrow, .titlu + .eyebrow { margin:4px 0 16px }
 .cont-meniu summary { cursor:pointer; list-style:none; user-select:none }
 .cont-meniu summary::-webkit-details-marker { display:none }
 .cont-meniu[open] summary { color:var(--rosu); margin-bottom:0 }
+/* numele contului, rosu cat timp porti o masca „vezi ca" — semnul de la prima privire ca nu te uiti
+   cu drepturile tale (user, 11.09.2026, dupa ce banda de jos a iesit) */
+.cont-meniu summary.mascat { color:var(--rosu) }
+.cont-meniu summary.mascat svg { color:var(--rosu) }
 .cont-lista { position:absolute; right:0; top:calc(100% + 8px); min-width:170px;
               background:var(--paper); border:1px solid var(--rule); border-radius:10px;
               padding:6px 0; box-shadow:0 8px 24px rgba(0,0,0,.10); z-index:60 }
@@ -76,19 +80,11 @@ h1 + .eyebrow, .titlu + .eyebrow { margin:4px 0 16px }
                 font:14px/1.2 ui-sans-serif,system-ui }
 .cont-lista a:hover { background:var(--tinta); color:var(--rosu) }
 .cont-desparte { border:0; border-top:1px solid var(--rule); margin:6px 0 }
-.cont-acum { display:block; padding:9px 16px; color:var(--rosu);
-             font:600 14px/1.2 ui-sans-serif,system-ui }
-.cont-lista a.cont-revino { color:var(--rosu); font-weight:600 }
-/* Banda „vezi ca": singurul semn ca omul nu se uita cu ochii lui. Sta jos, peste tot,
-   si il scoate de sub masca dintr-un click — inclusiv cand masca e „neautentificat",
-   unde antetul n-are niciun meniu din care sa se poata iesi. */
-.banda-vezica { position:fixed; left:0; right:0; bottom:0; z-index:90;
-                display:flex; align-items:center; justify-content:center; gap:14px;
-                flex-wrap:wrap; padding:10px 16px; background:var(--rosu); color:#fff;
-                font:13px/1.4 ui-sans-serif,system-ui; text-align:center;
-                padding-bottom:calc(10px + env(safe-area-inset-bottom)) }
-.banda-vezica a { color:#fff; font-weight:600 }
-body:has(.banda-vezica) { padding-bottom:64px }
+/* Masca purtata ACUM: acelasi rand din meniu, scris rosu. E si singurul semn ca omul nu se uita cu
+   ochii lui, si drumul inapoi — la a doua apasare scoate masca (user, 11.09.2026: „«Vezi ca
+   utilizator» sau «Vezi ca neautentificat» să fie cu roșu dacă sunt pe el. Iar la a doua apăsare…
+   să revin la ce sunt eu, super admin"). Banda rosie de jos a iesit atunci — „nu am nevoie de el". */
+.cont-lista a.cont-acum { color:var(--rosu); font-weight:600 }
 h1 { font-size:36px; font-weight:400; letter-spacing:-.02em; margin:0 0 10px }
 h1 .cod { color:var(--rosu) }
 h2 { font-size:25px; font-weight:400; letter-spacing:-.01em; margin:34px 0 10px }
@@ -336,36 +332,66 @@ function comutatorVeziCa(urlCont: string, ca: string, spre: string): string {
  * platforma cu ochii unui utilizator, ai unui administrator sau ai unui om neintrat, fara sa
  * se atinga de contul lui. Comutarea se cere la aplicatia de cont, fiindca acolo sta sesiunea
  * pe care se scrie masca; ea il trimite pe om inapoi exact unde era (`spre`).
+ *
+ * ⚠️ Cele trei randuri sunt COMUTATOARE, nu linkuri intr-un singur sens (user, 11.09.2026): randul
+ * mastii purtate acum e scris rosu si, apasat a doua oara, scoate masca. De aceea nu mai exista un
+ * al patrulea rand, „Revino la super admin" — iesirea e chiar randul pe care esti.
  */
-function veziCa(c: Cont): string {
-  if (!c.poateVedeaCa) return ''
+function randuriVeziCa(c: Cont): string {
   const urlCont = c.urlCont ?? ''
   const spre = c.spre ?? ''
-  const cere = (ca: string, text: string, clasa = '') =>
+  const cere = (ca: string, text: string) =>
     c.veziCa === ca
-      ? `\n          <span class="cont-acum">Te uiți ca ${esc(numeleMastii(ca))}</span>`
-      : `\n          <a${clasa ? ` class="${clasa}"` : ''} href="${comutatorVeziCa(urlCont, ca, spre)}">${text}</a>`
+      ? `\n          <a class="cont-acum" href="${comutatorVeziCa(urlCont, 'real', spre)}" aria-current="true"` +
+        ` title="Te uiți ca ${esc(numeleMastii(ca))} — apasă din nou ca să revii la contul tău">${text}</a>`
+      : `\n          <a href="${comutatorVeziCa(urlCont, ca, spre)}">${text}</a>`
   return (
-    `\n          <hr class="cont-desparte">` +
     cere('user', 'Vezi ca utilizator') +
     cere('admin', 'Vezi ca administrator') +
-    cere('anonim', 'Vezi ca neautentificat') +
-    (c.veziCa ? cere('real', 'Revino la super admin', 'cont-revino') : '') +
-    `\n          <hr class="cont-desparte">`
+    cere('anonim', 'Vezi ca neautentificat')
   )
+}
+
+function veziCa(c: Cont): string {
+  if (!c.poateVedeaCa) return ''
+  return `\n          <hr class="cont-desparte">` + randuriVeziCa(c) + `\n          <hr class="cont-desparte">`
 }
 
 function contul(c: Cont): string {
   const urlCont = c.urlCont ?? ''
   const nume = c.nume ?? 'Cont'
+  /*
+   * ⚠️ Cat timp masca e pusa, NUMELE DIN ANTET e scris rosu (user, 11.09.2026: „dacă am vreo setare cu
+   * «Vezi ca», să fie numele contului cu roșu — și asta e suficient ca să-mi dau seama că văd
+   * restricționat față de contul meu de super-admin"). E tot ce a mai ramas din banda de jos: un semn
+   * care se vede din prima privire, fara sa deschizi meniul. Sub masca „neautentificat" se inroseste
+   * cuvantul „Cont", singurul scris acolo.
+   */
+  const capul = `<summary class="cont${c.veziCa ? ' mascat' : ''}">${ICOANE.om}<span>${esc(nume)}</span></summary>`
   if (!c.intrat) {
+    /*
+     * ⚠️ Sub masca „neautentificat" platforma nu mai stie pe nimeni, deci in antet scrie tot „Cont",
+     * ca oricarui om neintrat — dar cuvantul deschide un meniu cu UN SINGUR lucru in el: comutatoarele
+     * „Vezi ca", din care se iese inapoi la contul adevarat. De cand banda rosie de jos a iesit (user,
+     * 11.09.2026: „să dispară banner-ul de jos"), asta e SINGURUL drum de intoarcere din masca anonima.
+     * Daca-l scoti, super-adminul mascat ramane inchis afara si trebuie sa scrie de mana
+     * `/cont/vezi-ca?ca=real`. Enoriasul adevarat nu-l vede niciodata: `poateVedeaCa` si `veziCa` vin
+     * amandoua de pe sesiune, iar el n-are nici sesiune, nici masca.
+     */
+    if (c.poateVedeaCa && c.veziCa) {
+      return `<details class="cont-meniu">
+        ${capul}
+        <nav class="cont-lista">${randuriVeziCa(c)}
+        </nav>
+      </details>`
+    }
     // Linkul de intrare poarta pagina de acum, ca dupa cele sase cifre omul sa se intoarca exact
     // aici, nu in pagina contului (user, 11.09.2026). Fara ea, contul il lasa la Home.
     const spre = c.spre ? `?spre=${encodeURIComponent(c.spre)}` : ''
     return `<a class="cont" href="${esc(c.href ?? `${urlCont}/auth/login${spre}`)}">${ICOANE.om}<span>${esc(nume)}</span></a>`
   }
   return `<details class="cont-meniu">
-        <summary class="cont">${ICOANE.om}<span>${esc(nume)}</span></summary>
+        ${capul}
         <nav class="cont-lista">
           <a href="${esc(urlCont)}/">Profil</a>${c.admin ? `
           <a href="${esc(c.urlAdmin ?? '')}/">Administrare</a>` : ''}${veziCa(c)}
@@ -374,21 +400,13 @@ function contul(c: Cont): string {
       </details>`
 }
 
-/**
- * Banda de jos, cat timp masca e pusa. Se deseneaza pe server, din sesiune — nu dintr-un
- * cookie citit de JS, ca in V1: aici masca sta pe sesiune, deci pagina stie singura ce sa
- * arate, si banda apare si cu JS-ul oprit.
+/*
+ * ⚠️ BANDA DE JOS „te uiți ca…" A IESIT CU TOTUL (user, 11.09.2026: „când fac probele pe diverse
+ * drepturi de utilizator, aș vrea să fie totul mai simplu, adică să dispară banner-ul de jos").
+ * Semnul ca masca e pusa si iesirea din ea sunt acum amandoua in meniul de cont, pe randul rosu.
+ * Daca vreodata se cere inapoi: se desena pe server, din sesiune (nu din cookie prin JS, ca in V1),
+ * si de aceea aparea si cu JS-ul oprit.
  */
-function bandaVeziCa(c: Cont | null | undefined): string {
-  if (!c?.veziCa) return ''
-  return `\n<div class="banda-vezica" role="status"><span>Te uiți ca <b>${esc(
-    numeleMastii(c.veziCa),
-  )}</b> — contul tău a rămas neatins.</span><a href="${comutatorVeziCa(
-    c.urlCont ?? '',
-    'real',
-    c.spre ?? '',
-  )}">Revino la super admin</a></div>`
-}
 
 // ---------------------------------------------------------------------------
 // Pagina
@@ -468,7 +486,7 @@ ${antet(p)}
 <div class="${w}">
 <main>${p.corp}</main>
 ${subsol(p.versiune, p.modificata)}
-</div>${bandaVeziCa(p.cont)}
+</div>
 <script>${JS_JOS}</script>${p.scripturi ? `\n<script>${p.scripturi}</script>` : ''}
 </body></html>`
 }

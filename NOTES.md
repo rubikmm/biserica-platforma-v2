@@ -97,20 +97,15 @@ propunerea automată, ca în V1.
 2. **PDF-urile cărților tipicului în R2** — Anuarul (41 MB), Mineiul pe noiembrie (67 MB) și ROEA
    stau în R2-ul V1 și n-au fost copiate. Fără ele, cardul care duce la pagina zilei din carte nu
    se scrie (codul îl așteaptă). De întrebat utilizatorul dacă le vrea.
-3. **Sfinții zilei pe foaia A4 a programului** — API-ul e gata (`tipic /v1/sfinti/<data>`);
-   rămâne afișarea, **grupată după sursă** (cerere user, 10.09.2026): sfinții calendarului
-   într-un grup, pomenirile Mineiului în altul, cu cartea scrisă lângă ele.
-4. **Curățenia (A6)** — schema, sloturile din slujbele programului (`curatenie: true`), rapoartele
+3. **Curățenia (A6)** — schema, sloturile din slujbele programului (`curatenie: true`), rapoartele
    prin serviciul de comunicare. Voluntarii devin conturi ale platformei: adresele lor din V1 se
    trec prin `identity /utilizatori/asigura`, iar aplicația ține doar `user_id`.
-2. **Testul real de email**, de către utilizator: `https://cont.staging.sfantul-ilie.ro` → cont nou
+4. **Testul real de email**, de către utilizator: `https://cont.staging.sfantul-ilie.ro` → cont nou
    cu `rubikmm@gmail.com` → codul vine pe email → super-admin automat.
-3. **Foaia A4 local** — Browser Rendering merge pe staging; local are nevoie de bibliotecile Chrome
-   în container (cerere la #agent-server, 10.09).
-4. **Pornire automată în container** — `pnpm dev` se lansează manual; de pus în `app-init.sh`.
-5. Comunicare reală (`LIVRARE_REALA=da`) abia când A7 se portează — nu înainte.
-6. Vocabularul de nume al subdomeniilor V2 (lista de 15) — de confirmat cu utilizatorul.
-7. **Titlul zilei din calendar** (`titlu_html`, văzut în program la „Afișează calendarul"): V2 îl
+5. **Pornire automată în container** — `pnpm dev` se lansează manual; de pus în `app-init.sh`.
+6. Comunicare reală (`LIVRARE_REALA=da`) abia când A7 se portează — nu înainte.
+7. Vocabularul de nume al subdomeniilor V2 (lista de 15) — de confirmat cu utilizatorul.
+8. **Titlul zilei din calendar** (`titlu_html`, văzut în program la „Afișează calendarul"): V2 îl
    reface din segmente, fără `<strong>`/`<em>` din sursa Patriarhiei; V1 le păstra (sfinții cu
    cruce, bold). De lămurit cu utilizatorul dacă vrea bold-ul înapoi — se schimbă în calendar, nu în program.
 
@@ -155,9 +150,14 @@ propunerea automată, ca în V1.
 - **Sub masca „vezi ca", pagina e personală chiar dacă n-are niciun nume pe ea.** Regula de cache
   se uita doar la `ctx.utilizator`, deci sub masca „neautentificat" pagina ieșea cu
   `public, max-age=300` — iar `home` o dădea așa **întotdeauna**. Browserul o servea din propriul
-  cache și după ce masca fusese scoasă, așa că butonul „Revino la super admin" părea că nu face
-  nimic (reclamat de user, 11.09.2026). Din 11.09 condiția e `ctx.utilizator || ctx.veziCa` în
+  cache și după ce masca fusese scoasă, așa că ieșirea din mască părea că nu face nimic (reclamat
+  de user, 11.09.2026). Din 11.09 condiția e `ctx.utilizator || ctx.veziCa` în
   program / calendar / tipic / home. La orice aplicație nouă: **masca intră în decizia de cache**.
+- **Ieșirea din mască stă într-un singur loc: meniul de cont** (de la 11.09.2026, când banda de jos
+  a fost scoasă la cererea userului). Sub masca „neautentificat" meniul e tot ce mai are omul —
+  `contul()` din `@xc/ui` îl desenează anume pentru cazul „neintrat, dar cu mască". Dacă se umblă
+  acolo, se probează întâi cu `tests/carcasa.test.ts`: altfel un super-admin mascat rămâne închis
+  afară și n-are decât să scrie de mână `/cont/vezi-ca?ca=real`.
 - **`req.url` NU e adresa din bara browserului.** Prin gateway-ul de preview workerul vede
   `http://127.0.0.1/program/…`, nu `https://rubik:8474/program/…` — iar `spre`, construit din el,
   era refuzat de `intoarcereSigura` și omul ajungea pe pagina contului. Din 11.09 toate aplicațiile
@@ -204,6 +204,18 @@ propunerea automată, ca în V1.
 
 ### 2026-09-11
 
+- **Probele pe roluri, mai simple** (trei cereri ale userului, plus una pe parcurs). **Banda roșie
+  de jos a ieșit cu totul** („să dispară banner-ul de jos. Nu am nevoie de el"), iar semnele ei s-au
+  mutat în meniul de cont: **numele contului din antet e scris roșu** cât timp porți o mască, iar
+  cele trei rânduri „Vezi ca …" sunt acum **comutatoare** — rândul măștii purtate e roșu și, apăsat
+  a doua oară, te întoarce la super-admin. Butonul „Revino la super admin" a dispărut, n-are ce
+  face. ⚠️ Sub masca „neautentificat" antetul scrie tot „Cont", dar cuvântul deschide un meniu cu
+  un singur lucru în el (comutatoarele) — **acela e acum singurul drum de întoarcere**; fără el,
+  super-adminul mascat rămâne închis afară. Probe noi în `tests/carcasa.test.ts` (55 de teste).
+  **Întrerupătorul „Calendar" din program pornește APRINS** („starea implicită este On"), iar becul
+  lui **nu mai e roșu**: aprins se umple cu cerneală și bila se face albă. Ca să nu clipească
+  pagina, clasa `cu-calendar` vine de pe server (`clasaCorp`), iar JS-ul doar o scoate dacă omul a
+  stins-o cu mâna lui. Program 0.4.0; publicate toate cele 6 aplicații pe staging.
 - **Întoarcerea la pagina de unde ai plecat**, două cereri ale userului într-una:
   (1) comutatoarele „Vezi ca …" din meniul contului te lasă **în pagina în care erai**, doar o
   reîncarcă — nu te mai duc în pagina contului. Cauza era `spre`, construit din `req.url`: prin

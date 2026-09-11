@@ -285,7 +285,7 @@ async function api(req: Request, env: Env, ctxExec: ExecutionContext, cale: stri
         { adresa: '/v1/slujbe/vocabular', ce_da: 'cele 29 de nume, cu cod_nume, categorie, activ' },
         { adresa: '/v1/foaie/<data>.pdf|.jpg|.html', ce_da: 'foaia A4 de pe ușă — numai săptămâni validate' },
         { adresa: '/v1/propunere/<data>.pdf|.jpg|.html', ce_da: 'aceeași foaie, din propunerea săptămânii' },
-        { adresa: '/v1/poza/saptamana/<data>.jpg|.html', ce_da: 'poza paginii: programul și calendarul, în două coloane' },
+        { adresa: '/v1/poza/saptamana/<data>.jpg|.html?coloane=1|2', ce_da: 'poza paginii: programul singur (coloane=1) sau programul și calendarul, în două coloane (implicit)' },
         { adresa: '/v1/sfintii-zilei/<data>.pdf|.html', ce_da: 'sfinții zilei, din datele calendarului' },
       ],
       reguli: ['ora e de perete, Europe/București', 'cod_nume nu e niciodată null', 'nimeni nu tipărește ce nu e validat'],
@@ -378,10 +378,19 @@ async function api(req: Request, env: Env, ctxExec: ExecutionContext, cale: stri
   }
 
   /*
-   * POZA SAPTAMANII — pagina cu cele DOUA COLOANE (programul la stanga, calendarul la dreapta), asa
-   * cum se vede cand intrerupatorul „Calendar" e aprins (cerere user, 11.09.2026). Se face la cerere,
-   * prin Browser Rendering, si sta in cache-ul de muchie cu cheia pe amprenta HTML-ului — deci se
-   * reface singura cand se schimba programul sau calendarul, si n-are nimic de intretinut.
+   * POZA SAPTAMANII — pagina fotografiata, asa cum se vede pe ecran (cerere user, 11.09.2026). Se face
+   * la cerere, prin Browser Rendering, si sta in cache-ul de muchie cu cheia pe amprenta HTML-ului —
+   * deci se reface singura cand se schimba programul sau calendarul, si n-are nimic de intretinut.
+   *
+   * ⚠️ DOUA VARIANTE, cerute cu `?coloane=` (user, 11.09.2026: „să descarce varianta care se vede"):
+   *   - `coloane=2` (si implicit, ca pana acum) — programul la stanga, calendarul la dreapta, adica
+   *     prima pagina a aplicatiei;
+   *   - `coloane=1` — doar programul, intr-o coloana, adica orice alta saptamana.
+   * Implicitul a ramas cel vechi dinadins: adresa fara intrebare inseamna acelasi lucru ca inainte de
+   * 11.09, deci nicio legatura veche nu-si schimba intelesul sub picioare.
+   *
+   * Cele doua nu se incurca in cache: cheia e adresa PLUS amprenta HTML-ului, iar HTML-urile difera.
+   * Numele fisierului le desparte si pe disc — `program-<luni>` fata de `program-calendar-<luni>`.
    *
    * Sursa e aceeasi ca a paginii (`saptamanaOriPropunere`): saptamana scrisa, iar daca nu e — propunerea
    * ei. De aceea poza NU cere saptamana „validata", cum cere foaia A4 de pe usa: ea arata pagina, iar
@@ -395,6 +404,7 @@ async function api(req: Request, env: Env, ctxExec: ExecutionContext, cale: stri
     const data = dataDin(mPoza[1]!, azi)
     const format = mPoza[2] as 'jpg' | 'html'
     if (!data) return eroareApi(400, 'data_invalida', 'Data se scrie AAAA-LL-ZZ (sau azi / maine / viitoare).')
+    const cuCalendar = url.searchParams.get('coloane') !== '1'
     const luni = luneaSaptamanii(data)
     const s = await saptamanaOriPropunere(env, luni, harta)
     // Ctx-ul pozei: fara om si fara drepturi. In poza nu se apasa nimic, deci butoanele adminului
@@ -423,10 +433,12 @@ async function api(req: Request, env: Env, ctxExec: ExecutionContext, cale: stri
       azi,
       // pe negru doar daca se cere anume; implicit fundal deschis, ca la poza calendarului (user, 11.09)
       tema: url.searchParams.get('tema') === 'dark' ? 'dark' : 'light',
+      cuCalendar,
     })
     if (format === 'html') return new Response(corp, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300', ...ANTETE_APP } })
     try {
-      return await hartieDinCache(req, ctxExec, corp, 'jpg', `program-calendar-${luni}`, () => jpgPozaDin(env.BROWSER, corp, LATIME_POZA))
+      const nume = cuCalendar ? `program-calendar-${luni}` : `program-${luni}`
+      return await hartieDinCache(req, ctxExec, corp, 'jpg', nume, () => jpgPozaDin(env.BROWSER, corp, LATIME_POZA))
     } catch (e) {
       return eroareApi(503, 'poza_indisponibila', 'Poza nu se poate face acum; încearcă peste un minut sau ia varianta .html.', { detaliu: e instanceof Error ? e.message.slice(0, 200) : '' })
     }
