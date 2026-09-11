@@ -38,7 +38,7 @@ import {
 } from './depozit.js'
 import { foaieHtml, hartieDinCache, jpgDin, pdfDin, sfintiiHtml, titluSaptamanii } from './foaie.js'
 import { propune } from './propunere.js'
-import { sfintiiDinMinei } from './tipic.js'
+import { sfintiiDinCarti } from './tipic.js'
 import { type Ctx, type Meniu, type RolProba, paginaArhiva, paginaMesaj, paginaSaptamana } from './pagini.js'
 
 export interface Env {
@@ -402,14 +402,14 @@ async function api(req: Request, env: Env, ctxExec: ExecutionContext, cale: stri
     const zi = await ziuaCalendarului(env.CALENDAR, data)
     if (!zi) return eroareApi(502, 'calendar_indisponibil', 'Calendarul nu răspunde acum.')
     const cuSinaxar = url.searchParams.get('sinaxar') === '1'
-    // Pomenirile Mineiului vin de la tipic (A9) si se scriu intr-un GRUP AL LOR, sub cele ale
-    // calendarului (cerere user): cele doua carti nu spun acelasi lucru, deci nici nu se amesteca.
+    // Pomenirile cartilor tipicului (Mineiul, apoi Anuarul) vin de la A9 si se scriu in grupuri
+    // ALE LOR, sub lista calendarului, fiecare fara ce s-a spus mai sus (cerere user).
     // Daca tipicul tace, foaia ramane cum era — o singura lista, fara cap de grup.
-    const [texte, minei] = await Promise.all([
+    const [texte, surse] = await Promise.all([
       cuSinaxar ? texteleZilei(env.CALENDAR, data) : Promise.resolve(null),
-      sfintiiDinMinei(env.TIPIC, data),
+      sfintiiDinCarti(env.TIPIC, data),
     ])
-    const corp = sfintiiHtml({ data, zi, sinaxar: texte?.sinaxar ?? null, cuSinaxar, minei })
+    const corp = sfintiiHtml({ data, zi, sinaxar: texte?.sinaxar ?? null, cuSinaxar, surse })
     if (format === 'html') return new Response(corp, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=3600', ...ANTETE_APP } })
     try {
       return await hartieDinCache(req, ctxExec, corp, 'pdf', `sfintii-zilei-${data}${cuSinaxar ? '-cu-sinaxar' : ''}`, () => pdfDin(env.BROWSER, corp))

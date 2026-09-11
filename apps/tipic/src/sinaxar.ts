@@ -111,3 +111,46 @@ export function pomeniriDinMinei(zi: ZiMinei): Pomenire[] {
 
   return pomeniri
 }
+
+/**
+ * Sfinții zilei așa cum îi scrie ANUARUL liturgic și tipiconal — a treia sursă, după calendar și
+ * Minei (cerere user, 11.09.2026: „Calendarul și apoi Mineiul și Tipicul, doar sfinți care nu au
+ * fost menționați mai sus").
+ *
+ * Ce trebuie știut despre ea, fiindcă se vede în rezultat: titlul zilei din Anuar e, practic,
+ * titlul calendarului oficial — amândouă vin de la aceeași editură. Pe tot anul 2026 Anuarul
+ * adaugă UN SINGUR nume față de calendar (Sf. Mc. Lup din Tesalonic, 27 octombrie); restul
+ * nepotrivirilor sunt prescurtări („Arhid." / „Arhidiacon"), ortografie („Joachim" / „Ioachim")
+ * sau stricăciuni de scanare. De aceea rândurile trec printr-o sită strânsă: orice pare vătămat
+ * de OCR e lăsat afară, ca să nu ajungă pe o foaie citită cu glas tare în biserică.
+ */
+const ZILE_SI_PERICOPE = /^(Ap\.|Ev\.|glas|voscr|Duminica|S[âa]mb[ăa]ta|Pomenirea mor[țt]ilor)/i
+/** Începuturile care anunță o pomenire; restul segmentelor sunt altceva (perioade, note de tipic). */
+const INCEPUT_SFANT = /^(\(†\)|†\)|†|Sf\.|Sfin[țt]|Sf[âa]nt|Cuv\.|Ier\.|Mc\.|Odovania|[ÎI]nainte-pr[ăa]znuirea|Soborul|Pomenirea|Aducerea|Aflarea|Punerea|T[ăa]ierea)/
+/** Semnele pe care cartea tipărită nu le are: dacă apar, rândul e vătămat de scanare. */
+const URME_DE_SCANARE = /["”“'`*|]|[-–]\s*$|\b(Miezonoptica|metaniile|Unde exist[ăa]|Slujba Sf[âa]ntului)\b/
+
+export function pomeniriDinAnuar(titlu: string): Pomenire[] {
+  const iesire: Pomenire[] = []
+  for (const bucata of titlu.split(';')) {
+    // notele din paranteze („(Post)", „(Anul Nou)") nu sunt sfinți
+    const curat = bucata.replace(/\([^)]*\)/g, '').trim().replace(/\.$/, '').trim()
+    // Doua puncte despart uneori DOUA pomeniri („Înainte-prăznuirea Înălțării Sfintei Cruci: †
+    // Târnosirea bisericii Învierii din Ierusalim", „Miercurea Luminată: Sf. Ap. Aristarh…"), dar
+    // alteori tin un singur nume la un loc („Sf. Mc. din Dobrogea: Macrobie, Gordian…"). Se despart
+    // numai cand ce urmeaza dupa ele incepe ca o pomenire de sine statatoare.
+    const i = curat.indexOf(':')
+    const parti = i > 0 && INCEPUT_SFANT.test(curat.slice(i + 1).trim().replace(/^\+\s*/, '† '))
+      ? [curat.slice(0, i).trim(), curat.slice(i + 1).trim()]
+      : [curat]
+    for (const parte of parti) {
+      // crucea citita „+" de scanare se scrie cum o scrie cartea
+      const t = parte.replace(/^\+\s*/, '† ').trim()
+      if (!t || t.length > 90) continue
+      if (ZILE_SI_PERICOPE.test(t) || URME_DE_SCANARE.test(t)) continue
+      if (!INCEPUT_SFANT.test(t)) continue
+      iesire.push({ nume: t, pomenire: bucata.trim(), stih: [], viata: '' })
+    }
+  }
+  return iesire
+}

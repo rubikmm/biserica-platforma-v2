@@ -4,7 +4,7 @@
  * autonom (fonturile si imaginile inglobate); PDF-ul/JPG-ul le face Browser Rendering.
  */
 import type { IntrareVocabular, Slujba } from '@xc/contracts'
-import type { SfintiiDinMinei } from './tipic.js'
+import { type SursaSfinti, pomeniriNoi } from './tipic.js'
 import { LUNI, ZILE_SAPTAMANA, esc, dataLunga, intervalLizibil, adaugaZile, ziuaSaptamanii } from '@xc/ui'
 import trajanOtf from '../resurse/TrajanPro3-Regular.otf'
 import caladeaRegular from '../resurse/Caladea-Regular.ttf'
@@ -358,26 +358,32 @@ const POTRIVESTE = `
 // Sfintii zilei
 // ---------------------------------------------------------------------------
 
-export function sfintiiHtml(o: { data: string; zi: ZiPeProgram; sinaxar: string | null; cuSinaxar: boolean; minei: SfintiiDinMinei | null }): string {
+export function sfintiiHtml(o: { data: string; zi: ZiPeProgram; sinaxar: string | null; cuSinaxar: boolean; surse: SursaSfinti[] }): string {
   const cand = `${ZILE_SAPTAMANA[ziuaSaptamanii(o.data)]}, ${dataLunga(o.data)}`
   // Titlul e NUMELE zilei (duminica, praznicul), ca in V1 — nu `titlu_html`, care tine la un loc si
   // sfintii, si pericopele, si glasul: puse acolo, se repetau imediat dedesubt, in lista si pe randul
   // marunt (semnalat de user, 10.09.2026, la comparatia cu foile V1).
   const titlu = o.zi.denumire ? `<h1>${esc(o.zi.denumire)}</h1>` : ''
   const sfinti = o.zi.sfinti.map((s) => `<li class="${s.rang === 'praznic_imparatesc' || s.rang === 'cruce_rosie' ? 'rosu' : s.rang === 'cruce_albastra' ? 'albastru' : ''}">${esc(`${s.semn ? `${s.semn} ` : ''}${s.nume}`)}</li>`).join('')
-  // GRUPAT DUPA SURSA (cerere user, 10.09.2026). Cele doua carti nu spun acelasi lucru: Mineiul
-  // trece toata ceata zilei si da cu cinci pana la zece nume mai mult, dar n-are sfintii romani
-  // canonizati dupa editie, care sunt numai in calendar. De aceea listele stau una sub alta,
-  // fiecare cu numele cartii ei — nu se contopesc si nu se alege una in locul celeilalte.
-  // Capul de grup se scrie doar cand chiar sunt doua grupuri; cu unul singur ar fi zgomot.
-  const dinMinei = o.minei
-    ? `<ul>${o.minei.pomeniri.map((p) => `<li>${esc(p.nume)}</li>`).join('')}</ul>`
-    : ''
-  const grupuri = dinMinei
+  // GRUPAT DUPA SURSA, IN CASCADA (user, 10–11.09.2026: „Calendarul și apoi Mineiul și Tipicul,
+  // doar sfinți care nu au fost menționați mai sus"). Cartile nu spun acelasi lucru si nu se
+  // contopesc: calendarul deschide lista, iar din fiecare carte de dedesubt se taie ce s-a scris
+  // deja — potrivirea se face pe NUME, cu ingaduinta la ortografia altei editii (`pomeniriNoi`).
+  // Capul de grup se scrie doar cand chiar sunt mai multe grupuri; cu unul singur ar fi zgomot.
+  // Ce s-a spus deja: numele zilei (sta chiar sus, ca titlu) si sfintii calendarului.
+  const spuseDeja = [o.zi.denumire ?? '', ...o.zi.sfinti.map((s) => s.nume)].filter(Boolean)
+  const grupuriInPlus: string[] = []
+  for (const sursa of o.surse) {
+    const noi = pomeniriNoi(sursa.pomeniri, spuseDeja)
+    if (!noi.length) continue
+    for (const p of noi) spuseDeja.push(p.nume)
+    grupuriInPlus.push(`<p class="sursa">${esc(sursa.carte || 'Tipicul')}</p>
+<ul>${noi.map((p) => `<li>${esc(p.nume)}</li>`).join('')}</ul>`)
+  }
+  const grupuri = grupuriInPlus.length
     ? `<p class="sursa">Calendarul bisericesc</p>
 <ul>${sfinti}</ul>
-<p class="sursa">${esc(o.minei!.carte || 'Mineiul')}</p>
-${dinMinei}`
+${grupuriInPlus.join('\n')}`
     : `<ul>${sfinti}</ul>`
   // Randul marunt de sub lista NU poarta pericopele: Apostolul si Evanghelia au fost scoase la cererea
   // userului (10.09.2026) — foaia se citeste cu glas tare la sfarsitul Liturghiei, unde pericopele

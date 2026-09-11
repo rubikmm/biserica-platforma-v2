@@ -23,7 +23,7 @@ import { adaugaZile, aziBucuresti, dataVersiunii, eDataValida, eroareApi, html, 
 import pkg from '../package.json'
 import { type Pericopa, textulPericopei, textulVoscresnei, ziuaCalendarului } from './calendar.js'
 import { acoperire, cartile, mineiZilei, randuialaZilei, tipiconalZilei, zileleCuRanduiala } from './depozit.js'
-import { pomeniriDinMinei } from './sinaxar.js'
+import { pomeniriDinAnuar, pomeniriDinMinei } from './sinaxar.js'
 import { type Ctx, paginaMesaj, paginaZilei } from './pagini.js'
 
 export interface Env {
@@ -103,7 +103,7 @@ async function api(req: Request, env: Env, cale: string, azi: string): Promise<R
           { adresa: '/v1/zi/<AAAA-LL-ZZ> · /v1/zi/azi · /v1/zi/maine', ce_da: 'rânduiala zilei: ROEA + Anuar + Mineiul' },
           { adresa: '/v1/zile', ce_da: 'zilele cu rânduială proprie' },
           { adresa: '/v1/minei/<luna>/<zi>', ce_da: 'ziua din Minei — cartea nu ține de an' },
-          { adresa: '/v1/sfinti/<data>|azi|maine · /v1/sfinti/minei/<luna>/<zi>', ce_da: 'sfinții zilei, așa cum îi numără Mineiul' },
+          { adresa: '/v1/sfinti/<data>|azi|maine · /v1/sfinti/minei/<luna>/<zi>', ce_da: 'sfinții zilei, pe surse: Mineiul, apoi Anuarul' },
         ],
       },
       cache,
@@ -140,10 +140,20 @@ async function api(req: Request, env: Env, cale: string, azi: string): Promise<R
       luna = Number(data.slice(5, 7))
       zi = Number(data.slice(8, 10))
     }
-    const m = await mineiZilei(env.DB, luna, zi)
-    if (!m) return eroareApi(404, 'zi_lipsa', `Mineiul pe luna ${luna} n-are ziua ${zi} — cărțile intră pe rând.`)
-    const carte = (await cartile(env.DB)).get(`minei-${String(luna).padStart(2, '0')}`) ?? null
-    return jsonCuEtag(req, { data, luna, zi, titlu: m.titlu, pomeniri: pomeniriDinMinei(m), carte }, cache)
+    const [m, carti, tip] = await Promise.all([
+      mineiZilei(env.DB, luna, zi),
+      cartile(env.DB),
+      // Anuarul tine de an, deci numai cand se cere o data anume; cerut ca (luna, zi), raspunde doar Mineiul.
+      data ? tipiconalZilei(env.DB, data) : Promise.resolve(null),
+    ])
+    if (!m && !tip) return eroareApi(404, 'zi_lipsa', `Nici Mineiul, nici Anuarul n-au ziua ${zi}.${luna} — cărțile intră pe rând.`)
+    // Sursele, in ORDINEA in care se citesc pe foaie (user, 11.09.2026): intai Mineiul — el trece
+    // toata ceata zilei —, apoi Anuarul, care aproape nu adauga nimic peste calendar.
+    const surse = [
+      m ? { cod: 'minei', carte: carti.get(`minei-${String(luna).padStart(2, '0')}`) ?? null, titlu: m.titlu, pomeniri: pomeniriDinMinei(m) } : null,
+      tip ? { cod: 'tipiconal', carte: carti.get('anuar') ?? null, titlu: tip.titlu, pomeniri: pomeniriDinAnuar(tip.titlu) } : null,
+    ].filter((x): x is NonNullable<typeof x> => x !== null && x.pomeniri.length > 0)
+    return jsonCuEtag(req, { data, luna, zi, surse }, cache)
   }
 
   const mMinei = /^\/v1\/minei\/(\d{1,2})\/(\d{1,2})$/.exec(cale)

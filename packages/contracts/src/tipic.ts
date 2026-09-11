@@ -117,14 +117,26 @@ export const PomenireMinei = z.object({
 })
 export type PomenireMinei = z.infer<typeof PomenireMinei>
 
-/** Răspunsul lui `GET /v1/sfinti/<data>`: sfinții zilei așa cum îi numără Mineiul. */
-export const SfintiiZileiMinei = z.object({
+/** Pomenirile zilei dintr-o singură carte, cu cartea la vedere. */
+export const SursaSfinti = z.object({
+  /** `minei` sau `tipiconal` (Anuarul liturgic și tipiconal). */
+  cod: z.string().min(1),
+  carte: CarteTipic.nullable(),
+  /** Titlul zilei în cartea aceea. */
+  titlu: z.string(),
+  pomeniri: z.array(PomenireMinei),
+})
+export type SursaSfinti = z.infer<typeof SursaSfinti>
+
+/**
+ * Răspunsul lui `GET /v1/sfinti/<data>`: sfinții zilei GRUPAȚI PE CĂRȚI, în ordinea în care se
+ * citesc pe foaie (user, 11.09.2026) — întâi Mineiul, care trece toată ceata zilei, apoi Anuarul.
+ * Cine le arată pune calendarul deasupra și taie din fiecare carte ce s-a spus mai sus.
+ */
+export const SfintiiZileiTipic = z.object({
   data: DataCalendaristica.nullable(),
   luna: z.number().int().min(1).max(12),
   zi: z.number().int().min(1).max(31),
-  /** Titlul zilei în carte. */
-  titlu: z.string(),
-  pomeniri: z.array(PomenireMinei),
-  carte: CarteTipic.nullable(),
+  surse: z.array(SursaSfinti),
 })
-export type SfintiiZileiMinei = z.infer<typeof SfintiiZileiMinei>
+export type SfintiiZileiTipic = z.infer<typeof SfintiiZileiTipic>
