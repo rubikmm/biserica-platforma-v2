@@ -536,7 +536,9 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
   actiune({
     nume: 'program.sterge_slujba',
     urmare: { actiune: 'program.valideaza_saptamana', argumente: { saptamana: 'zi' } },
-    descriere: 'Scoate o slujbă din program. Slujba se găsește după zi și nume. Omul confirmă înainte.',
+    descriere:
+      'Scoate o slujbă din program. Slujba se găsește după zi („marți") și nume sau oră; fără zi se ' +
+      'caută azi, deci cere-i omului ziua dacă n-a spus-o. Cheam-o direct, fără să întrebi altceva.',
     efect: 'scrie',
     permisiune: 'program.write',
     intrare: z.object({
@@ -545,7 +547,11 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
       ora: OraOptionala.describe('ora ei; alege slujba când sunt mai multe în zi'),
     }),
     iesire: z.object({ sters: z.string() }),
-    exemple: ['scoate vecernia de vineri', 'anulează acatistul de joi'],
+    exemple: [
+      { fraza: 'scoate vecernia de vineri', argumente: { zi: 'vineri', slujba: 'vecernia' } },
+      { fraza: 'șterge Sfântul Maslu de marți', argumente: { zi: 'marti', slujba: 'sfantul maslu' } },
+      { fraza: 'anulează slujba de joi seara de la 18', argumente: { zi: 'joi', ora: '18:00' } },
+    ],
     async rezuma({ zi, slujba, ora }, c) {
       const g = await gasesteSlujba(c.env, zi, slujba, ora)
       return `Scot „${g.slujba.nume}" de ${dataCuZi(g.slujba.data)}, ora ${g.slujba.ora}.${g.scrisa ? '' : ' Săptămâna nu e scrisă încă — o scriu întâi din propunere.'}`
