@@ -213,6 +213,13 @@ propunerea automată, ca în V1.
   de sus. Fără JS, ori intrat de-a dreptul pe adresă (link trimis, semn de carte), linkul duce cinstit
   la `/arhiva`. **De ce nu din `referer`**: acela lipsește des (și la trecerea https→http, și la unele
   telefoane), deci pagina ar arăta altfel de la o deschidere la alta — cu tot cu cache-ul de muchie.
+  **Și în pagina arhivei, săptămânile deschise rămân marcate** (user, 16:32: „`:visited` trebuie și el
+  marcat cumva"): `.baton a:visited` capătă contur, fundal stins și scris mai șters — semnul vine din
+  **istoricul browserului**, deci nu ținem noi nimic minte și se vede și după ce omul închide
+  telefonul. ⚠️ La `:visited` browserele lasă NUMAI proprietăți de culoare (`color`,
+  `background-color`, `border-color`, `outline-color`), ca istoricul să nu se poată citi măsurând
+  pagina: de aceea conturul e scris dinainte **transparent** pe `.baton a`, iar `:visited` doar îl
+  colorează. Se pun două semne deodată (contur ȘI fundal), fiindcă browserele mai fac nazuri la unul.
 - **Antetul pe telefon are acum DOUĂ înfățișări, după drepturi** (patru cereri ale userului, 16:02).
   Pastila omului **fără** drepturi de admin poartă clasa **`larga`** (o decide `ctx.eAdmin`) și, sub
   600 px: **se întinde cât rândul** („cele două butoane de la stânga… să fie dispuse pe toată

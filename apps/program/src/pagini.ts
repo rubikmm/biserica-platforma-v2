@@ -421,8 +421,20 @@ body:not(.cu-calendar) .zi.ultima { border-bottom:0 }
 .baton { display:grid; grid-template-columns:repeat(auto-fit,minmax(128px,1fr));
          background:var(--paper); border:1px solid var(--rule); border-radius:10px; overflow:hidden }
 .baton a { padding:9px 8px 10px; text-align:center; text-decoration:none; color:var(--ink);
-           box-shadow:1px 0 0 var(--rule), 0 1px 0 var(--rule) }
+           box-shadow:1px 0 0 var(--rule), 0 1px 0 var(--rule);
+           /* conturul sta scris de pe acum, TRANSPARENT, ca sa aiba ce colora :visited — vezi jos */
+           outline:2px solid transparent; outline-offset:-2px }
 .baton a:hover { background:var(--tinta); color:var(--rosu) }
+/* ⚠️ SAPTAMANILE DESCHISE se vad marcate (user, 11.09.2026, 16:32) — semnul ca „aici am fost deja",
+   cand te intorci in arhiva cu pasul inapoi. Se face din :visited, adica din istoricul browserului:
+   nimic de tinut minte de noi, si merge si dupa ce omul inchide telefonul. ⚠️ Browserele lasa la
+   :visited NUMAI proprietati de culoare (color, background-color, border-color, outline-color) —
+   ca sa nu se poata citi istoricul masurand pagina. De aceea conturul e scris mai sus transparent si
+   aici doar se coloreaza; un chenar sau un semn adaugat acum n-ar avea niciun efect.
+   Doua semne deodata, dinadins: conturul (se vede si pe fundal colorat) si fundalul stins (se vede si
+   acolo unde browserul face nazuri la contur). */
+.baton a:visited { outline-color:var(--faint); background-color:var(--tinta); color:var(--soft) }
+.baton a:visited:hover { outline-color:var(--rosu); color:var(--rosu) }
 .baton b { display:block; font-size:15.5px; font-weight:600; white-space:nowrap }
 .baton span { display:block; margin-top:2px; font:12.5px ui-sans-serif,system-ui; color:var(--faint) }
 .baton i { display:block; margin-top:4px; font:600 9px/1 ui-sans-serif,system-ui; font-style:normal;
