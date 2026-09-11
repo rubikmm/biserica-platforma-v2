@@ -14,6 +14,7 @@ import {
   redacteaza,
 } from '@xc/contracts'
 import { citesteConfig, permiteSecretDebug } from '@xc/config'
+import type { RezultatConsum } from './depozit.js'
 import { toate } from '@xc/db'
 import { Logger, correlationId } from '@xc/observability'
 import { DURATA_COD_SEC, DURATA_SESIUNE_SEC } from './jetoane.js'
@@ -252,7 +253,18 @@ export default {
         // Codul scris: aici se naste sesiunea (si contul, la prima confirmare).
         case '/confirma-cod': {
           const date = CerereConsum.parse(await req.json())
-          const rezultat = await confirmaCodDeIntrare(env.DB, date.email, date.cod)
+          // ⚠️ TEMPORAR, DOAR IN DEV — codul de casa (user, 11.09.2026: „sa faci 123456 valabil
+          // mereu pentru contul meu"). Merge numai pe adresa super-adminului si numai cat timp
+          // `permiteSecretDebug` e adevarat, adica `MEDIU === 'dev'`; pe staging si in productie
+          // blocul e inert, ca si cutia care arata codul in pagina. DE STERS cand nu mai trebuie.
+          const codDeCasa =
+            permiteSecretDebug(cfg) &&
+            date.cod === '123456' &&
+            cfg.EMAIL_SUPERADMIN !== '' &&
+            date.email === cfg.EMAIL_SUPERADMIN.trim().toLowerCase()
+          const rezultat: RezultatConsum = codDeCasa
+            ? { ok: true, email: date.email, userId: null, displayName: null }
+            : await confirmaCodDeIntrare(env.DB, date.email, date.cod)
 
           if (!rezultat.ok) {
             await inregistreazaIncercare(env.DB, date.email, 'email')

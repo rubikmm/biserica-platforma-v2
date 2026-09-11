@@ -136,7 +136,7 @@ export default {
 
     // Bariera CSRF pentru orice metoda care schimba date.
     if (req.method === 'POST') {
-      const problema = verificaCsrf(req, [cfg.ORIGINE_PUBLICA])
+      const problema = verificaCsrf(req, [cfg.ORIGINE_PUBLICA], cfg.MEDIU === 'dev')
       if (problema) {
         log.warn('cerere respinsa de verificarea de origine', { problema })
         return html(

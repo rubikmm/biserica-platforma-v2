@@ -64,12 +64,19 @@ export function principalDin(sesiune: SesiuneCurenta): Principal | null {
  * (`https://rubik:8474/cont`) — comparate ca siruri, cele doua nu se potrivesc niciodata si
  * fiecare POST local ajungea respins.
  */
-export function verificaCsrf(req: Request, adresePermise: string[]): string | null {
+export function verificaCsrf(req: Request, adresePermise: string[], eDev = false): string | null {
   const metoda = req.method.toUpperCase()
   if (metoda === 'GET' || metoda === 'HEAD' || metoda === 'OPTIONS') return null
 
   const origine = req.headers.get('origin')
   if (!origine) return 'lipseste antetul Origin'
+
+  // In dev containerul se deschide de pe mai multe nume (rubik, IP-ul NAS-ului, alt nume de casa),
+  // iar `ORIGINE_PUBLICA` e scrisa cu unul singur: orice POST de pe celelalte cadea aici cu
+  // „origine neacceptata" si intrarea locala parea stricata (pătit de user, 11.09.2026). Lista
+  // alba se lasa deoparte DOAR in dev — paza adevarata, tokenul CSRF pereche cu cookie-ul, se
+  // verifica oricum la fiecare ruta care schimba date (`verificaTokenCsrf`).
+  if (eDev) return null
 
   const permise = new Set(
     adresePermise.map((a) => {

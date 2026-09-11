@@ -164,7 +164,7 @@ export default {
     const meniuAzi = (rest: Partial<Meniu> = {}): Meniu => ({ luni: null, foaie: null, azi, ...rest })
 
     if (req.method === 'POST') {
-      const problema = verificaCsrf(req, [cfg.ORIGINE_PUBLICA])
+      const problema = verificaCsrf(req, [cfg.ORIGINE_PUBLICA], cfg.MEDIU === 'dev')
       if (problema) {
         const ctxMinim: Ctx = { prefix, nav, utilizator: null, eAdmin: false, versiune: pkg.version, modificata: dataVersiunii(env.VERSIUNE) }
         return html(paginaMesaj(ctxMinim, 'Verificare de securitate', problema, 'rea', meniuAzi()), 403)

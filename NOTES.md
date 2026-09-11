@@ -143,6 +143,15 @@ propunerea automată, ca în V1.
 
 ## Capcane de ținut minte
 
+- **Intrarea pe local: `123456` merge oricând pentru adresa super-adminului** (⚠️ TEMPORAR, cerere
+  user 11.09.2026). Fluxul rămâne întreg: adresă → „Trimite-mi codul" → scrii `123456`. Blocul e în
+  `services/identity-worker/src/index.ts`, sub `permiteSecretDebug(cfg)` — pe staging și în
+  producție e inert. **De șters când nu mai trebuie.**
+- **`Origin` în dev: lista albă nu mai respinge.** `ORIGINE_PUBLICA` e scrisă cu un singur nume
+  (`https://rubik:8474`), dar containerul se deschide și de pe IP-ul NAS-ului sau alt nume de casă —
+  orice POST de acolo cădea cu „origine neacceptată" și intrarea locală părea stricată. Din 11.09
+  `verificaCsrf(req, …, eDev)` sare peste lista albă **doar în dev**; paza adevărată (tokenul CSRF
+  pereche cu cookie-ul) se verifică oricum la fiecare rută.
 - **Sub masca „vezi ca", pagina e personală chiar dacă n-are niciun nume pe ea.** Regula de cache
   se uita doar la `ctx.utilizator`, deci sub masca „neautentificat" pagina ieșea cu
   `public, max-age=300` — iar `home` o dădea așa **întotdeauna**. Browserul o servea din propriul
@@ -190,6 +199,13 @@ propunerea automată, ca în V1.
 
 ### 2026-09-11
 
+- **Intrarea pe local, reparată în două locuri.** (1) POST-urile locale cădeau cu „origine
+  neacceptată" când pagina era deschisă de pe alt nume decât `rubik` — lista albă de origini se
+  sare acum în dev. (2) `123456` e cod de casă permanent pentru adresa super-adminului, tot numai
+  în dev. Probat: POST cu `Origin: https://192.168.1.77:8474` trece, iar `123456` deschide sesiune
+  cu drepturi de super-admin. **Emailul de pe staging NU e stricat** — auditul
+  (`xc-audit-staging`) arată `livrat: true` cu `messageId=…@posta.sfantul-ilie.ro`, inclusiv la
+  intrarea reușită a userului de la 08:49. „Eroarea de trimitere" era pagina de CSRF respins.
 - **Cutia de probă locală are ieșire.** X în dreapta (`/proba/inchis`): scoate rolul împrumutat —
   antetul și drepturile revin la contul adevărat — și strânge cutia într-o pastilă „probă", care
   o deschide la loc (`/proba/deschis` șterge cookie-ul). Nota de sub butoane a ieșit, iar pe
