@@ -105,7 +105,11 @@ propunerea automată, ca în V1.
      rămâne `comunicare.trimite_obiect` (trimiterea unei foi la o audiență) — a comunicării;
    - nimic nu e publicat pe staging: acolo trebuie `wrangler secret put SECRET_INTERN` la fiecare
      worker cu acțiuni (`program`, `calendar`, `tipic`, `chat`) și migrația bazei `xc-chat-staging`;
-   - de probat cu ochii pe telefon: bula pe ecran mic (panoul ia toată lățimea sub 480 px).
+   - de probat cu ochii pe telefon: bula pe ecran mic (panoul ia toată lățimea sub 480 px);
+   - ⚠️ **`program.retrage_validarea` (nou, 12.09.2026) nu e încă în lista de unelte din panou** —
+     până nu i se scrie numele acolo, modelul n-o vede și regula „validat → propus" din Îndrumări
+     rămâne fără braț. După ce se adaugă: reformulat îndrumarea ca să cheme unealta pe nume și
+     rerulate probele (a cincea unealtă îngreunează alegerea pentru modelele mici).
 2. **Ce a mai rămas deosebit între local și public** (user, 11.09.2026: „să nu fie nicio diferență
    între testare și public"). Trei deosebiri, toate **structurale**, nu de afișare:
    - **emailul nu poate pleca din `wrangler dev`** — de aceea codul apare în pagină și `123456`
@@ -428,6 +432,10 @@ la chat-worker; local în `services/chat-worker/.dev.vars` (gitignored). Modelul
 acțiuni (`{fraza, argumente}`), setul de probe `infrastructure/eval/chat.mjs`. **Dacă cineva lărgește
 lista de unelte, să reruleze probele** — modelele mici cad exact la alegerea între unelte.
 
+⚠️ **Lista din panou e un filtru, nu o listă de dorințe**: o unealtă nouă publicată de aplicație NU
+ajunge la model până nu i se scrie numele acolo (goală = toate; `chat-worker/src/index.ts`, `permis`).
+Așa a stat `program.retrage_validarea` după publicarea ei (12.09.2026).
+
 **Drumul de antrenament, convenit prin practică**: utilizatorul se joacă pe staging → export
 (`node infrastructure/eval/discutii.mjs --remote --env staging`) → fiecare discuție dusă la capăt intră
 în probe, cu fraza LUI și sursa notată → orice schimbare la instrucțiuni/unelte/model se rulează pe
@@ -594,6 +602,22 @@ forța antetul `Host`**.
 ## Jurnal
 
 ### 2026-09-12
+
+- **Validarea are, în sfârșit, drum înapoi: `program.retrage_validarea`** (user, 02:28, după ce
+  scrisese în Îndrumări „dacă programul este deja VALIDAT trebuie mai întâi să-l transformi în
+  PROPUS"). ⚠️ Regula aceea era **nefolosibilă**: în cod nu exista nicio cale `validat → propus` —
+  nici funcție, nici acțiune, nici rută. Starea urca doar: `valideazaSaptamana` o ducea în `validat`,
+  iar orice editare a unei săptămâni validate o muta automat în `modificat_dupa_validare`
+  (`stareaDupaSchimbare`). Acum: `retrageValidarea` (`depozit.ts`) trece săptămâna în `propus`,
+  golește `validat_de`/`validat_la` și lasă urma în `istoric` (`ce = 'retras'`, cu starea și
+  validarea dinainte în `detalii`). Scrie **`program.week.changed.v1`**, nu `...validated.v1`, ca
+  automatizarea să nu trimită anunțul a doua oară.
+- **Dreptul: `program.publish`, același cu al validării** (decizie user, 02:35) — cine poate valida
+  poate și retrage, adminii îl au implicit, deci **nicio cheie nouă și nicio republicare a lui
+  `xc-authz-staging`**.
+- **Blocarea rămâne moale, nu în cod** (decizie user, 02:35): `modifica/adauga/sterge_slujba` NU
+  refuză o săptămână validată — regula trăiește în Îndrumările din panou, iar unealta e cea care o
+  face executabilă. Publicat pe staging, 0.5.0; 103 teste trec, `tsc` curat.
 
 - **Întrerupătorul „Calendar" lucrează oriunde AVEM calendarul, nu doar pe săptămâna de azi și pe cea
   viitoare** (user, 00:03: „să fie activ pe toate săptămânile din anul curent… unde știm că avem

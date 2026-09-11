@@ -306,7 +306,7 @@ function actorEveniment(cine: CineScrie): ActorEveniment {
 function declaratieIstoric(
   db: D1Database,
   cine: CineScrie,
-  ce: 'scris' | 'validat' | 'schimbat' | 'sters',
+  ce: 'scris' | 'validat' | 'retras' | 'schimbat' | 'sters',
   luni: string,
   slujbaId: string | null,
   detalii: unknown,
@@ -513,4 +513,30 @@ export async function valideazaSaptamana(db: D1Database, luni: string, cine: Cin
     declaratieEveniment(db, 'program.week.validated.v1', s, 'validat', n, cine),
   ])
   return { ...s, stare: 'validat', validat_de: cine.userId ?? 'sistem', validat_la: t, modificat: t }
+}
+
+/**
+ * RETRAGE validarea: saptamana se intoarce in `propus`, ca sa poata fi modificata (user,
+ * 12.09.2026: „nu se editeaza un program VALIDAT, mai intai se trece in alta stare"). Drumul
+ * invers al validarii, singurul — pana acum starea urca doar. Cine a validat si cand se sterg:
+ * validarea nu mai e in picioare, iar urma ei ramane in `istoric` ('retras').
+ *
+ * ⚠️ De aici foaia de pe usa nu se mai da (ruta ei cere `validat`), iar anuntul NU pleaca a doua
+ * oara: se scrie `program.week.changed.v1`, nu `...validated.v1` — automatizarile asculta la al
+ * doilea.
+ */
+export async function retrageValidarea(db: D1Database, luni: string, cine: CineScrie): Promise<RandSaptamana> {
+  const s = await saptamana(db, luni)
+  if (!s) throw new Error(`săptămâna ${luni} nu e scrisă încă`)
+  if (s.stare === 'propus') return s
+  const t = acum()
+  const n = await numarSlujbe(db, luni)
+  await batch(db, [
+    db
+      .prepare(`UPDATE saptamani SET stare = 'propus', validat_de = NULL, validat_la = NULL, modificat = ? WHERE luni = ?`)
+      .bind(t, luni),
+    declaratieIstoric(db, cine, 'retras', luni, null, { slujbe: n, din: s.stare, validat_de: s.validat_de, validat_la: s.validat_la }),
+    declaratieEveniment(db, 'program.week.changed.v1', s, 'propus', n, cine),
+  ])
+  return { ...s, stare: 'propus', validat_de: null, validat_la: null, modificat: t }
 }

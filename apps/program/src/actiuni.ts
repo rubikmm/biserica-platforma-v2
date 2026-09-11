@@ -23,6 +23,7 @@ import {
   arhivaIntreaga,
   cautaInVocabular,
   modificaSlujba,
+  retrageValidarea,
   scrieSaptamana,
   stergeSlujba,
   valideazaSaptamana,
@@ -618,6 +619,38 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
       const rand = await valideazaSaptamana(c.env.DB, luni, cine, s.cal?.versiune ?? null)
       c.ctxExec.waitUntil(golesteOutbox(c.env.DB, c.env.EVENIMENTE))
       return saptamanaDin(rand, await slujbeleSaptamanii(c.env.DB, luni))
+    },
+  }),
+
+  actiune({
+    nume: 'program.retrage_validarea',
+    descriere:
+      'Trece o săptămână VALIDATĂ înapoi în „propus", ca să poată fi modificată. De chemat înainte ' +
+      'de orice schimbare într-o săptămână validată. Din acel moment foaia de pe ușă nu se mai ' +
+      'tipărește, până la o nouă validare. Omul confirmă înainte.',
+    efect: 'scrie',
+    permisiune: 'program.publish',
+    intrare: z.object({ saptamana: SaptamanaCeruta }),
+    iesire: Saptamana,
+    exemple: [
+      'treci săptămâna asta înapoi în propus',
+      'retrage validarea săptămânii viitoare',
+      'vreau să schimb ceva în săptămâna validată',
+    ],
+    async rezuma({ saptamana: cerut }, c) {
+      const luni = luneaSaptamanii(ziua(cerut))
+      const rand = await saptamana(c.env.DB, luni)
+      if (!rand) throw new Error(`săptămâna ${titluSaptamanii(luni)} nu e scrisă încă — n-are ce validare să piardă`)
+      if (rand.stare === 'propus') throw new Error(`săptămâna ${titluSaptamanii(luni)} e deja „propus" — se poate modifica așa cum e`)
+      return `Retrag validarea săptămânii ${titluSaptamanii(luni)}: trece înapoi în „propus", ca să poată fi modificată. Foaia de pe ușă nu se mai tipărește până la o nouă validare.`
+    },
+    async executa({ saptamana: cerut }, c) {
+      const luni = luneaSaptamanii(ziua(cerut))
+      const rand = await saptamana(c.env.DB, luni)
+      if (!rand) throw new Error(`săptămâna ${titluSaptamanii(luni)} nu e scrisă încă — n-are ce validare să piardă`)
+      const dupa = await retrageValidarea(c.env.DB, luni, cineScrie(c))
+      c.ctxExec.waitUntil(golesteOutbox(c.env.DB, c.env.EVENIMENTE))
+      return saptamanaDin(dupa, await slujbeleSaptamanii(c.env.DB, luni))
     },
   }),
 ])
