@@ -102,56 +102,84 @@ html { scroll-padding-top:130px }
 .luni-alege .acum { color:var(--paper); background:var(--rosu); border-color:var(--rosu) }
 .luni-alege .gol { opacity:.3 }
 
-/* Pe telefon butoanele isi lasa cuvintele si raman numai iconitele — altfel randul, care tine acum
-   si navigarea, s-ar rupe in doua. Numele intreg sta in title si aria-label, deci nu se pierde. */
+/* Pe telefon butoanele de sub pastila isi lasa cuvintele si raman numai iconitele: cu ele, abonarea
+   si cele doua liste cer ~446 px, iar un telefon de 390 are 335 de folosit. Numele intreg sta in
+   title si aria-label, deci nu se pierde. */
 @media (max-width:600px) {
   .btns { gap:7px }
   .btns .mic { padding-left:11px; padding-right:11px }
   .btns .sarb .cuv, .btns .abon .cuv { display:none }
 }
 
+/* PASTILA NAVIGARII (user, 12.09.2026: „să fie o pastilă ca la Program și lunile să fie text în
+   capsulă"). Un singur corp: chenarul si rotunjirea stau pe PASTILA, nu pe segmente; inauntru,
+   bulina lui „azi" si lunile, despartite doar de o linie de 1 px. Aceeasi retea de reguli ca la
+   pastila Programului, ca cele doua aplicatii sa se recunoasca.
+
+   ⚠️ TOTUL STA PE O SINGURA LINIE (user, 12.09.2026: „butoanele au coborât jos - să fie totul pe o
+   linie"). Incercasem pastila pe un rand al ei, ca sa incapa tot anul la vedere; utilizatorul a
+   cerut inapoi randul unic, deci pastila ia numai ce ramane dupa abonare si sarbatori (~245 px, vreo
+   patru luni) si se DERULEAZA pentru rest — JS-ul aduce luna deschisa la mijloc si scrie sagetile.
+   ⚠️ MASURA DE PORNIRE E 0 (flex:1 1 0), NU auto: randul are flex-wrap, iar ruperea lui se hotaraste
+   dupa masura IPOTETICA a fiecarui copil, inainte de orice strangere. Cu auto, pastila porneste de la
+   latimea celor treisprezece luni, umple singura randul, si tocmai butoanele coboara — chiar asta
+   s-a si intamplat o data. */
+.btns .pastila { display:flex; flex:1 1 0; min-width:0; align-items:stretch;
+                 border:1px solid var(--rule); border-radius:10px; background:var(--tinta);
+                 overflow:hidden }
+/* ⚠️ Fasia se deruleaza (si pe telefon, si oriunde lunile nu incap), bulina nu: ea sta in afara ei,
+   la capul pastilei, ca sa fie mereu la indemana. Linia dintre ele e chenarul din stanga al fasiei. */
+/* ⚠️ position:relative NU e de podoaba: JS-ul aduce luna deschisa la mijloc cu offsetLeft, iar acela
+   se masoara fata de cel mai apropiat stramos asezat. Fara el, offsetParent ajunge sa fie pagina,
+   numarul iese cu vreo doua sute de pixeli mai mare si fasia se deschide derulata la capat — se vedea
+   „NOI DEC IAN 2027" in loc de luna curenta. */
+.pastila .fasie { flex:1 1 auto; min-width:0; position:relative;
+                  overflow-x:auto; overscroll-behavior-x:contain;
+                  -webkit-overflow-scrolling:touch; scrollbar-width:none;
+                  border-left:1px solid var(--rule) }
+.pastila .fasie::-webkit-scrollbar { display:none }
+.pastila .luni { display:flex; align-items:stretch; gap:0; width:max-content; padding:0 }
+
+/* LUNILE: text simplu in capsula — fara chenar, fara fundal, fara rotunjire a lor. Despartitura e o
+   linie de 1 px, ca intre segmentele Programului. */
+/* ⚠️ SEGMENTELE SUNT STRANSE CAT SE POATE, ca in latimea putina a pastilei sa intre cat mai multe
+   luni: spatiul dintre litere .03em (era .1em), cel din laturi 8 px (era 14), scrisul 12,5 px (era
+   13). Asa lunile cer 636 px cu totul — exact cat le-ar trebui ca sa incapa TOATE, daca pastila ar
+   avea randul ei; pe randul comun, cu abonarea si sarbatorile langa, se vad vreo patru si restul vin
+   din derulare. Daca umfli vreo masura, se vad si mai putine. Masoara cu scrollWidth vs clientWidth
+   pe .fasie, nu cu ochiul. */
+.luna-buton { flex:none; display:flex; align-items:center; justify-content:center;
+              color:var(--soft); text-decoration:none; background:transparent;
+              border:0; border-radius:0; padding:11px 8px;
+              font:600 12.5px/1 ui-sans-serif,system-ui; letter-spacing:.03em;
+              text-transform:uppercase; white-space:nowrap }
+.luna-buton + .luna-buton { border-left:1px solid var(--rule) }
+.luna-buton:hover { color:var(--rosu); background:var(--paper) }
+/* luna deschisa: rosie si plina, ca segmentul pe care esti din pastila Programului (nu rosu tare cu
+   scris alb, cum era cand fiecare luna era o pastiluta a ei) */
+.luna-buton.activa { color:var(--rosu); font-weight:700;
+                     background:color-mix(in srgb, var(--rosu) 11%, transparent) }
+
 /* „AZI" E O BULINA (user, 12.09.2026: „AZI să fie o bulină ca la Program"): butonul n-are text, are
    un punct desenat din CSS, cat cel din navigarea Programului (9 px). Rosul i-a ramas — el spune ca
    tinta e ziua de azi; masura din laturi e mai mare decat ar cere punctul, ca sa fie la fel de usor
-   de nimerit cu degetul ca butoanele lunilor de langa el. Inaltimea e pusa sa cada exact cat a unei
-   luni (punct 9 + 12 sus + 12 jos + 2 de chenar = 35 px): daca umbli la .luna-buton, umbla si aici. */
+   de nimerit cu degetul ca lunile de langa el. De cand sta in pastila, chenarul si rotunjirea lui au
+   cazut: le are pastila. */
 .azi-buton { flex:none; display:flex; align-items:center; justify-content:center;
              color:var(--rosu); background:var(--rosu-palid);
-             border:1px solid var(--rosu-linie); border-radius:999px; padding:12px 20px;
-             text-decoration:none }
+             border:0; border-radius:0; padding:11px 16px; text-decoration:none }
 .azi-buton::before { content:""; width:9px; height:9px; border-radius:50%; background:currentColor }
-.azi-buton:hover { border-color:var(--rosu) }
-.luni-rand .azi-buton { margin-right:6px }
+.azi-buton:hover { background:color-mix(in srgb, var(--rosu) 14%, transparent) }
 
-/* NAVIGAREA A URCAT IN ANTET (user, 12.09.2026: „mută navigarea sus") — de aceea .luni-rand nu mai
-   are margini de sus si de jos si e singura din rand care creste (flex:1 1 auto, min-width:0):
-   restul butoanelor stau cat le tine scrisul, iar prisosul il ia fasia lunilor. */
-/* ⚠️ MASURA DE PORNIRE E 0 (flex:1 1 0), NU auto — aceeasi capcana ca la pastila Programului:
-   randul are flex-wrap, iar wrap-ul se hotaraste dupa masura IPOTETICA a fiecarui buton, inainte de
-   orice strangere. Cu auto, fasia pornea de la latimea celor 13 luni (~1000 px), umplea singura
-   randul, si abonarea cu sarbatorile cadeau pe al doilea rand. Cu 0, navigarea ia numai ce ramane
-   dupa ele si se deruleaza inauntru, cum ii e felul. */
-.btns .luni-rand { flex:1 1 0; min-width:0; margin:0 }
-.luni-rand { display:flex; align-items:center; gap:0; margin:14px 0 2px }
-.sageata { flex:none; border:none; background:none; color:var(--faint);
-           cursor:pointer; font:300 22px/1 ui-sans-serif,system-ui; padding:9px 7px;
-           border-radius:999px }
-.sageata:hover:not([disabled]) { color:var(--rosu) }
-.sageata[disabled] { opacity:.2; cursor:default }
-.fasie { flex:1 1 auto; min-width:0;
-         position:relative; overflow-x:auto; overscroll-behavior-x:contain;
-         -webkit-overflow-scrolling:touch; scrollbar-width:none;
-         -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 14px,#000 calc(100% - 14px),transparent 100%);
-         mask-image:linear-gradient(90deg,transparent 0,#000 14px,#000 calc(100% - 14px),transparent 100%) }
-.fasie::-webkit-scrollbar { display:none }
-.luni { display:flex; gap:7px; width:max-content; padding:0 14px }
-.luna-buton { flex:none; color:var(--soft); text-decoration:none; background:var(--paper);
-              border:1px solid var(--rule); border-radius:999px; padding:10px 16px;
-              font:600 13px/1 ui-sans-serif,system-ui; letter-spacing:.1em;
-              text-transform:uppercase }
-.luna-buton:hover { color:var(--rosu); border-color:var(--rosu) }
-.luna-buton.activa { color:var(--paper); background:var(--rosu); border-color:var(--rosu) }
-.luna-buton.an-vecin { color:var(--faint); border-style:dashed }
+/* Sagetile — segmentele de la capetele pastilei, pentru cine n-are deget. JS-ul le ascunde cu totul
+   cand lunile incap (pe desktop incap), ca sa nu stea doua segmente moarte in pastila. */
+/* stranse la os: pe randul unic, fiecare pixel luat de ele e o bucata de luna care nu se mai vede */
+.sageata { flex:none; border:0; background:transparent; color:var(--faint); cursor:pointer;
+           font:300 19px/1 ui-sans-serif,system-ui; padding:0 6px; border-radius:0 }
+.azi-buton + .sageata, .sageata + .fasie, .fasie + .sageata { border-left:1px solid var(--rule) }
+.sageata:hover:not([disabled]) { color:var(--rosu); background:var(--paper) }
+.sageata[disabled] { opacity:.25; cursor:default }
+.sageata[hidden] { display:none }
 
 h2.luna { font:400 13px/1 ui-sans-serif,system-ui; letter-spacing:.2em; text-transform:uppercase;
           color:var(--faint); margin:26px 0 6px; padding-bottom:8px;
@@ -268,8 +296,10 @@ dialog.fereastra::backdrop { background:rgba(8,10,14,.55) }
 
 @media (max-width:520px) {
   /* bulina ramane cat o luna si aici: 9 + 12 + 12 + 2 = 35, fata de 12.5 + 20 + 2 = 34.5 */
-  .azi-buton { padding:12px 16px }
-  .luna-buton { padding:10px 14px; font-size:12.5px }
+  /* pastila se strange, ca sa incapa mai multe luni in ea; derularea o face degetul, deci sagetile
+     ies cu totul (user, 12.09.2026: „pe mobil tot așa să se poate muta stânga dreapta") */
+  .azi-buton { padding:11px 15px }
+  .luna-buton { padding:11px 11px; font-size:12.5px }
   .sageata { display:none }
   h1 { font-size:42px }
   .data-mare { font-size:34px }

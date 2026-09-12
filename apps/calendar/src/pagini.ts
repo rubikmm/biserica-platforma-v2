@@ -154,13 +154,19 @@ const JS_ABONARE = `
 })();
 `
 
-/** Scriptul paginii de lună: șirul lunilor, „AZI" și fereastra cu textele zilei (din V1). */
-function script(prefix: string): string {
-  return `
+/**
+ * Scriptul NAVIGARII — merge pe TOATE paginile care au pastila in antet (luna, ziua, sarbatorile),
+ * nu doar pe pagina lunii ca pana la 12.09.2026. Face trei lucruri:
+ *
+ *   - aduce luna deschisa la mijlocul pastilei, daca pastila se deruleaza;
+ *   - pune sagetile ‹ › pentru cine n-are deget (mouse fara roata orizontala). ⚠️ Ele se scriu DOAR
+ *     daca lunile chiar nu incap: pe desktop, in pastila lata cat randul, incap toate, iar doua
+ *     sageti moarte ar fi doua segmente in plus care ar strica tocmai forma ceruta;
+ *   - leaga bulina de ziua de azi, acolo unde ziua e in pagina (lista lunii). Pe celelalte pagini
+ *     bulina ramane un link adevarat catre luna de azi, cu ancora #azi.
+ */
+const JS_NAV = `
 (function () {
-  var PREFIX = ${JSON.stringify(prefix)};
-
-  // ——— sirul lunilor: luna deschisa, la mijloc, si doua sageti pentru cine n-are deget
   var fasie = document.querySelector('.fasie');
   if (fasie) {
     var lunaDeschisa = fasie.querySelector('.luna-buton.activa');
@@ -178,12 +184,15 @@ function script(prefix: string): string {
       });
       return b;
     });
-    fasie.parentNode.insertBefore(sageti[0], fasie);
-    fasie.parentNode.appendChild(sageti[1]);
     var capete = function () {
+      var incap = fasie.scrollWidth <= fasie.clientWidth + 2;
+      sageti[0].hidden = incap;
+      sageti[1].hidden = incap;
       sageti[0].disabled = fasie.scrollLeft < 2;
       sageti[1].disabled = fasie.scrollLeft > fasie.scrollWidth - fasie.clientWidth - 2;
     };
+    fasie.parentNode.insertBefore(sageti[0], fasie);
+    fasie.parentNode.appendChild(sageti[1]);
     fasie.addEventListener('scroll', capete, { passive: true });
     window.addEventListener('resize', capete);
     capete();
@@ -202,6 +211,14 @@ function script(prefix: string): string {
     });
   }
   window.addEventListener('hashchange', function () { if (location.hash === '#azi') laAzi(); });
+})();
+`
+
+/** Scriptul paginii de lună: navigarea, abonarea și fereastra cu textele zilei (din V1). */
+function script(prefix: string): string {
+  return JS_NAV + `
+(function () {
+  var PREFIX = ${JSON.stringify(prefix)};
 
   // ——— fereastra cu textele zilei
   var fereastra = document.getElementById('fereastra');
@@ -386,9 +403,19 @@ function adresaLunii(prefix: string, an: number, luna: number): string {
 }
 
 /**
- * NAVIGAREA: sirul lunilor, precedat de bulina lui „azi". NUMAI anul curent, plus ianuarie anul
- * viitor (cerere user, 10.09.2026: „nu mai afișa alți ani în afară de anul curent și luna ianuarie
- * anul viitor"). Din 12.09.2026 sta in randul de unelte din antet, nu in corp — vezi `unelte`.
+ * NAVIGAREA — o PASTILA, ca la Program (user, 12.09.2026: „să fie o pastilă ca la Program și lunile
+ * să fie text în capsulă"). Un singur corp cu chenar si colturi rotunjite, in care segmentele stau
+ * lipite si despartite de o linie de 1 px: bulina lui „azi" la cap, apoi lunile, text simplu, fara
+ * chenar al lor. Luna deschisa e segmentul rosu. Pana atunci fiecare luna era o pastiluta de sine
+ * statatoare, cu chenar si spatiu intre ele.
+ *
+ * NUMAI anul curent, plus ianuarie anul viitor (cerere user, 10.09.2026: „nu mai afișa alți ani în
+ * afară de anul curent și luna ianuarie anul viitor").
+ *
+ * ⚠️ Pastila se DERULEAZA stanga-dreapta (`.fasie` inauntru), si pe telefon, si oriunde lunile nu
+ * incap („pe mobil tot așa să se poată muta stânga dreapta"). Pe desktop pastila tine randul de sus
+ * al antetului doar pentru ea, deci toate cele treisprezece incap si nu e nimic de derulat — atunci
+ * JS-ul nici nu scrie sagetile. Bulina sta in afara fasiei: ea nu se deruleaza niciodata.
  *
  * ⚠️ „AZI" E O BULINA, nu un cuvant (user, 12.09.2026: „AZI să fie o bulină ca la Program"). Punctul
  * se deseneaza din CSS (`.azi-buton::before`), deci butonul ramane gol de text: numele lui se citeste
@@ -396,7 +423,10 @@ function adresaLunii(prefix: string, an: number, luna: number): string {
  * tinta e ziua de azi, iar un punct fara culoare n-ar zice nimic.
  *
  * Clasa `azi-buton` e si manerul de care se leaga JS-ul (derularea la ziua de azi); daca o schimbi,
- * schimb-o si in `script`.
+ * schimb-o si in `JS_NAV`.
+ *
+ * `luna: 0` inseamna „nicio luna nu e a paginii" — asa o cheama listele de sarbatori, unde marcajul
+ * rosu ar minti: acolo nu esti intr-o luna a calendarului, ci intr-o lista peste tot anul.
  */
 function sirulLunilor(ctx: Ctx, an: number, luna: number, azi: string): string {
   const p = esc(ctx.prefix)
@@ -404,13 +434,13 @@ function sirulLunilor(ctx: Ctx, an: number, luna: number, azi: string): string {
   const butoane = LUNI.map((nume, i) => {
     const l = i + 1
     const activa = an === anCurent && l === luna ? ' activa' : ''
-    return `<a class="luna-buton${activa}" href="${adresaLunii(p, anCurent, l)}" data-l="${l}">${esc(nume.slice(0, 3))}</a>`
+    return `<a class="luna-buton${activa}" href="${adresaLunii(p, anCurent, l)}" data-l="${l}"${activa ? ' aria-current="page"' : ''}>${esc(nume.slice(0, 3))}</a>`
   })
   const ianuarieViitor = an === anCurent + 1 && luna === 1 ? ' activa' : ''
-  butoane.push(`<a class="luna-buton${ianuarieViitor}" href="${adresaLunii(p, anCurent + 1, 1)}" title="ianuarie ${anCurent + 1}">Ian ${anCurent + 1}</a>`)
+  butoane.push(`<a class="luna-buton${ianuarieViitor}" href="${adresaLunii(p, anCurent + 1, 1)}" title="ianuarie ${anCurent + 1}"${ianuarieViitor ? ' aria-current="page"' : ''}>Ian ${anCurent + 1}</a>`)
   const [anAzi, lunaAzi] = azi.split('-').map(Number) as [number, number]
   const butonAzi = `<a class="azi-buton" href="${adresaLunii(p, anAzi, lunaAzi)}#azi" title="Mergi la ziua de azi" aria-label="ziua de azi"></a>`
-  return `<div class="luni-rand">${butonAzi}<div class="fasie"><nav class="luni">${butoane.join('')}</nav></div></div>`
+  return `<span class="pastila">${butonAzi}<div class="fasie"><nav class="luni">${butoane.join('')}</nav></div></span>`
 }
 
 function comune(ctx: Ctx) {
@@ -507,7 +537,7 @@ export function cuprinsul(sectiuni: Array<[string, string]>): string {
     .join('\n')
 }
 
-export function paginaZi(o: { ctx: Ctx; r: RandZi; d: RandDesfacut; zi: ZiLiturgica; texte: TexteZilei; parte?: Parte; ieri: string; maine: string }): string {
+export function paginaZi(o: { ctx: Ctx; r: RandZi; d: RandDesfacut; zi: ZiLiturgica; texte: TexteZilei; parte?: Parte; ieri: string; maine: string; azi: string }): string {
   const p = esc(o.ctx.prefix)
   const luna = `${p}/${o.r.an}-${String(o.r.luna).padStart(2, '0')}`
   const numeParte = o.parte === 'sinaxar' ? 'Sinaxar' : o.parte ? 'Lectura zilei' : ''
@@ -522,9 +552,10 @@ export function paginaZi(o: { ctx: Ctx; r: RandZi; d: RandDesfacut; zi: ZiLiturg
     ...comune(o.ctx),
     titluPagina: `${numeParte ? `${numeParte} · ` : ''}${numeZi} · ${o.r.zi} ${LUNI[o.r.luna - 1]} ${o.r.an}`,
     indexabil: true,
-    unelte: unelte({ ctx: o.ctx }),
+    // navigarea sta pe TOATE paginile, cu luna zilei marcata — in ea esti
+    unelte: unelte({ ctx: o.ctx, navigarea: sirulLunilor(o.ctx, o.r.an, o.r.luna, o.azi) }),
     subantet: fereastraAbonare(o.ctx),
-    scripturi: JS_ABONARE,
+    scripturi: JS_NAV + JS_ABONARE,
     clasaCorp: `pagina-zi ${o.r.zi_saptamana === 0 ? 'duminica' : ''} ${o.r.cruce ? `cruce-${o.r.cruce}` : ''}`,
     corp: `<div class="cap">
   <p class="eyebrow"><a href="${luna}">${esc(LUNI[o.r.luna - 1] ?? '')} ${o.r.an}</a>${numeParte ? ` · ${esc(numeParte)}` : ''}</p>
@@ -615,9 +646,12 @@ ${grup.map((x) => randZi(o.ctx, x.r, x.d, x.zi, x.r.data === o.azi)).join('')}</
     titluPagina: `${CRUCILE[o.fel].nume} · ${unde}`,
     indexabil: true,
     metaExtra: `<meta name="description" content="${esc(CRUCILE[o.fel].nume)} în ${esc(unde)}, din calendarul creștin ortodox al Patriarhiei Române.">`,
-    unelte: unelte({ ctx: o.ctx, felActiv: o.fel }),
+    // ⚠️ Navigarea se scrie si aici (user, 12.09.2026: „să nu se mai ascundă când intru pe sărbători
+    // cruce neagră roșie") — randul are aceeasi forma pe toate paginile, ca la Program. Fara luna
+    // marcata (`0`): aici nu esti intr-o luna a calendarului, ci intr-o lista peste tot anul.
+    unelte: unelte({ ctx: o.ctx, navigarea: sirulLunilor(o.ctx, o.an, 0, o.azi), felActiv: o.fel }),
     subantet: fereastraAbonare(o.ctx),
-    scripturi: JS_ABONARE,
+    scripturi: JS_NAV + JS_ABONARE,
     clasaCorp: 'sarbatori',
     corp: `<div class="cap">
   <p class="inainte-de-titlu"><a class="btn inapoi" href="${p}/${o.an}">← Înapoi</a></p>

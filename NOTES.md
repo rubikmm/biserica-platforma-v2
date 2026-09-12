@@ -389,21 +389,49 @@ Când se leagă cu adevărat, capătă `action` către `POST /abonare` (ruta a r
 
 ## Calendarul (A1) — antetul, refăcut la 12.09.2026
 
-Rândul de unelte al calendarului a fost refăcut într-o rundă, la patru cereri ale utilizatorului.
-Ordinea din antet, de la stânga la dreapta: **navigarea · Abonare · | · Cruce roșie · Cruce neagră**.
+Rândul de unelte al calendarului a fost refăcut într-o singură dimineață, la opt cereri ale
+utilizatorului. **TOTUL STĂ PE O SINGURĂ LINIE** (cerut anume, 10:55: „butoanele au coborât jos - să
+fie totul pe o linie"), în ordinea: **pastila navigării · Abonare · | · Cruce roșie · Cruce neagră**.
 
 - **NAVIGAREA A URCAT ÎN ANTET** („mută navigarea sus"). Șirul lunilor stătea în corp, sub antet, și
-  fugea la derulare; antetul e lipicios, deci acum lunile rămân la îndemână pe toată pagina. Ea ia
-  spațiul rămas după butoane și se derulează înăuntru.
-  ⚠️ **`flex:1 1 0`, NU `1 1 auto`** — aceeași capcană ca la pastila Programului: `.btns` are
-  `flex-wrap`, iar ruperea rândului se hotărăște după măsura **ipotetică** a fiecărui copil, înainte
-  de orice strângere. Cu `auto`, fâșia pornea de la lățimea celor 13 luni (~1000 px), umplea singură
-  rândul, iar abonarea și sărbătorile cădeau pe rândul doi. Prima variantă chiar așa a ieșit.
+  fugea la derulare; antetul e lipicios, deci acum lunile rămân la îndemână pe toată pagina.
+- **E O PASTILĂ, ca la Program** („să fie o pastilă ca la Program și lunile să fie text în capsulă"):
+  un singur corp cu chenar și colțuri rotunjite, în care bulina lui „azi" și lunile stau lipite,
+  despărțite doar de o linie de 1 px. Lunile sunt **text simplu** — fără chenar, fără fundal, fără
+  rotunjire a lor; luna deschisă e segmentul roșu (`color-mix(rosu 11%)`, ca la Program, nu roșu tare
+  cu scris alb, cum era când fiecare lună era o pastiluță a ei).
+- ⚠️ **PASTILA IA NUMAI CE RĂMÂNE** (`flex:1 1 0`) — 217 px din 680, din care fâșiei îi rămân ~132,
+  adică **vreo trei luni la vedere**; restul vin din derulare. Am încercat pe la 10:45 varianta cu
+  pastila pe un rând al ei (atunci încap toate treisprezece), dar utilizatorul a cerut **înapoi rândul
+  unic**. Dacă se cere iar mai mult loc, câștigul ieftin e la butoanele de sărbători: fără cuvinte, cu
+  numele doar în `title` (cum sunt deja pe telefon), fâșia sare de la ~132 la ~430 px.
+  ⚠️ Măsura de pornire trebuie să fie **`flex:1 1 0`, NU `1 1 auto`** — aceeași capcană ca la pastila
+  Programului: `.btns` are `flex-wrap`, iar ruperea rândului se hotărăște după măsura **ipotetică** a
+  fiecărui copil, înainte de orice strângere. Cu `auto`, pastila pornește de la lățimea celor 13 luni,
+  umple singură rândul și **tocmai butoanele coboară** — exact reclamația de la 10:55.
+- **Segmentele sunt strânse cât se poate**, ca în puținul acela să intre cât mai multe luni: spațiul
+  dintre litere `.1em → .03em`, cel din laturi 14 → 8 px, scrisul 13 → 12,5 px. Cu totul, lunile cer
+  636 px — atât cât le-ar trebui ca să încapă toate, dacă pastila ar avea rândul ei. Măsoară cu
+  `scrollWidth` vs `clientWidth` pe `.fasie`, nu cu ochiul.
+- ⚠️ **`.fasie` are `position:relative`, și nu de podoabă**: JS-ul aduce luna deschisă la mijloc cu
+  `offsetLeft`, iar acela se măsoară față de cel mai apropiat strămoș așezat. Fără el, `offsetParent`
+  ajungea `.sus` (antetul e `sticky`), numărul ieșea cu ~270 px mai mare și pastila se deschidea
+  derulată la capăt — se vedea „NOI DEC IAN 2027" în loc de luna curentă.
+- **Se derulează stânga-dreapta** oriunde nu încap — pe telefon întotdeauna („pe mobil tot așa să se
+  poată muta stânga dreapta"). Bulina stă **în afara fâșiei**, la capul pastilei: ea nu se derulează
+  niciodată. Săgețile ‹ › se scriu **numai dacă e ceva de derulat** (JS: `scrollWidth > clientWidth`),
+  ca pe desktop să nu stea două segmente moarte în pastilă; sub 520 px nu se scriu deloc — acolo e
+  degetul.
 - **„AZI" E O BULINĂ**, ca la Program („AZI să fie o bulină ca la Program"): butonul n-a mai rămas cu
   niciun cuvânt, punctul de 9 px se desenează din CSS (`.azi-buton::before`), iar numele stă în
-  `title`/`aria-label`. Roșul i-a rămas — el spune că ținta e ziua de azi. Înălțimea e pusă anume cât
-  a unui buton de lună (9 + 12 + 12 + 2 = 35 px): dacă umbli la `.luna-buton`, umblă și la ea.
+  `title`/`aria-label`. Roșul i-a rămas — el spune că ținta e ziua de azi. De când stă în pastilă,
+  chenarul și rotunjirea lui au căzut: le are pastila.
   Clasa `azi-buton` e și mânerul JS-ului care derulează la ziua de azi.
+- ⚠️ **NAVIGAREA E PE TOATE PAGINILE**, nu doar pe lista lunii (user: „să nu se mai ascundă când intru
+  pe sărbători cruce neagră roșie") — ca la Program, rândul are aceeași formă peste tot. Pe pagina
+  zilei e marcată luna zilei; pe listele de sărbători **nicio lună** (`luna: 0`), fiindcă acolo nu
+  ești într-o lună a calendarului, ci într-o listă peste tot anul — un marcaj ar minți. De aceea
+  scriptul navigării a ieșit din `script()` într-un `JS_NAV` al lui, pus pe toate paginile.
 - **Butonul se cheamă „Abonare"** („butonul după navigare să se numească Abonare"), cu plicul de la
   Program, și **nu se scrie la administratori** („butonul de Abonare nu se vede pe Administratori").
 - **Propoziția lămuritoare de lângă el a fost ștearsă** („șterge acel text") — „Ca să te abonezi, îți
@@ -422,12 +450,11 @@ Ordinea din antet, de la stânga la dreapta: **navigarea · Abonare · | · Cruc
   ieșit și `eAbonat` din rutele paginilor — întrebarea „e omul pe listă?" ar fi fost o cerere la
   comunicare pe fiecare pagină, degeaba.
 
-**⚠️ MĂSURI: rândul încape exact, fără rezervă.** `.w` are 680 px, iar butoanele cer, măsurate în
-pagină: Abonare 117 + bara 1 + Cruce roșie 142 + Cruce neagră 157 + patru spații de 10 =
-457, deci **navigării îi rămân 217 px — cam două luni la vedere** (restul, din derulare; JS-ul aduce
-luna curentă la mijloc). **Al treilea buton nu mai încape cu cuvânt cu tot**: atunci ori se scurtează
-numele, ori sărbătorile rămân doar iconițe, ori navigarea coboară pe un rând al ei, tot în antet. De
-întrebat utilizatorul când vine vorba. Pe telefon (sub 600 px) cuvintele cad deja, rămân iconițele.
+**⚠️ MĂSURI.** `.w` are 680 px, iar butoanele cer, măsurate în pagină: Abonare 117 + bara 1 + Cruce
+roșie 142 + Cruce neagră 157 + spațiile = 457; pastilei îi rămân 217. **Al treilea buton („Sfinții cu
+evlavie") nu mai încape cu cuvânt cu tot** — când vine, ori se scurtează numele, ori sărbătorile rămân
+doar iconițe (și atunci navigarea câștigă mult). Pe telefon (sub 600 px) cuvintele cad deja și rămân
+iconițele: cu ele, cele trei ar cere ~446 px, iar un telefon de 390 are 335 de folosit.
 
 ### API-ul programului
 
@@ -647,13 +674,20 @@ forța antetul `Host`**.
 
 ### 2026-09-12
 
-- **Antetul calendarului, refăcut din patru cereri** (user, 09:33–09:58): navigarea a urcat în rândul
-  de unelte, „AZI" a devenit bulină, propoziția de lângă abonare a fost ștearsă, butonul se cheamă
-  acum „Abonare" și nu se mai scrie la administratori, meniul „Informații utile" a fost înlocuit cu
-  două butoane cu iconiță (Cruce roșie · Cruce neagră), iar clicul pe Abonare deschide fereastra de la
-  Program. Amănuntele și măsurile: secțiunea **Calendarul (A1) — antetul**. Staging 0.2.0, 103 teste,
-  `tsc` curat. ⚠️ Prima variantă a rupt rândul în două (`flex:1 1 auto` pe fâșie) — s-a văzut într-o
-  poză făcută cu Browser Rendering, nu la ochi.
+- **Antetul calendarului, refăcut din șapte cereri** (user, 09:33–10:55), în două valuri:
+  **întâi** (staging 0.2.0) navigarea a urcat în rândul de unelte, „AZI" a devenit bulină, propoziția
+  de lângă abonare a fost ștearsă, butonul se cheamă „Abonare" și nu se mai scrie la administratori,
+  meniul „Informații utile" a fost înlocuit cu două butoane cu iconiță, iar clicul pe Abonare deschide
+  fereastra de la Program; **apoi** (staging 0.3.1) navigarea a devenit **pastilă ca la Program**, cu
+  lunile text în capsulă, derulabilă cu degetul, și a fost pusă **pe toate paginile**, nu doar pe lista
+  lunii. 103 teste, `tsc` curat. Amănuntele și măsurile: secțiunea **Calendarul (A1) — antetul**.
+  ⚠️ Pe drum, pastila a stat o clipă pe un rând al ei (așa încap toate lunile), dar utilizatorul a
+  cerut **totul pe o linie** — așa a rămas.
+  ⚠️ **Trei greșeli prinse cu poza, nu cu ochiul**: rândul rupt în două (`flex:1 1 auto`), lunile care
+  nu încăpeau, și fâșia care se deschidea la capăt (`offsetParent` greșit, fără `position:relative`).
+  ⚠️ **Backtick în comentariu CSS, a doua oară în aceeași zi**: build-ul cade fără zgomot, iar
+  `wrangler dev` servește mai departe versiunea VECHE — am căutat o vreme o cauză de așezare care nu
+  exista. Rulează `tsc` după fiecare atingere de stil.
 
 - **Validarea are, în sfârșit, drum înapoi: `program.retrage_validarea`** (user, 02:28, după ce
   scrisese în Îndrumări „dacă programul este deja VALIDAT trebuie mai întâi să-l transformi în

@@ -274,7 +274,7 @@ export default {
         if (!z) return html(paginaMesaj(ctx, `Ziua ${data} nu e preluată`, 'Alege o lună din șirul de sus.'), 404)
         const t = await textele(env, z.r, z.zi, z.d)
         return html(
-          paginaZi({ ctx, ...z, texte: t, ...(parte ? { parte } : {}), ieri: adaugaZile(data, -1), maine: adaugaZile(data, 1) }),
+          paginaZi({ ctx, ...z, texte: t, ...(parte ? { parte } : {}), ieri: adaugaZile(data, -1), maine: adaugaZile(data, 1), azi }),
           200,
           cachePagina,
         )
