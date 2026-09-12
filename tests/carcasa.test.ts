@@ -23,11 +23,13 @@ describe('carcasă — masca „vezi ca"', () => {
     }
   })
 
+  // ⚠️ De la 12.09.2026 cele trei rânduri se numesc „→ Utilizator" / „→ Administrator" /
+  // „→ Neautentificat" (user: „în loc de «vezi ca…» să fie o săgeată"). Doar numele s-a schimbat.
   it('super-adminul nemascat are cele trei comutatoare, niciunul aprins', () => {
     const html = randeaza({ ...SUPER_ADMIN, veziCa: null })
-    expect(html).toContain('Vezi ca utilizator')
-    expect(html).toContain('Vezi ca administrator')
-    expect(html).toContain('Vezi ca neautentificat')
+    expect(html).toContain('→ Utilizator')
+    expect(html).toContain('→ Administrator')
+    expect(html).toContain('→ Neautentificat')
     expect(html).not.toContain('cont-acum')
     expect(html).not.toContain('Revino la super admin')
   })
@@ -35,8 +37,8 @@ describe('carcasă — masca „vezi ca"', () => {
   it('masca purtată e scrisă roșu și, apăsată din nou, scoate masca', () => {
     const html = randeaza({ ...SUPER_ADMIN, veziCa: 'user' })
     expect(html).toContain('<a class="cont-acum" href="/cont/vezi-ca?ca=real&spre=%2Fprogram%2F"')
-    // rândul aprins rămâne „Vezi ca utilizator", nu se schimbă în „Te uiți ca…" (user, 11.09.2026)
-    expect(html).toMatch(/class="cont-acum"[^>]*>Vezi ca utilizator</)
+    // rândul aprins rămâne „→ Utilizator", nu se schimbă în „Te uiți ca…" (user, 11.09.2026)
+    expect(html).toMatch(/class="cont-acum"[^>]*>→ Utilizator</)
     expect(html).not.toContain('Revino la super admin')
   })
 
@@ -48,7 +50,7 @@ describe('carcasă — masca „vezi ca"', () => {
   it('sub masca „neautentificat" meniul rămâne, ca să existe drum de întoarcere', () => {
     const html = randeaza({ intrat: false, nume: 'Cont', urlCont: '/cont', poateVedeaCa: true, veziCa: 'anonim', spre: '/program/' })
     expect(html).toContain('cont-meniu')
-    expect(html).toMatch(/class="cont-acum"[^>]*>Vezi ca neautentificat</)
+    expect(html).toMatch(/class="cont-acum"[^>]*>→ Neautentificat</)
     expect(html).toContain('/cont/vezi-ca?ca=real')
     // nimic din contul adevărat nu se vede: nici profilul, nici ieșirea, nici administrarea
     expect(html).not.toContain('Profil')

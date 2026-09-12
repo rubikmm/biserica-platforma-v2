@@ -336,6 +336,10 @@ function comutatorVeziCa(urlCont: string, ca: string, spre: string): string {
  * ⚠️ Cele trei randuri sunt COMUTATOARE, nu linkuri intr-un singur sens (user, 11.09.2026): randul
  * mastii purtate acum e scris rosu si, apasat a doua oara, scoate masca. De aceea nu mai exista un
  * al patrulea rand, „Revino la super admin" — iesirea e chiar randul pe care esti.
+ *
+ * ⚠️ Cuvintele „Vezi ca" au IESIT din cele trei randuri (user, 12.09.2026: „în loc de «vezi ca…» să
+ * fie o săgeată"): a rămas săgeata si rolul — „→ Utilizator". Doar numele s-a schimbat; comutatorul,
+ * randul rosu si drumul inapoi sunt neatinse.
  */
 function randuriVeziCa(c: Cont): string {
   const urlCont = c.urlCont ?? ''
@@ -346,9 +350,9 @@ function randuriVeziCa(c: Cont): string {
         ` title="Te uiți ca ${esc(numeleMastii(ca))} — apasă din nou ca să revii la contul tău">${text}</a>`
       : `\n          <a href="${comutatorVeziCa(urlCont, ca, spre)}">${text}</a>`
   return (
-    cere('user', 'Vezi ca utilizator') +
-    cere('admin', 'Vezi ca administrator') +
-    cere('anonim', 'Vezi ca neautentificat')
+    cere('user', '→ Utilizator') +
+    cere('admin', '→ Administrator') +
+    cere('anonim', '→ Neautentificat')
   )
 }
 

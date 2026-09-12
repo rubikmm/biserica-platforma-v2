@@ -842,6 +842,15 @@ forța antetul `Host`**.
 
 ### 2026-09-12
 
+- **Meniul contului: cele trei rânduri ale măștii s-au redenumit** (user, 22:25: „în loc de
+  «vezi ca…» să fie o săgeată") — „→ Utilizator", „→ Administrator", „→ Neautentificat".
+  Doar numele; comutatorul, rândul roșu al măștii purtate și drumul înapoi sunt neatinse. Stau
+  într-un singur loc, `randuriVeziCa` din `@xc/ui`, deci s-au schimbat în toate aplicațiile deodată,
+  și se văd numai la super-admin. ⚠️ **Regulă nouă a utilizatorului: „mereu publică pe staging"** —
+  orice schimbare se urcă în aceeași rundă, fără să se mai ceară. La o atingere de `@xc/ui` se
+  republică **toate cele șase** aplicații care o folosesc: account 0.1.3, admin 0.1.1, calendar 0.6.1,
+  home 0.1.3, program 0.6.1, tipic 0.1.3.
+
 - **Antetul calendarului, refăcut din șapte cereri** (user, 09:33–10:55), în două valuri:
   **întâi** (staging 0.2.0) navigarea a urcat în rândul de unelte, „AZI" a devenit bulină, propoziția
   de lângă abonare a fost ștearsă, butonul se cheamă „Abonare" și nu se mai scrie la administratori,
