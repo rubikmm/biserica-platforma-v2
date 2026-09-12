@@ -77,8 +77,8 @@ function contDin(ctx: Ctx) {
  * sarbatori" — sunt stari ale aceleiasi liste. Ce se vede pe unde:
  *
  *   `/<an>-<luna>`                  luna intreaga
- *   `/<an>-<luna>?cruce=rosie`      luna, numai zilele rosii si duminicile
- *   `/sarbatori/cruce-rosie/<an>`   anul intreg, numai zilele rosii („toate lunile")
+ *   `/<an>-<luna>?filtru=rosie`     luna, numai zilele rosii si duminicile
+ *   `/sarbatori/cruce-rosie/<an>`  anul intreg, numai zilele rosii („toate lunile")
  *
  * ⚠️ ABONAREA se cheama „Abonare" („butonul după navigare să se numească Abonare"), sta indata dupa
  * navigare si NU se scrie la administratori — ca la Program, unde butonul e tot al omului fara
@@ -92,7 +92,7 @@ function unelte(o: {
   ctx: Ctx
   navigarea?: string
   /** filtrul de fel pus acum, daca e vreunul */
-  felActiv?: FelCruce
+  felActiv?: FelFiltru
   /** luna peste care lucreaza filtrele, „<an>-<luna>"; lipseste cand lista tine anul intreg */
   luna?: string
 }): string {
@@ -100,26 +100,33 @@ function unelte(o: {
   const an = o.ctx.anCurent
   // Cu o luna in brate, filtrul se pune pe ea; fara luna (lista anului) se trece la lista de an a
   // celuilalt fel. Stins, drumul inapoi e luna neatinsa — ori, daca nu suntem pe nicio luna, luna de azi.
-  const cuFel = (fel: FelCruce) => (o.luna ? `${p}/${o.luna}?cruce=${fel}` : `${p}/sarbatori/cruce-${fel}/${an}`)
+  const cuFel = (fel: FelFiltru) => (o.luna ? `${p}/${o.luna}?filtru=${fel}` : `${p}/sarbatori/${FILTRE[fel].slug}/${an}`)
   const faraFel = o.luna ? `${p}/${o.luna}` : ''
-  const buton = (fel: FelCruce, scurt: string) => {
-    const nume = CRUCILE[fel].nume
+  /**
+   * ⚠️ BUTOANELE FILTRELOR N-AU CUVINTE, NICI PE DESKTOP (user, 12.09.2026, 13:34: „pe desktop,
+   * iconițele cu cruci lasă-le fără text… să fie ca pe mobil"). Le deosebeste CULOAREA crucii, ca in
+   * calendarul tiparit, iar numele intreg sta in `title` si in `aria-label` — deci cine se uita cu
+   * degetul pe ecran ori cu cititorul de ecran il afla. Asa incap trei butoane si navigarii ii ramane
+   * spatiu adevarat: cu cuvinte, cele trei ar fi cerut ~470 px din 680 si pastila ar fi ramas cu 40.
+   */
+  const buton = (fel: FelFiltru) => {
+    const nume = FILTRE[fel].nume
     const clasa = `btn mic sarb sarb-${fel}`
     const pus = o.felActiv === fel
     const unde = pus ? faraFel : cuFel(fel)
     const spune = pus ? `Scoate filtrul: ${nume.toLowerCase()}` : nume
     // stins, dar fara drum inapoi (lista anului, fara luna): butonul ramane marcat si neapasabil
     if (pus && !unde) {
-      return `<span class="${clasa} activ" aria-current="page" title="${esc(nume)}" aria-label="${esc(nume)}">`
-        + `${IC_CRUCE}<span class="cuv">${esc(scurt)}</span></span>`
+      return `<span class="${clasa} activ" aria-current="page" title="${esc(nume)}" aria-label="${esc(nume)}">${IC_CRUCE}</span>`
     }
     return `<a class="${clasa}${pus ? ' activ' : ''}" href="${unde}"${pus ? ' aria-current="page"' : ''}`
-      + ` title="${esc(spune)}" aria-label="${esc(nume)}">${IC_CRUCE}<span class="cuv">${esc(scurt)}</span></a>`
+      + ` title="${esc(spune)}" aria-label="${esc(nume)}">${IC_CRUCE}</a>`
   }
   return `${o.navigarea ?? ''}${butonAbonare(o.ctx)}
     <span class="desparte" aria-hidden="true"></span>
-    ${buton('rosie', 'Cruce roșie')}
-    ${buton('neagra', 'Cruce neagră')}`
+    ${buton('rosie')}
+    ${buton('neagra')}
+    ${buton('evlavie')}`
 }
 
 /**
@@ -135,17 +142,19 @@ function unelte(o: {
  * `action` catre ele, iar adresa scrisa aici slujeste doar la facerea contului (identitatea o tine,
  * nu calendarul) — abonarea ramane pe adresa contului, cum cere structura platformei.
  *
- * Butonul e al omului FARA drepturi de admin (user, 12.09.2026: „butonul de Abonare nu se vede pe
- * Administratori"); adminul isi vede abonatii in pagina de administrare.
+ * ⚠️ BUTONUL E AL TUTUROR, SI AL ADMINILOR (user, 12.09.2026, 13:39: „să lăsăm totuși iconița de
+ * abonare și la admini. Că și ei se comportă ca un utilizator care poate vor să fie anunțați. Aici nu
+ * e vorba doar despre mine, care sunt super admin"). Dimineata ceruse invers, si asa fusese facut, ca
+ * la Program; acum regula e limpede si e a amandurora: dreptul de a administra nu-l scoate pe om din
+ * randul celor care vor sa primeasca vestea. Nu-l ascunde iar. (`ctx` ramane in semnatura: butonul
+ * atarna oricum de om, iar de aici se va lega si starea „esti abonat" cand fereastra prinde rute.)
  */
-function butonAbonare(ctx: Ctx): string {
-  if (ctx.eAdmin) return ''
+function butonAbonare(_ctx: Ctx): string {
   return `<button type="button" class="btn mic abon" id="b-abonare"`
     + ` title="Primește calendarul pe email">${IC_PLIC}<span class="cuv">Abonare</span></button>`
 }
 
-function fereastraAbonare(ctx: Ctx): string {
-  if (ctx.eAdmin) return ''
+function fereastraAbonare(_ctx: Ctx): string {
   return `<dialog class="modal" id="d-abonare" aria-labelledby="t-abonare">
   <form method="dialog" class="modal-cutie">
     <div class="modal-cap">
@@ -171,7 +180,14 @@ const JS_ABONARE = `
   var b = document.getElementById("b-abonare");
   var d = document.getElementById("d-abonare");
   if (!b || !d || !d.showModal) return;
-  b.addEventListener("click", function(){ d.showModal(); });
+  // ⚠️ Cat timp fereastra e deschisa, pagina din spate NU se deruleaza (user, 12.09.2026, 13:42), iar
+  // la inchidere isi capata derularea inapoi. <dialog> face pagina inertă, dar rotita mouse-ului tot
+  // misca fundalul, si atunci omul se trezeste in alta parte a lunii cand inchide. Clasa e aceeasi cu
+  // a ferestrei textelor zilei (body.cu-fereastra), deci regula de stil e scrisa o singura data.
+  // Inchiderea o prindem din evenimentul „close": asa acopera si Escape, si butoanele dinauntru
+  // (formularul e method="dialog"), fara sa le ascultam pe fiecare.
+  b.addEventListener("click", function(){ d.showModal(); document.body.classList.add("cu-fereastra"); });
+  d.addEventListener("close", function(){ document.body.classList.remove("cu-fereastra"); });
 })();
 `
 
@@ -368,9 +384,16 @@ function capulZilei(d: RandDesfacut): string {
  * „ce culoare are crucea?", si de aceea alegerea se face aici, nu acolo. Daca vreodata se desparte
  * culoarea (roman/local) de insemn in `Rang`, locul asta se simplifica.
  */
-const RANGURILE: Record<FelCruce, readonly string[]> = {
+const RANGURILE: Record<FelFiltru, readonly string[]> = {
   rosie: ['cruce_rosie', 'praznic_imparatesc'],
   neagra: ['cruce_neagra', 'cruce_albastra', 'cruce_nedeclarata'],
+  // „evlavie" nu se uita la rang deloc — se uita la NUME (`eCuEvlavie`)
+  evlavie: [],
+}
+
+/** Sfantul acesta intra in filtrul cerut? Doua masuri deosebite: rangul, ori lista parohiei. */
+function tineDeFiltru(s: { nume: string; rang: string }, fel: FelFiltru): boolean {
+  return fel === 'evlavie' ? eCuEvlavie(s.nume) : RANGURILE[fel].includes(s.rang)
 }
 
 /**
@@ -390,10 +413,10 @@ const RANGURILE: Record<FelCruce, readonly string[]> = {
  * pentru o zi nu iese niciun sfant cu rangul cerut, se scrie titlul intreg: mai bine prea mult decat
  * un rand gol.
  */
-function capulFiltrat(zi: ZiLiturgica, d: RandDesfacut, fel: FelCruce): { titlu: string; dinSfinti: boolean } {
+function capulFiltrat(zi: ZiLiturgica, d: RandDesfacut, fel: FelFiltru): { titlu: string; dinSfinti: boolean } {
   // la rosu, duminica intra ca duminica: numele ei e capul zilei, iar sfintii se scriu oricum dedesubt
   if (fel === 'rosie' && d.eDuminica) return { titlu: capulZilei(d), dinSfinti: false }
-  const alesi = zi.sfinti.filter((s) => RANGURILE[fel].includes(s.rang))
+  const alesi = zi.sfinti.filter((s) => tineDeFiltru(s, fel))
   if (!alesi.length) return { titlu: capulZilei(d), dinSfinti: false }
   // ⚠️ CULOAREA VINE DIN RANGUL SFANTULUI, aceeasi regula ca la sfintii de sub titlul duminicii
   // (`sfintiiZilei`): rosu la cruce rosie si la praznice, albastru la sfintii romani. Cand capul zilei
@@ -403,7 +426,11 @@ function capulFiltrat(zi: ZiLiturgica, d: RandDesfacut, fel: FelCruce): { titlu:
   const titlu = alesi
     .map((s) => {
       const text = esc(`${s.semn ? `${s.semn} ` : ''}${s.nume}`)
-      const clasa = s.rang === 'cruce_albastra' ? 'c-albastru' : RANGURILE.rosie.includes(s.rang) ? 'c-rosu' : ''
+      // in lista evlaviei culoarea e a filtrului, nu a rangului: acolo sfintii sunt aproape toti fara
+      // cruce in calendarul oficial, deci rangul n-ar avea ce spune
+      const clasa = fel === 'evlavie'
+        ? 'c-evlavie'
+        : s.rang === 'cruce_albastra' ? 'c-albastru' : RANGURILE.rosie.includes(s.rang) ? 'c-rosu' : ''
       return clasa ? `<span class="${clasa}">${text}</span>` : text
     })
     .join('; ')
@@ -437,7 +464,7 @@ function glasulZilei(zi: ZiLiturgica, d: RandDesfacut): string {
 }
 
 /** `fel` — cand randul se scrie intr-o lista filtrata: atunci titlul tine numai sfintii felului. */
-export function randZi(ctx: Ctx, r: RandZi, d: RandDesfacut, zi: ZiLiturgica, eAzi: boolean, fel?: FelCruce): string {
+export function randZi(ctx: Ctx, r: RandZi, d: RandDesfacut, zi: ZiLiturgica, eAzi: boolean, fel?: FelFiltru): string {
   const p = esc(ctx.prefix)
   const clase = ['zi']
   if (r.zi_saptamana === 0) clase.push('duminica')
@@ -519,10 +546,10 @@ function adresaLunii(prefix: string, an: number, luna: number): string {
  * `luna: 0` inseamna „nicio luna nu e a paginii" — asa o cheama listele de sarbatori, unde marcajul
  * rosu ar minti: acolo nu esti intr-o luna a calendarului, ci intr-o lista peste tot anul.
  */
-function sirulLunilor(ctx: Ctx, an: number, luna: number, azi: string, fel?: FelCruce): string {
+function sirulLunilor(ctx: Ctx, an: number, luna: number, azi: string, fel?: FelFiltru): string {
   const p = esc(ctx.prefix)
   const anCurent = ctx.anCurent
-  const cuFiltru = (adresa: string) => (fel ? `${adresa}?cruce=${fel}` : adresa)
+  const cuFiltru = (adresa: string) => (fel ? `${adresa}?filtru=${fel}` : adresa)
   const butoane = LUNI.map((nume, i) => {
     const l = i + 1
     const activa = an === anCurent && l === luna ? ' activa' : ''
@@ -561,8 +588,10 @@ function comune(ctx: Ctx) {
  * dinafara toti sfintii romani, pana la unul. Felul zilei a ramas doar ca plasa, pentru zilele in care
  * insemnul e al zilei si sfantul nu-l poarta.
  */
-export function trecePrinFiltru(r: RandZi, zi: ZiLiturgica, fel: FelCruce): boolean {
-  if (zi.sfinti.some((s) => RANGURILE[fel].includes(s.rang))) return true
+export function trecePrinFiltru(r: RandZi, zi: ZiLiturgica, fel: FelFiltru): boolean {
+  if (zi.sfinti.some((s) => tineDeFiltru(s, fel))) return true
+  // plasa felului zilei nu e si a evlaviei: acolo lista e a numelor, si atat
+  if (fel === 'evlavie') return false
   return fel === 'rosie' ? r.cruce === 'rosie' || r.zi_saptamana === 0 : r.cruce === 'neagra'
 }
 
@@ -576,13 +605,13 @@ export function trecePrinFiltru(r: RandZi, zi: ZiLiturgica, fel: FelCruce): bool
  * douasprezece luni de pe vechea pagina de sarbatori: lunile se aleg acum din pastila de sus, ca
  * peste tot.
  */
-function butonToateLunile(ctx: Ctx, fel: FelCruce, an: number, peTotAnul: boolean): string {
+function butonToateLunile(ctx: Ctx, fel: FelFiltru, an: number, peTotAnul: boolean): string {
   const p = esc(ctx.prefix)
   if (peTotAnul) {
     return `<p class="rand-filtru"><b class="btn toate-lunile activ" aria-current="page">Toate lunile</b></p>`
   }
-  return `<p class="rand-filtru"><a class="btn toate-lunile" href="${p}/sarbatori/cruce-${fel}/${an}"`
-    + ` title="Scoate luna din filtru — ${esc(CRUCILE[fel].nume.toLowerCase())} din tot anul">Toate lunile</a></p>`
+  return `<p class="rand-filtru"><a class="btn toate-lunile" href="${p}/sarbatori/${FILTRE[fel].slug}/${an}"`
+    + ` title="Scoate luna din filtru — ${esc(FILTRE[fel].nume.toLowerCase())} din tot anul">Toate lunile</a></p>`
 }
 
 export function paginaLuna(o: {
@@ -593,13 +622,13 @@ export function paginaLuna(o: {
   calculat: boolean
   azi: string
   /** filtrul de fel pus acum; lipseste cand se vede luna intreaga */
-  cruce?: FelCruce
+  cruce?: FelFiltru
   mesajAbonare?: string
 }): string {
-  const alese = o.cruce ? o.randuri.filter(({ r, zi }) => trecePrinFiltru(r, zi, o.cruce as FelCruce)) : o.randuri
+  const alese = o.cruce ? o.randuri.filter(({ r, zi }) => trecePrinFiltru(r, zi, o.cruce as FelFiltru)) : o.randuri
   const corp = alese.map(({ r, d, zi }) => randZi(o.ctx, r, d, zi, r.data === o.azi, o.cruce)).join('')
   const numeLuna = `${LUNI[o.luna - 1] ?? ''} ${o.an}`
-  const felul = o.cruce ? CRUCILE[o.cruce] : null
+  const felul = o.cruce ? FILTRE[o.cruce] : null
   const lunaSir = `${o.an}-${String(o.luna).padStart(2, '0')}`
   return pagina({
     ...comune(o.ctx),
@@ -618,10 +647,10 @@ export function paginaLuna(o: {
     corp: `${o.mesajAbonare ? `<p class="an-calculat">${esc(o.mesajAbonare)}</p>` : ''}
 ${o.calculat ? `<p class="an-calculat">${esc(NOTA_GENERAT)}</p>` : ''}
 ${o.cruce ? butonToateLunile(o.ctx, o.cruce, o.an, false) : ''}
-<h2 class="luna">${esc(numeLuna)}${felul ? ` · <span class="fel-filtru ${o.cruce === 'neagra' ? 'f-neagra' : 'f-rosie'}">${esc(felul.eticheta)}</span>` : ''}</h2>
+<h2 class="luna">${esc(numeLuna)}${felul ? ` · <span class="fel-filtru f-${o.cruce}">${esc(felul.eticheta)}</span>` : ''}</h2>
 <div class="zile">
 ${corp}</div>
-${corp ? '' : `<p class="gol">${esc(numeLuna)} n-are nicio zi însemnată cu cruce ${esc(felul?.scurt ?? '')}.</p>`}
+${corp ? '' : `<p class="gol">${esc(numeLuna)} n-are ${esc(felul?.pustiu ?? '')}.</p>`}
 
 <dialog class="fereastra" id="fereastra" aria-label="textele zilei">
   <div class="bara-fereastra"><button type="button" class="inchide" aria-label="Închide">×</button></div>
@@ -734,26 +763,73 @@ ${o.parte
 // „Informații utile" · sărbătorile
 // ---------------------------------------------------------------------------
 
-export type FelCruce = 'rosie' | 'neagra'
+/**
+ * Felurile de filtru din bara de sus. Primele doua vin din INSEMNUL calendarului oficial; al treilea,
+ * „evlavie", e al parohiei — o lista de nume, tinuta de noi (vezi `SFINTI_CU_EVLAVIE`).
+ * Numele tipului a fost `FelCruce` pana la 12.09.2026, cand a intrat al treilea, care nu e o cruce.
+ */
+export type FelFiltru = 'rosie' | 'neagra' | 'evlavie'
 
 /**
- * `scurt` intra in propozitii care spun deja cuvantul „cruce" („nicio zi însemnată cu cruce roșie");
- * `eticheta` sta singura, langa numele lunii, si de aceea il poarta cu ea (user, 12.09.2026, 13:28:
- * „când sunt pe cruce roșie, acolo să scrie «cruce roșie», nu «Roșie»").
+ * `scurt` intra in propozitii („nicio zi însemnată cu cruce roșie"); `eticheta` sta singura, langa
+ * numele lunii, si de aceea poarta cuvantul cu ea (user, 12.09.2026, 13:28: „când sunt pe cruce roșie,
+ * acolo să scrie «cruce roșie», nu «Roșie»"); `slug` e bucata din adresa listei de an;
+ * plin; `slug` e bucata din adresa listei de an; `pustiu` incheie propozitia „Septembrie 2026 n-are…".
  */
-export const CRUCILE: Record<FelCruce, { nume: string; scurt: string; eticheta: string; lamurire: string }> = {
+export const FILTRE: Record<FelFiltru, { nume: string; scurt: string; eticheta: string; slug: string; lamurire: string; pustiu: string }> = {
   rosie: {
     nume: 'Sărbători cu cruce roșie',
     scurt: 'roșie',
     eticheta: 'cruce roșie',
+    slug: 'cruce-rosie',
     lamurire: 'Praznicele împărătești și sfinții cu ținere — zilele pe care calendarul oficial le însemnează cu cruce roșie.',
+    pustiu: 'nicio zi însemnată cu cruce roșie',
   },
   neagra: {
     nume: 'Sărbători cu cruce neagră',
     scurt: 'neagră',
     eticheta: 'cruce neagră',
+    slug: 'cruce-neagra',
     lamurire: 'Sfinții însemnați cu cruce neagră: se prăznuiesc, dar ziua nu e cu ținere.',
+    pustiu: 'nicio zi însemnată cu cruce neagră',
   },
+  evlavie: {
+    nume: 'Sfinți cu evlavie',
+    scurt: 'evlavie',
+    eticheta: 'sfinți cu evlavie',
+    slug: 'evlavie',
+    lamurire: 'Sfinții la care ține parohia — lista e a noastră, nu a însemnului din calendarul oficial: cei mai mulți dintre ei sunt scriși acolo fără cruce.',
+    pustiu: 'niciun sfânt din cei cu evlavie',
+  },
+}
+
+/**
+ * SFINTII CU EVLAVIE — lista parohiei (user, 12.09.2026, 13:31: „mai pune un buton… Sfinți cu evlavie.
+ * În care adaugi, pentru început, pe Sfântul Porfirie și pe Sfântul Siluan").
+ *
+ * ⚠️ Filtrul asta nu se sprijina pe nimic din calendarul oficial: amandoi sfintii de mai jos sunt
+ * scrisi acolo cu rang `simplu`, fara cruce, deci nu apar in niciunul din celelalte doua. De aceea
+ * lista e a noastra, si de aceea se potriveste pe NUME.
+ *
+ * ⚠️ Potrivirea se face pe numele CURATAT (fara diacritice, cu cratime — vezi `slug`), ca sa nu atarne
+ * de felul in care isi scrie Patriarhia numele de la an la an. Cheia trebuie sa fie indeajuns de lunga
+ * cat sa nu prinda pe altcineva: „porfirie" singur ar fi prins si pe episcopul Gazei (26 februarie) si
+ * pe Sf. Mc. Onisifor si Porfirie (9 noiembrie), care sunt alti sfinti.
+ *
+ * ⚠️ **CAND SE ADAUGA UN NUME NOU**, cauta-l intai cu `/v1/cauta?q=` si ia cheia din numele gasit
+ * acolo; altfel lista se umple de nume care nu prind nimic. Deocamdata lista traieste in cod, deci
+ * fiecare adaugare cere o publicare — daca ajunge sa se schimbe des, locul ei firesc e in D1, cu un
+ * rand in pagina de administrare.
+ */
+export const SFINTI_CU_EVLAVIE: ReadonlyArray<{ cheie: string; spune: string }> = [
+  { cheie: 'porfirie-cavsocalivitul', spune: 'Sf. Cuv. Porfirie Cavsocalivitul — 2 decembrie' },
+  { cheie: 'siluan-athonitul', spune: 'Sf. Cuv. Siluan Athonitul — 24 septembrie' },
+]
+
+/** Sfantul acesta e pe lista parohiei? Se intreaba pe numele curatat. */
+export function eCuEvlavie(nume: string): boolean {
+  const curat = slug(nume)
+  return SFINTI_CU_EVLAVIE.some((s) => curat.includes(s.cheie))
 }
 
 /**
@@ -766,7 +842,7 @@ export const CRUCILE: Record<FelCruce, { nume: string; scurt: string; eticheta: 
  */
 export function paginaSarbatori(o: {
   ctx: Ctx
-  fel: FelCruce
+  fel: FelFiltru
   an: number
   randuri: Array<{ r: RandZi; d: RandDesfacut; zi: ZiLiturgica }>
   calculat: boolean
@@ -774,7 +850,8 @@ export function paginaSarbatori(o: {
 }): string {
   const p = esc(o.ctx.prefix)
   const unde = String(o.an)
-  const celalalt: FelCruce = o.fel === 'rosie' ? 'neagra' : 'rosie'
+  // de cand felurile sunt trei, jos se scriu amandoua celelalte, nu „celalalt"
+  const celelalte = (['rosie', 'neagra', 'evlavie'] as FelFiltru[]).filter((f) => f !== o.fel)
   const peLuni = LUNI.map((numeLunii, i) => {
     const grup = o.randuri.filter((x) => x.r.luna === i + 1)
     if (!grup.length) return ''
@@ -787,9 +864,9 @@ ${grup.map((x) => randZi(o.ctx, x.r, x.d, x.zi, x.r.data === o.azi, o.fel)).join
 
   return pagina({
     ...comune(o.ctx),
-    titluPagina: `${CRUCILE[o.fel].nume} · ${unde}`,
+    titluPagina: `${FILTRE[o.fel].nume} · ${unde}`,
     indexabil: true,
-    metaExtra: `<meta name="description" content="${esc(CRUCILE[o.fel].nume)} în ${esc(unde)}, din calendarul creștin ortodox al Patriarhiei Române.">`,
+    metaExtra: `<meta name="description" content="${esc(FILTRE[o.fel].nume)} în ${esc(unde)}, din calendarul creștin ortodox al Patriarhiei Române.">`,
     // ⚠️ Navigarea se scrie si aici (user, 12.09.2026: „să nu se mai ascundă când intru pe sărbători
     // cruce neagră roșie") — randul are aceeasi forma pe toate paginile, ca la Program. Fara luna
     // marcata (`0`) si fara `luna` in unelte: aici filtrul tine anul intreg, nicio luna nu e aleasa,
@@ -800,17 +877,17 @@ ${grup.map((x) => randZi(o.ctx, x.r, x.d, x.zi, x.r.data === o.azi, o.fel)).join
     clasaCorp: 'sarbatori',
     corp: `<div class="cap">
   <p class="inainte-de-titlu"><a class="btn inapoi" href="${p}/${o.an}">← Înapoi</a></p>
-  <h1 class="titlu-lista">${esc(CRUCILE[o.fel].nume)}</h1>
+  <h1 class="titlu-lista">${esc(FILTRE[o.fel].nume)}</h1>
   <p class="cate">${o.randuri.length} ${o.randuri.length === 1 ? 'zi' : 'zile'} în ${esc(unde)}</p>
-  <p class="sursa">${esc(CRUCILE[o.fel].lamurire)}</p>
+  <p class="sursa">${esc(FILTRE[o.fel].lamurire)}</p>
 </div>
 ${butonToateLunile(o.ctx, o.fel, o.an, true)}
 ${o.calculat ? `<p class="an-calculat">${esc(NOTA_GENERAT)}</p>` : ''}
-${peLuni || `<p class="gol">Anul ${o.an} n-are nicio zi însemnată cu cruce ${esc(CRUCILE[o.fel].scurt)}.</p>`}
+${peLuni || `<p class="gol">Anul ${o.an} n-are ${esc(FILTRE[o.fel].pustiu)}.</p>`}
 
 <nav class="vecini">
   <a href="${p}/${o.an}">← Înapoi</a>
-  <a href="${p}/sarbatori/cruce-${celalalt}/${o.an}">${esc(CRUCILE[celalalt].nume)} →</a>
+  ${celelalte.map((f) => `<a href="${p}/sarbatori/${FILTRE[f].slug}/${o.an}">${esc(FILTRE[f].nume)} →</a>`).join('\n  ')}
 </nav>`,
   })
 }

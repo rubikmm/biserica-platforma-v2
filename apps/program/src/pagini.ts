@@ -448,6 +448,9 @@ body:not(.cu-calendar) .zi.ultima { border-bottom:0 }
 /* FEREASTRA DE ABONARE (user, 11.09.2026) — dialog nativ: fundalul intunecat, focusul si Escape vin
    de la browser, noi scriem doar cum arata. Cutia nu creste peste ecran (min cu latimea lui, minus o
    margine), ca pe telefon sa nu iasa in afara. */
+/* ⚠️ Cat timp fereastra e deschisa, pagina din spate nu se deruleaza (user, 12.09.2026, 13:42): clasa
+   o pune si o scoate JS-ul, din „click" si din „close". */
+body.cu-fereastra { overflow:hidden }
 .modal { border:0; padding:0; border-radius:14px; width:min(420px, calc(100vw - 32px));
          background:var(--paper); color:var(--ink); box-shadow:0 18px 50px rgba(0,0,0,.22) }
 .modal::backdrop { background:rgba(10,12,16,.45) }
@@ -579,7 +582,12 @@ export const SCRIPT = `
   var b = document.getElementById("b-abonare");
   var d = document.getElementById("d-abonare");
   if (!b || !d || !d.showModal) return;
-  b.addEventListener("click", function(){ d.showModal(); });
+  // ⚠️ Cat timp fereastra e deschisa, pagina din spate NU se deruleaza (user, 12.09.2026, 13:42), iar
+  // la inchidere isi capata derularea inapoi. <dialog> face pagina inertă, dar rotita mouse-ului tot
+  // misca fundalul, si atunci omul se trezeste in alta parte a saptamanii cand inchide. Inchiderea o
+  // prindem din evenimentul „close": asa acopera si Escape, si butoanele dinauntru.
+  b.addEventListener("click", function(){ d.showModal(); document.body.classList.add("cu-fereastra"); });
+  d.addEventListener("close", function(){ document.body.classList.remove("cu-fereastra"); });
 })();
 `
 
@@ -869,9 +877,12 @@ function pozaPaginii(ctx: Ctx, m: Meniu): string {
 /**
  * ABONAREA — butonul din rand si fereastra care se deschide din el (cerere user, 11.09.2026, 16:36).
  *
- * Cine il vede: **omul fara drepturi de admin** — si cel neintrat, si utilizatorul simplu („pentru cei
- * neautentificați, dar și pentru userii simpli autentificați"). Adminul nu-l are: lui randul ii e plin
- * de uneltele saptamanii, iar abonarea nu e treaba lui.
+ * ⚠️ CINE IL VEDE: **TOATA LUMEA, si adminii** (user, 12.09.2026, 13:39: „să lăsăm totuși iconița de
+ * abonare și la admini. Că și ei se comportă ca un utilizator care poate vor să fie anunțați. Aici nu
+ * e vorba doar despre mine, care sunt super admin"). Pana atunci butonul era numai al omului fara
+ * drepturi, pe socoteala ca adminului ii e randul plin si ca abonarea nu e treaba lui — socoteala
+ * gresita: dreptul de a administra nu-l scoate pe om din randul celor care vor sa primeasca vestea.
+ * Regula e aceeasi si la Calendar; daca o schimbi intr-un loc, schimb-o in amandoua.
  *
  * ⚠️ DEOCAMDATA NU FACE NIMIC (cerut anume: „momentan, să nu facă nimic acest câmp, dar să fie făcut").
  * Fereastra e un `<dialog>` nativ, cu `<form method="dialog">` inauntru: asa ORICE buton din ea — si
@@ -880,14 +891,12 @@ function pozaPaginii(ctx: Ctx, m: Meniu): string {
  * care a ramas intreaga tot timpul (vezi index.ts); pana atunci nu se pierde nimic pe drum, fiindca
  * nimic nu pleaca.
  */
-function butonAbonare(ctx: Ctx): string {
-  if (ctx.eAdmin) return ''
+function butonAbonare(_ctx: Ctx): string {
   return `<button type="button" class="btn mic abon" id="b-abonare"`
     + ` title="Primește programul pe email">${IC_PLIC}<span class="fel">Abonare</span></button>`
 }
 
-function fereastraAbonare(ctx: Ctx): string {
-  if (ctx.eAdmin) return ''
+function fereastraAbonare(_ctx: Ctx): string {
   return `<dialog class="modal" id="d-abonare" aria-labelledby="t-abonare">
   <form method="dialog" class="modal-cutie">
     <div class="modal-cap">

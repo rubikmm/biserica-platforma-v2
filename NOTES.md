@@ -400,10 +400,27 @@ azi, este ca un filtru"). Nu mai există „pagina de sărbători" ca destinați
 **stări ale aceleiași liste**, iar bara arată care stare e pusă.
 
 - **Filtrul de lună** — pastila. Alegi o lună, se arată luna aceea.
-- **Filtrul de fel** — cele două butoane. **Roșie** lasă zilele cu cruce roșie **și duminicile**
+- **Filtrul de fel** — cele **trei** butoane. **Roșie** lasă zilele cu cruce roșie **și duminicile**
   („rămân doar Sfinții cu cruce roșie și duminicile din acea lună" — duminica e sărbătoare chiar când
-  nu poartă însemnul); **neagra** lasă doar zilele cu cruce neagră, fără duminici. Sunt **reciproc
-  exclusive** (cerut anume) și se sting apăsând încă o dată pe cel aprins.
+  nu poartă însemnul); **neagra** lasă doar zilele cu cruce neagră, fără duminici; **evlavia** lasă
+  zilele în care se pomenește un sfânt din lista parohiei. Sunt **reciproc exclusive** (cerut anume) și
+  se sting apăsând încă o dată pe cel aprins.
+- ⚠️ **BUTOANELE N-AU CUVINTE, nici pe desktop** (user, 13:34: „pe desktop, iconițele cu cruci lasă-le
+  fără text… să fie ca pe mobil"). Le deosebește **culoarea crucii** — roșu, negru, mov —, iar numele
+  întreg stă în `title` și `aria-label`. De aici vine și spațiul: cu cuvinte, cele trei ar fi cerut
+  ~470 px din 680 și pastilei i-ar fi rămas 40; fără ele, pastila are **362 px**, adică șase luni la
+  vedere în loc de trei.
+- **SFINȚII CU EVLAVIE** (user, 13:31: „mai pune un buton cu o cruce. Culoare diferită") — al treilea
+  filtru **nu se sprijină pe calendarul oficial**: e o listă de nume ținută de noi (`SFINTI_CU_EVLAVIE`
+  în `pagini.ts`), fiindcă sfinții aceștia sunt scriși în calendar **fără cruce** (rang `simplu`) și
+  n-ar apărea în niciun alt filtru. Începutul, cerut anume: **Sf. Cuv. Porfirie Cavsocalivitul**
+  (2 decembrie) și **Sf. Cuv. Siluan Athonitul** (24 septembrie).
+  ⚠️ Potrivirea se face pe numele **curățat** (`slug`: fără diacritice, cu cratime), nu pe numele exact
+  din sursă. Cheia trebuie să fie destul de lungă cât să nu prindă pe altcineva: „porfirie" singur ar
+  fi prins și pe episcopul Gazei (26 februarie), și pe Sf. Mc. Onisifor și Porfirie (9 noiembrie).
+  ⚠️ **Când se adaugă un nume nou**, caută-l întâi cu `/v1/cauta?q=` și ia cheia din numele găsit acolo.
+  Lista trăiește în cod, deci fiecare adăugare cere o publicare — dacă ajunge să se schimbe des, locul
+  ei firesc e în D1, cu un rând în pagina de administrare.
 - **Se păstrează unul pe altul**: schimbi luna, filtrul crucii rămâne pus; schimbi felul, luna rămâne.
   De aceea adresele se scriu una din alta.
 - **„Toate lunile"** deselectează luna și întinde filtrul peste anul curent (user, 11:13). Butonul se
@@ -412,15 +429,29 @@ azi, este ca un filtru"). Nu mai există „pagina de sărbători" ca destinați
 - **Bulina „azi" NU e filtru** (spus explicit) și nu duce filtrul cu ea: înseamnă „arată-mi ziua de
   azi", iar ziua de azi poate să nu fie în lista filtrată.
 - **Abonarea** e singurul lucru din bară care nu filtrează — de aceea stă despărțită de bara verticală.
+  ⚠️ **O văd TOȚI, și adminii** (user, 13:39: „să lăsăm totuși iconița de abonare și la admini. Că și ei
+  se comportă ca un utilizator care poate vor să fie anunțați"). Dimineața ceruse invers și așa fusese
+  făcută, ca la Program; acum regula e a **amândurora** — dreptul de a administra nu-l scoate pe om din
+  rândul celor care vor să primească vestea. Dacă o schimbi într-un loc, schimb-o în amândouă.
+  ⚠️ **Cât timp fereastra e deschisă, pagina din spate nu se derulează** (user, 13:42), și își capătă
+  derularea înapoi la închidere. `<dialog>` face pagina inertă, dar rotița mouse-ului tot mișcă
+  fundalul — și omul se trezește în altă parte a lunii când închide. Clasa e `body.cu-fereastra`,
+  aceeași cu a ferestrei textelor zilei; închiderea se prinde din evenimentul `close`, ca să acopere
+  dintr-o singură ascultare și Escape, și butoanele dinăuntru. **La fel în Program.**
 
 Stările și adresele lor:
 
 | ce se vede | adresă |
 | --- | --- |
 | luna întreagă | `/<an>-<luna>` |
-| luna, numai zilele roșii și duminicile | `/<an>-<luna>?cruce=rosie` |
-| luna, numai zilele negre | `/<an>-<luna>?cruce=neagra` |
-| anul întreg, un fel („toate lunile") | `/sarbatori/cruce-<fel>/<an>` |
+| luna, numai zilele roșii și duminicile | `/<an>-<luna>?filtru=rosie` |
+| luna, numai zilele negre | `/<an>-<luna>?filtru=neagra` |
+| luna, numai sfinții cu evlavie | `/<an>-<luna>?filtru=evlavie` |
+| anul întreg, un fel („toate lunile") | `/sarbatori/cruce-rosie\|cruce-neagra\|evlavie/<an>` |
+
+⚠️ Parametrul se cheamă `?filtru=` de când felurile sunt trei (`?cruce=` era impropriu pentru evlavie);
+vechiul nume e primit mai departe, ca sinonim. Tipul `FelCruce` s-a făcut `FelFiltru`, iar `CRUCILE` →
+`FILTRE`, din aceeași pricină.
 
 ⚠️ **Grila de douăsprezece luni de pe vechea pagină de sărbători a ieșit** — lunile se aleg din pastila
 de sus, ca peste tot; în locul ei a rămas doar „Toate lunile".
@@ -514,7 +545,8 @@ din `zileleCuCruce` (care nu știa de duminici), ci din `randurileAnului` filtra
   ești într-o lună a calendarului, ci într-o listă peste tot anul — un marcaj ar minți. De aceea
   scriptul navigării a ieșit din `script()` într-un `JS_NAV` al lui, pus pe toate paginile.
 - **Butonul se cheamă „Abonare"** („butonul după navigare să se numească Abonare"), cu plicul de la
-  Program, și **nu se scrie la administratori** („butonul de Abonare nu se vede pe Administratori").
+  Program. ⚠️ La 09:38 a fost scos de la administratori, iar la 13:39 **repus, și la Calendar, și la
+  Program** — vezi mai sus; nu-l ascunde iar.
 - **Propoziția lămuritoare de lângă el a fost ștearsă** („șterge acel text") — „Ca să te abonezi, îți
   trebuie cont." / „Îți trimitem calendarul pe adresa contului." Ce spunea a trecut în `title`.
 - **Meniul „Informații utile" a ieșit cu totul** („în loc de butonul de info să fie două butoane cu

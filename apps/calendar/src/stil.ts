@@ -5,14 +5,16 @@
  * Se lipeste DUPA stilul global al carcasei (`@xc/ui`) si il suprascrie.
  */
 export const LOCAL = `
-/* Paleta e a carcasei. Aici stau numai variabilele pe care le foloseste doar calendarul:
-   negrul titlurilor din lista si rosul palid al butonului AZI. */
-:root { --negru:#2B2F38; --rosu-palid:rgba(198,34,52,.06); --rosu-linie:rgba(198,34,52,.45) }
+/* Paleta e a carcasei. Aici stau numai variabilele pe care le foloseste doar calendarul: negrul
+   titlurilor din lista, rosul palid al bulinei AZI si movul sfintilor cu evlavie. Movul e ales ca
+   sa nu se incurce cu celelalte semne — rosul sarbatorii, albastrul sfintilor romani, verdele zilei
+   de azi — si e mai deschis pe tema de noapte, ca sa se citeasca pe fundal intunecat. */
+:root { --negru:#2B2F38; --mov:#6B4FA8; --rosu-palid:rgba(198,34,52,.06); --rosu-linie:rgba(198,34,52,.45) }
 @media (prefers-color-scheme: dark) { :root:not([data-tema="light"]) {
-  --negru:#C3C9D3; --rosu-palid:rgba(240,97,111,.09); --rosu-linie:rgba(240,97,111,.45);
+  --negru:#C3C9D3; --mov:#B9A0E8; --rosu-palid:rgba(240,97,111,.09); --rosu-linie:rgba(240,97,111,.45);
 } }
 :root[data-tema="dark"] {
-  --negru:#C3C9D3; --rosu-palid:rgba(240,97,111,.09); --rosu-linie:rgba(240,97,111,.45);
+  --negru:#C3C9D3; --mov:#B9A0E8; --rosu-palid:rgba(240,97,111,.09); --rosu-linie:rgba(240,97,111,.45);
 }
 .c-rosu { color:var(--rosu) }
 .c-albastru { color:var(--albastru) }
@@ -80,6 +82,11 @@ html { scroll-padding-top:130px }
 .btns .sarb { text-decoration:none }
 .btns .sarb-rosie svg { color:var(--rosu) }
 .btns .sarb-neagra svg { color:var(--negru) }
+/* al treilea filtru, „Sfinți cu evlavie" (user, 12.09.2026, 13:31: „mai pune un buton cu o cruce.
+   Culoare diferită"). Movul nu se ciocneste cu niciunul din semnele de pana acum: rosul e al
+   sarbatorii, albastrul al sfintilor romani, verdele al zilei de azi. */
+.btns .sarb-evlavie svg { color:var(--mov) }
+.c-evlavie { color:var(--mov) }
 .btns .sarb:hover { border-color:var(--rosu); color:var(--rosu) }
 .btns .sarb.activ { border-color:var(--rosu); color:var(--rosu); font-weight:700;
                     background:var(--rosu-palid); cursor:default }
@@ -110,6 +117,7 @@ html { scroll-padding-top:130px }
    scris cu alb"). */
 h2.luna .fel-filtru.f-rosie { color:var(--rosu) }
 h2.luna .fel-filtru.f-neagra { color:var(--ink) }
+h2.luna .fel-filtru.f-evlavie { color:var(--mov) }
 
 /* Pe telefon butoanele de sub pastila isi lasa cuvintele si raman numai iconitele: cu ele, abonarea
    si cele doua liste cer ~446 px, iar un telefon de 390 are 335 de folosit. Numele intreg sta in
@@ -117,7 +125,7 @@ h2.luna .fel-filtru.f-neagra { color:var(--ink) }
 @media (max-width:600px) {
   .btns { gap:7px }
   .btns .mic { padding-left:11px; padding-right:11px }
-  .btns .sarb .cuv, .btns .abon .cuv { display:none }
+  .btns .abon .cuv { display:none }
 }
 
 /* PASTILA NAVIGARII (user, 12.09.2026: „să fie o pastilă ca la Program și lunile să fie text în

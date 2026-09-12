@@ -37,7 +37,7 @@ import { extrageZi, faraTaguri, dataDinAcf, type RandZiExtras } from './extrager
 import { duminica, glasSiVoscreasna, perioadaOficiala, randuialaMesei, repereContract, sambataMortilor, ziLibera } from './pascalia.js'
 import { canonizeazaReferinta } from './titluri.js'
 import { type RandZi, desfaRandul, ziLiturgica } from './traducere.js'
-import { type Ctx, type FelCruce, type Parte, type TexteZilei, paginaAdmin, paginaLuna, paginaMesaj, paginaSarbatori, paginaZi, pozaSaptamaniiHtml, texteFereastra, trecePrinFiltru } from './pagini.js'
+import { type Ctx, type FelFiltru, type Parte, type TexteZilei, paginaAdmin, paginaLuna, paginaMesaj, paginaSarbatori, paginaZi, pozaSaptamaniiHtml, texteFereastra, trecePrinFiltru } from './pagini.js'
 
 export interface Env {
   DB: D1Database
@@ -263,8 +263,8 @@ export default {
         const mesajAbonare = semn === '1' ? 'Gata, te-am trecut pe listă.' : semn === '0' ? 'Nu am putut face abonarea; încearcă din nou.' : semn === '2' ? 'Te-am scos de pe listă.' : undefined
         // filtrul crucii, pus din bara de sus (user, 12.09.2026): lucreaza peste luna asta. Un fel
         // nerecunoscut se face ca si cum n-ar fi — lista intreaga, fara eroare.
-        const cerut = url.searchParams.get('cruce')
-        const cruce = cerut === 'rosie' || cerut === 'neagra' ? (cerut as FelCruce) : undefined
+        const cerut = url.searchParams.get('filtru') ?? url.searchParams.get('cruce')
+        const cruce = cerut === 'rosie' || cerut === 'neagra' || cerut === 'evlavie' ? (cerut as FelFiltru) : undefined
         return html(paginaLuna({ ctx, an, luna, randuri: lista, calculat, azi, ...(cruce ? { cruce } : {}), mesajAbonare }), 200, cachePagina)
       }
 
@@ -285,13 +285,13 @@ export default {
       }
 
       // FILTRUL CRUCII PESTE ANUL INTREG — starea „toate lunile" (user, 12.09.2026, 11:13)
-      const mSarb = /^\/sarbatori\/cruce-(rosie|neagra)(?:\/(\d{4})(?:-(\d{2}))?)?$/.exec(cale)
+      const mSarb = /^\/sarbatori\/(?:cruce-(rosie|neagra)|(evlavie))(?:\/(\d{4})(?:-(\d{2}))?)?$/.exec(cale)
       if (mSarb && req.method === 'GET') {
-        const fel = mSarb[1] as FelCruce
-        const an = mSarb[2] ? Number(mSarb[2]) : ctx.anCurent
+        const fel = (mSarb[1] ?? mSarb[2]) as FelFiltru
+        const an = mSarb[3] ? Number(mSarb[3]) : ctx.anCurent
         // ⚠️ Adresa cu luna in ea a fost inlocuita de filtrul pe pagina lunii; o trimitem acolo, ca
         // legaturile vechi si cele scrise de om sa nu cada.
-        if (mSarb[3]) return redirect(`${prefix}/${an}-${mSarb[3]}?cruce=${fel}`)
+        if (mSarb[4]) return redirect(`${prefix}/${an}-${mSarb[4]}?filtru=${fel}`)
         let randuri: RandZi[]
         let calculat = false
         if (ani.includes(an)) randuri = await randurileAnului(env.DB, an)
