@@ -592,6 +592,38 @@ evlavie") nu mai încape cu cuvânt cu tot** — când vine, ori se scurtează n
 doar iconițe (și atunci navigarea câștigă mult). Pe telefon (sub 600 px) cuvintele cad deja și rămân
 iconițele: cu ele, cele trei ar cere ~446 px, iar un telefon de 390 are 335 de folosit.
 
+### Propunerea săptămânii — și privegherile din anii trecuți (12.09.2026)
+
+Propunerea are acum **patru izvoare**: obiceiul ultimelor 52 de săptămâni, aceeași dată în anii
+trecuți, **privegherile** și calendarul. La sfârșit se face o **curățare**.
+
+- ⚠️ **PRAGUL E UNU** (user, 15:18: „pragul pentru o priveghere nu e să fie de mai multe ci să fi fost
+  măcar o slujbă de la ora 21"). Privegherea nu e un obicei săptămânal, e o hotărâre: dacă s-a stat o
+  dată noaptea la un sfânt, merită amintită la anul. De aceea izvorul 2 nu le prindea — el cere două
+  apariții **și** jumătate din ani, iar privegherile sunt rare (40 în 12 ani) și împărțite pe trei
+  coduri: `priveghere_liturghie` (26, ora 21:00), `priveghere_utrenia` (11, 18:00),
+  `priveghere_ceasurile_liturghie` (3, 21:00).
+- **Cum se recunoaște una**: ora de la **21:00** în sus **ori** codul care spune el însuși
+  „priveghere". Ora e semnul adevărat, cum a spus utilizatorul; codul e plasa pentru
+  `priveghere_utrenia`, care se ține de la 18:00 și s-ar pierde dacă ne-am lua numai după ceas.
+  Se propune slujba care **chiar a fost** — același cod, aceeași oră —, nu o priveghere închipuită.
+- **Motivul se scrie pe față**: „priveghere: în 2018, 2019, 2021". Numele sfântului vine din `detalii`
+  al privegherii de atunci — de aceea `istoriculSlujbelor` aduce acum și coloana `detalii`.
+- ⚠️ **CURĂȚAREA, ca să nu se scrie de două ori aceeași slujbă.** Așa s-a făcut dintotdeauna, se vede
+  în arhivă: după `priveghere_liturghie` (21:00) a doua zi **nu** se mai face Liturghie, fiindcă
+  privegherea o cuprinde; după `priveghere_utrenia` (18:00) a doua zi urmează `ceasurile_liturghie`
+  la 08:00. Deci privegherea ține locul vecerniei din aceeași seară și, numai când are Liturghie, al
+  slujbei de dimineață a zilei următoare.
+- ⚠️ **Liturghia duminicii nu se atinge niciodată.** În toată arhiva nu e nicio priveghere sâmbătă
+  seara (cele de la sfârșit de săptămână sunt toate duminică seara, pentru luni), deci cazul n-a fost
+  văzut — iar a șterge din greșeală Liturghia duminicii ar fi cea mai urâtă greșeală cu putință.
+- **Probat pe viu**: săptămâna 26 octombrie 2026 propune privegherea de luni seara (Sf. Cuv. Dimitrie
+  cel Nou, 2018 și 2020), iar marți dimineața nu mai apare Liturghie.
+- **Opt probe în `tests/propunere.test.ts`** păzesc toate regulile de mai sus. ⚠️ Slujba se caută
+  acolo **pe ziua ei**, nu pe cod: cu un istoric mic, izvorul obiceiului umple și alte zile cu același
+  cod (o săptămână din una înseamnă 100%) și proba ar privi slujba nepotrivită — chiar așa a picat
+  prima oară.
+
 ### API-ul programului
 
 `slujba_urmatoare`, `slujba_curenta` (în curs = începută de cel mult **3 ore**), `slujbele_zilei`,

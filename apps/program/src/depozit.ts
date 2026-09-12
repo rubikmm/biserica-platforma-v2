@@ -146,9 +146,11 @@ export interface RandIstoricSlujba {
   ora: string
   cod_nume: string
   luni: string
+  /** JSON-ul din coloana `detalii` — de acolo ia propunerea numele sfantului privegherii. */
+  detalii: string | null
 }
 export async function istoriculSlujbelor(db: D1Database, inainteDe: string): Promise<RandIstoricSlujba[]> {
-  return toate<RandIstoricSlujba>(db, `SELECT data, ora, cod_nume, luni FROM slujbe WHERE data < ? ORDER BY data`, [inainteDe])
+  return toate<RandIstoricSlujba>(db, `SELECT data, ora, cod_nume, luni, detalii FROM slujbe WHERE data < ? ORDER BY data`, [inainteDe])
 }
 
 /** Urmatoarea slujba de la un moment incolo, in cel mult N zile. */
