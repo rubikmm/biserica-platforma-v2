@@ -87,6 +87,12 @@ function contDin(ctx: Ctx) {
  * pop-up la fel") — vezi `fereastraAbonare`.
  *
  * Butonul filtrului pus se scrie marcat (`.activ`, rosu); apasat inca o data, il stinge.
+ *
+ * ⚠️ FILTRELE ATARNA DE ROL (user, 13.09.2026, 01:26: „sunt felul cum afectează rolul userului a ce
+ * vede în app" — regula noua, ceruta anume): neautentificatul n-are niciun filtru, utilizatorul le
+ * are pe primele doua (rosie, neagra), adminul pe toate trei. Vezi `poateFiltra`. Butoanele fara
+ * drept se STING, nu se ascund (regula userului din 11–12.09.2026: „se ascund și strică interfața") —
+ * raman la locul lor, palite, cu pricina in `title`, ca randul sa aiba aceeasi forma la toata lumea.
  */
 function unelte(o: {
   ctx: Ctx
@@ -115,6 +121,13 @@ function unelte(o: {
     const pus = o.felActiv === fel
     const unde = pus ? faraFel : cuFel(fel)
     const spune = pus ? `Scoate filtrul: ${nume.toLowerCase()}` : nume
+    // fara dreptul lui, crucea se scrie palita (`.gol`): se vede ca exista, dar nu duce nicaieri.
+    // Pricina sta in `title` si in `aria-label`, ca omul sa stie ce-i lipseste, nu doar ca nu merge.
+    if (!poateFiltra(o.ctx, fel)) {
+      const pricina = FILTRE[fel].cere
+      return `<span class="${clasa} gol" aria-disabled="true" title="${esc(nume)} — ${esc(pricina)}"`
+        + ` aria-label="${esc(nume)} — ${esc(pricina)}">${IC_CRUCE}</span>`
+    }
     // stins, dar fara drum inapoi (lista anului, fara luna): butonul ramane marcat si neapasabil
     if (pus && !unde) {
       return `<span class="${clasa} activ" aria-current="page" title="${esc(nume)}" aria-label="${esc(nume)}">${IC_CRUCE}</span>`
@@ -784,7 +797,7 @@ export type FelFiltru = 'rosie' | 'neagra' | 'evlavie'
  * acolo să scrie «cruce roșie», nu «Roșie»"); `slug` e bucata din adresa listei de an;
  * plin; `slug` e bucata din adresa listei de an; `pustiu` incheie propozitia „Septembrie 2026 n-are…".
  */
-export const FILTRE: Record<FelFiltru, { nume: string; scurt: string; eticheta: string; slug: string; lamurire: string; pustiu: string }> = {
+export const FILTRE: Record<FelFiltru, { nume: string; scurt: string; eticheta: string; slug: string; lamurire: string; pustiu: string; cere: string }> = {
   rosie: {
     nume: 'Sărbători cu cruce roșie',
     scurt: 'roșie',
@@ -792,6 +805,7 @@ export const FILTRE: Record<FelFiltru, { nume: string; scurt: string; eticheta: 
     slug: 'cruce-rosie',
     lamurire: 'Praznicele împărătești și sfinții cu ținere — zilele pe care calendarul oficial le însemnează cu cruce roșie.',
     pustiu: 'nicio zi însemnată cu cruce roșie',
+    cere: 'intră în cont ca să filtrezi',
   },
   neagra: {
     nume: 'Sărbători cu cruce neagră',
@@ -800,6 +814,7 @@ export const FILTRE: Record<FelFiltru, { nume: string; scurt: string; eticheta: 
     slug: 'cruce-neagra',
     lamurire: 'Sfinții însemnați cu cruce neagră: se prăznuiesc, dar ziua nu e cu ținere.',
     pustiu: 'nicio zi însemnată cu cruce neagră',
+    cere: 'intră în cont ca să filtrezi',
   },
   evlavie: {
     nume: 'Sfinți cu evlavie',
@@ -808,7 +823,25 @@ export const FILTRE: Record<FelFiltru, { nume: string; scurt: string; eticheta: 
     slug: 'evlavie',
     lamurire: 'Sfinții la care ține parohia — lista e a noastră, nu a însemnului din calendarul oficial: cei mai mulți dintre ei sunt scriși acolo fără cruce.',
     pustiu: 'niciun sfânt din cei cu evlavie',
+    cere: 'numai pentru administratori',
   },
+}
+
+/**
+ * CINE POATE FILTRA — treptele cerute de user pe 13.09.2026, 01:26 („sunt felul cum afectează rolul
+ * userului a ce vede în app"): neautentificatul niciun filtru, utilizatorul cele doua cruci ale
+ * calendarului oficial, adminul si lista parohiei („Sfinți cu evlavie").
+ *
+ * ⚠️ Se hotaraste din `ctx`, nu din vreo cheie noua de permisiune, si de aceea nu cere republicarea
+ * lui `xc-authz-staging`. Amandoua campurile vin din sesiunea EFECTIVA, asa cum o da identitatea:
+ * sub masca „vezi ca" rolurile adevarate nu se vad nicaieri, iar masca „neautentificat" intoarce
+ * chiar `SESIUNE_ANONIMA`. Deci filtrele coboara singure cu masca, fara nimic in plus aici.
+ *
+ * ⚠️ Ce NU se inchide: cititul. Lunile, zilele si textele raman la liber pentru oricine — se inchide
+ * numai unealta care taie lista, nu continutul ei.
+ */
+export function poateFiltra(ctx: Ctx, fel: FelFiltru): boolean {
+  return fel === 'evlavie' ? ctx.eAdmin : !!ctx.utilizator
 }
 
 /**
@@ -907,8 +940,9 @@ export function paginaSarbatori(o: {
 }): string {
   const p = esc(o.ctx.prefix)
   const unde = String(o.an)
-  // de cand felurile sunt trei, jos se scriu amandoua celelalte, nu „celalalt"
-  const celelalte = (['rosie', 'neagra', 'evlavie'] as FelFiltru[]).filter((f) => f !== o.fel)
+  // de cand felurile sunt trei, jos se scriu amandoua celelalte, nu „celalalt" — dar numai cele pe
+  // care omul le poate folosi (13.09.2026): o legatura catre un filtru inchis ar duce la un ocol
+  const celelalte = (['rosie', 'neagra', 'evlavie'] as FelFiltru[]).filter((f) => f !== o.fel && poateFiltra(o.ctx, f))
   const peLuni = LUNI.map((numeLunii, i) => {
     const grup = o.randuri.filter((x) => x.r.luna === i + 1)
     if (!grup.length) return ''

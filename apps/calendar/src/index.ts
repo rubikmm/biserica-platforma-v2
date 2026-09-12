@@ -37,7 +37,7 @@ import { extrageZi, faraTaguri, dataDinAcf, type RandZiExtras } from './extrager
 import { duminica, glasSiVoscreasna, perioadaOficiala, randuialaMesei, repereContract, sambataMortilor, ziLibera } from './pascalia.js'
 import { canonizeazaReferinta } from './titluri.js'
 import { type RandZi, desfaRandul, ziLiturgica } from './traducere.js'
-import { type Ctx, type FelFiltru, type Parte, type TexteZilei, paginaAdmin, paginaLuna, paginaMesaj, paginaSarbatori, paginaZi, pozaSaptamaniiHtml, texteFereastra, trecePrinFiltru } from './pagini.js'
+import { type Ctx, type FelFiltru, type Parte, type TexteZilei, paginaAdmin, paginaLuna, paginaMesaj, paginaSarbatori, paginaZi, poateFiltra, pozaSaptamaniiHtml, texteFereastra, trecePrinFiltru } from './pagini.js'
 
 export interface Env {
   DB: D1Database
@@ -264,7 +264,12 @@ export default {
         // filtrul crucii, pus din bara de sus (user, 12.09.2026): lucreaza peste luna asta. Un fel
         // nerecunoscut se face ca si cum n-ar fi — lista intreaga, fara eroare.
         const cerut = url.searchParams.get('filtru') ?? url.searchParams.get('cruce')
-        const cruce = cerut === 'rosie' || cerut === 'neagra' || cerut === 'evlavie' ? (cerut as FelFiltru) : undefined
+        const felCerut = cerut === 'rosie' || cerut === 'neagra' || cerut === 'evlavie' ? (cerut as FelFiltru) : undefined
+        // ⚠️ Filtrul atarna de rol (user, 13.09.2026): fara dreptul lui, adresa scrisa de mana ori
+        // ramasa in semne de carte se poarta ca si cum filtrul n-ar fi — luna intreaga, fara eroare,
+        // fiindca CITITUL ramane la liber. Altfel poarta ar fi doar de fatada: butonul palit in bara,
+        // dar lista filtrata la un `?filtru=` scris de mana.
+        const cruce = felCerut && poateFiltra(ctx, felCerut) ? felCerut : undefined
         return html(paginaLuna({ ctx, an, luna, randuri: lista, calculat, azi, ...(cruce ? { cruce } : {}), mesajAbonare }), 200, cachePagina)
       }
 
@@ -290,8 +295,13 @@ export default {
         const fel = (mSarb[1] ?? mSarb[2]) as FelFiltru
         const an = mSarb[3] ? Number(mSarb[3]) : ctx.anCurent
         // ⚠️ Adresa cu luna in ea a fost inlocuita de filtrul pe pagina lunii; o trimitem acolo, ca
-        // legaturile vechi si cele scrise de om sa nu cada.
+        // legaturile vechi si cele scrise de om sa nu cada. (Si cine n-are dreptul filtrului trece
+        // pe aici: ruta lunii ii lasa luna si scapa de filtru, deci ajunge unde trebuie.)
         if (mSarb[4]) return redirect(`${prefix}/${an}-${mSarb[4]}?filtru=${fel}`)
+        // ⚠️ Aceeasi poarta ca pe luna (user, 13.09.2026): pagina asta nu e altceva decat starea
+        // „toate lunile" a filtrului, deci fara dreptul lui n-are ce arata. Nu dam eroare — omul e
+        // trimis la anul nefiltrat, care ramane deschis oricui.
+        if (!poateFiltra(ctx, fel)) return redirect(`${prefix}/${an}`)
         let randuri: RandZi[]
         let calculat = false
         if (ani.includes(an)) randuri = await randurileAnului(env.DB, an)

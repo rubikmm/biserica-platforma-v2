@@ -130,6 +130,10 @@ propunerea automată, ca în V1.
 8. Vocabularul de nume al subdomeniilor V2 (lista de 15) — de confirmat cu utilizatorul.
 9. **Titlul zilei din calendar** (`titlu_html`): V2 îl reface din segmente, fără `<strong>`/`<em>`
    din sursa Patriarhiei; V1 le păstra. De lămurit dacă vrea bold-ul înapoi — se schimbă în calendar.
+10. **Treptele rolului — numai la calendar, ori peste tot?** (13.09.2026) Filtrele-cruce atârnă de acum
+    de rol; regula a fost cerută pentru calendar. De întrebat utilizatorul dacă același fel de trepte
+    se cuvine și la Program/Tipic, și ce anume se închide acolo — altfel platforma capătă câte o regulă
+    de vizibilitate pe aplicație, ceea ce e tocmai ce n-a vrut la structura mare.
 
 ## Aplicațiile de pe staging
 
@@ -435,6 +439,22 @@ azi, este ca un filtru"). Nu mai există „pagina de sărbători" ca destinați
   ⚠️ **Când se adaugă un nume nou**, caută-l întâi cu `/v1/cauta?q=` și ia cheia din numele găsit acolo.
   Lista trăiește în cod, deci fiecare adăugare cere o publicare — dacă ajunge să se schimbe des, locul
   ei firesc e în D1, cu un rând în pagina de administrare.
+- ⚠️ **FILTRELE ATÂRNĂ DE ROL** (user, 13.09.2026, 01:26: „sunt felul cum afectează rolul userului a
+  ce vede în app" — regulă nouă, cerută anume, prima abatere de la „totul la liber"): **neautentificatul
+  niciun filtru**, **utilizatorul cele două cruci** ale calendarului oficial, **adminul și evlavia**,
+  lista parohiei. Poarta e `poateFiltra(ctx, fel)` în `pagini.ts` — `ctx.utilizator` pentru cruci,
+  `ctx.eAdmin` pentru evlavie.
+  - **Nicio cheie nouă de permisiune**, deci nici republicarea lui `xc-authz-staging`: amândouă
+    câmpurile vin din sesiunea **efectivă**, cum o dă identitatea, iar masca „vezi ca" coboară singură
+    cu ele (masca „neautentificat" întoarce chiar `SESIUNE_ANONIMA`). De aici și folosul: calendarul e
+    locul unde se **vede** ce face masca.
+  - **Butoanele fără drept se sting, nu se ascund** (regula din 11–12.09): `<span class="… gol">`,
+    palit, cu pricina în `title` („intră în cont ca să filtrezi" / „numai pentru administratori").
+    Rândul are aceeași formă la toți trei — probat cu poze pe toate stările.
+  - **Poarta e și pe rute, nu doar pe butoane**: `?filtru=` scris de mână se poartă ca și cum n-ar fi
+    (luna întreagă, fără eroare), iar `/sarbatori/<fel>/<an>` trimite la anul nefiltrat. **Cititul
+    rămâne la liber** — se închide unealta care taie lista, nu conținutul.
+  - Proba care păzește treptele: `tests/filtre-calendar.test.ts`.
 - **Se păstrează unul pe altul**: schimbi luna, filtrul crucii rămâne pus; schimbi felul, luna rămâne.
   De aceea adresele se scriu una din alta.
 - **„Toate lunile"** deselectează luna și întinde filtrul peste anul curent (user, 11:13). Butonul se
@@ -839,6 +859,21 @@ forța antetul `Host`**.
   copiere în fiecare aplicație** — de aici costul oricărei schimbări transversale (antetul în 12 locuri).
 
 ## Jurnal
+
+### 2026-09-13
+
+- **Filtrele calendarului au căpătat trepte de rol** (user, 01:26, regulă nouă: „sunt felul cum
+  afectează rolul userului a ce vede în app"): neautentificatul niciun filtru, utilizatorul cele două
+  cruci, adminul și evlavia. Amănuntele, în „BARA E UN SET DE FILTRE". Calendar **0.7.0** pe staging.
+  - **Întâi am întrebat, fiindcă e prima abatere de la „totul la liber"**, și fiindcă în cod nu exista
+    nicio urmă de așa ceva — anonim, și localul, și staging-ul dădeau toate trei crucile. Utilizatorul
+    a confirmat că e regulă nouă, nu reclamație.
+  - Poarta stă pe `ctx.utilizator` / `ctx.eAdmin`, adică pe sesiunea **efectivă**: nicio cheie nouă de
+    permisiune, deci nici republicarea lui `xc-authz-staging`, iar masca „vezi ca" coboară singură cu
+    ea. Calendarul e de acum locul unde se **vede** ce face masca — pentru asta a fost cerută regula.
+  - Pozele celor trei stări s-au făcut fără sesiune, cu rețeta „probă vitest → Browser Rendering":
+    `paginaLuna` cu trei `ctx` scrise de mână, HTML-ul în `/tmp`, poza din API. Bun de ținut minte
+    pentru orice regulă „cine ce vede" — altfel ar fi cerut trei conturi și trei intrări.
 
 ### 2026-09-12
 
