@@ -446,6 +446,11 @@ vreodată se desparte culoarea (român/local) de însemn în `Rang`, locul acela
 titlul duminicii: roșu la cruce roșie și la praznice, albastru la sfinții români. Când capul zilei se
 scrie din sfinți, marcajul de culoare al sursei se pierde; așa ajunseseră sărbătorile cu cruce roșie
 să fie scrise cu cerneală în lista lor (user, 13:04: „nu sunt notate cu roșu, cum sunt duminicile").
+⚠️ **Eticheta de lângă numele lunii spune felul întreg și e în culoarea lui** (user, 13:28): „septembrie
+2026 · **cruce roșie**" / „· **cruce neagră**", nu „roșie"/„neagră". Roșul e `--rosu` (pe tema de noapte
+se deschide, dar rămâne roșu); negrul e `--ink`, cerneala paginii, care **se întoarce singură în alb pe
+întuneric** — chiar ce s-a cerut. De aceea `CRUCILE` are și `scurt` (intră în propoziții care spun deja
+„cruce": „nicio zi însemnată cu cruce roșie"), și `eticheta`, care stă singură și poartă cuvântul cu ea.
 ⚠️ **Și data zilei cu cruce roșie se scrie roșu**, nu doar a duminicii (`.zi.cruce-rosie .nr`) — ca în
 calendarul tipărit, unde ziua cu ținere e roșie cu totul. **Fundalul palid rămâne însă numai al
 duminicii**: el spune „e duminică", nu „e sărbătoare".

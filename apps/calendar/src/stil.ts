@@ -104,7 +104,12 @@ html { scroll-padding-top:130px }
 .toate-lunile.activ { color:var(--paper); background:var(--rosu); border-color:var(--rosu);
                       font-weight:700 }
 /* felul crucii, scris langa numele lunii, ca sa se stie din titlu ce lista se vede */
-h2.luna .fel-filtru { color:var(--rosu) }
+/* Felul crucii, scris langa numele lunii, in CULOAREA LUI (user, 12.09.2026, 13:28). Rosul e --rosu,
+   care pe tema de noapte se face mai deschis, dar ramane rosu; negrul e cerneala paginii, deci se
+   intoarce singur in alb pe intuneric — chiar ce s-a cerut („să fie cu negru, iar pe tema dark să fie
+   scris cu alb"). */
+h2.luna .fel-filtru.f-rosie { color:var(--rosu) }
+h2.luna .fel-filtru.f-neagra { color:var(--ink) }
 
 /* Pe telefon butoanele de sub pastila isi lasa cuvintele si raman numai iconitele: cu ele, abonarea
    si cele doua liste cer ~446 px, iar un telefon de 390 are 335 de folosit. Numele intreg sta in

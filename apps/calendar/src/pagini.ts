@@ -618,7 +618,7 @@ export function paginaLuna(o: {
     corp: `${o.mesajAbonare ? `<p class="an-calculat">${esc(o.mesajAbonare)}</p>` : ''}
 ${o.calculat ? `<p class="an-calculat">${esc(NOTA_GENERAT)}</p>` : ''}
 ${o.cruce ? butonToateLunile(o.ctx, o.cruce, o.an, false) : ''}
-<h2 class="luna">${esc(numeLuna)}${felul ? ` · <span class="fel-filtru">${esc(felul.scurt)}</span>` : ''}</h2>
+<h2 class="luna">${esc(numeLuna)}${felul ? ` · <span class="fel-filtru ${o.cruce === 'neagra' ? 'f-neagra' : 'f-rosie'}">${esc(felul.eticheta)}</span>` : ''}</h2>
 <div class="zile">
 ${corp}</div>
 ${corp ? '' : `<p class="gol">${esc(numeLuna)} n-are nicio zi însemnată cu cruce ${esc(felul?.scurt ?? '')}.</p>`}
@@ -736,15 +736,22 @@ ${o.parte
 
 export type FelCruce = 'rosie' | 'neagra'
 
-export const CRUCILE: Record<FelCruce, { nume: string; scurt: string; lamurire: string }> = {
+/**
+ * `scurt` intra in propozitii care spun deja cuvantul „cruce" („nicio zi însemnată cu cruce roșie");
+ * `eticheta` sta singura, langa numele lunii, si de aceea il poarta cu ea (user, 12.09.2026, 13:28:
+ * „când sunt pe cruce roșie, acolo să scrie «cruce roșie», nu «Roșie»").
+ */
+export const CRUCILE: Record<FelCruce, { nume: string; scurt: string; eticheta: string; lamurire: string }> = {
   rosie: {
     nume: 'Sărbători cu cruce roșie',
     scurt: 'roșie',
+    eticheta: 'cruce roșie',
     lamurire: 'Praznicele împărătești și sfinții cu ținere — zilele pe care calendarul oficial le însemnează cu cruce roșie.',
   },
   neagra: {
     nume: 'Sărbători cu cruce neagră',
     scurt: 'neagră',
+    eticheta: 'cruce neagră',
     lamurire: 'Sfinții însemnați cu cruce neagră: se prăznuiesc, dar ziua nu e cu ținere.',
   },
 }
