@@ -481,6 +481,8 @@ export function randZi(ctx: Ctx, r: RandZi, d: RandDesfacut, zi: ZiLiturgica, eA
   // ⚠️ Intr-o lista de cruci NEGRE, titlul unei duminici nu se mai scrie rosu: rosul ar spune
   // „sarbatoare cu ținere", adica taman ce lista aceasta nu cuprinde.
   if (fel === 'neagra') clase.push('fara-rosu')
+  // anii privegherilor se scriu numai in lista evlaviei, unde sunt insasi pricina pentru care ziua e acolo
+  const anii = fel === 'evlavie' ? privegherileZilei(zi) : []
   const semne = semnele(d, (e) => !E_POST(e) && !E_LIBERA(e))
   const randuialaMesei = semnele(d, E_POST) + semnele(d, E_LIBERA)
 
@@ -501,6 +503,7 @@ export function randZi(ctx: Ctx, r: RandZi, d: RandDesfacut, zi: ZiLiturgica, eA
     ${randuialaMesei ? `<div class="randuiala-mesei">${randuialaMesei}</div>` : ''}
     <p class="titlu-zi">${spreSinaxar(titlu)}</p>
     ${sfinti ? `<p class="sfinti">${spreSinaxar(sfinti)}</p>` : ''}
+    ${anii.length ? `<p class="privegheri"><b>Privegheri:</b> ${anii.join(', ')}</p>` : ''}
     ${r.subtitlu ? `<p class="subtitlu">${esc(r.subtitlu)}</p>` : ''}
     ${semne ? `<p class="semne">${semne}</p>` : ''}
     ${pericope || glas ? `<p class="pericope">${[pericope ? spreTexte : '', glas].filter(Boolean).join(' · ')}</p>` : ''}
@@ -561,7 +564,9 @@ function sirulLunilor(ctx: Ctx, an: number, luna: number, azi: string, fel?: Fel
   // bulina se face rosie numai cand pagina arata chiar luna de azi — rosul spune locul, nu butonul
   const peLunaAzi = an === anAzi && luna === lunaAzi
   const butonAzi = `<a class="azi-buton${peLunaAzi ? ' activ' : ''}" href="${adresaLunii(p, anAzi, lunaAzi)}#azi"`
-    + ` title="${peLunaAzi ? 'Mergi la ziua de azi' : 'Mergi la luna de azi'}" aria-label="ziua de azi"></a>`
+    // ⚠️ Butonul se cheama „Astăzi", si atat (user, 12.09.2026, 14:17: „textul buton Azi să fie chiar
+    // «Astăzi» - nu mergi la luna…"). Un nume, nu o poruncă: bulina spune CE e, nu ce face cu tine.
+    + ` title="Astăzi" aria-label="Astăzi"></a>`
   return `<span class="pastila">${butonAzi}<div class="fasie"><nav class="luni">${butoane.join('')}</nav></div></span>`
 }
 
@@ -824,10 +829,59 @@ export const FILTRE: Record<FelFiltru, { nume: string; scurt: string; eticheta: 
  * fiecare adaugare cere o publicare — daca ajunge sa se schimbe des, locul ei firesc e in D1, cu un
  * rand in pagina de administrare.
  */
-export const SFINTI_CU_EVLAVIE: ReadonlyArray<{ cheie: string; spune: string }> = [
-  { cheie: 'porfirie-cavsocalivitul', spune: 'Sf. Cuv. Porfirie Cavsocalivitul — 2 decembrie' },
-  { cheie: 'siluan-athonitul', spune: 'Sf. Cuv. Siluan Athonitul — 24 septembrie' },
+export const SFINTI_CU_EVLAVIE: ReadonlyArray<{ cheie: string; data: string; privegheri: readonly number[] }> = [
+  // ⚠️ Lista vine din ARHIVA PROGRAMULUI (user, 12.09.2026, 14:17: „pune toți sfinții la care am făcut
+  // priveghere"): 40 de slujbe numite „Priveghere" intre 2017 si 2025, la 18 sarbatori. Cheile sunt
+  // luate din numele CU CARE SCRIE CALENDARUL ziua, nu din cum le zicem noi, si au fost probate una
+  // cate una: fiecare prinde exact ziua ei.
+  //
+  // ⚠️ ANII sunt cei in care s-a privegheat, si se scriu in pagina, sub numele zilei (user, 14:20).
+  // La Anul Nou sunt trecuti si 2014 si 2015, desi acolo slujba e scrisa „Te Deum, Utrenia și Sfânta
+  // Liturghie" (22:30), fara cuvantul priveghere: ca randuiala e tot o priveghere, iar din 2018
+  // aceeasi slujba e scrisa „PRIVEGHERE". Daca vrei numai ce se cheama asa in arhiva, scoate-i.
+  { cheie: 'taierea-imprejur', data: '01-01', privegheri: [2014, 2015, 2018, 2019, 2021] },
+  { cheie: 'antipa-de-la-calapodesti', data: '01-10', privegheri: [2022] },
+  { cheie: 'antonie-cel-mare', data: '01-17', privegheri: [2019] },
+  { cheie: 'intampinarea-domnului', data: '02-02', privegheri: [2021] },
+  { cheie: 'efrem-cel-nou', data: '05-05', privegheri: [2018] },
+  { cheie: 'ioan-rusul', data: '05-27', privegheri: [2023, 2024, 2025] },
+  { cheie: 'grigorie-dascalul', data: '06-22', privegheri: [2018] },
+  { cheie: 'paisie-aghioritul', data: '07-12', privegheri: [2021] },
+  { cheie: 'proroc-ilie-tesviteanul', data: '07-20', privegheri: [2017, 2018, 2019, 2021, 2022, 2023, 2024] },
+  { cheie: 'alexandru-ioan-si-pavel', data: '08-30', privegheri: [2021, 2022, 2023] },
+  { cheie: 'nasterea-maicii-domnului', data: '09-08', privegheri: [2021] },
+  { cheie: 'siluan-athonitul', data: '09-24', privegheri: [2018, 2019, 2021, 2024, 2025] },
+  { cheie: 'acoperamantul-maicii-domnului', data: '10-01', privegheri: [2018, 2019, 2022] },
+  // ⚠️ prinde DOUA zile, si pe drept: 27 octombrie si 13 iulie (aducerea moastelor la Bucuresti).
+  // Privegherile au fost la 27 octombrie.
+  { cheie: 'dimitrie-cel-nou', data: '10-27', privegheri: [2018, 2020] },
+  { cheie: 'soborul-sf-arhangheli', data: '11-08', privegheri: [2021] },
+  { cheie: 'nectarie-de-la-eghina', data: '11-09', privegheri: [2019] },
+  { cheie: 'mare-mc-ecaterina', data: '11-25', privegheri: [2021, 2024] },
+  // pus la cererea userului (13:31), inainte sa vina lista privegherilor: la el nu s-a privegheat
+  { cheie: 'porfirie-cavsocalivitul', data: '12-02', privegheri: [] },
+  { cheie: 'spiridon-episcopul-trimitundei', data: '12-12', privegheri: [2018, 2019, 2023] },
 ]
+
+/**
+ * Anii in care s-a privegheat la sfintii zilei — se scriu sub numele zilei, in lista evlaviei
+ * (user, 12.09.2026, 14:20: „chiar să scrii așa: **Privegheri:** anii, cu virgulă, unul după altul").
+ * Daca ziua are doi sfinti de pe lista, anii se string laolalta si se aseaza in ordine.
+ */
+function privegherileZilei(zi: ZiLiturgica): number[] {
+  // ⚠️ Anii se leaga de ZIUA in care s-a privegheat, nu doar de sfant: Sf. Cuv. Dimitrie cel Nou se
+  // pomeneste si pe 13 iulie (aducerea moastelor), dar privegherile au fost pe 27 octombrie. Ziua de
+  // iulie ramane in lista — sfantul e acelasi —, insa fara ani, ca sa nu spuna ce n-a fost.
+  const ziLuna = zi.data.slice(5)
+  const ani = new Set<number>()
+  for (const s of zi.sfinti) {
+    const curat = slug(s.nume)
+    for (const e of SFINTI_CU_EVLAVIE) {
+      if (e.data === ziLuna && curat.includes(e.cheie)) for (const an of e.privegheri) ani.add(an)
+    }
+  }
+  return [...ani].sort((a, b) => a - b)
+}
 
 /** Sfantul acesta e pe lista parohiei? Se intreaba pe numele curatat. */
 export function eCuEvlavie(nume: string): boolean {

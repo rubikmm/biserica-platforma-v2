@@ -413,11 +413,25 @@ azi, este ca un filtru"). Nu mai există „pagina de sărbători" ca destinați
 - **SFINȚII CU EVLAVIE** (user, 13:31: „mai pune un buton cu o cruce. Culoare diferită") — al treilea
   filtru **nu se sprijină pe calendarul oficial**: e o listă de nume ținută de noi (`SFINTI_CU_EVLAVIE`
   în `pagini.ts`), fiindcă sfinții aceștia sunt scriși în calendar **fără cruce** (rang `simplu`) și
-  n-ar apărea în niciun alt filtru. Începutul, cerut anume: **Sf. Cuv. Porfirie Cavsocalivitul**
-  (2 decembrie) și **Sf. Cuv. Siluan Athonitul** (24 septembrie).
+  n-ar apărea în niciun alt filtru.
+  ⚠️ **LISTA VINE DIN ARHIVA PROGRAMULUI** (user, 14:17: „pune toți sfinții la care am făcut
+  priveghere"): 40 de slujbe numite „Priveghere" între 2017 și 2025, la **18 sărbători** — plus
+  Sf. Cuv. Porfirie Cavsocalivitul, cerut anume la 13:31, la care nu s-a privegheat. În frunte:
+  hramul (Sf. Proroc Ilie, 20 iulie, de 7 ori) și Sf. Cuv. Siluan Athonitul (24 septembrie, de 5 ori).
+  Raportul întreg, cu note: `outputs/privegheri-2014-2026.md`.
+  ⚠️ **ANII SE SCRIU ÎN PAGINĂ**, sub numele zilei — „**Privegheri:** 2018, 2019, 2021" (user, 14:20,
+  cu formatul cerut anume). Se scriu **numai în lista evlaviei**, unde sunt însăși pricina pentru care
+  ziua e acolo, și numai dacă sunt: la Porfirie rândul lipsește.
+  ⚠️ **Anii se leagă de ZIUA privegherii, nu doar de sfânt** (câmpul `data`, `LL-ZZ`): Sf. Cuv. Dimitrie
+  cel Nou se pomenește și pe 13 iulie (aducerea moaștelor), dar privegherile au fost pe 27 octombrie.
+  Ziua de iulie rămâne în listă — sfântul e același —, însă fără ani, ca să nu spună ce n-a fost.
+  ⚠️ **La Anul Nou sunt trecuți și 2014 și 2015**, deși acolo slujba e scrisă „Te Deum, Utrenia și
+  Sfânta Liturghie" (22:30), fără cuvântul priveghere: ca rânduială e tot o priveghere, iar din 2018
+  aceeași slujbă e scrisă „PRIVEGHERE". Dacă se cere numai ce poartă numele în arhivă, se scot.
   ⚠️ Potrivirea se face pe numele **curățat** (`slug`: fără diacritice, cu cratime), nu pe numele exact
   din sursă. Cheia trebuie să fie destul de lungă cât să nu prindă pe altcineva: „porfirie" singur ar
   fi prins și pe episcopul Gazei (26 februarie), și pe Sf. Mc. Onisifor și Porfirie (9 noiembrie).
+  **Toate cele 19 chei au fost probate una câte una** pe anul 2026: fiecare prinde exact ziua ei.
   ⚠️ **Când se adaugă un nume nou**, caută-l întâi cu `/v1/cauta?q=` și ia cheia din numele găsit acolo.
   Lista trăiește în cod, deci fiecare adăugare cere o publicare — dacă ajunge să se schimbe des, locul
   ei firesc e în D1, cu un rând în pagina de administrare.
@@ -543,6 +557,8 @@ din `zileleCuCruce` (care nu știa de duminici), ci din `randurileAnului` filtra
   mai spunea nimic: părea un buton aprins mereu, nu semnul locului. Acum stă în cerneala celorlalte
   segmente și se face roșie **numai pe luna de azi** (clasa `activ`, pusă din `sirulLunilor`), ca luna
   deschisă din șirul de lângă ea.
+  ⚠️ Butonul se cheamă **„Astăzi"**, în `title` și în `aria-label` (user, 14:17: „textul buton Azi să
+  fie chiar «Astăzi» - nu mergi la luna…"). Un nume, nu o poruncă: bulina spune CE e, nu ce face cu tine.
   ⚠️ **Fundalul e efemer**: se aprinde doar cât ține apăsarea (`:active`) și cât ține focusul de la
   tastatură, apoi se stinge („să fie ceva efemer"). Pe luna de azi, unde butonul nu duce nicăieri ci
   doar derulează la ziua curentă, ăsta e singurul semn că apăsarea a fost primită.

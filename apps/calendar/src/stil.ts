@@ -249,6 +249,10 @@ h2.luna { font:400 13px/1 ui-sans-serif,system-ui; letter-spacing:.2em; text-tra
 .sfinti a { color:inherit; text-decoration:none }
 .sfinti a:hover { text-decoration:underline; text-decoration-color:var(--rule) }
 .subtitlu { font-size:14px; color:var(--soft); margin-top:2px; font-style:italic }
+/* anii privegherilor, sub numele zilei, numai in lista sfintilor cu evlavie (user, 12.09.2026, 14:20).
+   Cuvantul „Privegheri:" poarta movul filtrului, anii raman in cerneala obisnuita — ei sunt faptul. */
+.privegheri { font:13.5px/1.5 ui-sans-serif,system-ui; color:var(--soft); margin-top:3px }
+.privegheri b { color:var(--mov); font-weight:600 }
 .pericope { font:12.5px/1.5 ui-sans-serif,system-ui; color:var(--faint); margin-top:4px }
 .pericope a { color:inherit; text-decoration:none;
               border-bottom:1px dotted var(--rule); padding-bottom:1px }
