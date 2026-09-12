@@ -227,6 +227,10 @@ h2.luna { font:400 13px/1 ui-sans-serif,system-ui; letter-spacing:.2em; text-tra
 .glas { font-weight:600; color:var(--soft) }
 .zi.duminica .titlu-zi { font-size:17.5px }
 .zi.duminica .titlu-zi, .pagina-zi.duminica .titlu-mare { color:var(--rosu) }
+/* ⚠️ In lista crucilor NEGRE, duminica nu se mai scrie rosu: acolo capul zilei sunt sfintii cu cruce
+   neagra, iar rosul ar spune „sarbatoare cu ținere" — taman ce lista aceasta nu cuprinde. Numarul
+   zilei ramane rosu: acolo rosul spune doar „e duminica". */
+.zi.fara-rosu.duminica .titlu-zi { color:var(--ink) }
 
 .semne { margin-top:5px; display:flex; flex-wrap:wrap; gap:5px }
 .semn { font:11px/1 ui-sans-serif,system-ui; letter-spacing:.03em; padding:4px 8px;

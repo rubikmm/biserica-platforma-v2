@@ -302,7 +302,11 @@ export default {
         // ⚠️ ACELASI filtru ca pe luna (`trecePrinFiltru`), nu interogarea veche `zileleCuCruce`:
         // altfel duminicile ar intra in lista pe o luna si ar lipsi pe „toate lunile", iar filtrul
         // ar insemna doua lucruri deosebite dupa cat de larg te uiti.
-        const lista = randuri.filter((r) => trecePrinFiltru(r, fel)).map((r) => ({ r, d: desfaRandul(r), zi: ziLiturgica(r, versiune) }))
+        // ⚠️ ziua liturgica se face pentru TOT anul, fiindca filtrul intreaba de sfintii ei, nu doar
+        // de crucea randului; abia apoi se aleg zilele care raman
+        const lista = randuri
+          .map((r) => ({ r, d: desfaRandul(r), zi: ziLiturgica(r, versiune) }))
+          .filter(({ r, zi }) => trecePrinFiltru(r, zi, fel))
         return html(paginaSarbatori({ ctx, fel, an, randuri: lista, calculat, azi }), 200, cachePagina)
       }
 

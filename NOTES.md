@@ -426,6 +426,27 @@ Stările și adresele lor:
 de sus, ca peste tot; în locul ei a rămas doar „Toate lunile".
 ⚠️ **`/sarbatori/cruce-<fel>/<an>-<luna>` face acum redirect** către `/<an>-<luna>?cruce=<fel>`:
 adresa cu lună a fost înlocuită de filtru, dar legăturile vechi nu trebuie să cadă.
+⚠️⚠️ **CE ÎNSEAMNĂ „CRUCE NEAGRĂ": HOTĂRĂȘTE SFÂNTUL, NU ZIUA** (user, 12:56: „sfinții cu albastru au
+cruce în față / este neagră - de ce nu apar?"). Regula calendarului tipărit: **fiecare sfânt cu semn
+are o cruce, iar culoarea ei e roșie numai la zilele cu ținere; în rest e neagră.** Albastrul **nu e
+un fel de cruce** — e culoarea cu care Patriarhia scrie sfinții români. Crucea lor e tot neagră.
+De aceea la „cruce neagră" intră rangurile `cruce_neagra`, `cruce_albastra` **și** `cruce_nedeclarata`
+(sfânt cu semn într-o zi care nu-și declară culoarea — de pildă o duminică).
+⚠️ Cifrele, măsurate pe 2026: **113 sfinți români, toți cu cruce, nu apăreau nicăieri**; lista anului
+a crescut de la **18 zile la 116**, iar septembrie de la 1 zi la 13. Asta e măsura adevărată a
+lucrului — nu te speria de ea și nu o „repara" înapoi.
+⚠️ Filtrul întreabă acum **sfinții zilei** (`zi.sfinti`), nu doar crucea rândului: altfel 13
+septembrie — duminică în care se prăznuiește Sf. Cuv. Ioan de la Prislop, cu cruce — nu intra nicăieri,
+fiindcă ziua e „duminica", nu „neagra". Felul zilei a rămas doar ca plasă.
+⚠️ `cruce_albastra` vine din `rangulSfantului`, unde **culoarea bate însemnul**: un sfânt scris albastru
+primește rangul ăsta chiar dacă semnul lui spune altceva. Rangul nu mai poate răspunde atunci la „ce
+culoare are crucea?" — de aceea alegerea se face în `pagini.ts` (`RANGURILE`), nu în traducere. Dacă
+vreodată se desparte culoarea (român/local) de însemn în `Rang`, locul acela se simplifică.
+⚠️ Două lucruri de înfățișare, în lista **neagră**: capul zilei nu se mai scrie roșu la duminici
+(`.zi.fara-rosu`) — roșul ar spune „sărbătoare cu ținere", taman ce lista nu cuprinde —, iar rândul de
+sfinți de sub titlu nu se mai scrie când titlul s-a făcut DIN sfinți (altfel duminica își spunea de
+două ori sfinții: sus cei ai felului, jos toți).
+
 ⚠️ **ÎN LISTA FILTRATĂ SE SCRIU DOAR SFINȚII FELULUI, nu titlul întreg al zilei** (`capulFiltrat`).
 Prima variantă scria titlul zilei cu toți sfinții ei și în „cruce neagră" se vedeau nume albastre
 (reclamația userului, 11:22: „sunt incluși aici și cei cu cruce albastră"). De pildă 20 ianuarie: ziua

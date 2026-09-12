@@ -350,10 +350,27 @@ function capulZilei(d: RandDesfacut): string {
   return d.denumire ? esc(d.denumire) : d.titluHtmlCurat
 }
 
-/** Ce ranguri de sfant tine fiecare fel de cruce. */
+/**
+ * CE RANGURI DE SFANT TINE FIECARE FEL DE CRUCE.
+ *
+ * ⚠️ Regula e a calendarului tiparit, spusa de utilizator la 12.09.2026, 12:56 („sfinții cu albastru
+ * au cruce în față / este neagră - de ce nu apar?"): **fiecare sfant cu semn are o cruce, iar culoarea
+ * ei e rosie numai la zilele cu tinere; in rest e neagra.** Albastrul NU e un fel de cruce — e
+ * culoarea cu care Patriarhia scrie sfintii romani. Crucea lor e tot neagra.
+ *
+ * De aceea la „cruce neagră" intra si `cruce_albastra` (sfintii romani cu semn: 113 in 2026, toti cu
+ * cruce, si niciunul nu aparea in lista pana acum), si `cruce_nedeclarata` (sfant cu semn intr-o zi
+ * care nu-si declara culoarea — de pilda o duminica). Lista anului creste de la 18 zile la 116, si
+ * asta e masura adevarata a lucrului.
+ *
+ * ⚠️ `cruce_albastra` vine din `rangulSfantului`, unde culoarea BATE insemnul: un sfant scris albastru
+ * primeste rangul asta chiar daca semnul lui spune altceva. Rangul nu mai poate raspunde atunci la
+ * „ce culoare are crucea?", si de aceea alegerea se face aici, nu acolo. Daca vreodata se desparte
+ * culoarea (roman/local) de insemn in `Rang`, locul asta se simplifica.
+ */
 const RANGURILE: Record<FelCruce, readonly string[]> = {
   rosie: ['cruce_rosie', 'praznic_imparatesc'],
-  neagra: ['cruce_neagra'],
+  neagra: ['cruce_neagra', 'cruce_albastra', 'cruce_nedeclarata'],
 }
 
 /**
@@ -373,11 +390,19 @@ const RANGURILE: Record<FelCruce, readonly string[]> = {
  * pentru o zi nu iese niciun sfant cu rangul cerut, se scrie titlul intreg: mai bine prea mult decat
  * un rand gol.
  */
-function capulFiltrat(zi: ZiLiturgica, d: RandDesfacut, fel: FelCruce): string {
-  if (d.eDuminica) return capulZilei(d)
+function capulFiltrat(zi: ZiLiturgica, d: RandDesfacut, fel: FelCruce): { titlu: string; dinSfinti: boolean } {
+  // la rosu, duminica intra ca duminica: numele ei e capul zilei, iar sfintii se scriu oricum dedesubt
+  if (fel === 'rosie' && d.eDuminica) return { titlu: capulZilei(d), dinSfinti: false }
   const alesi = zi.sfinti.filter((s) => RANGURILE[fel].includes(s.rang))
-  if (!alesi.length) return capulZilei(d)
-  return alesi.map((s) => esc(`${s.semn ? `${s.semn} ` : ''}${s.nume}`)).join('; ')
+  if (!alesi.length) return { titlu: capulZilei(d), dinSfinti: false }
+  // albastrul sfintilor romani ramane — e insusirea lor, nu felul crucii (vezi RANGURILE)
+  const titlu = alesi
+    .map((s) => {
+      const text = esc(`${s.semn ? `${s.semn} ` : ''}${s.nume}`)
+      return s.rang === 'cruce_albastra' ? `<span class="c-albastru">${text}</span>` : text
+    })
+    .join('; ')
+  return { titlu, dinSfinti: true }
 }
 
 /**
@@ -416,8 +441,14 @@ export function randZi(ctx: Ctx, r: RandZi, d: RandDesfacut, zi: ZiLiturgica, eA
 
   const pericope = pericopele(zi, d)
   const glas = glasulZilei(zi, d)
-  const sfinti = sfintiiZilei(zi, d)
-  const titlu = fel ? capulFiltrat(zi, d, fel) : capulZilei(d)
+  const cap = fel ? capulFiltrat(zi, d, fel) : { titlu: capulZilei(d), dinSfinti: false }
+  const titlu = cap.titlu
+  // ⚠️ Cand capul zilei s-a facut DIN sfinti, randul de dedesubt nu se mai scrie: altfel duminica
+  // filtrata isi spunea de doua ori sfintii — sus cei ai felului, jos toti.
+  const sfinti = cap.dinSfinti ? '' : sfintiiZilei(zi, d)
+  // ⚠️ Intr-o lista de cruci NEGRE, titlul unei duminici nu se mai scrie rosu: rosul ar spune
+  // „sarbatoare cu ținere", adica taman ce lista aceasta nu cuprinde.
+  if (fel === 'neagra') clase.push('fara-rosu')
   const semne = semnele(d, (e) => !E_POST(e) && !E_LIBERA(e))
   const randuialaMesei = semnele(d, E_POST) + semnele(d, E_LIBERA)
 
@@ -517,9 +548,16 @@ function comune(ctx: Ctx) {
  *
  *   - ROSIE lasa zilele cu cruce rosie **si duminicile** („rămân doar Sfinții cu cruce roșie și
  *     duminicile din acea lună") — duminica e sarbatoare chiar cand nu poarta insemnul;
- *   - NEAGRA lasa doar zilele cu cruce neagra („rămân doar acei sfinți"), fara duminici.
+ *   - NEAGRA lasa zilele care au macar un sfant cu cruce neagra („rămân doar acei sfinți").
+ *
+ * ⚠️ HOTARATOR E SFANTUL, NU ZIUA (12.09.2026, 12:56). Prima varianta intreba doar ce fel de cruce
+ * poarta ZIUA (`r.cruce`), si atunci 13 septembrie — duminica in care se prazuieste Sf. Cuv. Ioan de
+ * la Prislop, cu cruce — nu intra nicaieri la negru: ziua e „duminica", nu „neagra". Asa ramaneau pe
+ * dinafara toti sfintii romani, pana la unul. Felul zilei a ramas doar ca plasa, pentru zilele in care
+ * insemnul e al zilei si sfantul nu-l poarta.
  */
-export function trecePrinFiltru(r: RandZi, fel: FelCruce): boolean {
+export function trecePrinFiltru(r: RandZi, zi: ZiLiturgica, fel: FelCruce): boolean {
+  if (zi.sfinti.some((s) => RANGURILE[fel].includes(s.rang))) return true
   return fel === 'rosie' ? r.cruce === 'rosie' || r.zi_saptamana === 0 : r.cruce === 'neagra'
 }
 
@@ -553,7 +591,7 @@ export function paginaLuna(o: {
   cruce?: FelCruce
   mesajAbonare?: string
 }): string {
-  const alese = o.cruce ? o.randuri.filter(({ r }) => trecePrinFiltru(r, o.cruce as FelCruce)) : o.randuri
+  const alese = o.cruce ? o.randuri.filter(({ r, zi }) => trecePrinFiltru(r, zi, o.cruce as FelCruce)) : o.randuri
   const corp = alese.map(({ r, d, zi }) => randZi(o.ctx, r, d, zi, r.data === o.azi, o.cruce)).join('')
   const numeLuna = `${LUNI[o.luna - 1] ?? ''} ${o.an}`
   const felul = o.cruce ? CRUCILE[o.cruce] : null
