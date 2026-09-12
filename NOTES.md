@@ -536,9 +536,16 @@ din `zileleCuCruce` (care nu știa de duminici), ci din `randurileAnului` filtra
   degetul.
 - **„AZI" E O BULINĂ**, ca la Program („AZI să fie o bulină ca la Program"): butonul n-a mai rămas cu
   niciun cuvânt, punctul de 9 px se desenează din CSS (`.azi-buton::before`), iar numele stă în
-  `title`/`aria-label`. Roșul i-a rămas — el spune că ținta e ziua de azi. De când stă în pastilă,
-  chenarul și rotunjirea lui au căzut: le are pastila.
+  `title`/`aria-label`. De când stă în pastilă, chenarul și rotunjirea lui au căzut: le are pastila.
   Clasa `azi-buton` e și mânerul JS-ului care derulează la ziua de azi.
+  ⚠️ **ROȘUL E AL LOCULUI, NU AL BUTONULUI** (user, 13:56: „butonul azi să nu mai fie roșu tot timpul -
+  doar când ești pe luna curentă"). Până atunci bulina stătea roșie pe orice pagină, și atunci roșul nu
+  mai spunea nimic: părea un buton aprins mereu, nu semnul locului. Acum stă în cerneala celorlalte
+  segmente și se face roșie **numai pe luna de azi** (clasa `activ`, pusă din `sirulLunilor`), ca luna
+  deschisă din șirul de lângă ea.
+  ⚠️ **Fundalul e efemer**: se aprinde doar cât ține apăsarea (`:active`) și cât ține focusul de la
+  tastatură, apoi se stinge („să fie ceva efemer"). Pe luna de azi, unde butonul nu duce nicăieri ci
+  doar derulează la ziua curentă, ăsta e singurul semn că apăsarea a fost primită.
 - ⚠️ **NAVIGAREA E PE TOATE PAGINILE**, nu doar pe lista lunii (user: „să nu se mai ascundă când intru
   pe sărbători cruce neagră roșie") — ca la Program, rândul are aceeași formă peste tot. Pe pagina
   zilei e marcată luna zilei; pe listele de sărbători **nicio lună** (`luna: 0`), fiindcă acolo nu

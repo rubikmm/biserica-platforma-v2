@@ -178,15 +178,27 @@ h2.luna .fel-filtru.f-evlavie { color:var(--mov) }
                      background:color-mix(in srgb, var(--rosu) 11%, transparent) }
 
 /* „AZI" E O BULINA (user, 12.09.2026: „AZI să fie o bulină ca la Program"): butonul n-are text, are
-   un punct desenat din CSS, cat cel din navigarea Programului (9 px). Rosul i-a ramas — el spune ca
-   tinta e ziua de azi; masura din laturi e mai mare decat ar cere punctul, ca sa fie la fel de usor
-   de nimerit cu degetul ca lunile de langa el. De cand sta in pastila, chenarul si rotunjirea lui au
-   cazut: le are pastila. */
+   un punct desenat din CSS, cat cel din navigarea Programului (9 px). Masura din laturi e mai mare
+   decat ar cere punctul, ca sa fie la fel de usor de nimerit cu degetul ca lunile de langa el. De cand
+   sta in pastila, chenarul si rotunjirea lui au cazut: le are pastila.
+
+   ⚠️ ROSUL E AL LOCULUI, NU AL BUTONULUI (user, 12.09.2026, 13:56: „butonul azi să nu mai fie roșu tot
+   timpul - doar când ești pe luna curentă"). Pana atunci bulina statea rosie pe orice pagina, si atunci
+   rosul nu mai spunea nimic: parea un buton aprins mereu, nu semnul locului in care esti. Acum bulina
+   sta in cerneala celorlalte segmente si se face rosie numai pe luna de azi — la fel ca luna deschisa
+   din sirul de langa ea. La atingere se rumeneste, ca orice segment.
+
+   ⚠️ FUNDALUL E EFEMER: se aprinde doar cat tine apasarea (:active) si cat tine focusul de la
+   tastatura, apoi se stinge („fundalul să se facă selectat doar când apăs pe el dar apoi să dispară /
+   să fie ceva efemer"). Pe luna de azi, unde butonul nu duce nicaieri ci doar deruleaza la ziua
+   curenta, asta e singurul semn ca apasarea a fost primita. */
 .azi-buton { flex:none; display:flex; align-items:center; justify-content:center;
-             color:var(--rosu); background:var(--rosu-palid);
+             color:var(--soft); background:transparent;
              border:0; border-radius:0; padding:11px 16px; text-decoration:none }
 .azi-buton::before { content:""; width:9px; height:9px; border-radius:50%; background:currentColor }
-.azi-buton:hover { background:color-mix(in srgb, var(--rosu) 14%, transparent) }
+.azi-buton:hover { color:var(--rosu); background:var(--paper) }
+.azi-buton.activ { color:var(--rosu) }
+.azi-buton:active, .azi-buton:focus-visible { background:color-mix(in srgb, var(--rosu) 14%, transparent) }
 
 /* Sagetile — segmentele de la capetele pastilei, pentru cine n-are deget. JS-ul le ascunde cu totul
    cand lunile incap (pe desktop incap), ca sa nu stea doua segmente moarte in pastila. */

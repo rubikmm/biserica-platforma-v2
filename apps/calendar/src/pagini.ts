@@ -558,7 +558,10 @@ function sirulLunilor(ctx: Ctx, an: number, luna: number, azi: string, fel?: Fel
   const ianuarieViitor = an === anCurent + 1 && luna === 1 ? ' activa' : ''
   butoane.push(`<a class="luna-buton${ianuarieViitor}" href="${cuFiltru(adresaLunii(p, anCurent + 1, 1))}" title="ianuarie ${anCurent + 1}"${ianuarieViitor ? ' aria-current="page"' : ''}>Ian ${anCurent + 1}</a>`)
   const [anAzi, lunaAzi] = azi.split('-').map(Number) as [number, number]
-  const butonAzi = `<a class="azi-buton" href="${adresaLunii(p, anAzi, lunaAzi)}#azi" title="Mergi la ziua de azi" aria-label="ziua de azi"></a>`
+  // bulina se face rosie numai cand pagina arata chiar luna de azi — rosul spune locul, nu butonul
+  const peLunaAzi = an === anAzi && luna === lunaAzi
+  const butonAzi = `<a class="azi-buton${peLunaAzi ? ' activ' : ''}" href="${adresaLunii(p, anAzi, lunaAzi)}#azi"`
+    + ` title="${peLunaAzi ? 'Mergi la ziua de azi' : 'Mergi la luna de azi'}" aria-label="ziua de azi"></a>`
   return `<span class="pastila">${butonAzi}<div class="fasie"><nav class="luni">${butoane.join('')}</nav></div></span>`
 }
 
