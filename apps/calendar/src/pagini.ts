@@ -350,6 +350,36 @@ function capulZilei(d: RandDesfacut): string {
   return d.denumire ? esc(d.denumire) : d.titluHtmlCurat
 }
 
+/** Ce ranguri de sfant tine fiecare fel de cruce. */
+const RANGURILE: Record<FelCruce, readonly string[]> = {
+  rosie: ['cruce_rosie', 'praznic_imparatesc'],
+  neagra: ['cruce_neagra'],
+}
+
+/**
+ * TITLUL UNEI ZILE DINTR-O LISTA FILTRATA — numai sfintii care poarta crucea ceruta.
+ *
+ * ⚠️ Fara asta, lista scria titlul INTREG al zilei, cu toti sfintii ei, si in „cruce neagră" se
+ * vedeau si nume albastre (reclamatia userului, 12.09.2026, 11:22: „sunt incluși aici și cei cu cruce
+ * albastră"). De pilda 20 ianuarie: ziua e a Sf. Cuv. Eftimie cel Mare (cruce neagra), dar titlul ei
+ * cuprinde si „Sf. Mc. In, Pin și Rim", scrisi albastru de Patriarhie. Ziua e pe drept in lista —
+ * numele celorlalti nu erau.
+ *
+ * ⚠️ Albastrul acela vine din `titlu_html`-ul sursei, nu din rangul structurat: sfintii aceia au
+ * `rang: "simplu"`. De aceea alegerea se face pe RANGUL sfantului (`zi.sfinti`), nu pe culoarea din
+ * HTML — singura care spune adevarul despre insemn.
+ *
+ * Duminicile isi pastreaza numele lor (intra in lista rosie fara sa aiba sfinti rosii), iar daca
+ * pentru o zi nu iese niciun sfant cu rangul cerut, se scrie titlul intreg: mai bine prea mult decat
+ * un rand gol.
+ */
+function capulFiltrat(zi: ZiLiturgica, d: RandDesfacut, fel: FelCruce): string {
+  if (d.eDuminica) return capulZilei(d)
+  const alesi = zi.sfinti.filter((s) => RANGURILE[fel].includes(s.rang))
+  if (!alesi.length) return capulZilei(d)
+  return alesi.map((s) => esc(`${s.semn ? `${s.semn} ` : ''}${s.nume}`)).join('; ')
+}
+
 /**
  * Sub titlu, la duminici: sfintii zilei. Rosul e al crucii rosii, sfant cu sfant, si numai
  * cand sursa o SPUNE (V1, 9 sept. 2026). Albastrul sfintilor locali bate rosul.
@@ -376,7 +406,8 @@ function glasulZilei(zi: ZiLiturgica, d: RandDesfacut): string {
   return `<b class="glas">${esc(`glas ${zi.glas}${zi.evanghelia_invierii ? `, voscr. ${zi.evanghelia_invierii}` : ''}`)}</b>`
 }
 
-export function randZi(ctx: Ctx, r: RandZi, d: RandDesfacut, zi: ZiLiturgica, eAzi: boolean): string {
+/** `fel` — cand randul se scrie intr-o lista filtrata: atunci titlul tine numai sfintii felului. */
+export function randZi(ctx: Ctx, r: RandZi, d: RandDesfacut, zi: ZiLiturgica, eAzi: boolean, fel?: FelCruce): string {
   const p = esc(ctx.prefix)
   const clase = ['zi']
   if (r.zi_saptamana === 0) clase.push('duminica')
@@ -386,7 +417,7 @@ export function randZi(ctx: Ctx, r: RandZi, d: RandDesfacut, zi: ZiLiturgica, eA
   const pericope = pericopele(zi, d)
   const glas = glasulZilei(zi, d)
   const sfinti = sfintiiZilei(zi, d)
-  const titlu = capulZilei(d)
+  const titlu = fel ? capulFiltrat(zi, d, fel) : capulZilei(d)
   const semne = semnele(d, (e) => !E_POST(e) && !E_LIBERA(e))
   const randuialaMesei = semnele(d, E_POST) + semnele(d, E_LIBERA)
 
@@ -523,7 +554,7 @@ export function paginaLuna(o: {
   mesajAbonare?: string
 }): string {
   const alese = o.cruce ? o.randuri.filter(({ r }) => trecePrinFiltru(r, o.cruce as FelCruce)) : o.randuri
-  const corp = alese.map(({ r, d, zi }) => randZi(o.ctx, r, d, zi, r.data === o.azi)).join('')
+  const corp = alese.map(({ r, d, zi }) => randZi(o.ctx, r, d, zi, r.data === o.azi, o.cruce)).join('')
   const numeLuna = `${LUNI[o.luna - 1] ?? ''} ${o.an}`
   const felul = o.cruce ? CRUCILE[o.cruce] : null
   const lunaSir = `${o.an}-${String(o.luna).padStart(2, '0')}`
@@ -699,7 +730,7 @@ export function paginaSarbatori(o: {
     if (!grup.length) return ''
     return `<h2 class="luna">${esc(numeLunii)}</h2>
 <div class="zile">
-${grup.map((x) => randZi(o.ctx, x.r, x.d, x.zi, x.r.data === o.azi)).join('')}</div>`
+${grup.map((x) => randZi(o.ctx, x.r, x.d, x.zi, x.r.data === o.azi, o.fel)).join('')}</div>`
   })
     .filter(Boolean)
     .join('\n')

@@ -426,6 +426,16 @@ Stările și adresele lor:
 de sus, ca peste tot; în locul ei a rămas doar „Toate lunile".
 ⚠️ **`/sarbatori/cruce-<fel>/<an>-<luna>` face acum redirect** către `/<an>-<luna>?cruce=<fel>`:
 adresa cu lună a fost înlocuită de filtru, dar legăturile vechi nu trebuie să cadă.
+⚠️ **ÎN LISTA FILTRATĂ SE SCRIU DOAR SFINȚII FELULUI, nu titlul întreg al zilei** (`capulFiltrat`).
+Prima variantă scria titlul zilei cu toți sfinții ei și în „cruce neagră" se vedeau nume albastre
+(reclamația userului, 11:22: „sunt incluși aici și cei cu cruce albastră"). De pildă 20 ianuarie: ziua
+e a Sf. Cuv. Eftimie cel Mare, cruce neagră — pe drept în listă —, dar titlul ei cuprinde și „Sf. Mc.
+In, Pin și Rim", scriși albastru de Patriarhie.
+⚠️ **Alegerea se face pe RANGUL sfântului** (`zi.sfinti[].rang`), nu pe culoarea din `titlu_html`:
+sfinții aceia albaștri au `rang: "simplu"` — albastrul e doar un marcaj al sursei. Rangul e singurul
+care spune adevărul despre însemn. Duminicile își păstrează numele lor (intră în lista roșie fără să
+aibă sfinți roșii), iar dacă pentru o zi nu iese niciun sfânt cu rangul cerut, se scrie titlul întreg.
+**Lista nefiltrată a rămas neatinsă**: acolo ziua se scrie întreagă, cu albastrul sursei cu tot.
 ⚠️ **Un singur predicat, `trecePrinFiltru`**, și pe lună, și pe an — de aceea lista anului nu mai vine
 din `zileleCuCruce` (care nu știa de duminici), ci din `randurileAnului` filtrat. Altfel filtrul ar fi
 însemnat două lucruri deosebite, după cât de larg te uiți.
