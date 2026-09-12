@@ -17,8 +17,9 @@ export const LOCAL = `
 .c-rosu { color:var(--rosu) }
 .c-albastru { color:var(--albastru) }
 
-/* Ancorele #azi / #zi trebuie sa cada sub antet, iar antetul calendarului e mai inalt decat
-   al celorlalti (sirul lunilor in loc de trei butoane): 130px in loc de 170px. */
+/* Ancorele #azi / #zi trebuie sa cada sub antetul lipicios, care la calendar e mai scund decat
+   masura carcasei: 130px in loc de 170px. Randul de unelte tine de la 12.09.2026 si sirul lunilor,
+   dar randul era acolo si inainte — masura n-a trebuit sa se schimbe. */
 html { scroll-padding-top:130px }
 
 .cap { padding:10px 0 4px }
@@ -29,30 +30,59 @@ html { scroll-padding-top:130px }
 .cod { color:var(--rosu) }
 .sursa { color:var(--soft); font-size:14.5px; margin:0 0 16px; max-width:58ch }
 
-/* randul de unelte din antet: abonarea si „Informații utile" */
+/* RANDUL DE UNELTE din antet (refacut 12.09.2026): navigarea, abonarea si listele de sarbatori.
+   Navigarea ia spatiul ramas, restul stau cat le tine scrisul — de aceea numai .luni-rand creste. */
 .btns .mic { flex:0 0 auto; display:flex; align-items:center; justify-content:center; gap:6px;
              padding-left:14px; padding-right:14px; font:600 12.5px/1 ui-sans-serif,system-ui;
              letter-spacing:.06em }
 .btns .mic svg { vertical-align:0 }
 .btns .desparte { flex:0 0 1px; align-self:stretch; background:var(--rule); margin:0 3px }
 
-.abonare { flex:1 1 auto; min-width:0; display:flex; align-items:stretch; flex-wrap:wrap;
-           gap:8px; margin:0 }
-.camp-email { flex:1 1 120px; min-width:0; margin:0; border-radius:10px;
-              font:16px ui-sans-serif,system-ui }
-.fara-cont { align-self:center; font:12.5px/1.35 ui-sans-serif,system-ui; color:var(--faint) }
+/* FEREASTRA DE ABONARE, adusa intocmai de la Program (user, 12.09.2026: „la click pe Abonare să
+   apară un pop-up la fel") — dialog nativ: fundalul intunecat, focusul si Escape vin de la browser,
+   noi scriem doar cum arata. Cutia nu creste peste ecran, ca pe telefon sa nu iasa in afara. */
+.modal { border:0; padding:0; border-radius:14px; width:min(420px, calc(100vw - 32px));
+         background:var(--paper); color:var(--ink); box-shadow:0 18px 50px rgba(0,0,0,.22) }
+.modal::backdrop { background:rgba(10,12,16,.45) }
+/* ⚠️ display:block si margin:0 nu sunt de prisos: carcasa are o regula pe TOATE formularele
+   (form { display:flex; gap:8px; flex-wrap:wrap; margin:14px 0 }), facuta pentru randurile de
+   cautare. Fara ele, titlul, textul si bifele ferestrei se insira ca niste jetoane, fiecare cat
+   scrisul lui, iar X-ul ramane lipit de titlu in loc sa stea in coltul din dreapta. */
+.modal-cutie { display:block; margin:0; padding:20px 22px 22px }
+.modal-cap { display:flex; align-items:flex-start; justify-content:space-between; gap:14px }
+.modal-cap h2 { margin:0; font-size:23px; font-weight:400 }
+.modal-x { flex:0 0 auto; width:34px; height:34px; display:flex; align-items:center; justify-content:center;
+           font:400 21px/1 ui-sans-serif,system-ui; color:var(--faint); background:transparent;
+           border:1px solid var(--rule); border-radius:9px; cursor:pointer }
+.modal-x:hover { color:var(--rosu); border-color:var(--rosu) }
+.modal-spune { margin:10px 0 18px; color:var(--soft) }
+.camp { display:block; margin:0 0 16px }
+.camp span { display:block; font:600 10.5px/1 ui-sans-serif,system-ui; letter-spacing:.12em;
+             text-transform:uppercase; color:var(--faint); margin:0 0 7px }
+.camp input { width:100%; box-sizing:border-box; padding:11px 12px; font:15px ui-sans-serif,system-ui;
+              color:var(--ink); background:var(--tinta); border:1px solid var(--rule); border-radius:10px }
+/* scrisul bifelor e NORMAL, nu ingrosat: carcasa face din toate etichetele capete de camp
+   (label { font:600 12px … }), potrivite deasupra unei casute, nu langa o bifa */
+.bifa { display:flex; align-items:center; gap:10px; margin:0 0 11px;
+        font:400 14.5px/1.4 ui-sans-serif,system-ui; color:var(--soft) }
+.bifa input { flex:0 0 auto; width:17px; height:17px; accent-color:var(--rosu) }
+.modal-jos { display:flex; justify-content:flex-end; margin:20px 0 0 }
+/* butonul plin: singurul loc din pagina unde rosul e fundal, nu scris — e fapta ferestrei */
+.btn-plin { font:600 13px/1 ui-sans-serif,system-ui; letter-spacing:.06em; padding:13px 22px;
+            color:var(--paper); background:var(--rosu); border:1px solid var(--rosu); border-radius:10px;
+            cursor:pointer }
 
-.meniu-util { position:relative; flex:0 0 auto; display:flex;
-              border:0; border-radius:0; padding:0; margin:0 }
-.meniu-util summary { cursor:pointer; list-style:none; user-select:none; color:var(--ink) }
-.meniu-util summary::-webkit-details-marker { display:none }
-.meniu-util[open] summary { border-color:var(--rosu); color:var(--rosu); margin-bottom:0 }
-.meniu-lista { position:absolute; right:0; top:calc(100% + 8px); min-width:230px;
-               background:var(--paper); border:1px solid var(--rule); border-radius:10px;
-               padding:6px 0; box-shadow:0 8px 24px rgba(0,0,0,.10); z-index:60 }
-.meniu-lista a { display:block; padding:9px 16px; color:var(--ink); text-decoration:none;
-                 font:14px/1.2 ui-sans-serif,system-ui; white-space:nowrap }
-.meniu-lista a:hover { background:var(--tinta); color:var(--rosu) }
+/* LISTELE DE SARBATORI, doua butoane in locul meniului „Informații utile" (user, 12.09.2026).
+   Deosebirea dintre ele o face CULOAREA CRUCII, ca in calendarul tiparit — cuvantul de langa ea
+   cade pe telefon, culoarea nu. Butonul intreg ramane in cerneala obisnuita: rosul aprins e al
+   locului in care te afli (clasa .activ), nu al unei simple destinatii.
+   ⚠️ Al treilea buton („Sfinții cu evlavie") isi are locul aici, langa ele, cand lista lui exista. */
+.btns .sarb { text-decoration:none }
+.btns .sarb-rosie svg { color:var(--rosu) }
+.btns .sarb-neagra svg { color:var(--negru) }
+.btns .sarb:hover { border-color:var(--rosu); color:var(--rosu) }
+.btns .sarb.activ { border-color:var(--rosu); color:var(--rosu); font-weight:700;
+                    background:var(--rosu-palid); cursor:default }
 
 .inainte-de-titlu { margin:0 0 14px }
 .btn.inapoi { display:inline-flex; align-items:center; flex:none; padding:9px 16px }
@@ -72,19 +102,36 @@ html { scroll-padding-top:130px }
 .luni-alege .acum { color:var(--paper); background:var(--rosu); border-color:var(--rosu) }
 .luni-alege .gol { opacity:.3 }
 
+/* Pe telefon butoanele isi lasa cuvintele si raman numai iconitele — altfel randul, care tine acum
+   si navigarea, s-ar rupe in doua. Numele intreg sta in title si aria-label, deci nu se pierde. */
 @media (max-width:600px) {
   .btns { gap:7px }
   .btns .mic { padding-left:11px; padding-right:11px }
-  .meniu-util .cuv { display:none }
+  .btns .sarb .cuv, .btns .abon .cuv { display:none }
 }
 
-.azi-buton { flex:none; color:var(--rosu); background:var(--rosu-palid);
-             border:1px solid var(--rosu-linie); border-radius:999px; padding:10px 17px;
-             text-decoration:none; font:600 13px/1 ui-sans-serif,system-ui;
-             letter-spacing:.1em; text-transform:uppercase }
+/* „AZI" E O BULINA (user, 12.09.2026: „AZI să fie o bulină ca la Program"): butonul n-are text, are
+   un punct desenat din CSS, cat cel din navigarea Programului (9 px). Rosul i-a ramas — el spune ca
+   tinta e ziua de azi; masura din laturi e mai mare decat ar cere punctul, ca sa fie la fel de usor
+   de nimerit cu degetul ca butoanele lunilor de langa el. Inaltimea e pusa sa cada exact cat a unei
+   luni (punct 9 + 12 sus + 12 jos + 2 de chenar = 35 px): daca umbli la .luna-buton, umbla si aici. */
+.azi-buton { flex:none; display:flex; align-items:center; justify-content:center;
+             color:var(--rosu); background:var(--rosu-palid);
+             border:1px solid var(--rosu-linie); border-radius:999px; padding:12px 20px;
+             text-decoration:none }
+.azi-buton::before { content:""; width:9px; height:9px; border-radius:50%; background:currentColor }
 .azi-buton:hover { border-color:var(--rosu) }
 .luni-rand .azi-buton { margin-right:6px }
 
+/* NAVIGAREA A URCAT IN ANTET (user, 12.09.2026: „mută navigarea sus") — de aceea .luni-rand nu mai
+   are margini de sus si de jos si e singura din rand care creste (flex:1 1 auto, min-width:0):
+   restul butoanelor stau cat le tine scrisul, iar prisosul il ia fasia lunilor. */
+/* ⚠️ MASURA DE PORNIRE E 0 (flex:1 1 0), NU auto — aceeasi capcana ca la pastila Programului:
+   randul are flex-wrap, iar wrap-ul se hotaraste dupa masura IPOTETICA a fiecarui buton, inainte de
+   orice strangere. Cu auto, fasia pornea de la latimea celor 13 luni (~1000 px), umplea singura
+   randul, si abonarea cu sarbatorile cadeau pe al doilea rand. Cu 0, navigarea ia numai ce ramane
+   dupa ele si se deruleaza inauntru, cum ii e felul. */
+.btns .luni-rand { flex:1 1 0; min-width:0; margin:0 }
 .luni-rand { display:flex; align-items:center; gap:0; margin:14px 0 2px }
 .sageata { flex:none; border:none; background:none; color:var(--faint);
            cursor:pointer; font:300 22px/1 ui-sans-serif,system-ui; padding:9px 7px;
@@ -220,7 +267,8 @@ dialog.fereastra::backdrop { background:rgba(8,10,14,.55) }
 .inchide:hover { color:var(--rosu) }
 
 @media (max-width:520px) {
-  .azi-buton { padding:10px 16px; font-size:12.5px }
+  /* bulina ramane cat o luna si aici: 9 + 12 + 12 + 2 = 35, fata de 12.5 + 20 + 2 = 34.5 */
+  .azi-buton { padding:12px 16px }
   .luna-buton { padding:10px 14px; font-size:12.5px }
   .sageata { display:none }
   h1 { font-size:42px }

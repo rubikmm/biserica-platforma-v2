@@ -30,8 +30,20 @@ export interface Ctx {
 export const NOTA_GENERAT = 'Calendar generat automat'
 const ZILE_SCURT = ['Du', 'Lu', 'Ma', 'Mi', 'Jo', 'Vi', 'Sâ']
 
-/** Iconita „Informații utile" — ca in V1; pe telefon ramane doar ea, fara cuvinte. */
-const IC_INFO = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11.2v4.6"/><path d="M12 8.2h.01"/></svg>`
+/**
+ * Iconitele listelor de sarbatori (12.09.2026, user: „în loc de butonul de info să fie două butoane
+ * cu Sărbătorile… pune niște iconițe acolo"). Meniul „Informații utile" a iesit cu totul: cele doua
+ * liste care statau in el au urcat in rand, fiecare cu butonul ei.
+ *
+ * Crucea e aceeasi pentru amandoua — ce le deosebeste e CULOAREA, cum le deosebeste si calendarul
+ * tiparit; culoarea vine din clasa butonului (`.sarb-rosie` / `.sarb-neagra`), nu din desen, ca sa
+ * asculte de tema de noapte. Pe telefon ramane doar iconita, fara cuvinte, si atunci culoarea e
+ * singurul semn — de aceea numele intreg sta oricum in `title` si in `aria-label`.
+ */
+const IC_CRUCE = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3.5v17"/><path d="M6.5 9h11"/></svg>`
+
+/** Plicul abonarii — acelasi desen ca la Program, ca butonul sa se recunoasca de la o aplicatie la alta. */
+const IC_PLIC = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="m3.5 7 8.5 6 8.5-6"/></svg>`
 
 // ---------------------------------------------------------------------------
 // Bucatile antetului
@@ -51,42 +63,94 @@ function contDin(ctx: Ctx) {
 }
 
 /**
- * Randul de unelte din antet: ABONAREA si „Informații utile" (ca in V1, 9 sept. 2026).
- * Deosebirea fata de V1: adresa nu se mai scrie de mana, e a contului — aplicatia nu tine
- * adrese de e-mail (structura platformei V2).
+ * RANDUL DE UNELTE din antet, refacut la 12.09.2026. Trei bucati, in ordinea ceruta de user:
+ * NAVIGAREA (sirul lunilor cu bulina lui „azi"), ABONAREA si LISTELE DE SARBATORI.
+ *
+ * ⚠️ NAVIGAREA A URCAT AICI („mută navigarea sus"). Pana atunci sirul lunilor statea in corp, sub
+ * antet, si fugea la derulare; antetul e lipicios, deci acum lunile raman la indemana pe toata
+ * lungimea paginii — ca navigarea saptamanii de la Program. Ea ia si spatiul care prisoseste.
+ *
+ * ⚠️ ABONAREA se cheama acum „Abonare" („butonul după navigare să se numească Abonare"), sta
+ * indata dupa navigare si NU se scrie la administratori — ca la Program, unde butonul e tot al
+ * omului fara drepturi. Propozitia lamuritoare de langa el („Ca să te abonezi, îți trebuie cont.")
+ * a fost stearsa la aceeasi cerere, ca randul sa ramana un rand de butoane; ce spunea ea a trecut
+ * in `title`, deci lamurirea nu s-a pierdut. Butonul nu mai trimite nimic: DESCHIDE FEREASTRA
+ * (user, 12.09.2026: „la click pe Abonare să apară un pop-up la fel") — vezi `fereastraAbonare`.
+ *
+ * ⚠️ MENIUL „Informații utile" A IESIT („în loc de butonul de info să fie două butoane cu
+ * Sărbătorile…"). Cele doua liste care se deschideau din el sunt acum doua butoane adevarate, cu
+ * iconita si cuvant — un drum, nu doua apasari. Al treilea, „Sfinții cu evlavie", e anuntat de user
+ * si isi are locul aici, langa ele, de indata ce lista lui exista.
+ *
+ * Butonul listei pe care CHIAR esti se scrie marcat (`.activ`, rosu si neapasabil): rosul spune
+ * locul in care te afli, ca peste tot in platforma.
  */
-function unelte(ctx: Ctx, cale: string, abonat: boolean): string {
-  const p = esc(ctx.prefix)
-  const an = ctx.anCurent
-  const abonarea = ctx.utilizator
-    ? `<form class="abonare" method="post" action="${p}/${abonat ? 'dezabonare' : 'abonare'}">
-      <input type="hidden" name="spre" value="${esc(cale)}">
-      <button class="btn mic" type="submit">${abonat ? 'Dezabonează-te' : 'Abonează-te'}</button>
-      <span class="fara-cont">${abonat ? 'Primești calendarul pe adresa contului.' : 'Îți trimitem calendarul pe adresa contului.'}</span>
-    </form>`
-    : `<span class="abonare">
-      <a class="btn mic" href="${esc(ctx.nav.cont)}/auth/login">Abonează-te</a>
-      <span class="fara-cont">Ca să te abonezi, îți trebuie cont.</span>
-    </span>`
-  return `${abonarea}
+function unelte(o: { ctx: Ctx; navigarea?: string; felActiv?: FelCruce }): string {
+  const p = esc(o.ctx.prefix)
+  const an = o.ctx.anCurent
+  const lista = (fel: FelCruce, scurt: string) => {
+    const nume = CRUCILE[fel].nume
+    const clasa = `btn mic sarb sarb-${fel}`
+    return o.felActiv === fel
+      ? `<span class="${clasa} activ" aria-current="page" title="Ești pe ${nume.toLowerCase()}" aria-label="${esc(nume)}">${IC_CRUCE}<span class="cuv">${esc(scurt)}</span></span>`
+      : `<a class="${clasa}" href="${p}/sarbatori/cruce-${fel}/${an}" title="${esc(nume)}" aria-label="${esc(nume)}">${IC_CRUCE}<span class="cuv">${esc(scurt)}</span></a>`
+  }
+  return `${o.navigarea ?? ''}${butonAbonare(o.ctx)}
     <span class="desparte" aria-hidden="true"></span>
-    <details class="meniu-util">
-      <summary class="btn mic" title="Informații utile">${IC_INFO}<span class="cuv">Informații utile</span></summary>
-      <nav class="meniu-lista">
-        <a href="${p}/sarbatori/cruce-rosie/${an}">Sărbători cu cruce roșie</a>
-        <a href="${p}/sarbatori/cruce-neagra/${an}">Sărbători cu cruce neagră</a>
-      </nav>
-    </details>`
+    ${lista('rosie', 'Cruce roșie')}
+    ${lista('neagra', 'Cruce neagră')}`
 }
 
-const JS_MENIU = `
+/**
+ * ABONAREA, in doua bucati: butonul din rand si fereastra care se deschide din el.
+ *
+ * ⚠️ Amandoua sunt luate de la Program (user, 12.09.2026: „la click pe Abonare să apară un pop-up la
+ * fel"), cu tot cu campul de adresa si cele doua bife — utilizatorul a ales anume varianta aceasta,
+ * stiind ce aduce cu ea: pana cand fereastra se leaga de rute, abonarea calendarului NU MAI MERGE din
+ * pagina. Ca la Program, unde fereastra e si acum doar infatisare.
+ *
+ * ⚠️ Ce ramane intreg dedesubt: rutele `POST /abonare` · `/dezabonare` si audienta
+ * `calendar-abonati` a comunicarii. Cand fereastra se leaga, formularul capata `method="post"` si
+ * `action` catre ele, iar adresa scrisa aici slujeste doar la facerea contului (identitatea o tine,
+ * nu calendarul) — abonarea ramane pe adresa contului, cum cere structura platformei.
+ *
+ * Butonul e al omului FARA drepturi de admin (user, 12.09.2026: „butonul de Abonare nu se vede pe
+ * Administratori"); adminul isi vede abonatii in pagina de administrare.
+ */
+function butonAbonare(ctx: Ctx): string {
+  if (ctx.eAdmin) return ''
+  return `<button type="button" class="btn mic abon" id="b-abonare"`
+    + ` title="Primește calendarul pe email">${IC_PLIC}<span class="cuv">Abonare</span></button>`
+}
+
+function fereastraAbonare(ctx: Ctx): string {
+  if (ctx.eAdmin) return ''
+  return `<dialog class="modal" id="d-abonare" aria-labelledby="t-abonare">
+  <form method="dialog" class="modal-cutie">
+    <div class="modal-cap">
+      <h2 id="t-abonare">Abonare</h2>
+      <button value="inchide" class="modal-x" aria-label="Închide fereastra">&times;</button>
+    </div>
+    <p class="modal-spune">Pentru a vă abona, completați câmpul cu adresa de mail.</p>
+    <label class="camp"><span>Adresa de e-mail</span>
+      <input type="email" name="email" autocomplete="email" placeholder="nume@exemplu.ro"></label>
+    <label class="bifa"><input type="checkbox" name="cont"> Vreau să fac cont.</label>
+    <label class="bifa"><input type="checkbox" name="termeni"> Sunt de acord cu termenii și condițiile.</label>
+    <div class="modal-jos"><button value="abonare" class="btn-plin">Abonare</button></div>
+  </form>
+</dialog>`
+}
+
+/**
+ * Butonul deschide fereastra. Inchiderea n-are nevoie de JS: formularul dinauntru e `method="dialog"`,
+ * deci si „Abonare", si X-ul o inchid singure (si Escape, de la browser). Acelasi script ca la Program.
+ */
+const JS_ABONARE = `
 (function(){
-  document.addEventListener("click", function(e){
-    var deschise=document.querySelectorAll("details.meniu-util[open]");
-    for (var i=0;i<deschise.length;i++){
-      if(!deschise[i].contains(e.target)) deschise[i].removeAttribute("open");
-    }
-  });
+  var b = document.getElementById("b-abonare");
+  var d = document.getElementById("d-abonare");
+  if (!b || !d || !d.showModal) return;
+  b.addEventListener("click", function(){ d.showModal(); });
 })();
 `
 
@@ -212,7 +276,7 @@ function script(prefix: string): string {
     else inchide();
   });
 })();
-` + JS_MENIU
+` + JS_ABONARE
 }
 
 // ---------------------------------------------------------------------------
@@ -322,8 +386,17 @@ function adresaLunii(prefix: string, an: number, luna: number): string {
 }
 
 /**
- * Sirul lunilor: NUMAI anul curent, plus ianuarie anul viitor (cerere user, 10.09.2026:
- * „nu mai afișa alți ani în afară de anul curent și luna ianuarie anul viitor").
+ * NAVIGAREA: sirul lunilor, precedat de bulina lui „azi". NUMAI anul curent, plus ianuarie anul
+ * viitor (cerere user, 10.09.2026: „nu mai afișa alți ani în afară de anul curent și luna ianuarie
+ * anul viitor"). Din 12.09.2026 sta in randul de unelte din antet, nu in corp — vezi `unelte`.
+ *
+ * ⚠️ „AZI" E O BULINA, nu un cuvant (user, 12.09.2026: „AZI să fie o bulină ca la Program"). Punctul
+ * se deseneaza din CSS (`.azi-buton::before`), deci butonul ramane gol de text: numele lui se citeste
+ * din `title` si `aria-label`, ca la bulina saptamanii din Program. Rosul i-a ramas — el spune ca
+ * tinta e ziua de azi, iar un punct fara culoare n-ar zice nimic.
+ *
+ * Clasa `azi-buton` e si manerul de care se leaga JS-ul (derularea la ziua de azi); daca o schimbi,
+ * schimb-o si in `script`.
  */
 function sirulLunilor(ctx: Ctx, an: number, luna: number, azi: string): string {
   const p = esc(ctx.prefix)
@@ -336,7 +409,7 @@ function sirulLunilor(ctx: Ctx, an: number, luna: number, azi: string): string {
   const ianuarieViitor = an === anCurent + 1 && luna === 1 ? ' activa' : ''
   butoane.push(`<a class="luna-buton${ianuarieViitor}" href="${adresaLunii(p, anCurent + 1, 1)}" title="ianuarie ${anCurent + 1}">Ian ${anCurent + 1}</a>`)
   const [anAzi, lunaAzi] = azi.split('-').map(Number) as [number, number]
-  const butonAzi = `<a class="azi-buton" href="${adresaLunii(p, anAzi, lunaAzi)}#azi">azi</a>`
+  const butonAzi = `<a class="azi-buton" href="${adresaLunii(p, anAzi, lunaAzi)}#azi" title="Mergi la ziua de azi" aria-label="ziua de azi"></a>`
   return `<div class="luni-rand">${butonAzi}<div class="fasie"><nav class="luni">${butoane.join('')}</nav></div></div>`
 }
 
@@ -360,8 +433,6 @@ export function paginaLuna(o: {
   randuri: Array<{ r: RandZi; d: RandDesfacut; zi: ZiLiturgica }>
   calculat: boolean
   azi: string
-  cale: string
-  abonat: boolean
   mesajAbonare?: string
 }): string {
   const corp = o.randuri.map(({ r, d, zi }) => randZi(o.ctx, r, d, zi, r.data === o.azi)).join('')
@@ -370,10 +441,10 @@ export function paginaLuna(o: {
     titluPagina: `Calendar ${LUNI[o.luna - 1]} ${o.an}`,
     indexabil: true,
     metaExtra: `<meta name="description" content="Calendarul creștin ortodox — ${LUNI[o.luna - 1]} ${o.an}, zi de zi. Copie a calendarului oficial al Patriarhiei Române.">`,
-    unelte: unelte(o.ctx, o.cale, o.abonat),
+    unelte: unelte({ ctx: o.ctx, navigarea: sirulLunilor(o.ctx, o.an, o.luna, o.azi) }),
+    subantet: fereastraAbonare(o.ctx),
     scripturi: script(o.ctx.prefix),
-    corp: `${sirulLunilor(o.ctx, o.an, o.luna, o.azi)}
-${o.mesajAbonare ? `<p class="an-calculat">${esc(o.mesajAbonare)}</p>` : ''}
+    corp: `${o.mesajAbonare ? `<p class="an-calculat">${esc(o.mesajAbonare)}</p>` : ''}
 ${o.calculat ? `<p class="an-calculat">${esc(NOTA_GENERAT)}</p>` : ''}
 <h2 class="luna">${esc(LUNI[o.luna - 1] ?? '')} ${o.an}</h2>
 <div class="zile">
@@ -436,7 +507,7 @@ export function cuprinsul(sectiuni: Array<[string, string]>): string {
     .join('\n')
 }
 
-export function paginaZi(o: { ctx: Ctx; r: RandZi; d: RandDesfacut; zi: ZiLiturgica; texte: TexteZilei; parte?: Parte; ieri: string; maine: string; abonat: boolean; cale: string }): string {
+export function paginaZi(o: { ctx: Ctx; r: RandZi; d: RandDesfacut; zi: ZiLiturgica; texte: TexteZilei; parte?: Parte; ieri: string; maine: string }): string {
   const p = esc(o.ctx.prefix)
   const luna = `${p}/${o.r.an}-${String(o.r.luna).padStart(2, '0')}`
   const numeParte = o.parte === 'sinaxar' ? 'Sinaxar' : o.parte ? 'Lectura zilei' : ''
@@ -451,8 +522,9 @@ export function paginaZi(o: { ctx: Ctx; r: RandZi; d: RandDesfacut; zi: ZiLiturg
     ...comune(o.ctx),
     titluPagina: `${numeParte ? `${numeParte} · ` : ''}${numeZi} · ${o.r.zi} ${LUNI[o.r.luna - 1]} ${o.r.an}`,
     indexabil: true,
-    unelte: unelte(o.ctx, o.cale, o.abonat),
-    scripturi: JS_MENIU,
+    unelte: unelte({ ctx: o.ctx }),
+    subantet: fereastraAbonare(o.ctx),
+    scripturi: JS_ABONARE,
     clasaCorp: `pagina-zi ${o.r.zi_saptamana === 0 ? 'duminica' : ''} ${o.r.cruce ? `cruce-${o.r.cruce}` : ''}`,
     corp: `<div class="cap">
   <p class="eyebrow"><a href="${luna}">${esc(LUNI[o.r.luna - 1] ?? '')} ${o.r.an}</a>${numeParte ? ` · ${esc(numeParte)}` : ''}</p>
@@ -524,8 +596,6 @@ export function paginaSarbatori(o: {
   cuZile: Set<number>
   calculat: boolean
   azi: string
-  cale: string
-  abonat: boolean
 }): string {
   const p = esc(o.ctx.prefix)
   const unde = o.luna ? `${LUNI[o.luna - 1]} ${o.an}` : String(o.an)
@@ -545,8 +615,9 @@ ${grup.map((x) => randZi(o.ctx, x.r, x.d, x.zi, x.r.data === o.azi)).join('')}</
     titluPagina: `${CRUCILE[o.fel].nume} · ${unde}`,
     indexabil: true,
     metaExtra: `<meta name="description" content="${esc(CRUCILE[o.fel].nume)} în ${esc(unde)}, din calendarul creștin ortodox al Patriarhiei Române.">`,
-    unelte: unelte(o.ctx, o.cale, o.abonat),
-    scripturi: JS_MENIU,
+    unelte: unelte({ ctx: o.ctx, felActiv: o.fel }),
+    subantet: fereastraAbonare(o.ctx),
+    scripturi: JS_ABONARE,
     clasaCorp: 'sarbatori',
     corp: `<div class="cap">
   <p class="inainte-de-titlu"><a class="btn inapoi" href="${p}/${o.an}">← Înapoi</a></p>
@@ -574,7 +645,6 @@ export function paginaMesaj(ctx: Ctx, titlu: string, mesaj: string): string {
   return pagina({
     ...comune(ctx),
     titluPagina: titlu,
-    scripturi: JS_MENIU,
     corp: `<div class="cap">
   <h1 class="titlu-lista">${esc(titlu)}</h1>
   <p class="sursa">${esc(mesaj)}</p>
@@ -607,7 +677,6 @@ export function paginaAdmin(o: {
   return pagina({
     ...comune(o.ctx),
     titluPagina: 'Administrare',
-    scripturi: JS_MENIU,
     corp: `<div class="cap">
   <h1 class="titlu-lista">Administrare</h1>
   <p class="sursa">Versiunea calendarului: <b>${esc(o.versiuneCalendar)}</b>. Anii calculați din Pascalie: ${o.aniCalculati.join(', ') || '—'}.</p>

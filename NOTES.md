@@ -387,6 +387,48 @@ A revenit în interfață (11.09, 16:36), dar **deocamdată nu face nimic** — 
 e-mail și două bife. Formularul e `method="dialog"`, deci **orice buton din el doar închide** fereastra.
 Când se leagă cu adevărat, capătă `action` către `POST /abonare` (ruta a rămas întreagă tot timpul).
 
+## Calendarul (A1) — antetul, refăcut la 12.09.2026
+
+Rândul de unelte al calendarului a fost refăcut într-o rundă, la patru cereri ale utilizatorului.
+Ordinea din antet, de la stânga la dreapta: **navigarea · Abonare · | · Cruce roșie · Cruce neagră**.
+
+- **NAVIGAREA A URCAT ÎN ANTET** („mută navigarea sus"). Șirul lunilor stătea în corp, sub antet, și
+  fugea la derulare; antetul e lipicios, deci acum lunile rămân la îndemână pe toată pagina. Ea ia
+  spațiul rămas după butoane și se derulează înăuntru.
+  ⚠️ **`flex:1 1 0`, NU `1 1 auto`** — aceeași capcană ca la pastila Programului: `.btns` are
+  `flex-wrap`, iar ruperea rândului se hotărăște după măsura **ipotetică** a fiecărui copil, înainte
+  de orice strângere. Cu `auto`, fâșia pornea de la lățimea celor 13 luni (~1000 px), umplea singură
+  rândul, iar abonarea și sărbătorile cădeau pe rândul doi. Prima variantă chiar așa a ieșit.
+- **„AZI" E O BULINĂ**, ca la Program („AZI să fie o bulină ca la Program"): butonul n-a mai rămas cu
+  niciun cuvânt, punctul de 9 px se desenează din CSS (`.azi-buton::before`), iar numele stă în
+  `title`/`aria-label`. Roșul i-a rămas — el spune că ținta e ziua de azi. Înălțimea e pusă anume cât
+  a unui buton de lună (9 + 12 + 12 + 2 = 35 px): dacă umbli la `.luna-buton`, umblă și la ea.
+  Clasa `azi-buton` e și mânerul JS-ului care derulează la ziua de azi.
+- **Butonul se cheamă „Abonare"** („butonul după navigare să se numească Abonare"), cu plicul de la
+  Program, și **nu se scrie la administratori** („butonul de Abonare nu se vede pe Administratori").
+- **Propoziția lămuritoare de lângă el a fost ștearsă** („șterge acel text") — „Ca să te abonezi, îți
+  trebuie cont." / „Îți trimitem calendarul pe adresa contului." Ce spunea a trecut în `title`.
+- **Meniul „Informații utile" a ieșit cu totul** („în loc de butonul de info să fie două butoane cu
+  Sărbătorile… pune niște iconițe acolo"): cele două liste sunt acum butoane adevărate, cu cruce
+  desenată și cuvânt — un drum, nu două apăsări. Crucea e aceeași; **culoarea** le deosebește, ca în
+  calendarul tipărit. Butonul listei pe care ești se scrie marcat (`.activ`, roșu, neapăsabil).
+  Odată cu meniul a căzut și `JS_MENIU` (închiderea lui la clic în afară).
+  ⚠️ **Al treilea buton, „Sfinții cu evlavie", e anunțat de utilizator** și își are locul lângă ele.
+- ⚠️ **FEREASTRA DE ABONARE, adusă întocmai de la Program** („la click pe Abonare să apară un pop-up
+  la fel"), cu câmp de e-mail și cele două bife. Utilizatorul a ales varianta aceasta **știind ce
+  aduce**: ca la Program, fereastra e deocamdată doar înfățișare (`method="dialog"`), deci **abonarea
+  calendarului nu se mai face din pagină** până când fereastra se leagă de rute. Ce a rămas întreg
+  dedesubt: `POST /abonare` · `/dezabonare` și audiența `calendar-abonati`. Odată cu butonul vechi a
+  ieșit și `eAbonat` din rutele paginilor — întrebarea „e omul pe listă?" ar fi fost o cerere la
+  comunicare pe fiecare pagină, degeaba.
+
+**⚠️ MĂSURI: rândul încape exact, fără rezervă.** `.w` are 680 px, iar butoanele cer, măsurate în
+pagină: Abonare 117 + bara 1 + Cruce roșie 142 + Cruce neagră 157 + patru spații de 10 =
+457, deci **navigării îi rămân 217 px — cam două luni la vedere** (restul, din derulare; JS-ul aduce
+luna curentă la mijloc). **Al treilea buton nu mai încape cu cuvânt cu tot**: atunci ori se scurtează
+numele, ori sărbătorile rămân doar iconițe, ori navigarea coboară pe un rând al ei, tot în antet. De
+întrebat utilizatorul când vine vorba. Pe telefon (sub 600 px) cuvintele cad deja, rămân iconițele.
+
 ### API-ul programului
 
 `slujba_urmatoare`, `slujba_curenta` (în curs = începută de cel mult **3 ore**), `slujbele_zilei`,
@@ -485,8 +527,10 @@ cu sfinții de duminică" → PDF 54 KB prin Browser Rendering, în R2, descărc
 ## Aplicațiile portate — amănunte
 
 - **`calendar`** (A1): D1 `xc-calendar-staging`, 730 de zile (2025+2026) + sinaxare, `/v1` în forma
-  contractului, **Pascalie proprie** (2027–2028 calculați), corecturi cu audit, abonare prin comunicare.
-  Șirul lunilor: doar anul curent + „Ian <an+1>" (alți ani „nu ne ajută la nimic").
+  contractului, **Pascalie proprie** (2027–2028 calculați), corecturi cu audit, abonare prin comunicare
+  (⚠️ din 12.09.2026 **nelegată de interfață** — vezi „Calendarul (A1) — antetul").
+  Șirul lunilor: doar anul curent + „Ian <an+1>" (alți ani „nu ne ajută la nimic"); din 12.09.2026 stă
+  în antet, nu în corp. **Antetul are secțiunea lui** mai sus — citește-o înainte să umbli la el.
   **Poza săptămânii**: `GET <calendar>/v1/poza/saptamana/<zi>` — PNG cu antetul intervalului și cele 7
   zile. E a CALENDARULUI, se face **la cerere** prin Browser Rendering și stă în cache-ul de muchie, cu
   cheia pe amprenta HTML-ului. În V1 se generau dinainte pentru tot anul și stăteau în R2.
@@ -602,6 +646,14 @@ forța antetul `Host`**.
 ## Jurnal
 
 ### 2026-09-12
+
+- **Antetul calendarului, refăcut din patru cereri** (user, 09:33–09:58): navigarea a urcat în rândul
+  de unelte, „AZI" a devenit bulină, propoziția de lângă abonare a fost ștearsă, butonul se cheamă
+  acum „Abonare" și nu se mai scrie la administratori, meniul „Informații utile" a fost înlocuit cu
+  două butoane cu iconiță (Cruce roșie · Cruce neagră), iar clicul pe Abonare deschide fereastra de la
+  Program. Amănuntele și măsurile: secțiunea **Calendarul (A1) — antetul**. Staging 0.2.0, 103 teste,
+  `tsc` curat. ⚠️ Prima variantă a rupt rândul în două (`flex:1 1 auto` pe fâșie) — s-a văzut într-o
+  poză făcută cu Browser Rendering, nu la ochi.
 
 - **Validarea are, în sfârșit, drum înapoi: `program.retrage_validarea`** (user, 02:28, după ce
   scrisese în Îndrumări „dacă programul este deja VALIDAT trebuie mai întâi să-l transformi în

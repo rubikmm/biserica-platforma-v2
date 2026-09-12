@@ -73,10 +73,11 @@ async function comunicare<T = unknown>(env: Env, cale: string, corp: unknown): P
   }
 }
 
-async function eAbonat(env: Env, userId: string): Promise<boolean> {
-  const r = await comunicare<{ membri: unknown[] }>(env, '/audiente/membri', { audienceId: AUDIENTA, userId })
-  return !!r && r.membri.length > 0
-}
+// `eAbonat` (intrebarea „e omul pe lista?", pusa la fiecare pagina ca sa se stie daca butonul scrie
+// „Abonare" sau „Dezabonare") a iesit odata cu formularul din antet: fereastra de abonare adusa de la
+// Program nu cunoaste starea, deci intrebarea ar fi fost o cerere la comunicare pe fiecare pagina,
+// degeaba (12.09.2026). Audienta si rutele de mai jos au ramas intregi — se readuce cand fereastra
+// se leaga de ele.
 const CACHE_PAGINI = 'public, max-age=300'
 const CACHE_API = 'public, max-age=600'
 
@@ -260,8 +261,7 @@ export default {
         const lista = randuri.map((r) => ({ r, d: desfaRandul(r), zi: ziLiturgica(r, versiune) }))
         const semn = url.searchParams.get('abonat')
         const mesajAbonare = semn === '1' ? 'Gata, te-am trecut pe listă.' : semn === '0' ? 'Nu am putut face abonarea; încearcă din nou.' : semn === '2' ? 'Te-am scos de pe listă.' : undefined
-        const abonat = principal ? await eAbonat(env, principal.userId) : false
-        return html(paginaLuna({ ctx, an, luna, randuri: lista, calculat, azi, cale: `${prefix}${cale}`, mesajAbonare, abonat }), 200, cachePagina)
+        return html(paginaLuna({ ctx, an, luna, randuri: lista, calculat, azi, mesajAbonare }), 200, cachePagina)
       }
 
       // ziua si partile ei — aceleasi adrese pe care le foloseste si fereastra din lista
@@ -273,9 +273,8 @@ export default {
         const z = await ziuaCompleta(env, data, ani, versiune)
         if (!z) return html(paginaMesaj(ctx, `Ziua ${data} nu e preluată`, 'Alege o lună din șirul de sus.'), 404)
         const t = await textele(env, z.r, z.zi, z.d)
-        const abonat = principal ? await eAbonat(env, principal.userId) : false
         return html(
-          paginaZi({ ctx, ...z, texte: t, ...(parte ? { parte } : {}), ieri: adaugaZile(data, -1), maine: adaugaZile(data, 1), abonat, cale: `${prefix}${cale}` }),
+          paginaZi({ ctx, ...z, texte: t, ...(parte ? { parte } : {}), ieri: adaugaZile(data, -1), maine: adaugaZile(data, 1) }),
           200,
           cachePagina,
         )
@@ -297,9 +296,8 @@ export default {
         const cuZile = new Set(randuri.map((r) => r.luna))
         const alese = luna ? randuri.filter((r) => r.luna === luna) : randuri
         const lista = alese.map((r) => ({ r, d: desfaRandul(r), zi: ziLiturgica(r, versiune) }))
-        const abonat = principal ? await eAbonat(env, principal.userId) : false
         return html(
-          paginaSarbatori({ ctx, fel, an, ...(luna ? { luna } : {}), randuri: lista, cuZile, calculat, azi, cale: `${prefix}${cale}`, abonat }),
+          paginaSarbatori({ ctx, fel, an, ...(luna ? { luna } : {}), randuri: lista, cuZile, calculat, azi }),
           200,
           cachePagina,
         )
