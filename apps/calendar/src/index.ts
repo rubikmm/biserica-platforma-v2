@@ -18,6 +18,7 @@ import {
   importurile,
   randulOriCalculat,
   randulZilei,
+  randurileAnului,
   randurileLunii,
   randuriInterval,
   referintele,
@@ -28,7 +29,6 @@ import {
   versiuneaCalendarului,
   versiunile,
   zileleAnuluiCalculat,
-  zileleCuCruce,
   CAMPURI_CORECTABILE,
   type CampCorectabil,
 } from './depozit.js'
@@ -37,7 +37,7 @@ import { extrageZi, faraTaguri, dataDinAcf, type RandZiExtras } from './extrager
 import { duminica, glasSiVoscreasna, perioadaOficiala, randuialaMesei, repereContract, sambataMortilor, ziLibera } from './pascalia.js'
 import { canonizeazaReferinta } from './titluri.js'
 import { type RandZi, desfaRandul, ziLiturgica } from './traducere.js'
-import { type Ctx, type FelCruce, type Parte, type TexteZilei, paginaAdmin, paginaLuna, paginaMesaj, paginaSarbatori, paginaZi, pozaSaptamaniiHtml, texteFereastra } from './pagini.js'
+import { type Ctx, type FelCruce, type Parte, type TexteZilei, paginaAdmin, paginaLuna, paginaMesaj, paginaSarbatori, paginaZi, pozaSaptamaniiHtml, texteFereastra, trecePrinFiltru } from './pagini.js'
 
 export interface Env {
   DB: D1Database
@@ -261,7 +261,11 @@ export default {
         const lista = randuri.map((r) => ({ r, d: desfaRandul(r), zi: ziLiturgica(r, versiune) }))
         const semn = url.searchParams.get('abonat')
         const mesajAbonare = semn === '1' ? 'Gata, te-am trecut pe listă.' : semn === '0' ? 'Nu am putut face abonarea; încearcă din nou.' : semn === '2' ? 'Te-am scos de pe listă.' : undefined
-        return html(paginaLuna({ ctx, an, luna, randuri: lista, calculat, azi, mesajAbonare }), 200, cachePagina)
+        // filtrul crucii, pus din bara de sus (user, 12.09.2026): lucreaza peste luna asta. Un fel
+        // nerecunoscut se face ca si cum n-ar fi — lista intreaga, fara eroare.
+        const cerut = url.searchParams.get('cruce')
+        const cruce = cerut === 'rosie' || cerut === 'neagra' ? (cerut as FelCruce) : undefined
+        return html(paginaLuna({ ctx, an, luna, randuri: lista, calculat, azi, ...(cruce ? { cruce } : {}), mesajAbonare }), 200, cachePagina)
       }
 
       // ziua si partile ei — aceleasi adrese pe care le foloseste si fereastra din lista
@@ -280,27 +284,26 @@ export default {
         )
       }
 
-      // listele de sarbatori din „Informații utile"
+      // FILTRUL CRUCII PESTE ANUL INTREG — starea „toate lunile" (user, 12.09.2026, 11:13)
       const mSarb = /^\/sarbatori\/cruce-(rosie|neagra)(?:\/(\d{4})(?:-(\d{2}))?)?$/.exec(cale)
       if (mSarb && req.method === 'GET') {
         const fel = mSarb[1] as FelCruce
         const an = mSarb[2] ? Number(mSarb[2]) : ctx.anCurent
-        const luna = mSarb[3] ? Number(mSarb[3]) : undefined
+        // ⚠️ Adresa cu luna in ea a fost inlocuita de filtrul pe pagina lunii; o trimitem acolo, ca
+        // legaturile vechi si cele scrise de om sa nu cada.
+        if (mSarb[3]) return redirect(`${prefix}/${an}-${mSarb[3]}?cruce=${fel}`)
         let randuri: RandZi[]
         let calculat = false
-        if (ani.includes(an)) randuri = await zileleCuCruce(env.DB, an, fel)
+        if (ani.includes(an)) randuri = await randurileAnului(env.DB, an)
         else if (sePoateCalcula(an, ani)) {
-          randuri = (await zileleAnuluiCalculat(env.DB, an)).filter((r) => r.cruce === fel)
+          randuri = await zileleAnuluiCalculat(env.DB, an)
           calculat = true
         } else return html(paginaMesaj(ctx, `${an} nu e preluat`, ani.length ? `Anii preluați până acum: ${ani.join(', ')}.` : 'Încă nu s-a preluat niciun an.'), 404)
-        const cuZile = new Set(randuri.map((r) => r.luna))
-        const alese = luna ? randuri.filter((r) => r.luna === luna) : randuri
-        const lista = alese.map((r) => ({ r, d: desfaRandul(r), zi: ziLiturgica(r, versiune) }))
-        return html(
-          paginaSarbatori({ ctx, fel, an, ...(luna ? { luna } : {}), randuri: lista, cuZile, calculat, azi }),
-          200,
-          cachePagina,
-        )
+        // ⚠️ ACELASI filtru ca pe luna (`trecePrinFiltru`), nu interogarea veche `zileleCuCruce`:
+        // altfel duminicile ar intra in lista pe o luna si ar lipsi pe „toate lunile", iar filtrul
+        // ar insemna doua lucruri deosebite dupa cat de larg te uiti.
+        const lista = randuri.filter((r) => trecePrinFiltru(r, fel)).map((r) => ({ r, d: desfaRandul(r), zi: ziLiturgica(r, versiune) }))
+        return html(paginaSarbatori({ ctx, fel, an, randuri: lista, calculat, azi }), 200, cachePagina)
       }
 
       // abonarea: cu adresa contului, in audienta serviciului de comunicare

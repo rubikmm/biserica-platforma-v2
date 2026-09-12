@@ -63,42 +63,63 @@ function contDin(ctx: Ctx) {
 }
 
 /**
- * RANDUL DE UNELTE din antet, refacut la 12.09.2026. Trei bucati, in ordinea ceruta de user:
- * NAVIGAREA (sirul lunilor cu bulina lui „azi"), ABONAREA si LISTELE DE SARBATORI.
+ * BARA DE SUS E UN SET DE FILTRE (user, 12.09.2026, 11:12: „tot ce este în bara de sus, cu excepția
+ * butonului de azi, este ca un filtru"). Doua filtre, care lucreaza impreuna peste aceeasi lista:
  *
- * ⚠️ NAVIGAREA A URCAT AICI („mută navigarea sus"). Pana atunci sirul lunilor statea in corp, sub
- * antet, si fugea la derulare; antetul e lipicios, deci acum lunile raman la indemana pe toata
- * lungimea paginii — ca navigarea saptamanii de la Program. Ea ia si spatiul care prisoseste.
+ *   - LUNILE, in pastila: alegi luna, se arata luna aceea. „Toate lunile" o deselecteaza si atunci
+ *     lista se intinde peste anul intreg.
+ *   - FELUL CRUCII, cele doua butoane: rosie lasa in lista doar sfintii cu cruce rosie SI duminicile,
+ *     neagra doar sfintii cu cruce neagra. Sunt RECIPROC EXCLUSIVE („aceste două filtre se exclud
+ *     reciproc") si se sting apasand inca o data pe cel aprins.
  *
- * ⚠️ ABONAREA se cheama acum „Abonare" („butonul după navigare să se numească Abonare"), sta
- * indata dupa navigare si NU se scrie la administratori — ca la Program, unde butonul e tot al
- * omului fara drepturi. Propozitia lamuritoare de langa el („Ca să te abonezi, îți trebuie cont.")
- * a fost stearsa la aceeasi cerere, ca randul sa ramana un rand de butoane; ce spunea ea a trecut
- * in `title`, deci lamurirea nu s-a pierdut. Butonul nu mai trimite nimic: DESCHIDE FEREASTRA
- * (user, 12.09.2026: „la click pe Abonare să apară un pop-up la fel") — vezi `fereastraAbonare`.
+ * Ele se pastreaza unul pe altul: schimbi luna, filtrul crucii ramane pus; schimbi felul crucii,
+ * luna ramane. De aceea adresele se scriu una din alta si nu se mai duce nicaieri „la o pagina de
+ * sarbatori" — sunt stari ale aceleiasi liste. Ce se vede pe unde:
  *
- * ⚠️ MENIUL „Informații utile" A IESIT („în loc de butonul de info să fie două butoane cu
- * Sărbătorile…"). Cele doua liste care se deschideau din el sunt acum doua butoane adevarate, cu
- * iconita si cuvant — un drum, nu doua apasari. Al treilea, „Sfinții cu evlavie", e anuntat de user
- * si isi are locul aici, langa ele, de indata ce lista lui exista.
+ *   `/<an>-<luna>`                  luna intreaga
+ *   `/<an>-<luna>?cruce=rosie`      luna, numai zilele rosii si duminicile
+ *   `/sarbatori/cruce-rosie/<an>`   anul intreg, numai zilele rosii („toate lunile")
  *
- * Butonul listei pe care CHIAR esti se scrie marcat (`.activ`, rosu si neapasabil): rosul spune
- * locul in care te afli, ca peste tot in platforma.
+ * ⚠️ ABONAREA se cheama „Abonare" („butonul după navigare să se numească Abonare"), sta indata dupa
+ * navigare si NU se scrie la administratori — ca la Program, unde butonul e tot al omului fara
+ * drepturi. Ea NU e un filtru; e singurul lucru din bara care face altceva, si de aceea sta despartita
+ * de ele prin bara verticala. Butonul deschide fereastra (user: „la click pe Abonare să apară un
+ * pop-up la fel") — vezi `fereastraAbonare`.
+ *
+ * Butonul filtrului pus se scrie marcat (`.activ`, rosu); apasat inca o data, il stinge.
  */
-function unelte(o: { ctx: Ctx; navigarea?: string; felActiv?: FelCruce }): string {
+function unelte(o: {
+  ctx: Ctx
+  navigarea?: string
+  /** filtrul de fel pus acum, daca e vreunul */
+  felActiv?: FelCruce
+  /** luna peste care lucreaza filtrele, „<an>-<luna>"; lipseste cand lista tine anul intreg */
+  luna?: string
+}): string {
   const p = esc(o.ctx.prefix)
   const an = o.ctx.anCurent
-  const lista = (fel: FelCruce, scurt: string) => {
+  // Cu o luna in brate, filtrul se pune pe ea; fara luna (lista anului) se trece la lista de an a
+  // celuilalt fel. Stins, drumul inapoi e luna neatinsa — ori, daca nu suntem pe nicio luna, luna de azi.
+  const cuFel = (fel: FelCruce) => (o.luna ? `${p}/${o.luna}?cruce=${fel}` : `${p}/sarbatori/cruce-${fel}/${an}`)
+  const faraFel = o.luna ? `${p}/${o.luna}` : ''
+  const buton = (fel: FelCruce, scurt: string) => {
     const nume = CRUCILE[fel].nume
     const clasa = `btn mic sarb sarb-${fel}`
-    return o.felActiv === fel
-      ? `<span class="${clasa} activ" aria-current="page" title="Ești pe ${nume.toLowerCase()}" aria-label="${esc(nume)}">${IC_CRUCE}<span class="cuv">${esc(scurt)}</span></span>`
-      : `<a class="${clasa}" href="${p}/sarbatori/cruce-${fel}/${an}" title="${esc(nume)}" aria-label="${esc(nume)}">${IC_CRUCE}<span class="cuv">${esc(scurt)}</span></a>`
+    const pus = o.felActiv === fel
+    const unde = pus ? faraFel : cuFel(fel)
+    const spune = pus ? `Scoate filtrul: ${nume.toLowerCase()}` : nume
+    // stins, dar fara drum inapoi (lista anului, fara luna): butonul ramane marcat si neapasabil
+    if (pus && !unde) {
+      return `<span class="${clasa} activ" aria-current="page" title="${esc(nume)}" aria-label="${esc(nume)}">`
+        + `${IC_CRUCE}<span class="cuv">${esc(scurt)}</span></span>`
+    }
+    return `<a class="${clasa}${pus ? ' activ' : ''}" href="${unde}"${pus ? ' aria-current="page"' : ''}`
+      + ` title="${esc(spune)}" aria-label="${esc(nume)}">${IC_CRUCE}<span class="cuv">${esc(scurt)}</span></a>`
   }
   return `${o.navigarea ?? ''}${butonAbonare(o.ctx)}
     <span class="desparte" aria-hidden="true"></span>
-    ${lista('rosie', 'Cruce roșie')}
-    ${lista('neagra', 'Cruce neagră')}`
+    ${buton('rosie', 'Cruce roșie')}
+    ${buton('neagra', 'Cruce neagră')}`
 }
 
 /**
@@ -413,9 +434,12 @@ function adresaLunii(prefix: string, an: number, luna: number): string {
  * afară de anul curent și luna ianuarie anul viitor").
  *
  * ⚠️ Pastila se DERULEAZA stanga-dreapta (`.fasie` inauntru), si pe telefon, si oriunde lunile nu
- * incap („pe mobil tot așa să se poată muta stânga dreapta"). Pe desktop pastila tine randul de sus
- * al antetului doar pentru ea, deci toate cele treisprezece incap si nu e nimic de derulat — atunci
- * JS-ul nici nu scrie sagetile. Bulina sta in afara fasiei: ea nu se deruleaza niciodata.
+ * incap („pe mobil tot așa să se poată muta stânga dreapta"). Sagetile ‹ › le scrie JS-ul, si numai
+ * daca e ceva de derulat. Bulina sta in afara fasiei: ea nu se deruleaza niciodata.
+ *
+ * ⚠️ LUNILE SUNT UN FILTRU si PASTREAZA filtrul crucii (user, 12.09.2026): daca te uiti la zilele cu
+ * cruce rosie si alegi alta luna, ramai pe rosu. Bulina lui „azi", in schimb, NU duce filtrul cu ea —
+ * ea inseamna „arata-mi ziua de azi", iar ziua de azi poate sa nu fie in lista filtrata.
  *
  * ⚠️ „AZI" E O BULINA, nu un cuvant (user, 12.09.2026: „AZI să fie o bulină ca la Program"). Punctul
  * se deseneaza din CSS (`.azi-buton::before`), deci butonul ramane gol de text: numele lui se citeste
@@ -428,16 +452,17 @@ function adresaLunii(prefix: string, an: number, luna: number): string {
  * `luna: 0` inseamna „nicio luna nu e a paginii" — asa o cheama listele de sarbatori, unde marcajul
  * rosu ar minti: acolo nu esti intr-o luna a calendarului, ci intr-o lista peste tot anul.
  */
-function sirulLunilor(ctx: Ctx, an: number, luna: number, azi: string): string {
+function sirulLunilor(ctx: Ctx, an: number, luna: number, azi: string, fel?: FelCruce): string {
   const p = esc(ctx.prefix)
   const anCurent = ctx.anCurent
+  const cuFiltru = (adresa: string) => (fel ? `${adresa}?cruce=${fel}` : adresa)
   const butoane = LUNI.map((nume, i) => {
     const l = i + 1
     const activa = an === anCurent && l === luna ? ' activa' : ''
-    return `<a class="luna-buton${activa}" href="${adresaLunii(p, anCurent, l)}" data-l="${l}"${activa ? ' aria-current="page"' : ''}>${esc(nume.slice(0, 3))}</a>`
+    return `<a class="luna-buton${activa}" href="${cuFiltru(adresaLunii(p, anCurent, l))}" data-l="${l}"${activa ? ' aria-current="page"' : ''}>${esc(nume.slice(0, 3))}</a>`
   })
   const ianuarieViitor = an === anCurent + 1 && luna === 1 ? ' activa' : ''
-  butoane.push(`<a class="luna-buton${ianuarieViitor}" href="${adresaLunii(p, anCurent + 1, 1)}" title="ianuarie ${anCurent + 1}"${ianuarieViitor ? ' aria-current="page"' : ''}>Ian ${anCurent + 1}</a>`)
+  butoane.push(`<a class="luna-buton${ianuarieViitor}" href="${cuFiltru(adresaLunii(p, anCurent + 1, 1))}" title="ianuarie ${anCurent + 1}"${ianuarieViitor ? ' aria-current="page"' : ''}>Ian ${anCurent + 1}</a>`)
   const [anAzi, lunaAzi] = azi.split('-').map(Number) as [number, number]
   const butonAzi = `<a class="azi-buton" href="${adresaLunii(p, anAzi, lunaAzi)}#azi" title="Mergi la ziua de azi" aria-label="ziua de azi"></a>`
   return `<span class="pastila">${butonAzi}<div class="fasie"><nav class="luni">${butoane.join('')}</nav></div></span>`
@@ -456,6 +481,36 @@ function comune(ctx: Ctx) {
   }
 }
 
+/**
+ * FILTRUL CRUCII, aplicat peste zilele unei liste (user, 12.09.2026, 11:12):
+ *
+ *   - ROSIE lasa zilele cu cruce rosie **si duminicile** („rămân doar Sfinții cu cruce roșie și
+ *     duminicile din acea lună") — duminica e sarbatoare chiar cand nu poarta insemnul;
+ *   - NEAGRA lasa doar zilele cu cruce neagra („rămân doar acei sfinți"), fara duminici.
+ */
+export function trecePrinFiltru(r: RandZi, fel: FelCruce): boolean {
+  return fel === 'rosie' ? r.cruce === 'rosie' || r.zi_saptamana === 0 : r.cruce === 'neagra'
+}
+
+/**
+ * „TOATE LUNILE" — butonul care DESELECTEAZA luna (user, 12.09.2026, 11:13: „doar butonul cu toate
+ * lunile, care deselectează luna calendarului și afișează toate sărbătorile cu roșu de peste anul în
+ * curs"). Se scrie numai cand un filtru de cruce e pus: fara filtru, „toate lunile" ar insemna tot
+ * calendarul, o listă de 365 de zile pe care nimeni n-a cerut-o.
+ *
+ * Pe lista anului butonul e deja apasat, deci se scrie marcat si neapasabil. A luat locul grilei de
+ * douasprezece luni de pe vechea pagina de sarbatori: lunile se aleg acum din pastila de sus, ca
+ * peste tot.
+ */
+function butonToateLunile(ctx: Ctx, fel: FelCruce, an: number, peTotAnul: boolean): string {
+  const p = esc(ctx.prefix)
+  if (peTotAnul) {
+    return `<p class="rand-filtru"><b class="btn toate-lunile activ" aria-current="page">Toate lunile</b></p>`
+  }
+  return `<p class="rand-filtru"><a class="btn toate-lunile" href="${p}/sarbatori/cruce-${fel}/${an}"`
+    + ` title="Scoate luna din filtru — ${esc(CRUCILE[fel].nume.toLowerCase())} din tot anul">Toate lunile</a></p>`
+}
+
 export function paginaLuna(o: {
   ctx: Ctx
   an: number
@@ -463,22 +518,36 @@ export function paginaLuna(o: {
   randuri: Array<{ r: RandZi; d: RandDesfacut; zi: ZiLiturgica }>
   calculat: boolean
   azi: string
+  /** filtrul de fel pus acum; lipseste cand se vede luna intreaga */
+  cruce?: FelCruce
   mesajAbonare?: string
 }): string {
-  const corp = o.randuri.map(({ r, d, zi }) => randZi(o.ctx, r, d, zi, r.data === o.azi)).join('')
+  const alese = o.cruce ? o.randuri.filter(({ r }) => trecePrinFiltru(r, o.cruce as FelCruce)) : o.randuri
+  const corp = alese.map(({ r, d, zi }) => randZi(o.ctx, r, d, zi, r.data === o.azi)).join('')
+  const numeLuna = `${LUNI[o.luna - 1] ?? ''} ${o.an}`
+  const felul = o.cruce ? CRUCILE[o.cruce] : null
+  const lunaSir = `${o.an}-${String(o.luna).padStart(2, '0')}`
   return pagina({
     ...comune(o.ctx),
-    titluPagina: `Calendar ${LUNI[o.luna - 1]} ${o.an}`,
-    indexabil: true,
+    titluPagina: felul ? `${felul.nume} · ${numeLuna}` : `Calendar ${numeLuna}`,
+    // paginile filtrate nu se dau la indexat: e acelasi continut, ciuntit
+    indexabil: !o.cruce,
     metaExtra: `<meta name="description" content="Calendarul creștin ortodox — ${LUNI[o.luna - 1]} ${o.an}, zi de zi. Copie a calendarului oficial al Patriarhiei Române.">`,
-    unelte: unelte({ ctx: o.ctx, navigarea: sirulLunilor(o.ctx, o.an, o.luna, o.azi) }),
+    unelte: unelte({
+      ctx: o.ctx,
+      navigarea: sirulLunilor(o.ctx, o.an, o.luna, o.azi, o.cruce),
+      ...(o.cruce ? { felActiv: o.cruce } : {}),
+      luna: lunaSir,
+    }),
     subantet: fereastraAbonare(o.ctx),
     scripturi: script(o.ctx.prefix),
     corp: `${o.mesajAbonare ? `<p class="an-calculat">${esc(o.mesajAbonare)}</p>` : ''}
 ${o.calculat ? `<p class="an-calculat">${esc(NOTA_GENERAT)}</p>` : ''}
-<h2 class="luna">${esc(LUNI[o.luna - 1] ?? '')} ${o.an}</h2>
+${o.cruce ? butonToateLunile(o.ctx, o.cruce, o.an, false) : ''}
+<h2 class="luna">${esc(numeLuna)}${felul ? ` · <span class="fel-filtru">${esc(felul.scurt)}</span>` : ''}</h2>
 <div class="zile">
 ${corp}</div>
+${corp ? '' : `<p class="gol">${esc(numeLuna)} n-are nicio zi însemnată cu cruce ${esc(felul?.scurt ?? '')}.</p>`}
 
 <dialog class="fereastra" id="fereastra" aria-label="textele zilei">
   <div class="bara-fereastra"><button type="button" class="inchide" aria-label="Închide">×</button></div>
@@ -553,7 +622,9 @@ export function paginaZi(o: { ctx: Ctx; r: RandZi; d: RandDesfacut; zi: ZiLiturg
     titluPagina: `${numeParte ? `${numeParte} · ` : ''}${numeZi} · ${o.r.zi} ${LUNI[o.r.luna - 1]} ${o.r.an}`,
     indexabil: true,
     // navigarea sta pe TOATE paginile, cu luna zilei marcata — in ea esti
-    unelte: unelte({ ctx: o.ctx, navigarea: sirulLunilor(o.ctx, o.r.an, o.r.luna, o.azi) }),
+    // filtrele lucreaza peste luna ZILEI deschise: de pe ziua de 13 septembrie, „cruce roșie" duce la
+    // septembrie filtrat, nu la un an intreg
+    unelte: unelte({ ctx: o.ctx, navigarea: sirulLunilor(o.ctx, o.r.an, o.r.luna, o.azi), luna: `${o.r.an}-${String(o.r.luna).padStart(2, '0')}` }),
     subantet: fereastraAbonare(o.ctx),
     scripturi: JS_NAV + JS_ABONARE,
     clasaCorp: `pagina-zi ${o.r.zi_saptamana === 0 ? 'duminica' : ''} ${o.r.cruce ? `cruce-${o.r.cruce}` : ''}`,
@@ -604,32 +675,24 @@ export const CRUCILE: Record<FelCruce, { nume: string; scurt: string; lamurire: 
   },
 }
 
-function lunileListei(ctx: Ctx, fel: FelCruce, an: number, luna: number | undefined, cuZile: Set<number>): string {
-  const p = esc(ctx.prefix)
-  const catre = (l?: number) => `${p}/sarbatori/cruce-${fel}/${an}${l ? `-${String(l).padStart(2, '0')}` : ''}`
-  const toate = luna ? `<a class="toate" href="${catre()}">toate lunile</a>` : `<b class="toate acum">toate lunile</b>`
-  const lunile = LUNI.map((numeLunii, i) => {
-    const l = i + 1
-    const scurt = esc(numeLunii.slice(0, 3))
-    if (l === luna) return `<b class="acum" title="${esc(numeLunii)}">${scurt}</b>`
-    if (!cuZile.has(l)) return `<span class="gol" title="${esc(numeLunii)} — nicio zi">${scurt}</span>`
-    return `<a href="${catre(l)}" title="${esc(numeLunii)}">${scurt}</a>`
-  }).join('')
-  return `<nav class="luni-alege">${toate}${lunile}</nav>`
-}
-
+/**
+ * LISTA UNUI FEL DE CRUCE PESTE ANUL INTREG — starea „toate lunile" a filtrului. Se ajunge aici
+ * deselectand luna; pe luna, filtrul se vede in `paginaLuna`.
+ *
+ * ⚠️ Grila de douasprezece luni de aici a IESIT (user, 12.09.2026, 11:13: „nu mai are acea filtrare în
+ * partea de sus, ci doar butonul cu toate lunile"). Lunile se aleg din pastila de sus, ca peste tot;
+ * in locul grilei a ramas butonul „Toate lunile", marcat, fiindca aici chiar esti pe toate.
+ */
 export function paginaSarbatori(o: {
   ctx: Ctx
   fel: FelCruce
   an: number
-  luna?: number
   randuri: Array<{ r: RandZi; d: RandDesfacut; zi: ZiLiturgica }>
-  cuZile: Set<number>
   calculat: boolean
   azi: string
 }): string {
   const p = esc(o.ctx.prefix)
-  const unde = o.luna ? `${LUNI[o.luna - 1]} ${o.an}` : String(o.an)
+  const unde = String(o.an)
   const celalalt: FelCruce = o.fel === 'rosie' ? 'neagra' : 'rosie'
   const peLuni = LUNI.map((numeLunii, i) => {
     const grup = o.randuri.filter((x) => x.r.luna === i + 1)
@@ -648,8 +711,9 @@ ${grup.map((x) => randZi(o.ctx, x.r, x.d, x.zi, x.r.data === o.azi)).join('')}</
     metaExtra: `<meta name="description" content="${esc(CRUCILE[o.fel].nume)} în ${esc(unde)}, din calendarul creștin ortodox al Patriarhiei Române.">`,
     // ⚠️ Navigarea se scrie si aici (user, 12.09.2026: „să nu se mai ascundă când intru pe sărbători
     // cruce neagră roșie") — randul are aceeasi forma pe toate paginile, ca la Program. Fara luna
-    // marcata (`0`): aici nu esti intr-o luna a calendarului, ci intr-o lista peste tot anul.
-    unelte: unelte({ ctx: o.ctx, navigarea: sirulLunilor(o.ctx, o.an, 0, o.azi), felActiv: o.fel }),
+    // marcata (`0`) si fara `luna` in unelte: aici filtrul tine anul intreg, nicio luna nu e aleasa,
+    // iar lunile din pastila duc la luna aceea CU filtrul pus.
+    unelte: unelte({ ctx: o.ctx, navigarea: sirulLunilor(o.ctx, o.an, 0, o.azi, o.fel), felActiv: o.fel }),
     subantet: fereastraAbonare(o.ctx),
     scripturi: JS_NAV + JS_ABONARE,
     clasaCorp: 'sarbatori',
@@ -659,13 +723,13 @@ ${grup.map((x) => randZi(o.ctx, x.r, x.d, x.zi, x.r.data === o.azi)).join('')}</
   <p class="cate">${o.randuri.length} ${o.randuri.length === 1 ? 'zi' : 'zile'} în ${esc(unde)}</p>
   <p class="sursa">${esc(CRUCILE[o.fel].lamurire)}</p>
 </div>
-${lunileListei(o.ctx, o.fel, o.an, o.luna, o.cuZile)}
+${butonToateLunile(o.ctx, o.fel, o.an, true)}
 ${o.calculat ? `<p class="an-calculat">${esc(NOTA_GENERAT)}</p>` : ''}
-${peLuni || `<p class="gol">${o.luna ? `${esc(LUNI[o.luna - 1] ?? '')} ${o.an} n-are` : `Anul ${o.an} n-are`} nicio zi însemnată cu cruce ${esc(CRUCILE[o.fel].scurt)}.</p>`}
+${peLuni || `<p class="gol">Anul ${o.an} n-are nicio zi însemnată cu cruce ${esc(CRUCILE[o.fel].scurt)}.</p>`}
 
 <nav class="vecini">
   <a href="${p}/${o.an}">← Înapoi</a>
-  <a href="${p}/sarbatori/cruce-${celalalt}/${o.an}${o.luna ? `-${String(o.luna).padStart(2, '0')}` : ''}">${esc(CRUCILE[celalalt].nume)} →</a>
+  <a href="${p}/sarbatori/cruce-${celalalt}/${o.an}">${esc(CRUCILE[celalalt].nume)} →</a>
 </nav>`,
   })
 }

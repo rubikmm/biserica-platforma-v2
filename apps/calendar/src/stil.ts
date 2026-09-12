@@ -92,15 +92,19 @@ html { scroll-padding-top:130px }
         color:var(--faint); margin:0 0 10px }
 .sarbatori .sursa { margin:0 }
 
-.luni-alege { display:grid; grid-template-columns:repeat(6,1fr); gap:7px; margin:18px 0 6px }
-.luni-alege > * { display:block; text-align:center; padding:9px 2px; border-radius:8px;
-                  border:1px solid var(--rule); background:var(--paper); color:var(--soft);
-                  text-decoration:none; font:600 12px/1 ui-sans-serif,system-ui;
-                  letter-spacing:.06em; text-transform:uppercase }
-.luni-alege .toate { grid-column:1 / -1; letter-spacing:.1em }
-.luni-alege a:hover { color:var(--rosu); border-color:var(--rosu) }
-.luni-alege .acum { color:var(--paper); background:var(--rosu); border-color:var(--rosu) }
-.luni-alege .gol { opacity:.3 }
+/* „TOATE LUNILE" — singurul buton ramas din grila de douasprezece luni a paginii de sarbatori (user,
+   12.09.2026: lunile se aleg din pastila de sus, aici a mai ramas doar deselectarea lunii). Se scrie
+   numai cand un filtru de cruce e pus. Apasat (esti pe tot anul), e rosu si nu mai duce nicaieri. */
+.rand-filtru { margin:18px 0 2px }
+.toate-lunile { display:inline-block; flex:none; padding:9px 16px; border-radius:999px;
+                border:1px solid var(--rule); background:var(--paper); color:var(--soft);
+                text-decoration:none; font:600 12px/1 ui-sans-serif,system-ui;
+                letter-spacing:.1em; text-transform:uppercase }
+.toate-lunile:hover { color:var(--rosu); border-color:var(--rosu) }
+.toate-lunile.activ { color:var(--paper); background:var(--rosu); border-color:var(--rosu);
+                      font-weight:700 }
+/* felul crucii, scris langa numele lunii, ca sa se stie din titlu ce lista se vede */
+h2.luna .fel-filtru { color:var(--rosu) }
 
 /* Pe telefon butoanele de sub pastila isi lasa cuvintele si raman numai iconitele: cu ele, abonarea
    si cele doua liste cer ~446 px, iar un telefon de 390 are 335 de folosit. Numele intreg sta in

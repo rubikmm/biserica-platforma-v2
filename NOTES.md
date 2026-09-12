@@ -389,9 +389,47 @@ Când se leagă cu adevărat, capătă `action` către `POST /abonare` (ruta a r
 
 ## Calendarul (A1) — antetul, refăcut la 12.09.2026
 
-Rândul de unelte al calendarului a fost refăcut într-o singură dimineață, la opt cereri ale
+Rândul de unelte al calendarului a fost refăcut într-o singură dimineață, la zece cereri ale
 utilizatorului. **TOTUL STĂ PE O SINGURĂ LINIE** (cerut anume, 10:55: „butoanele au coborât jos - să
 fie totul pe o linie"), în ordinea: **pastila navigării · Abonare · | · Cruce roșie · Cruce neagră**.
+
+### ⚠️ BARA E UN SET DE FILTRE, nu un rând de destinații
+
+Aceasta e cheia întregului antet (user, 11:12: „tot ce este în bara de sus, cu excepția butonului de
+azi, este ca un filtru"). Nu mai există „pagina de sărbători" ca destinație de sine stătătoare: sunt
+**stări ale aceleiași liste**, iar bara arată care stare e pusă.
+
+- **Filtrul de lună** — pastila. Alegi o lună, se arată luna aceea.
+- **Filtrul de fel** — cele două butoane. **Roșie** lasă zilele cu cruce roșie **și duminicile**
+  („rămân doar Sfinții cu cruce roșie și duminicile din acea lună" — duminica e sărbătoare chiar când
+  nu poartă însemnul); **neagra** lasă doar zilele cu cruce neagră, fără duminici. Sunt **reciproc
+  exclusive** (cerut anume) și se sting apăsând încă o dată pe cel aprins.
+- **Se păstrează unul pe altul**: schimbi luna, filtrul crucii rămâne pus; schimbi felul, luna rămâne.
+  De aceea adresele se scriu una din alta.
+- **„Toate lunile"** deselectează luna și întinde filtrul peste anul curent (user, 11:13). Butonul se
+  scrie **numai când un filtru de fel e pus** — fără el, „toate lunile" ar însemna tot calendarul, o
+  listă de 365 de zile pe care n-a cerut-o nimeni. Pe lista anului e marcat și neapăsabil.
+- **Bulina „azi" NU e filtru** (spus explicit) și nu duce filtrul cu ea: înseamnă „arată-mi ziua de
+  azi", iar ziua de azi poate să nu fie în lista filtrată.
+- **Abonarea** e singurul lucru din bară care nu filtrează — de aceea stă despărțită de bara verticală.
+
+Stările și adresele lor:
+
+| ce se vede | adresă |
+| --- | --- |
+| luna întreagă | `/<an>-<luna>` |
+| luna, numai zilele roșii și duminicile | `/<an>-<luna>?cruce=rosie` |
+| luna, numai zilele negre | `/<an>-<luna>?cruce=neagra` |
+| anul întreg, un fel („toate lunile") | `/sarbatori/cruce-<fel>/<an>` |
+
+⚠️ **Grila de douăsprezece luni de pe vechea pagină de sărbători a ieșit** — lunile se aleg din pastila
+de sus, ca peste tot; în locul ei a rămas doar „Toate lunile".
+⚠️ **`/sarbatori/cruce-<fel>/<an>-<luna>` face acum redirect** către `/<an>-<luna>?cruce=<fel>`:
+adresa cu lună a fost înlocuită de filtru, dar legăturile vechi nu trebuie să cadă.
+⚠️ **Un singur predicat, `trecePrinFiltru`**, și pe lună, și pe an — de aceea lista anului nu mai vine
+din `zileleCuCruce` (care nu știa de duminici), ci din `randurileAnului` filtrat. Altfel filtrul ar fi
+însemnat două lucruri deosebite, după cât de larg te uiți.
+⚠️ Paginile filtrate **nu se dau la indexat**: e același conținut, ciuntit.
 
 - **NAVIGAREA A URCAT ÎN ANTET** („mută navigarea sus"). Șirul lunilor stătea în corp, sub antet, și
   fugea la derulare; antetul e lipicios, deci acum lunile rămân la îndemână pe toată pagina.
@@ -680,7 +718,11 @@ forța antetul `Host`**.
   meniul „Informații utile" a fost înlocuit cu două butoane cu iconiță, iar clicul pe Abonare deschide
   fereastra de la Program; **apoi** (staging 0.3.1) navigarea a devenit **pastilă ca la Program**, cu
   lunile text în capsulă, derulabilă cu degetul, și a fost pusă **pe toate paginile**, nu doar pe lista
-  lunii. 103 teste, `tsc` curat. Amănuntele și măsurile: secțiunea **Calendarul (A1) — antetul**.
+  lunii; **la urmă** (staging 0.4.0) utilizatorul a dat întregului antet înțelesul care lipsea —
+  **bara e un set de filtre**: lunile filtrează, crucile filtrează peste luna aleasă și se exclud
+  reciproc, „Toate lunile" deselectează luna. Pagina de sărbători a încetat să fie o destinație și a
+  devenit starea „toate lunile" a filtrului. 103 teste, `tsc` curat. Amănuntele și măsurile: secțiunea
+  **Calendarul (A1) — antetul**.
   ⚠️ Pe drum, pastila a stat o clipă pe un rând al ei (așa încap toate lunile), dar utilizatorul a
   cerut **totul pe o linie** — așa a rămas.
   ⚠️ **Trei greșeli prinse cu poza, nu cu ochiul**: rândul rupt în două (`flex:1 1 auto`), lunile care
