@@ -395,11 +395,16 @@ function capulFiltrat(zi: ZiLiturgica, d: RandDesfacut, fel: FelCruce): { titlu:
   if (fel === 'rosie' && d.eDuminica) return { titlu: capulZilei(d), dinSfinti: false }
   const alesi = zi.sfinti.filter((s) => RANGURILE[fel].includes(s.rang))
   if (!alesi.length) return { titlu: capulZilei(d), dinSfinti: false }
-  // albastrul sfintilor romani ramane — e insusirea lor, nu felul crucii (vezi RANGURILE)
+  // ⚠️ CULOAREA VINE DIN RANGUL SFANTULUI, aceeasi regula ca la sfintii de sub titlul duminicii
+  // (`sfintiiZilei`): rosu la cruce rosie si la praznice, albastru la sfintii romani. Cand capul zilei
+  // se scrie din sfinti, marcajul de culoare al sursei se pierde — asa au ajuns sarbatorile cu cruce
+  // rosie sa fie scrise cu cerneala in lista lor (user, 12.09.2026, 13:04: „nu sunt notate cu roșu,
+  // cum sunt duminicile"). Rosul ramane al crucii rosii, sfant cu sfant.
   const titlu = alesi
     .map((s) => {
       const text = esc(`${s.semn ? `${s.semn} ` : ''}${s.nume}`)
-      return s.rang === 'cruce_albastra' ? `<span class="c-albastru">${text}</span>` : text
+      const clasa = s.rang === 'cruce_albastra' ? 'c-albastru' : RANGURILE.rosie.includes(s.rang) ? 'c-rosu' : ''
+      return clasa ? `<span class="${clasa}">${text}</span>` : text
     })
     .join('; ')
   return { titlu, dinSfinti: true }

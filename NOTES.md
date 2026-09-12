@@ -442,6 +442,13 @@ fiindcă ziua e „duminica", nu „neagra". Felul zilei a rămas doar ca plasă
 primește rangul ăsta chiar dacă semnul lui spune altceva. Rangul nu mai poate răspunde atunci la „ce
 culoare are crucea?" — de aceea alegerea se face în `pagini.ts` (`RANGURILE`), nu în traducere. Dacă
 vreodată se desparte culoarea (român/local) de însemn în `Rang`, locul acela se simplifică.
+⚠️ **CULOAREA, ÎN LISTELE FILTRATE, VINE DIN RANGUL SFÂNTULUI** — aceeași regulă ca la sfinții de sub
+titlul duminicii: roșu la cruce roșie și la praznice, albastru la sfinții români. Când capul zilei se
+scrie din sfinți, marcajul de culoare al sursei se pierde; așa ajunseseră sărbătorile cu cruce roșie
+să fie scrise cu cerneală în lista lor (user, 13:04: „nu sunt notate cu roșu, cum sunt duminicile").
+⚠️ **Și data zilei cu cruce roșie se scrie roșu**, nu doar a duminicii (`.zi.cruce-rosie .nr`) — ca în
+calendarul tipărit, unde ziua cu ținere e roșie cu totul. **Fundalul palid rămâne însă numai al
+duminicii**: el spune „e duminică", nu „e sărbătoare".
 ⚠️ Două lucruri de înfățișare, în lista **neagră**: capul zilei nu se mai scrie roșu la duminici
 (`.zi.fara-rosu`) — roșul ar spune „sărbătoare cu ținere", taman ce lista nu cuprinde —, iar rândul de
 sfinți de sub titlu nu se mai scrie când titlul s-a făcut DIN sfinți (altfel duminica își spunea de

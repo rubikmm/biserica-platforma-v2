@@ -200,7 +200,11 @@ h2.luna { font:400 13px/1 ui-sans-serif,system-ui; letter-spacing:.2em; text-tra
 
 .cand { text-align:right; padding-top:1px; line-height:1.2; text-decoration:none; display:block }
 .nr { display:block; font-size:20px; color:var(--ink) }
-.zi.duminica .nr { color:var(--rosu) }
+/* ⚠️ Si ziua cu CRUCE ROSIE isi scrie data cu rosu, nu doar duminica (user, 12.09.2026, 13:04:
+   „sărbătorile cu Crucea Roșie nu sunt notate cu roșu, cum sunt duminicile"). Asa e si in calendarul
+   tiparit: ziua cu tinere se scrie rosu cu totul. Fundalul palid ramane insa numai al duminicii — el
+   spune „e duminica", nu „e sarbatoare". */
+.zi.duminica .nr, .zi.cruce-rosie .nr { color:var(--rosu) }
 .zs { display:block; font:11px/1.4 ui-sans-serif,system-ui; color:var(--faint);
       text-transform:uppercase; letter-spacing:.05em }
 .cand:hover .nr { color:var(--rosu) }
@@ -231,6 +235,7 @@ h2.luna { font:400 13px/1 ui-sans-serif,system-ui; letter-spacing:.2em; text-tra
    neagra, iar rosul ar spune „sarbatoare cu ținere" — taman ce lista aceasta nu cuprinde. Numarul
    zilei ramane rosu: acolo rosul spune doar „e duminica". */
 .zi.fara-rosu.duminica .titlu-zi { color:var(--ink) }
+.zi.fara-rosu .nr { color:var(--ink) }
 
 .semne { margin-top:5px; display:flex; flex-wrap:wrap; gap:5px }
 .semn { font:11px/1 ui-sans-serif,system-ui; letter-spacing:.03em; padding:4px 8px;
