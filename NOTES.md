@@ -376,6 +376,11 @@ propunerea automată, ca în V1.
 
 ## Stare tehnică
 
+⚠️ **„LIVE" înseamnă STAGING** cât timp nu s-a făcut cutover-ul (user, 13.09.2026: „Live = staging
+pana nu facem cutover"). Când cere ceva „pe live", locul e `*.staging.sfantul-ilie.ro`. Producția V2
+e goală — **zero workeri `xc-*-production`**, fără resurse și fără rute —, iar pe subdomeniile
+parohiei trăiesc încă aplicațiile V1. Mutarea rutelor rămâne pas explicit, cerut anume.
+
 - **Local**: `https://rubik:8474` (container `biserica-platforma-v2`). 11 workeri prin
   `wrangler dev`, gateway pe `/`. Email în sandbox: codul apare în pagină.
 - **Modulul de chat pe staging** (11.09.2026, seara): publicat și **aprins** — `xc-chat-staging`
