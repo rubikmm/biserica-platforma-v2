@@ -45,6 +45,8 @@ export interface Env {
   AUTORIZARE: Fetcher
   AUDIT: Fetcher
   COMUNICARE: Fetcher
+  /** Biblia (A10): de la ea vine textul pericopelor, prin Service Binding. */
+  BIBLIA: Fetcher
   /** Browser Rendering — din el iese poza saptamanii. */
   BROWSER: Fetcher
   EVENIMENTE: Queue
@@ -52,6 +54,7 @@ export interface Env {
   ORIGINE_PUBLICA: string
   DOMENIU_COOKIE: string
   EMAIL_SUPERADMIN: string
+  /** Adresa PUBLICA a Bibliei — numai pentru legatura pe care o apasa omul. */
   URL_BIBLIA: string
   /** Data publicarii, pentru subsol — binding-ul `version_metadata`. */
   VERSIUNE?: { timestamp?: string }
@@ -131,10 +134,10 @@ async function ziuaCompleta(env: Env, data: string, ani: number[], versiune: str
 async function textele(env: Env, r: RandZi, zi: ZiLiturgica, d: ReturnType<typeof desfaRandul>): Promise<TexteZilei> {
   const [sinaxar, apostol, evanghelie, voscreasna, ...inPlus] = await Promise.all([
     r.calculat ? Promise.resolve(null) : textulZilei(env.DB, r.data),
-    zi.pericope.apostol ? textulPericopei(env.URL_BIBLIA, zi.pericope.apostol) : Promise.resolve(null),
-    zi.pericope.evanghelie ? textulPericopei(env.URL_BIBLIA, zi.pericope.evanghelie) : Promise.resolve(null),
+    zi.pericope.apostol ? textulPericopei(env.BIBLIA, env.URL_BIBLIA, zi.pericope.apostol) : Promise.resolve(null),
+    zi.pericope.evanghelie ? textulPericopei(env.BIBLIA, env.URL_BIBLIA, zi.pericope.evanghelie) : Promise.resolve(null),
     zi.evanghelia_invierii && VOSCRESNE[zi.evanghelia_invierii]
-      ? textulPericopei(env.URL_BIBLIA, VOSCRESNE[zi.evanghelia_invierii]!).then((t) => ({ nr: zi.evanghelia_invierii!, text: t }))
+      ? textulPericopei(env.BIBLIA, env.URL_BIBLIA, VOSCRESNE[zi.evanghelia_invierii]!).then((t) => ({ nr: zi.evanghelia_invierii!, text: t }))
       : Promise.resolve(null),
     // citirile in plus din titlu (ale ierarhului, ale sfantului), dupa cele doua de rand
     ...d.citiri
@@ -142,7 +145,7 @@ async function textele(env: Env, r: RandZi, zi: ZiLiturgica, d: ReturnType<typeo
       .map((c) => canonizeazaReferinta(c))
       .filter((c) => c && c !== zi.pericope.apostol && c !== zi.pericope.evanghelie)
       .slice(0, 4)
-      .map((c) => textulPericopei(env.URL_BIBLIA, c)),
+      .map((c) => textulPericopei(env.BIBLIA, env.URL_BIBLIA, c)),
   ])
   return { sinaxar, apostol, evanghelie, voscreasna, inPlus: inPlus as PericopaCuText[] }
 }
@@ -470,8 +473,8 @@ async function api(req: Request, env: Env, ctxExec: ExecutionContext, prefix: st
     const ref = nrVoscr >= 1 && nrVoscr <= 11 ? VOSCRESNE[nrVoscr]! : refCerut
     if (!ref) return eroareApi(400, 'referinta_lipsa', 'Cere ?ref=<referință> sau ?voscreasna=<1..11>.')
     if (ref.length > 120) return eroareApi(400, 'referinta_invalida', 'Referința e prea lungă.')
-    const text = await textulPericopei(env.URL_BIBLIA, ref)
-    return jsonCuEtag(req, { referinta: text.referinta, voscreasna: nrVoscr >= 1 && nrVoscr <= 11 ? nrVoscr : null, bucati: text.bucati, sursa: 'Biblia — biblia.sfantul-ilie.ro' }, cache)
+    const text = await textulPericopei(env.BIBLIA, env.URL_BIBLIA, ref)
+    return jsonCuEtag(req, { referinta: text.referinta, voscreasna: nrVoscr >= 1 && nrVoscr <= 11 ? nrVoscr : null, bucati: text.bucati, sursa: `Biblia — ${(env.URL_BIBLIA || '/biblia').replace(/^https:\/\//, '')}` }, cache)
   }
 
   const mZi = /^\/v1\/zi\/([^/]+)$/.exec(cale)

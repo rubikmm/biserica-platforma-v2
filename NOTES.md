@@ -47,7 +47,29 @@ Etape:
 1. ✅ **Nucleul** — monorepo, identitate fără parolă (email → cod de 6 cifre), autorizare centrală,
    contracte, evenimente, audit, automatizare, comunicare, home.
 2. ✅ **Staging** — publicat pe `*.staging.sfantul-ilie.ro`, email real prin Cloudflare Email Service.
-3. ⏳ **Portarea aplicațiilor**: ✅ calendar (A1), ✅ program (A2), ✅ tipic (A9), ⏳ curățenie (A6), apoi A10 → A3/A8 → A12 → A7 → A5 → A4 → A13 se stinge.
+3. ⏳ **Portarea aplicațiilor**: ✅ calendar (A1), ✅ program (A2), ✅ tipic (A9), ✅ biblia (A10), ⏳ curățenie (A6), apoi A3/A8 → A12 → A7 → A5 → A4 → A13 se stinge.
+
+**Biblia (A10)**: Vechiul și Noul Testament, pe cărți, capitole și versete — ediția **sinodală**,
+preluată în V1 de pe bibliaortodoxa.ro (hotărâre user, 27 aug. 2026). Cele **80 de cărți** (39 VT +
+14 anaginoscomena + 27 NT) stau în JSON, una pe fișier, în depozit propriu: **`xc-biblia-staging`**,
+bucket NOU — s-au copiat din bucketul V1 `biserica-biblia`, obiect cu obiect, nu s-a refolosit nimic.
+Portată pe 13.09.2026 din `biserica-biblia` v0.8.4, cu afișarea, markup-ul și textele de acolo.
+Ce s-a schimbat față de V1, și de ce:
+- pagina e **deschisă** (V1 cerea cont) — „totul la liber, deocamdată";
+- carcasa vine din `@xc/ui`, nu din `src/comun/` copiat în aplicație;
+- textele văzute de om s-au scris **cu diacritice** acolo unde V1 le pierduse („Căutare în text:",
+  „80 de cărți citite", „Nu am înțeles referința") — aceleași cuvinte, aceeași ordine;
+- **PDF-urile n-au ce căuta aici**: Biblia n-are cărți scanate, ca Tipicul.
+Rutele sunt cele din contractul V1, întregi: `/`, `/carte/<slug>[/<cap>]`, `/cauta?q=`, `/pasaj?ref=`
+(redirect la capitol), plus API-ul `/v1`, `/v1/carti`, `/v1/pasaj?ref=`, `/v1/cauta?q=[&carte=&max=]`
+și **adresa stabilă** `/v1/<slug>/<cap>[/<verset>[-<până>]]`.
+⚠️ **Adresele stabile sunt PERMANENTE** odată publicate: buletinul și newsletterul citează prin ele.
+⚠️ **Calendarul cere textul prin Service Binding** (`BIBLIA`), nu prin internet: până pe 13.09.2026
+`URL_BIBLIA` arăta spre worker-ul V1 `biblia.sfantul-ilie.ro`, deci pericopele din Calendar și din
+Tipic veneau, pe staging, tot din V1. Acum `URL_BIBLIA` rămâne doar pentru **legătura pe care o apasă
+omul** (`/carte/<slug>/<cap>#v<nr>`); în dev e gol și se face `/biblia`, calea gateway-ului.
+Citirea referinței (versete discontinue, treceri peste capitol, „și") e codul V1 mutat cuvânt cu
+cuvânt, cu probă a lui: `tests/referinte-biblia.test.ts`.
 
 **Tipicul (A9)**: rânduiala slujbei zilei, trei cărți așezate una sub alta, ca în V1 (user, 1 sept.
 2026): **Rânduiala Tipicului** (ROEA, 97 de zile) spune CE se face, **Anuarul liturgic și tipiconal**
@@ -134,6 +156,16 @@ propunerea automată, ca în V1.
     de rol; regula a fost cerută pentru calendar. De întrebat utilizatorul dacă același fel de trepte
     se cuvine și la Program/Tipic, și ce anume se închide acolo — altfel platforma capătă câte o regulă
     de vizibilitate pe aplicație, ceea ce e tocmai ce n-a vrut la structura mare.
+
+11. **Biblia (A10), ce a rămas după portare** (13.09.2026):
+    - **fereastra de abonare de la Tipic nu e legată de rute** — ca la Calendar și la Program, e
+      deocamdată numai înfățișare; când se leagă una, se leagă toate trei deodată;
+    - **căutarea în text citește toate cele 80 de cărți din R2** la fiecare cerere rece (așa era și în
+      V1). Merge, dar dacă ajunge să fie folosită des, textul cere un index — nu o memorie mai mare;
+    - Biblia **n-are acțiuni de chat** (`/_actiuni`): calendarul e cel care vorbește cu ea, deci o
+      unealtă „caută în Biblia" ar dubla legătura. De hotărât dacă se vrea totuși;
+    - ⚠️ **CSS-ul pastilei e acum în trei copii** (Program, Calendar, Tipic). La a patra cerere, locul
+      lui e `@xc/ui` — dar atunci se republică toate cele șase aplicații care folosesc carcasa.
 
 ## Aplicațiile de pe staging
 
@@ -861,6 +893,33 @@ forța antetul `Host`**.
 ## Jurnal
 
 ### 2026-09-13
+
+- **BIBLIA (A10) portată în V2** (user: „să portăm și biblia"). Worker nou `xc-biblia-staging` pe
+  `biblia.staging.sfantul-ilie.ro`, cu depozit NOU `xc-biblia-staging`: cele **82 de obiecte** ale
+  bucketului V1 (index, pericope, 80 de cărți) copiate unul câte unul cu `wrangler r2 object get/put`.
+  Amănuntele, sus, la „Biblia (A10)". Probe: 10 în `tests/referinte-biblia.test.ts`; căutarea în text
+  citește toate cele 80 de cărți și răspunde („manastire" găsește „mănăstire").
+  - ⚠️ **Legătura cu V1 s-a rupt abia acum**: `URL_BIBLIA` din calendar arăta spre worker-ul V1, deci
+    textul pericopelor — și în Calendar, și în Tipic — venea din V1 chiar pe staging. Acum calendarul
+    cere prin **Service Binding** `BIBLIA`; adresa publică a rămas doar pentru legătura omului.
+  - Înregistrată peste tot: `packages/config` (`URL_BIBLIA` + `nav.biblia`), gateway (`/biblia`),
+    `pnpm dev`, butonul din `home` (0.1.4) și `URL_BIBLIA` la `cont` (0.1.4). Calendar **0.7.1**.
+  - ⚠️ Rămâne al V1: **PDF-urile cărților tipicului**; Biblia n-avea cărți scanate, deci n-a rămas nimic.
+
+- **Rândul de unelte al Tipicului, refăcut după Program și Calendar** (user, 16:35: „meniul principal
+  să semene ca la Program și Calendar - vom avea abonare pe aceleași principii"; 16:39: „să fie
+  abonare și calendar", „și ieri nu are sens"). Tipic **0.2.0** pe staging.
+  - **Pastila** e cea `larga` de la Program, cu două segmente: **bulina** zilei de azi (fără text) și
+    **„Mâine"**, care ia prisosul de lățime. Treptele sunt socotite față de ZIUA DE AZI, ca la Program;
+    pe o zi venită din calendar niciun segment nu e marcat. **„Ieri" nu există, cerut anume.**
+  - După pastilă, **Abonarea** — butonul și fereastra luate cuvânt cu cuvânt de la Program prin
+    Calendar, cu tot cu câmpul de e-mail și cele două bife; ca acolo, e deocamdată doar înfățișare.
+    Butonul îl văd toți, și adminii (regula celor două aplicații, acum a trei).
+  - La dreapta, după bara verticală, **calendarul**: aceeași iconiță și același lucru, dar buton mic
+    (`.mic`), nu unul lat cât o treime din rând. Poze pe 1100 px și pe 390 px: rândul ține o linie la
+    amândouă, iar pe telefon cade doar cuvântul „Abonare", plicul rămâne.
+  - ⚠️ CSS-ul pastilei e **a treia copie** (Program, Calendar, acum Tipic). Dacă se mai cere o dată,
+    locul lui e `@xc/ui` — dar atunci se republică toate cele șase aplicații.
 
 - **Filtrele calendarului au căpătat trepte de rol** (user, 01:26, regulă nouă: „sunt felul cum
   afectează rolul userului a ce vede în app"): neautentificatul niciun filtru, utilizatorul cele două

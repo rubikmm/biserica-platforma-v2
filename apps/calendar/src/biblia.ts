@@ -4,6 +4,10 @@
  *
  * A10 raspunde la `GET /v1/pasaj?ref=<referinta>` cu
  * `{ referinta, carte, slug, capitol, versete: [{ numar, text, capitol }], sursa }`.
+ *
+ * Din 13.09.2026 Biblia e in V2, deci cererea merge prin SERVICE BINDING (`BIBLIA`), nu prin
+ * internet: asa vorbesc intre ei workerii platformei, si asa merge si in `wrangler dev`. Adresa
+ * publica ramane doar pentru legatura pe care o apasa OMUL (`/carte/<slug>/<capitol>#v<numar>`).
  */
 import { canonizeazaReferinta } from './titluri.js'
 
@@ -73,21 +77,22 @@ interface RaspunsPasaj {
   versete?: Array<{ numar: number; text: string; capitol?: number }>
 }
 
-export async function textulPericopei(urlBiblia: string, ref: string): Promise<PericopaCuText> {
+export async function textulPericopei(biblia: Fetcher, urlPublic: string, ref: string): Promise<PericopaCuText> {
+  const baza = urlPublic || '/biblia'
   const bucati = bucatile(ref)
   const rezultate = await Promise.all(
     bucati.map(async (b): Promise<BucataPericopa> => {
-      const adresa = `${urlBiblia}/v1/pasaj?ref=${encodeURIComponent(b)}`
+      const cautare = `/v1/pasaj?ref=${encodeURIComponent(b)}`
+      const adresa = `${baza}${cautare}`
       try {
-        const r = await fetch(adresa, {
+        const r = await biblia.fetch(`https://biblia.intern${cautare}`, {
           headers: { accept: 'application/json' },
-          cf: { cacheTtl: 86400, cacheEverything: true },
-        } as RequestInit)
+        })
         if (!r.ok) return { referinta: b, adresa, versete: null, nota: `Biblia a răspuns ${r.status}` }
         const j = (await r.json()) as RaspunsPasaj
         const versete = (j.versete ?? []).map((v) => ({ numar: v.numar, text: v.text, capitol: v.capitol }))
         const primul = versete[0]
-        const adresaOm = j.slug && j.capitol ? `${urlBiblia}/carte/${j.slug}/${j.capitol}${primul ? `#v${primul.numar}` : ''}` : adresa
+        const adresaOm = j.slug && j.capitol ? `${baza}/carte/${j.slug}/${j.capitol}${primul ? `#v${primul.numar}` : ''}` : adresa
         return { referinta: b, adresa: adresaOm, versete: versete.length ? versete : null, ...(versete.length ? {} : { nota: 'fără text' }) }
       } catch (e) {
         return { referinta: b, adresa, versete: null, nota: e instanceof Error ? e.message : 'Biblia nu răspunde' }

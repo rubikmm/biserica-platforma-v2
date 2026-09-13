@@ -153,6 +153,98 @@ h3 { font-size:20px; font-weight:600; color:var(--capitol);
    carcasei; aici e singura aplicatie care scrie versete, deci regula sta local). */
 .vers b { color:var(--faint); font:600 12px ui-sans-serif,system-ui; margin-right:4px }
 
+/* RANDUL DE UNELTE din antet, refacut dupa Program si Calendar (user, 13.09.2026: „meniul principal
+   să semene ca la Program și Calendar… să fie abonare și calendar"). Doua grupuri: la stanga pastila
+   navigarii si abonarea, la dreapta — lipit de margine, dupa bara verticala — calendarul.
+   ⚠️ Regulile de mai jos sunt COPIATE din Program (pastila, bulina, segmentul cu scris) si din
+   Calendar (butoanele mici, bara, fereastra). Daca se schimba forma pastilei intr-un loc, se schimba
+   in toate trei: tocmai asemanarea lor a fost ceruta. */
+
+/* carcasa comuna lasa randul sa se rupa; aici, ca la Program, butoanele se string in loc sa sara */
+.btns { flex-wrap:nowrap }
+.btns .btn { min-width:0 }
+/* treapta pe care CHIAR esti: nu duce nicaieri, dar se apasa — atunci ia focusul si ramane marcata */
+.btns .btn[aria-disabled="true"] { cursor:default }
+.btns .btn[aria-disabled="true"]:focus { outline:none; background:var(--azi-fund) }
+
+/* PASTILA navigarii: segmentele lipite intr-un singur corp, cu chenarul si rotunjirea pe pastila.
+   Aici e „larga" de la Program — cea cu doua segmente —, fiindca tot doua are si Tipicul: bulina
+   zilei de azi si „Mâine". Creste cat o tine randul; prisosul il ia doar segmentul cu scris. */
+.btns .pastila { display:flex; flex:1 1 auto; min-width:0; border:1px solid var(--rule); border-radius:10px;
+                 background:var(--tinta); overflow:hidden }
+.btns .pastila .btn { flex:0 0 auto; border:0; border-radius:0; background:transparent }
+.btns .pastila .btn + .btn { border-left:1px solid var(--rule) }
+.btns .pastila a.btn:hover { color:var(--rosu); background:var(--paper) }
+.btns .pastila .btn.activ { color:var(--rosu); font-weight:600;
+                            background:color-mix(in srgb, var(--rosu) 11%, transparent) }
+.btns .pastila .btn[aria-disabled="true"]:focus { background:color-mix(in srgb, var(--rosu) 18%, transparent) }
+.btns .pastila .viit { flex:1 1 auto; min-width:0 }
+/* BULINA zilei de azi: un punct, fara text, la fel de inalt ca segmentul de langa el */
+.btns .punct { flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+               padding-left:20px; padding-right:20px }
+.btns .punct::before { content:""; width:9px; height:9px; border-radius:50%; background:currentColor }
+.btns .punct:hover { color:var(--rosu) }
+/* „Mâine" poarta si cuvantul (.cuv), si sageata (.sgt), amandoua scrise in pagina; pe larg se vede
+   cuvantul singur. Alegerea o face CSS-ul, nu JS-ul, deci nu apuca sa se vada forma nepotrivita. */
+.btns .viit .sgt { display:none }
+
+/* GRUPUL DIN DREAPTA: margin-left:auto il impinge in capat, iar pastila ramane cu tot ce prisoseste */
+.btns .unelte-dr { display:flex; align-items:stretch; gap:10px; flex:0 0 auto; margin-left:auto }
+/* bara verticala dintre cele doua grupuri */
+.btns .desparte { flex:0 0 1px; align-self:stretch; background:var(--rule); margin:0 3px }
+/* butoanele mici — abonarea si calendarul: nu cresc, stau cat le tine continutul */
+.btns .mic { flex:0 0 auto; display:flex; align-items:center; justify-content:center; gap:6px;
+             padding-left:14px; padding-right:14px; font:600 12.5px/1 ui-sans-serif,system-ui;
+             letter-spacing:.06em }
+.btns .mic svg { vertical-align:0 }
+
+/* FEREASTRA DE ABONARE, adusa intocmai de la Program prin Calendar — dialog nativ: fundalul
+   intunecat, focusul si Escape vin de la browser, noi scriem doar cum arata. */
+body.cu-fereastra { overflow:hidden }
+.modal { border:0; padding:0; border-radius:14px; width:min(420px, calc(100vw - 32px));
+         background:var(--paper); color:var(--ink); box-shadow:0 18px 50px rgba(0,0,0,.22) }
+.modal::backdrop { background:rgba(10,12,16,.45) }
+/* display:block si margin:0 nu sunt de prisos: carcasa are o regula pe TOATE formularele, facuta
+   pentru randurile de cautare; fara ele, titlul, textul si bifele s-ar insira ca niste jetoane. */
+.modal-cutie { display:block; margin:0; padding:20px 22px 22px }
+.modal-cap { display:flex; align-items:flex-start; justify-content:space-between; gap:14px }
+.modal-cap h2 { margin:0; font-size:23px; font-weight:400 }
+.modal-x { flex:0 0 auto; width:34px; height:34px; display:flex; align-items:center; justify-content:center;
+           font:400 21px/1 ui-sans-serif,system-ui; color:var(--faint); background:transparent;
+           border:1px solid var(--rule); border-radius:9px; cursor:pointer }
+.modal-x:hover { color:var(--rosu); border-color:var(--rosu) }
+.modal-spune { margin:10px 0 18px; color:var(--soft) }
+.camp { display:block; margin:0 0 16px }
+.camp span { display:block; font:600 10.5px/1 ui-sans-serif,system-ui; letter-spacing:.12em;
+             text-transform:uppercase; color:var(--faint); margin:0 0 7px }
+.camp input { width:100%; box-sizing:border-box; padding:11px 12px; font:15px ui-sans-serif,system-ui;
+              color:var(--ink); background:var(--tinta); border:1px solid var(--rule); border-radius:10px }
+/* scrisul bifelor e NORMAL, nu ingrosat: carcasa face din toate etichetele capete de camp */
+.bifa { display:flex; align-items:center; gap:10px; margin:0 0 11px;
+        font:400 14.5px/1.4 ui-sans-serif,system-ui; color:var(--soft) }
+.bifa input { flex:0 0 auto; width:17px; height:17px; accent-color:var(--rosu) }
+.modal-jos { display:flex; justify-content:flex-end; margin:20px 0 0 }
+/* butonul plin: singurul loc din pagina unde rosul e fundal, nu scris — e fapta ferestrei */
+.btn-plin { font:600 13px/1 ui-sans-serif,system-ui; letter-spacing:.06em; padding:13px 22px;
+            color:var(--paper); background:var(--rosu); border:1px solid var(--rosu); border-radius:10px;
+            cursor:pointer }
+
+/* PE TELEFON randul are de dus doar trei lucruri — pastila, abonarea si calendarul —, deci cuvantul
+   „Mâine" RAMANE (ca in pastila larga a Programului) si cade numai cuvantul abonarii, al carui plic
+   se citeste singur. Numele intreg sta in title si aria-label, deci nu se pierde. */
+@media (max-width:600px) {
+  .btns { gap:7px }
+  .btns .mic { padding:9px }
+  .btns .abon .cuv { display:none }
+  .btns .unelte-dr { gap:5px }
+  .btns .punct { padding-left:22px; padding-right:22px }
+}
+/* Telefoanele inguste: cade bara verticala dintre grupuri — pastila se vede oricum ca un corp. */
+@media (max-width:380px) {
+  .btns .desparte { display:none }
+  .btns .mic { padding-left:7px; padding-right:7px }
+}
+
 /* calendarul de selectie: doar zilele cu randuiala sunt vii */
 .cal td, .cal th { text-align:center; padding:6px 4px }
 .cal td { border-bottom:0 }

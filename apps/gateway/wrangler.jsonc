@@ -26,6 +26,7 @@
     { "binding": "PROGRAM", "service": "xc-program" },
     { "binding": "CALENDAR", "service": "xc-calendar" },
     { "binding": "TIPIC", "service": "xc-tipic" },
+    { "binding": "BIBLIA", "service": "xc-biblia" },
     { "binding": "ADMIN", "service": "xc-admin" }
   ]
 }

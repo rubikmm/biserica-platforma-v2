@@ -1,8 +1,13 @@
 {
-  // Home-ul platformei: radacina domeniului (`staging.sfantul-ilie.ro`). Listeaza aplicatiile.
-  // Nu are baza si nu tine date; cere identitatii doar cine e, ca sa arate contul in antet.
+  // Biblia (A10 din V1): Vechiul si Noul Testament, pe carti, capitole si versete.
+  // Editia sinodala, preluata de pe bibliaortodoxa.ro — aceleasi 80 de carti ca in V1, copiate
+  // in depozit NOU (`xc-biblia-*`), nu refolosite din cel al lui V1.
+  //
+  // Biblioteca de citit: nu decide nimic, nu anunta nimic si nu tine nimic al altei aplicatii.
+  // Ce zi liturgica e si ce pericope are ziua NU se tin aici — le stie calendarul, care vine si
+  // cere textul de la noi.
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "xc-home",
+  "name": "xc-biblia",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-25",
   "compatibility_flags": ["nodejs_compat"],
@@ -18,15 +23,22 @@
     "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
   },
 
-  "services": [{ "binding": "IDENTITATE", "service": "xc-identity" }],
+  // Depozitul propriu: cartile in JSON, una pe fisier, plus `index.json`.
+  "r2_buckets": [
+    { "binding": "TEXTE", "bucket_name": "xc-biblia-staging" }
+  ],
+
+  "services": [
+    { "binding": "IDENTITATE", "service": "xc-identity" }
+  ],
 
   "env": {
     "staging": {
-      "name": "xc-home-staging",
+      "name": "xc-biblia-staging",
       "version_metadata": { "binding": "VERSIUNE" },
       "vars": {
         "MEDIU": "staging",
-        "ORIGINE_PUBLICA": "https://staging.sfantul-ilie.ro",
+        "ORIGINE_PUBLICA": "https://biblia.staging.sfantul-ilie.ro",
         "DOMENIU_COOKIE": ".staging.sfantul-ilie.ro",
         "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
         "URL_HOME": "https://staging.sfantul-ilie.ro",
@@ -38,16 +50,20 @@
         "URL_BIBLIA": "https://biblia.staging.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.staging.sfantul-ilie.ro"
       },
-      "services": [{ "binding": "IDENTITATE", "service": "xc-identity-staging" }],
-      // Subdomeniul `staging.` — nou, nu atinge nicio inregistrare DNS a V1.
-      "routes": [{ "pattern": "staging.sfantul-ilie.ro", "custom_domain": true }]
+      "r2_buckets": [
+        { "binding": "TEXTE", "bucket_name": "xc-biblia-staging" }
+      ],
+      "services": [
+        { "binding": "IDENTITATE", "service": "xc-identity-staging" }
+      ],
+      "routes": [{ "pattern": "biblia.staging.sfantul-ilie.ro", "custom_domain": true }]
     },
     "production": {
-      "name": "xc-home-production",
+      "name": "xc-biblia-production",
       "version_metadata": { "binding": "VERSIUNE" },
       "vars": {
         "MEDIU": "production",
-        "ORIGINE_PUBLICA": "https://sfantul-ilie.ro",
+        "ORIGINE_PUBLICA": "https://biblia.sfantul-ilie.ro",
         "DOMENIU_COOKIE": ".sfantul-ilie.ro",
         "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
         "URL_HOME": "https://sfantul-ilie.ro",
@@ -59,7 +75,7 @@
         "URL_BIBLIA": "https://biblia.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.sfantul-ilie.ro"
       }
-      // Apexul productiei e al WordPress-ului V1 pana la o decizie explicita.
+      // Ruta de productie (`biblia.sfantul-ilie.ro`) ramane a lui A10 pana la cutover-ul explicit.
     }
   }
 }

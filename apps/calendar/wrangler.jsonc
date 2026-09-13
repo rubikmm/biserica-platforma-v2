@@ -18,7 +18,7 @@
     "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
     // Textul pericopelor vine din Biblia platformei (A10), nu din calendar. Pana la portarea
     // lui A10 in V2, adresa e cea a aplicatiei V1 — se citeste doar, nu se scrie nimic acolo.
-    "URL_BIBLIA": "https://biblia.sfantul-ilie.ro",
+    "URL_BIBLIA": "",
     // Secretul dintre workerii nostri, pentru `/_actiuni`. Pe staging: `wrangler secret put`.
     "SECRET_INTERN": "dev-actiuni-local"
   },
@@ -39,7 +39,8 @@
     { "binding": "IDENTITATE", "service": "xc-identity" },
     { "binding": "AUTORIZARE", "service": "xc-authz" },
     { "binding": "AUDIT", "service": "xc-audit" },
-    { "binding": "COMUNICARE", "service": "xc-communication" }
+    { "binding": "COMUNICARE", "service": "xc-communication" },
+    { "binding": "BIBLIA", "service": "xc-biblia" }
   ],
 
   "queues": {
@@ -65,7 +66,7 @@
         "URL_PROGRAM": "https://program.staging.sfantul-ilie.ro",
         "URL_CURATENIE": "https://curatenie.staging.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.staging.sfantul-ilie.ro",
-        "URL_BIBLIA": "https://biblia.sfantul-ilie.ro"
+        "URL_BIBLIA": "https://biblia.staging.sfantul-ilie.ro"
       },
       "browser": { "binding": "BROWSER" },
       "d1_databases": [
@@ -80,7 +81,8 @@
         { "binding": "IDENTITATE", "service": "xc-identity-staging" },
         { "binding": "AUTORIZARE", "service": "xc-authz-staging" },
         { "binding": "AUDIT", "service": "xc-audit-staging" },
-        { "binding": "COMUNICARE", "service": "xc-communication-staging" }
+        { "binding": "COMUNICARE", "service": "xc-communication-staging" },
+        { "binding": "BIBLIA", "service": "xc-biblia-staging" }
       ],
       "queues": {
         "producers": [{ "binding": "EVENIMENTE", "queue": "xc-events-staging" }]

@@ -8,6 +8,7 @@ export interface Env {
   /** Se leaga pe masura ce aplicatiile sunt gata; in dev, un binding fara worker pornit opreste totul. */
   PROGRAM?: Fetcher
   CURATENIE?: Fetcher
+  BIBLIA?: Fetcher
   ADMIN: Fetcher
   MEDIU: string
 }
@@ -23,6 +24,7 @@ function alegeAplicatia(env: Env, cale: string): Fetcher | null {
   if (cale === '/program' || cale.startsWith('/program/')) return env.PROGRAM ?? null
   if (cale === '/tipic' || cale.startsWith('/tipic/')) return env.TIPIC ?? null
   if (cale === '/curatenie' || cale.startsWith('/curatenie/')) return env.CURATENIE ?? null
+  if (cale === '/biblia' || cale.startsWith('/biblia/')) return env.BIBLIA ?? null
   if (cale === '/admin' || cale.startsWith('/admin/')) return env.ADMIN
   return env.HOME
 }

@@ -30,6 +30,7 @@ export const VariabileComune = z.object({
   URL_PROGRAM: z.string().default(''),
   URL_CURATENIE: z.string().default(''),
   URL_TIPIC: z.string().default(''),
+  URL_BIBLIA: z.string().default(''),
   URL_ADMIN: z.string().default(''),
 })
 export type VariabileComune = z.infer<typeof VariabileComune>
@@ -52,6 +53,7 @@ export interface Navigatie {
   program: string
   curatenie: string
   tipic: string
+  biblia: string
   admin: string
 }
 
@@ -63,6 +65,7 @@ export function navigatieDin(cfg: VariabileComune): Navigatie {
     program: cfg.URL_PROGRAM || '/program',
     curatenie: cfg.URL_CURATENIE || '/curatenie',
     tipic: cfg.URL_TIPIC || '/tipic',
+    biblia: cfg.URL_BIBLIA || '/biblia',
     admin: cfg.URL_ADMIN || '/admin',
   }
 }

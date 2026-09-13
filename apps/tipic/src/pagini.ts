@@ -18,6 +18,10 @@ import { ICOANE, LUNI, ZILE_SAPTAMANA, dataLunga, esc, pagina, ziuaSaptamanii } 
 import type { Pericopa } from './calendar.js'
 import { LOCAL } from './stil.js'
 
+/** Plicul abonarii si sageata inainte — aceleasi desene ca la Program si la Calendar. */
+const IC_PLIC = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="m3.5 7 8.5 6 8.5-6"/></svg>`
+const IC_INAINTE = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12h14"/><path d="m12.5 6 6 6-6 6"/></svg>`
+
 export interface Ctx {
   prefix: string
   nav: Navigatie
@@ -237,6 +241,110 @@ function capulZilei(zi: ZiLiturgica | null, titluAnuar: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Randul de unelte din antet
+// ---------------------------------------------------------------------------
+
+/**
+ * PASTILA NAVIGARII (user, 13.09.2026: „meniul principal să semene ca la Program și Calendar").
+ * Un singur corp, cu chenarul si rotunjirea pe PASTILA, nu pe segmente — ca la amandoua celelalte
+ * aplicatii, ca sa se citeasca drept UN obiect cu o pozitie, nu doua destinatii deosebite.
+ *
+ * Inauntru, doua segmente: BULINA zilei de azi (fara text, ca bulina saptamanii de la Program si
+ * cea a lunii de la Calendar) si „MÂINE", care ia prisosul de latime fiindca e singurul cu scris.
+ * E chiar pastila `larga` a Programului — cea a omului fara drepturi, tot cu doua segmente.
+ *
+ * ⚠️ „Ieri" NU exista (user, 13.09.2026: „și ieri nu are sens"): tipicul se citeste inaintea
+ * slujbei, nu dupa ea. Orice alta zi se alege din calendarul de la capatul randului.
+ *
+ * Treptele sunt socotite fata de ZIUA DE AZI, nu fata de ziua deschisa — ca la Program, unde cele
+ * trei trepte sunt tot destinatii fixe. Pe o zi venita din calendar niciun segment nu e marcat.
+ *
+ * Segmentul pe care CHIAR esti nu duce nicaieri, dar ramane apasabil (`<button aria-disabled>`):
+ * asa primeste focusul si se vede unde te afli.
+ */
+function navigarea(ctx: Ctx, o: { data: string; azi: string; maine: string }): string {
+  const p = esc(ctx.prefix)
+  const bulina =
+    o.data === o.azi
+      ? `<button type="button" class="btn punct activ" aria-disabled="true" aria-current="page" title="Ești pe ziua de azi" aria-label="ziua de azi"></button>`
+      : `<a class="btn punct" href="${p}/${o.azi}" title="Treci la ziua de azi" aria-label="ziua de azi"></a>`
+  // Cuvantul SI sageata se scriu amandoua in pagina; care se vede alege CSS-ul dupa latime, ca la
+  // Program — asa nu apuca sa se vada infatisarea nepotrivita, cum s-ar intampla cu JS.
+  const scris = `<span class="cuv">Mâine</span><span class="sgt">${IC_INAINTE}</span>`
+  const maine =
+    o.data === o.maine
+      ? `<button type="button" class="btn viit activ" aria-disabled="true" aria-current="page" title="Ești pe ziua de mâine" aria-label="ziua de mâine">${scris}</button>`
+      : `<a class="btn viit" href="${p}/${o.maine}" title="Treci la ziua de mâine" aria-label="ziua de mâine">${scris}</a>`
+  return `<span class="pastila larga">${bulina}${maine}</span>`
+}
+
+/**
+ * ABONAREA, in doua bucati: butonul din rand si fereastra care se deschide din el.
+ *
+ * ⚠️ Amandoua sunt luate de la Program, prin Calendar, CUVANT CU CUVANT (user, 13.09.2026: „vom
+ * avea abonare pe aceleași principii"), cu tot cu campul de adresa si cele doua bife. Ca acolo,
+ * fereastra e deocamdata numai infatisare: pana nu se leaga de rute, din pagina nu se aboneaza
+ * nimeni. Cand se va lega, adresa scrisa slujeste doar la facerea contului — abonarea ramane pe
+ * adresa contului, cum cere structura platformei.
+ *
+ * ⚠️ BUTONUL E AL TUTUROR, SI AL ADMINILOR (regula Calendarului si a Programului, user 12.09.2026:
+ * „și ei se comportă ca un utilizator care poate vor să fie anunțați"). Daca se schimba intr-un
+ * loc, se schimba in toate trei.
+ */
+function butonAbonare(_ctx: Ctx): string {
+  return `<button type="button" class="btn mic abon" id="b-abonare" title="Primește tipicul pe email">${IC_PLIC}<span class="cuv">Abonare</span></button>`
+}
+
+function fereastraAbonare(_ctx: Ctx): string {
+  return `<dialog class="modal" id="d-abonare" aria-labelledby="t-abonare">
+  <form method="dialog" class="modal-cutie">
+    <div class="modal-cap">
+      <h2 id="t-abonare">Abonare</h2>
+      <button value="inchide" class="modal-x" aria-label="Închide fereastra">&times;</button>
+    </div>
+    <p class="modal-spune">Pentru a vă abona, completați câmpul cu adresa de mail.</p>
+    <label class="camp"><span>Adresa de e-mail</span>
+      <input type="email" name="email" autocomplete="email" placeholder="nume@exemplu.ro"></label>
+    <label class="bifa"><input type="checkbox" name="cont"> Vreau să fac cont.</label>
+    <label class="bifa"><input type="checkbox" name="anunturi"> Vreau să primesc anunțuri.</label>
+    <div class="modal-jos"><button value="abonare" class="btn-plin">Abonare</button></div>
+  </form>
+</dialog>`
+}
+
+/**
+ * Butonul deschide fereastra. Inchiderea n-are nevoie de JS: formularul dinauntru e
+ * `method="dialog"`, deci si „Abonare", si X-ul o inchid singure (si Escape, de la browser).
+ * ⚠️ `body.cu-fereastra` opreste derularea paginii de sub fereastra si se scoate la `close`, ca sa
+ * acopere si Escape, si butoanele dinauntru (asa s-a reparat la Calendar si Program, 12.09.2026).
+ */
+const JS_ABONARE = `
+(function(){
+  var b = document.getElementById("b-abonare");
+  var d = document.getElementById("d-abonare");
+  if (!b || !d || !d.showModal) return;
+  b.addEventListener("click", function(){ document.body.classList.add("cu-fereastra"); d.showModal(); });
+  d.addEventListener("close", function(){ document.body.classList.remove("cu-fereastra"); });
+})();
+`
+
+/**
+ * Randul din antet, in doua grupuri, ca la Program si la Calendar (user, 13.09.2026: „meniul
+ * principal să semene ca la Program și Calendar… să fie abonare și calendar"). La stanga pastila
+ * navigarii, care ia spatiul ramas, si indata dupa ea ABONAREA — acolo sta si acolo, si acolo. La
+ * dreapta, lipit de margine, dupa bara verticala: CALENDARUL, care deschide alegerea zilei.
+ *
+ * Butonul calendarului si-a pastrat icoana si lucrul; ce s-a schimbat e locul si masura lui — pana
+ * pe 13.09.2026 randul era „Astăzi · Mâine · calendar", trei butoane deopotriva de late.
+ */
+function unelte(ctx: Ctx, o: { data: string; azi: string; maine: string }): string {
+  return `${navigarea(ctx, o)}${butonAbonare(ctx)}
+      <span class="unelte-dr"><span class="desparte" aria-hidden="true"></span>
+      <button class="btn mic cal-buton" id="btn-cal" type="button" aria-expanded="false" aria-controls="cal"
+              aria-label="Calendar" title="Alege ziua din calendar">${ICOANE.calendar}</button></span>`
+}
+
+// ---------------------------------------------------------------------------
 // Pagina unei zile
 // ---------------------------------------------------------------------------
 
@@ -292,15 +400,10 @@ export function paginaZilei(ctx: Ctx, o: ContinutZi): string {
     ...comune(ctx),
     titluPagina: `Tipicul — ${o.data}`,
     indexabil: true,
-    unelte: `
-      <a class="btn${o.data === o.azi ? ' activ' : ''}" href="${esc(ctx.prefix)}/${o.azi}">Astăzi</a>
-      <a class="btn${o.data === o.maine ? ' activ' : ''}" href="${esc(ctx.prefix)}/${o.maine}">Mâine</a>
-      <button class="btn" id="btn-cal" type="button" aria-expanded="false" aria-controls="cal"
-              aria-label="Calendar" title="Calendar">${ICOANE.calendar}</button>
-    `,
-    subantet: `<div id="cal" hidden></div>`,
+    unelte: unelte(ctx, { data: o.data, azi: o.azi, maine: o.maine }),
+    subantet: `${fereastraAbonare(ctx)}<div id="cal" hidden></div>`,
     corp,
-    scripturi: scriptulPaginii(o.zileCuRanduiala, o.data, ctx.prefix),
+    scripturi: `${scriptulPaginii(o.zileCuRanduiala, o.data, ctx.prefix)}${JS_ABONARE}`,
   })
 }
 
