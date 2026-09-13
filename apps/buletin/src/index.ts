@@ -70,6 +70,30 @@ const eAdresaDeMasina = (cale: string) => /^\/(v1|intern|\.well-known|health)(\/
  *  nu se cauta in depozit — nici macar ca sa se afle ca nu exista. */
 const CHEIE_BUNA = /^\d{4}\/buletin-\d{3,4}-\d{4}-\d{2}-\d{2}(-mic)?\.(pdf|jpg)$/
 
+/**
+ * Asseturile modulului de rasfoit (Real3D FlipBook), tinute tot in depozit, sub `flipbook/`: 3,8 MB
+ * n-au ce cauta in codul workerului, iar pagina parohiei nu atarna de un CDN strain. Se aduc doar
+ * cand omul apasa „Răsfoiește". Se urca cu `node apps/buletin/unelte/urca-flipbook.mjs`.
+ *
+ * Numele se verifica INTAI: doar dosarele modulului si doar felurile lui de fisiere. Fara asta,
+ * `/flipbook/<orice>` ar deveni o fereastra spre tot depozitul.
+ */
+const CHEIE_FLIPBOOK = /^(jquery\.min\.js|(js|css|images|mp3|webfonts)\/[\w.-]+(\/[\w.-]+)?)$/
+const TIPURI_FLIPBOOK: Record<string, string> = {
+  js: 'text/javascript; charset=utf-8',
+  css: 'text/css; charset=utf-8',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  gif: 'image/gif',
+  svg: 'image/svg+xml',
+  mp3: 'audio/mpeg',
+  woff: 'font/woff',
+  woff2: 'font/woff2',
+  ttf: 'font/ttf',
+  eot: 'application/vnd.ms-fontobject',
+  bcmap: 'application/octet-stream',
+}
+
 function redirect(catre: string, status: 302 | 303 = 303): Response {
   return new Response(null, { status, headers: { location: catre } })
 }
@@ -131,6 +155,25 @@ async function fisierul(req: Request, url: URL, env: Env, cheie: string): Promis
     )
   }
   // `onlyIf` a raspuns cu obiectul FARA continut: browserul are deja versiunea buna
+  if (!('body' in obiect) || !obiect.body) return new Response(null, { status: 304, headers: h })
+  return new Response(obiect.body, { headers: h })
+}
+
+/**
+ * Un fisier al modulului de rasfoit, din depozit. Modulul isi afla singur adresele fratilor lui
+ * (`three.`, `pdf.`, `flipbook.webgl.`…) din propria adresa, deci dosarul trebuie servit intreg,
+ * cu numele neschimbate. Se tine in cache un an — asseturile unui modul cumparat nu se schimba
+ * decat la o actualizare, cand se reia unealta de urcare.
+ */
+async function fisierFlipbook(req: Request, env: Env, cheie: string): Promise<Response> {
+  if (!CHEIE_FLIPBOOK.test(cheie)) return new Response('Nu există fișierul.', { status: 404 })
+  const obiect = await env.FISIERE.get(`flipbook/${cheie}`, { onlyIf: req.headers })
+  if (!obiect) return new Response('Nu există fișierul.', { status: 404 })
+  const ext = cheie.slice(cheie.lastIndexOf('.') + 1).toLowerCase()
+  const h = new Headers()
+  h.set('content-type', TIPURI_FLIPBOOK[ext] ?? 'application/octet-stream')
+  h.set('etag', obiect.httpEtag)
+  h.set('cache-control', 'public, max-age=31536000, immutable')
   if (!('body' in obiect) || !obiect.body) return new Response(null, { status: 304, headers: h })
   return new Response(obiect.body, { headers: h })
 }
@@ -258,6 +301,12 @@ export default {
     if (cale.startsWith('/fisier/')) {
       if (req.method !== 'GET' && req.method !== 'HEAD') return new Response('Metoda nu e permisă.', { status: 405 })
       return await fisierul(req, url, env, decodeURIComponent(cale.slice(8)))
+    }
+
+    // Asseturile rasfoitului. Tot fara sesiune: sunt fisiere de modul, nu date.
+    if (cale.startsWith('/flipbook/')) {
+      if (req.method !== 'GET' && req.method !== 'HEAD') return new Response('Metoda nu e permisă.', { status: 405 })
+      return await fisierFlipbook(req, env, decodeURIComponent(cale.slice(10)))
     }
 
     if (req.method === 'POST') {

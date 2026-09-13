@@ -71,6 +71,34 @@ body.cu-fereastra { overflow:hidden }
             color:var(--paper); background:var(--rosu); border:1px solid var(--rosu); border-radius:10px;
             cursor:pointer }
 
+/* ── RĂSFOITUL: fereastra cu numarul, peste pagina, pe tot ecranul (cerere user, 13.09.2026),
+   cu modulul Real3D FlipBook — acelasi de la jurnaluldeafaceri.
+   Fundalul e inchis dinadins, ca hartia alba sa iasa in fata. */
+.rasfoit { width:100vw; max-width:100vw; height:100vh; max-height:100vh; margin:0; padding:0;
+           border:0; background:#14161a; color:#e9e9ea; overflow:hidden }
+.rasfoit::backdrop { background:#14161a }
+/* ⚠️ Capul sta DEASUPRA modulului, nu langa el: modulul isi aseaza singur uneltele peste toata
+   fereastra (numarul paginii sus-stanga, bara jos), asa ca un cap in randul de sus ar fi acoperit
+   si omul ar ramane fara buton de inchidere pe telefon, unde nu exista tasta Escape. */
+.rasfoit-cap { position:fixed; top:8px; right:8px; z-index:2147483000;
+               display:flex; align-items:center; gap:10px;
+               font:14px/1 ui-sans-serif,system-ui }
+.rasfoit-cap b { font-weight:600 }
+.rasfoit-cand { color:rgba(233,233,234,.72) }
+.rasfoit-cap b, .rasfoit-cand { text-shadow:0 1px 4px rgba(0,0,0,.75) }
+.rasfoit .modal-x { color:#fff; border-color:rgba(255,255,255,.3); background:rgba(20,22,26,.72) }
+.rasfoit .modal-x:hover { border-color:#fff }
+/* scena ia toata fereastra; modulul se aseaza in ea */
+.rasfoit-scena { position:absolute; inset:0; display:flex }
+.rasfoit-carte { flex:1 1 auto; min-width:0; min-height:0 }
+.rasfoit-vorba { position:absolute; left:0; right:0; bottom:18px; margin:0; text-align:center;
+                 color:rgba(233,233,234,.7); font:14px ui-sans-serif,system-ui }
+/* pe telefon, langa X incape doar numarul — data ar ajunge peste uneltele modulului */
+@media (max-width:600px) {
+  .rasfoit-cand { display:none }
+}
+
+
 /* ── CAPUL unui numar: eticheta, numarul mare, ziua */
 .cap-numar { text-align:center; margin:26px 0 16px }
 .cap-numar h2 { margin:2px 0 0; font-size:30px; letter-spacing:.02em }

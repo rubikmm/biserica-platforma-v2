@@ -85,6 +85,44 @@ Ce s-a schimbat față de V1, și de ce:
 - `Range` pe PDF-uri: ca în V1, se răspunde întreg (fișierele au ~0,7 MB). Tipicul, cu PDF-uri de
   zeci de MB, răspunde pe bucăți — aici n-a fost nevoie.
 
+### Răsfoitul numărului (13.09.2026, seara)
+
+**În loc să se deschidă PDF-ul, numărul se RĂSFOIEȘTE** — cerere user: „există un mod turn-page-3D
+asociat cu PDF-urile din site editoriale și revista - aș vrea să preluăm scriptul și să facem și noi
+așa - în loc să deschidem pdf-ul". Modulul e **Real3D FlipBook v3.7.10** (CodeCanyon,
+creativeinteractivemedia), chiar cel de la `jurnaluldeafaceri`, de unde s-au și luat asseturile.
+
+- ⚠️ **LICENȚA, pas deschis**: licența Envato se socotește **pe produs final** (un sit), nu după câți
+  oameni intră. Copia de aici e a doua folosință și cere licența ei. Utilizatorul a hotărât s-o
+  cumpere („vreau același script chiar dacă e a doua licență"; „nu e un site - e o micro aplicație
+  pentru 10 oameni"). **De confirmat înainte de cutover-ul pe producție** — până atunci stă doar pe
+  staging. I-am spus o dată că numărul de cititori nu schimbă cerința; a ales știind.
+- **Unde stau asseturile**: în depozitul buletinului, sub `flipbook/` (35 de fișiere, 3,8 MB), servite
+  de worker la `/flipbook/*` cu cache de un an. Nu în codul workerului (prea mari) și nu de pe un CDN
+  străin (pagina parohiei n-are de ce să atârne de altcineva). Se urcă cu
+  `node apps/buletin/unelte/urca-flipbook.mjs --din /tmp/fb`.
+  ⚠️ Numele fișierelor **nu se schimbă**: modulul își află singur adresele fraților lui
+  (`three.`, `pdf.`, `flipbook.webgl.`) din propria adresă. `rootFolder` i se dă în opțiuni, altfel
+  își caută sunetul și iconițele lângă PAGINĂ.
+  Nu s-au adus cele **168 de `js/cmaps/*.bcmap`** (codări chinezești/japoneze) și nici CSS-urile de
+  administrare ale pluginului. Dacă vreun PDF le va cere, se adaugă și `cMapUrl`.
+- **Cum arată**: fereastră `<dialog>` peste pagină, pe tot ecranul (cerere user), fundal închis.
+  Modulul își pune singur uneltele — numărul paginii sus-stânga, bara de jos (zoom, autoplay, semn de
+  carte, cuprins, miniaturi, sunet), săgețile pe margini. ⚠️ De aceea **butonul de închidere stă
+  `position:fixed` cu z-index maxim**, nu într-un rând de antet: acolo ar fi acoperit, iar pe telefon
+  nu există tastă Escape. Tipărirea, descărcarea și partajarea modulului sunt **stinse**.
+- **Butoanele de PDF au ieșit de tot** (cerere user: „iese de tot"): „Deschide PDF-ul" și „Descarcă"
+  au fost înlocuite de **„Răsfoiește"**, iar coperta deschide tot răsfoitul. Amândouă au rămas
+  **linkuri adevărate** către fișier (`data-rasfoit`, JS-ul le ia clicul): pe un telefon fără
+  `<dialog>` omul tot ajunge la foaie, în loc să apese în gol. Adresele `/fisier/…` rămân vii — le
+  citează newsletterul.
+- **`?rasfoit=1`** deschide răsfoitul de la sine: e și legătura de dat mai departe, și calea prin care
+  se fotografiază pagina cu Browser Rendering.
+- **Varianta liberă, dacă se renunță vreodată la licență**: a existat și a mers, cu `page-flip` 2.0.7
+  (MIT) + `pdf.js` 6.3.289 (Apache-2.0), în commit-ul dinaintea trecerii pe Real3D. ⚠️ Acolo se ia
+  build-ul **`legacy/`** al lui pdf.js: cel de serie a căzut cu „n.toHex is not a function" chiar în
+  browserul de probă al Cloudflare, darămite pe telefoanele vechi.
+
 **Newsletterul (A8)**: **arhiva PUBLICĂ a celor 459 de numere** trimise pe email din 2017 încoace,
 aduse în V1 din MailPoet și re-randate cu chiar motorul MailPoet. Portat pe 13.09.2026 din
 `biserica-newsletter` v0.6.5. Depozitul: **R2 `xc-newsletter-staging`** — 1423 de obiecte, 722 MB
@@ -308,6 +346,18 @@ propunerea automată, ca în V1.
       poza — butonul lor scrie „Fără PDF", stins. Întrebarea din V1 (dacă parohia le mai are pe
       undeva) rămâne deschisă;
     - **trimiterea newsletterului** nu s-a portat fiindcă nu există: A8 e numai arhivă, și în V1.
+
+14. **Răsfoitul, ce a rămas** (13.09.2026, seara):
+    - ⚠️ **licența a doua pentru Real3D FlipBook** — de cumpărat, e singurul lucru care ține răsfoitul
+      pe staging. Fără ea nu se face cutover pe producție;
+    - **probat pe staging, cu ochii, la 1280 px și la 390 px**; ce NU s-a probat: sunetul paginii
+      întoarse (poza nu-l aude), zoomul cu două degete pe un telefon adevărat, și un număr cu 8
+      pagini (toate probele au fost pe unul de 4);
+    - modulul aduce **jQuery** în platformă — singura bibliotecă străină de până acum. Trăiește numai
+      în fereastra răsfoitului, adusă la prima apăsare, deci nu atinge restul paginilor;
+    - **newsletterul n-are răsfoit** și nici nu-i trebuie: numerele lui sunt HTML, nu PDF;
+    - de întrebat dacă răsfoitul se cuvine și la **Tipic** (cele trei cărți scanate, până la 67 MB).
+      Acolo ar conta `Range` și numărul de pagini — altă socoteală decât o foaie de 4 pagini.
 
 ## Aplicațiile de pe staging
 
@@ -1024,6 +1074,13 @@ forța antetul `Host`**.
 - **⚠️ Fără backtick în comentariile CSS** — `STIL`/`STIL_COMUN` sunt template literals; un accent grav
   într-un `/* … */` închide șirul și `tsc` scoate erori fără legătură cu locul vinovat („Property 'cuv'
   does not exist on type…", `TS1005`). Pățit de trei ori într-o seară.
+  ⚠️ **Și în comentariile din JS-ul paginilor**, nu doar în CSS (13.09.2026): `JS_PAGINI` e tot un
+  template literal, deci un `` `loadFromImages` `` într-un `//` îl taie la fel.
+- **⚠️ Un modul de browser se probează ÎN browser, nu din citit** (13.09.2026, la răsfoit): trei
+  împiedicări una după alta — un API schimbat, un build prea modern, o randare încețoșată — s-au
+  lămurit în câteva minute cu Browser Rendering `/content` + un script care scrie ce iese într-un
+  `<div id="proba">`, citit apoi din HTML-ul întors. Mult mai iute decât deploy-poză-ghicit, și
+  singurul fel de a vedea **cifre** (dimensiuni măsurate), nu impresii de pe un JPEG.
 - **Capcană DNS**: un subdomeniu `*.staging` nou răspunde public în câteva minute, dar de pe NAS rămâne
   nerezolvat mult mai mult (cache negativ). Probează cu
   `curl --resolve <host>:443:188.114.97.8`.
@@ -1067,6 +1124,20 @@ forța antetul `Host`**.
 ## Jurnal
 
 ### 2026-09-13
+
+- **RĂSFOITUL numărului, în locul deschiderii PDF-ului** (cerere user, seara). Modulul **Real3D
+  FlipBook v3.7.10**, chiar cel de la `jurnaluldeafaceri`; asseturile (35 de fișiere, 3,8 MB) stau în
+  depozitul buletinului sub `flipbook/` și se servesc la `/flipbook/*`. Fereastră peste pagină, pe tot
+  ecranul; butoanele de PDF au ieșit de tot, coperta și „Răsfoiește" deschid răsfoitul, iar
+  `?rasfoit=1` îl deschide singur. Buletin **0.3.2**. ⚠️ **Licența a doua rămâne de cumpărat** —
+  amănunte în „Răsfoitul numărului".
+  **Drumul până aici, ca să nu se mai bâjbâie**: întâi varianta liberă (page-flip MIT + pdf.js
+  Apache-2.0), cerută ca probă; a mers după trei împiedicări — `getDocument` din pdf.js 6 nu mai
+  primește adresa ca șir (cere `{ url }`), build-ul modern cade cu „n.toHex is not a function" (se ia
+  `legacy/`), iar `loadFromImages` desenează tot într-o pânză 1x, deci scrisul mărunt iese încețoșat
+  (se dau paginile ca HTML). Apoi userul a cerut Real3D, și motorul s-a schimbat fără să se atingă
+  fereastra, butonul sau adresa — bucata de JS care umple `#r-carte` a fost scrisă de la început ca
+  să poată fi schimbată singură.
 
 - **Reparat, la reclamația userului: paginile numerelor de buletin dădeau 404** („nu merg linkurile
   de sub ultimul număr"). Cauza, subtilă: aplicația își tăia din cale propriul nume, crezând că e

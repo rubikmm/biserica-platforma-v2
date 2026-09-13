@@ -42,8 +42,11 @@ export interface Meniu {
 /** Iconita Arhivei: cutie cu capac — aceeasi ca in V1 (venita acolo din A2). */
 const IC_ARHIVA = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></svg>`
 
-/** Iconita hartiei de tipar: foaie cu coltul indoit — tot din V1. */
+/** Iconita hartiei de tipar: foaie cu coltul indoit — din V1; a ramas la numerele fara PDF. */
 const IC_PDF = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>`
+
+/** Cartea deschisa: semnul rasfoitului. */
+const IC_CARTE = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 6.5S10 4.8 6.8 4.8c-1.4 0-2.3.3-2.8.5v13c.5-.2 1.4-.5 2.8-.5C10 17.8 12 19.5 12 19.5"/><path d="M12 6.5S14 4.8 17.2 4.8c1.4 0 2.3.3 2.8.5v13c-.5-.2-1.4-.5-2.8-.5C14 17.8 12 19.5 12 19.5"/><path d="M12 6.5v13"/></svg>`
 
 /** Plicul abonarii — acelasi desen ca la Calendar, Program si Tipic. */
 const IC_PLIC = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="m3.5 7 8.5 6 8.5-6"/></svg>`
@@ -164,6 +167,103 @@ const JS_PAGINI = `
   b.addEventListener("click", function(){ document.body.classList.add("cu-fereastra"); d.showModal(); });
   d.addEventListener("close", function(){ document.body.classList.remove("cu-fereastra"); });
 })();
+(function(){
+  // RĂSFOITUL, cu modulul Real3D FlipBook — acelasi de la jurnaluldeafaceri (cerere user,
+  // 13.09.2026). Tot ce urmeaza e ES5 DINADINS: pe un telefon vechi, o singura sintaxa noua ar face
+  // bucata asta de script sa nu se mai citeasca, si ar cadea odata cu ea si lupa, si abonarea.
+  //
+  // Modulul isi aduce singur fratii (three.js, pdf.js, webgl, sunetul) din acelasi dosar cu
+  // flipbook.min.js, deci de aici se incarca doar jQuery si el; restul vin dupa nevoie.
+  var d = document.getElementById("d-rasfoit");
+  if (!d) return;
+  var pdf = d.getAttribute("data-pdf");
+  var baza = d.getAttribute("data-js") + "/";
+  var v = "?v=" + encodeURIComponent(d.getAttribute("data-v") || "");
+  var cutie = document.getElementById("r-carte");
+  var vorba = document.getElementById("r-vorba");
+  var pornit = false;
+
+  function deschidePdf(){ window.open(pdf, "_blank", "noopener"); }
+
+  // Cine n-are <dialog> nu poate rasfoi aici: ii dam foaia, ca sa nu apese in gol. De aceea butonul
+  // a ramas un link adevarat catre PDF.
+  var poate = !!d.showModal;
+
+  function aduScript(src){
+    return new Promise(function(res, rej){
+      var s = document.createElement("script");
+      s.src = src;
+      s.onload = function(){ res(); };
+      s.onerror = function(){ rej(new Error(src)); };
+      document.head.appendChild(s);
+    });
+  }
+
+  function aduStil(href){
+    var l = document.createElement("link");
+    l.rel = "stylesheet"; l.href = href;
+    document.head.appendChild(l);
+  }
+
+  function pregateste(){
+    if (pornit) return;
+    pornit = true;
+    aduStil(baza + "css/flipbook.style.css" + v);
+    aduStil(baza + "css/font-awesome.css" + v);
+    var lant = window.jQuery ? Promise.resolve() : aduScript(baza + "jquery.min.js" + v);
+    lant.then(function(){
+      return aduScript(baza + "js/flipbook.min.js" + v);
+    }).then(function(){
+      vorba.hidden = true;
+      window.jQuery(cutie).flipBook({
+        pdfUrl: pdf,
+        // ⚠️ Fara rootFolder modulul si-ar cauta sunetul, preloaderul si iconitele langa PAGINA,
+        // nu langa el. Adresa se termina cu bara — asa o lipeste de numele fisierelor.
+        rootFolder: baza,
+        viewMode: "webgl", viewModeMobile: "webgl",
+        mode: "normal",
+        // Fundalul e al ferestrei noastre, nu al modulului: altfel se vede o alta culoare pe sub el.
+        backgroundColor: "#14161a", backgroundTransparent: false,
+        sound: true, shadows: true,
+        zoomMin: 0.85, zoomStep: 2,
+        pageTextureSize: 1600, pageTextureSizeMobile: 1200,
+        singlePageMode: false, singlePageModeIfMobile: true,
+        responsiveView: true, responsiveViewTreshold: 768,
+        thumbnailsOnStart: false, contentOnStart: false,
+        // Butoanele modulului: paginile, zoomul, miniaturile, sunetul. Fara descarcare si fara
+        // tiparire — foaia se ia de la adresa ei, iar din pagina nu mai duce niciun buton la PDF
+        // (cerere user, 13.09.2026: „iese de tot").
+        btnDownloadPdf: { enabled: false }, btnDownloadPages: { enabled: false },
+        btnPrint: { enabled: false }, btnShare: { enabled: false },
+        btnExpand: { enabled: false },
+        deeplinkingEnabled: false,
+        height: cutie.clientHeight || 600
+      });
+    })["catch"](function(){
+      // Nu lasam omul cu ochii pe o fereastra goala: ii deschidem foaia, ca inainte de rasfoit.
+      vorba.hidden = false;
+      vorba.textContent = "Nu s-a putut răsfoi aici. Deschid foaia…";
+      setTimeout(function(){ d.close(); deschidePdf(); }, 1200);
+    });
+  }
+
+  function deschide(e){
+    if (e) e.preventDefault();
+    if (!poate) { deschidePdf(); return; }
+    document.body.classList.add("cu-fereastra");
+    d.showModal();
+    pregateste();
+  }
+
+  var declansatoare = document.querySelectorAll("[data-rasfoit]");
+  for (var i = 0; i < declansatoare.length; i++) declansatoare[i].addEventListener("click", deschide);
+
+  document.getElementById("r-inchide").addEventListener("click", function(){ d.close(); });
+  d.addEventListener("close", function(){ document.body.classList.remove("cu-fereastra"); });
+
+  // Legatura de-a dreptul catre rasfoit: ?rasfoit=1. Tot ea e si calea prin care se fotografiaza.
+  if (poate && /[?&]rasfoit=1/.test(location.search)) deschide();
+})();
 `
 
 function sablon(ctx: Ctx, m: Meniu, titluPagina: string | undefined, corp: string): string {
@@ -196,9 +296,18 @@ function poza(ctx: Ctx, b: { nr: number; cheie_poza_mica: string | null }, clasa
 const fisa = (ctx: Ctx, b: BuletinScurt): string =>
   `<a class="fisa" href="${adresa(ctx, b)}">${poza(ctx, b, 'cop')}<b>Nr. ${b.nr}</b><span>${ziuaScurt(b.data)}</span></a>`
 
-/** Butoanele unui numar: PDF-ul de citit si acelasi PDF de descarcat. Fara PDF (cateva numere vechi
- *  au ramas doar cu poza), butonul se stinge in loc sa duca in gol. */
-function butoanePdf(ctx: Ctx, b: Buletin): string {
+/**
+ * Butonul unui numar: RĂSFOIEȘTE. Din 13.09.2026 a luat locul celor doua butoane de PDF ale V1
+ * („Deschide PDF-ul" și „Descarcă") — cerere user: „în loc să deschidem pdf-ul"; „iese de tot".
+ *
+ * ⚠️ E un LINK adevarat catre PDF, nu un buton gol: JS-ul ii ia clicul si deschide rasfoitul peste
+ * pagina. Asa, pe un telefon prea vechi pentru rasfoit (fara `<dialog>` ori fara module ES), omul
+ * tot ajunge la foaie in loc sa apese in gol. Adresa `/fisier/…` ramane oricum vie — o citeaza
+ * newsletterul.
+ *
+ * Fara PDF (doua numere vechi au ramas doar cu poza), butonul se stinge in loc sa duca in gol.
+ */
+function butonRasfoit(ctx: Ctx, b: Buletin): string {
   if (!b.cheie_pdf) {
     return (
       `<span class="btn intreg gol" title="Numărul acesta a rămas în arhivă doar ca poză">` +
@@ -207,9 +316,36 @@ function butoanePdf(ctx: Ctx, b: Buletin): string {
   }
   const marime = b.marime_pdf ? ` <small>· ${(b.marime_pdf / 1048576).toFixed(1)} MB</small>` : ''
   return (
-    `<a class="btn intreg" href="${fisier(ctx, b.cheie_pdf)}" target="_blank" rel="noopener">${IC_PDF} Deschide PDF-ul${marime}</a>` +
-    `<a class="btn intreg" href="${fisier(ctx, b.cheie_pdf)}?descarca=1">Descarcă</a>`
+    `<a class="btn intreg" id="b-rasfoit" data-rasfoit href="${fisier(ctx, b.cheie_pdf)}"` +
+    ` target="_blank" rel="noopener">${IC_CARTE} Răsfoiește${marime}</a>`
   )
+}
+
+/**
+ * FEREASTRA DE RĂSFOIT — peste pagină, pe tot ecranul (cerere user, 13.09.2026), ca la
+ * `jurnaluldeafaceri`. Înăuntru se desenează paginile PDF-ului și se întorc cu degetul sau cu
+ * săgețile.
+ *
+ * ⚠️ Motorul de acum e cel LIBER: `page-flip` 2.0.7 (MIT) pentru întoarcerea paginii și `pdf.js`
+ * 6.3.289 (Apache-2.0) pentru desenat, aduse din depozit la prima apăsare (vezi
+ * `unelte/urca-rasfoit.mjs`). Utilizatorul vrea, la capăt, chiar **Real3D FlipBook** de la
+ * `jurnaluldeafaceri` (CodeCanyon, WebGL, cu sunet), cu a doua licență cumpărată — de aceea
+ * fereastra, butonul și adresa `?rasfoit=1` sunt scrise ca să rămână NESCHIMBATE la schimbarea
+ * motorului: se înlocuiește doar bucata din JS care umple `#r-carte`.
+ *
+ * Nu se pune decât unde numărul chiar are PDF.
+ */
+function fereastraRasfoit(ctx: Ctx, b: Buletin): string {
+  if (!b.cheie_pdf) return ''
+  return `<dialog class="rasfoit" id="d-rasfoit" aria-label="Răsfoiește numărul ${b.nr}"
+  data-pdf="${fisier(ctx, b.cheie_pdf)}" data-js="${esc(ctx.prefix)}/flipbook" data-v="${esc(ctx.versiune)}">
+  <div class="rasfoit-cap">
+    <b>Nr. ${b.nr}</b> <span class="rasfoit-cand">${dataLunga(b.data)}</span>
+    <button type="button" class="modal-x" id="r-inchide" aria-label="Închide răsfoitul">&times;</button>
+  </div>
+  <div class="rasfoit-scena"><div class="rasfoit-carte" id="r-carte"></div></div>
+  <p class="rasfoit-vorba" id="r-vorba">Se pregătește…</p>
+</dialog>`
 }
 
 /** Coperta: pagina intai, mare, care duce in PDF. */
@@ -217,9 +353,11 @@ function coperta(ctx: Ctx, b: Buletin): string {
   const mare = b.cheie_poza
     ? `<img src="${fisier(ctx, b.cheie_poza)}" alt="Pagina întâi a numărului ${b.nr}" width="1400" height="1980">`
     : poza(ctx, b, 'cop')
+  // Coperta deschide RĂSFOITUL, ca și butonul de sub ea (`data-rasfoit`); `href` rămâne fișierul,
+  // ca ea să facă ceva și acolo unde răsfoitul nu poate rula.
   return b.cheie_pdf
-    ? `<a class="coperta" href="${fisier(ctx, b.cheie_pdf)}" target="_blank" rel="noopener"
-         title="Deschide PDF-ul">${mare}</a>`
+    ? `<a class="coperta" data-rasfoit href="${fisier(ctx, b.cheie_pdf)}" target="_blank" rel="noopener"
+         title="Răsfoiește numărul">${mare}</a>`
     : `<span class="coperta">${mare}</span>`
 }
 
@@ -248,7 +386,7 @@ export function paginaAcasa(ctx: Ctx, m: Meniu, b: Buletin | null, dinainte: Bul
   <p class="cand">${dataCuZi(b.data)}</p>
 </div>
 ${coperta(ctx, b)}
-<nav class="btns hartii">${butoanePdf(ctx, b)}</nav>
+<nav class="btns hartii">${butonRasfoit(ctx, b)}</nav>${fereastraRasfoit(ctx, b)}
 ${
   dinainte.length
     ? `<h3 class="titlu-fasie">Numerele dinainte</h3>
@@ -278,7 +416,7 @@ export function paginaBuletin(
   <p class="cand">${dataCuZi(b.data)}${b.pagini ? ` · ${b.pagini} pagini` : ''}</p>
 </div>
 ${coperta(ctx, b)}
-<nav class="btns hartii">${butoanePdf(ctx, b)}</nav>
+<nav class="btns hartii">${butonRasfoit(ctx, b)}</nav>${fereastraRasfoit(ctx, b)}
 <nav class="btns vecini">${sageata(v.inainte, `◀ <span class="cuv">numărul dinainte</span>`)}${sageata(
       v.dupa,
       `<span class="cuv">numărul următor</span> ▶`,
