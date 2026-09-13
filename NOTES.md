@@ -1168,6 +1168,10 @@ forța antetul `Host`**.
   răsfoitul 3D și lupa copertei din bibliotecă (ea scria `overflow` direct pe corp); chatul cere acum
   aceeași numărătoare, în loc de clasa lui. Trei probe noi în `tests/carcasa.test.ts`, una care
   păzește ca nicio aplicație să nu-și mai scrie blocarea singură. Amănunte: „Capcane de ținut minte".
+  **Publicat pe staging** (cerere user, 23:35) la **toate cele zece aplicații care poartă carcasa** —
+  home 0.2.1, cont 0.1.6, admin 0.1.4, biblia 0.1.2, bibliotecă 0.1.2, calendar 0.7.4, program 0.6.4,
+  tipic 0.3.3, buletin 0.3.4, newsletter 0.1.1. ⚠️ **O schimbare în `@xc/ui` nu ajunge la om până nu
+  se republică fiecare aplicație** — carcasa e legată în fiecare worker, nu servită de undeva.
 
 - **RĂSFOITUL numărului, în locul deschiderii PDF-ului** (cerere user, seara). Modulul **Real3D
   FlipBook v3.7.10**, chiar cel de la `jurnaluldeafaceri`; asseturile (35 de fișiere, 3,8 MB) stau în
