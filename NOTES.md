@@ -48,10 +48,45 @@ Etape:
    contracte, evenimente, audit, automatizare, comunicare, home.
 2. ✅ **Staging** — publicat pe `*.staging.sfantul-ilie.ro`, email real prin Cloudflare Email Service.
 3. ⏳ **Portarea aplicațiilor**: ✅ calendar (A1), ✅ program (A2), ✅ tipic (A9), ✅ biblia (A10),
-   ✅ biblioteca (A12), ✅ buletin (A3), ✅ newsletter (A8), ⏳ curățenie (A6), apoi A7 → A5 → A4 →
+   ✅ biblioteca (A12), ✅ buletin (A3), ✅ newsletter (A8), ✅ curățenie (A6), apoi A7 → A5 → A4 →
    A13 se stinge.
    ⚠️ Biblioteca, buletinul și newsletterul au fost cerute **înaintea rândului lor** (user,
-   13.09.2026); curățenia rămâne următoarea.
+   13.09.2026).
+
+**Curățenia (A6)**: programarea voluntarilor la duminici, pe poziții, plus cele trei rapoarte care ies
+din ea. Portată pe 14.09.2026. ⚠️ **V1-ul ei NU e aplicația PHP de pe cPanel**, ci un Worker scris pe
+8 septembrie 2026 (containerul `biserica-curatenie-nou`, v2.0.0) și comutat pe viu pe 9 septembrie:
+`curatenie.sfantul-ilie.ro`, D1 `biserica-curatenie`, cron orar care **chiar trimite** scrisori. PHP-ul
+vechi doar redirectează încoace.
+
+Datele s-au copiat rând cu rând în **D1 `xc-curatenie-staging`** (`0c60549b-9f84-4f92-a788-835929a2f8c7`):
+29 de voluntari, 81 de programări (mai–sept. 2026), 529 de mesaje de jurnal, 31 de rapoarte (368.144
+de semne de HTML), 7 setări — **677 de rânduri, verificate sumă cu sumă față de V1**.
+
+Ce s-a schimbat față de V1, și de ce:
+- **voluntarii au rămas ai aplicației** (nume, e-mail, telefon în baza ei), iar omul se recunoaște
+  alegându-și numele din listă, fără cont. Utilizatorul a ales asta anume, dintre trei variante, după
+  ce i s-a spus că se abate de la „datele stau într-un loc, autentificarea la fel";
+- **parola locală de admin a ieșit cu totul** — cele trei hash-uri bcrypt, sesiunea semnată, resetarea
+  prin email, fila „Schimbă parola" și „modul de inițializare". Panoul cere `cleaning.manage`, cheie
+  care exista deja în contracte (deci **fără republicarea lui authz**). `is_admin` din tabel a rămas
+  **etichetă a echipei**: cine e „Admin" pe cartelă și primește rapoartele din oficiu;
+- **scrisorile pleacă prin `communication-worker`** (`/trimite`), nu prin SMTP propriu către
+  `no-reply@`. Cheia de idempotență e `curatenie:<fel>:<duminică>`, iar trimiterile de probă din panou
+  au cheia lor, ca să nu blocheze plecarea celei adevărate. ⚠️ **Un raport pleacă acum întreg sau
+  deloc** — în V1 putea reuși pentru unii și cădea pentru alții;
+- **numele duminicii se cere de la calendar (A1)**, `/v1/interval`, o singură întrebare pe pagină. În
+  V1 erau 52 de rânduri scrise de mână care acopereau numai 2026: din 2027 toate duminicile ar fi
+  apărut ca „Duminica - 3 ianuarie", și în pagină, și în scrisori;
+- **assets-urile au ieșit**: `app.js` stă acum în pagină (`src/sloturi-js.ts`), ca la toate aplicațiile
+  V2, iar manifestul și iconițele PWA ale V1 nu s-au portat — carcasa dă doar meta-urile;
+- carcasa, meniul contului și „vezi ca" vin din `@xc/ui`; fiecare apăsare de slot poartă jeton CSRF
+  (V1 n-avea niciunul).
+
+Ce a rămas **neatins**, fiindcă așa trebuie: „trenulețul" pozițiilor (mută tot la +1000, apoi trage
+pozițiile una câte una), pragul de patru voluntari, ora 18 la care duminica trece în trecut, lunea în
+care pleacă raportul lunar, înfățișarea scrisorii (cu tot cu potrivelile pentru modul întunecat al
+Outlook-ului și al Apple Mail), meniul adminului pe slot și „Participarea" cu bife.
 
 **Buletinul (A3)**: foaia periodică față-verso și arhiva ei — **619 numere apărute din 2012
 încoace**. Portat pe 13.09.2026 din `biserica-buletin` v0.5.0. Datele s-au copiat în resurse NOI:
@@ -293,9 +328,20 @@ propunerea automată, ca în V1.
 3. ✅ **PDF-urile cărților tipicului** — copiate pe 13.09.2026 în `xc-tipic-staging`; cardurile sunt
    înapoi în pagină. A rămas: **Mineiul pe celelalte 11 luni** n-are scanare (lunile vin de pe sit),
    deci acolo cardul lipsește pe drept.
-4. **Curățenia (A6)** — schema, sloturile din slujbele programului (`curatenie: true`), rapoartele
-   prin serviciul de comunicare. Voluntarii devin conturi: adresele din V1 trec prin
-   `identity /utilizatori/asigura`, iar aplicația ține doar `user_id`.
+4. **Curățenia (A6), ce a rămas după portare** (14.09.2026):
+   - ⚠️ **panoul n-a fost umblat cu un om adevărat**: ecranul de voluntari, filele de rapoarte și
+     „Trimite acum" cer sesiune cu `cleaning.manage`, iar prin curl nu se poate intra (cookie-uri
+     `Secure`). Probate sunt schema, TOATE interogările panoului (rulate una câte una pe baza nouă),
+     `tsc` și cele 19 probe noi; **de mers o dată cap-coadă din browser**;
+   - **dreptul `cleaning.manage` nu e dat nimănui anume**: vine cu rolul de admin al platformei. Cine
+     administra curățenia în V1 cu parola locală trebuie să aibă cont de platformă cu rolul acela;
+   - **sloturile atârnă de DUMINICI, nu de slujbele programului** — alegere a utilizatorului
+     (13.09.2026), pentru că steagul `curatenie` din A2 e „da" din fabrică la 2213 din 2623 de slujbe:
+     ar fi ieșit ~10 poziții pe săptămână în loc de una duminica. Dacă se vrea vreodată legătura cu
+     A2, **întâi se curăță steagul în Program** — după care slotul se poate lega de `slujba_id`;
+   - **vacanța e ascunsă din pagină**, ca în V1 (`VACANTA_IN_PAGINA = false`), cu spatele întreg;
+   - **cutover-ul cere oprirea ceasului din V1**, altfel cei 29 de voluntari primesc câte două
+     scrisori: acolo se stinge `NEWSLETTER_ACTIV`, aici se rutează subdomeniul.
 5. **Testul real de email**, de către utilizator: `https://cont.staging.sfantul-ilie.ro` → cont nou
    cu `rubikmm@gmail.com` → codul vine pe email → super-admin automat.
 6. **Pornire automată în container** — `pnpm dev` se lansează manual; de pus în `app-init.sh`.
@@ -1039,7 +1085,18 @@ cu sfinții de duminică" → PDF 54 KB prin Browser Rendering, în R2, descărc
   - **politețea la cules nu e opțională**: un singur fir, pauză între cereri (10–20 s unde cere
     `robots.txt`), User-Agent care spune cine suntem și duce la `/despre-imbogatire`. Nu se folosește
     căutarea magazinului — sitemapul o dată, potrivirea local.
-- **`curatenie`** (A6): D1 `xc-curatenie-staging` creată. **Urmează la rând.**
+- **`curatenie`** (A6): D1 `xc-curatenie-staging` (`0c60549b-…`), 677 de rânduri copiate din V1.
+  Amănuntele, sus, la „Curățenia (A6)". Trei lucruri de știut înainte să umbli la ea:
+  - ⚠️ **schema poartă numele din V1** (`volunteers`, `assignments`, `notifications_log`,
+    `app_settings`, `newsletter_history`, `volunteer_vacations`), nu nume în românește ca restul
+    aplicațiilor V2. Dinadins: interogările s-au portat cuvânt cu cuvânt, iar un rebotez ar fi cerut
+    rescrierea fiecărui SELECT fără să câștige nimic;
+  - ⚠️ **`is_admin` NU dă drept de administrare** — e eticheta echipei. Poarta panoului e
+    `cleaning.manage`, de la autorizarea centrală;
+  - **rapoartele se compun aici, dar pleacă prin comunicare**, iar `newsletter_history` rămâne arhiva
+    a CE A SCRIS curățenia (ca `scrisori` la bibliotecă); arhiva livrărilor e a poștei.
+  Import: `node infrastructure/import/curatenie-din-v1.mjs --scrie staging` (golește întâi tabelele,
+  copil înainte de părinte — vezi capcana cu `INSERT OR REPLACE` de mai jos).
 - **Legătura V2 → V1, singura de acum**: calendarul cere textul pericopelor de la Biblia din V1
   (`URL_BIBLIA`), la afișare, cu cache de o zi. E doar citire și dispare la portarea lui A10.
   Referința e a noastră; textul nu se stochează niciodată.
@@ -1079,6 +1136,22 @@ forța antetul `Host`**.
 
 ### Capcane tehnice
 
+- **⚠️ `INSERT OR REPLACE` + cheie străină `ON DELETE RESTRICT` = a doua rulare a importului cade**
+  (pățit la curățenie, 14.09.2026). REPLACE înseamnă „șterge rândul de dinainte și pune-l pe ăsta";
+  ștergerea unui părinte care are deja copii (un voluntar cu programări) se lovește de RESTRICT și
+  scriptul moare cu `FOREIGN KEY constraint failed`. Prima rulare merge, fiindcă tabela e goală —
+  deci se vede abia la reluare. **Leacul**: importul golește întâi tabelele, **copil înainte de
+  părinte**, și abia apoi scrie. La o copiere de date, reluabilitatea contează mai mult decât ce era
+  acolo (oricum venea tot din V1).
+- **⚠️ D1 primește cel mult 100 de valori legate într-o comandă.** `insereazaLoturi` socotește singură
+  câte rânduri intră într-un lot (`100 / numărul de coloane`); dacă scrii `lot:` de mână și treci de
+  prag, cade cu `too many SQL variables`. Scrie `lot:` doar ca să faci loturile MAI MICI (rânduri
+  grele, ca scrisorile de zeci de KB), niciodată mai mari.
+- **⚠️ Backtick într-un comentariu dintr-un template literal: `tsc` poate să-l ratedeze, esbuild NU**
+  (14.09.2026). Regula de mai jos (fără backtick în comentariile de stil) e aceeași, dar acolo o
+  prindea `tsc`; într-un JS de pagină lipit cu `String.raw`, `tsc` a trecut curat și build-ul de la
+  `wrangler deploy` a picat cu „Expected ";" but found …". **Deci: `tsc` curat NU garantează că se
+  publică** — la prima publicare a unei aplicații noi, rulează și un deploy, nu doar typecheck-ul.
 - **⚠️ O aplicație cu o rută care poartă CHIAR NUMELE ei își taie singură calea** (pățit la buletin,
   13.09.2026, reclamat de user: „nu merg linkurile de sub ultimul număr"). `prefixSiCale(url, '/x')`
   nu poate deosebi prefixul de montaj al gateway-ului de preview de o rută adevărată `/x/…`: pe

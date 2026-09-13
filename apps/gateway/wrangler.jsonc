@@ -18,12 +18,13 @@
 
   "vars": { "MEDIU": "dev" },
 
-  // PROGRAM si CURATENIE se adauga aici cand aplicatiile lor sunt gata: in `wrangler dev` un
-  // binding catre un worker care nu ruleaza in aceeasi sesiune opreste toata sesiunea.
+  // ⚠️ O aplicatie se adauga aici doar cand e gata: in `wrangler dev` un binding catre un worker
+  // care nu ruleaza in aceeasi sesiune opreste toata sesiunea.
   "services": [
     { "binding": "HOME", "service": "xc-home" },
     { "binding": "CONT", "service": "xc-account" },
     { "binding": "PROGRAM", "service": "xc-program" },
+    { "binding": "CURATENIE", "service": "xc-curatenie" },
     { "binding": "CALENDAR", "service": "xc-calendar" },
     { "binding": "TIPIC", "service": "xc-tipic" },
     { "binding": "BIBLIA", "service": "xc-biblia" },

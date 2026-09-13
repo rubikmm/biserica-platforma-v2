@@ -26,11 +26,12 @@ export interface Env {
 /**
  * Aplicatiile platformei. Se adauga aici pe masura ce se poarta — dar NUMAI dupa ce adresa
  * lor raspunde: toate butoanele arata la fel (cerere user, 10.09.2026), deci un buton care
- * n-ar duce nicaieri n-are cum sa se deosebeasca de unul bun. Curatenia intra la publicare.
+ * n-ar duce nicaieri n-are cum sa se deosebeasca de unul bun.
  */
 const APLICATII: Array<{ cheie: keyof Navigatie; nume: string }> = [
   { cheie: 'calendar', nume: 'Calendarul' },
   { cheie: 'program', nume: 'Programul liturgic' },
+  { cheie: 'curatenie', nume: 'Curățenia bisericii' },
   { cheie: 'tipic', nume: 'Tipicul' },
   { cheie: 'biblia', nume: 'Biblia' },
   { cheie: 'biblioteca', nume: 'Biblioteca' },

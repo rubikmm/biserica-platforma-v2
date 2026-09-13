@@ -1,0 +1,116 @@
+{
+  // Curatenia bisericii (A6 din V1) — programarea voluntarilor la duminici, pe pozitii („sloturi"),
+  // plus rapoartele care ies din ea: alerta de „locuri libere", raportul saptamanal si cel lunar.
+  //
+  // Trei lucruri de stiut inainte sa umbli aici:
+  //  - **voluntarii sunt ai aplicatiei**, nu ai identitatii (alegere a utilizatorului, 13.09.2026):
+  //    omul isi alege numele din lista, fara cont, ca in V1. Abatere STIUTA de la „datele personale
+  //    nu se copiaza" — de aceea `voluntari` tine nume, e-mail si telefon. Cine intra cu contul
+  //    platformei se leaga de rand prin `user_id`, si atunci contul e cel care il recunoaste;
+  //  - **emailul nu pleaca de aici**: rapoartele se dau postei platformei (`xc-communication`),
+  //    care tine si arhiva livrarilor. In V1 aplicatia deschidea singura SMTP catre no-reply@;
+  //  - **dreptul de administrare e central**: `cleaning.manage`, nu parola locala din V1 (cele trei
+  //    hash-uri bcrypt NU s-au copiat, si nici tabelul lor de resetare).
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "xc-curatenie",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "workers_dev": false,
+  // Data publicarii, pentru randul de versiune din subsol.
+  "version_metadata": { "binding": "VERSIUNE" },
+
+  "vars": {
+    "MEDIU": "dev",
+    "ORIGINE_PUBLICA": "https://rubik:8474",
+    "DOMENIU_COOKIE": "",
+    "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
+  },
+
+  // Voluntarii, programarile, vacantele, jurnalul de mesaje si arhiva rapoartelor.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "xc-curatenie-staging",
+      "database_id": "0c60549b-9f84-4f92-a788-835929a2f8c7"
+    }
+  ],
+
+  // CALENDAR: numele duminicii („Duminica a 18-a dupa Rusalii") se CERE de la A1, nu se mai tine
+  // scris de mana in cod — in V1 era o lista care acoperea doar 2026.
+  "services": [
+    { "binding": "IDENTITATE", "service": "xc-identity" },
+    { "binding": "AUTORIZARE", "service": "xc-authz" },
+    { "binding": "COMUNICARE", "service": "xc-communication" },
+    { "binding": "CALENDAR", "service": "xc-calendar" }
+  ],
+
+  // Ceasul rapoartelor, din ora in ora, ca in V1 (`0 * * * *`): el hotaraste singur, pe ora
+  // Bucurestiului, daca e vremea alertei, a raportului saptamanal ori a celui lunar. Cron Triggers
+  // bat pe UTC — de aceea ora locala se socoteste in cod, nu in expresie.
+  "triggers": { "crons": ["0 * * * *"] },
+
+  "env": {
+    "staging": {
+      "name": "xc-curatenie-staging",
+      "version_metadata": { "binding": "VERSIUNE" },
+      "vars": {
+        "MEDIU": "staging",
+        "ORIGINE_PUBLICA": "https://curatenie.staging.sfantul-ilie.ro",
+        "DOMENIU_COOKIE": ".staging.sfantul-ilie.ro",
+        "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
+        "URL_HOME": "https://staging.sfantul-ilie.ro",
+        "URL_CONT": "https://cont.staging.sfantul-ilie.ro",
+        "URL_CALENDAR": "https://calendar.staging.sfantul-ilie.ro",
+        "URL_PROGRAM": "https://program.staging.sfantul-ilie.ro",
+        "URL_CURATENIE": "https://curatenie.staging.sfantul-ilie.ro",
+        "URL_TIPIC": "https://tipic.staging.sfantul-ilie.ro",
+        "URL_BIBLIA": "https://biblia.staging.sfantul-ilie.ro",
+        "URL_BIBLIOTECA": "https://biblioteca.staging.sfantul-ilie.ro",
+        "URL_BULETIN": "https://buletin.staging.sfantul-ilie.ro",
+        "URL_NEWSLETTER": "https://newsletter.staging.sfantul-ilie.ro",
+        "URL_ADMIN": "https://admin.staging.sfantul-ilie.ro"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "xc-curatenie-staging",
+          "database_id": "0c60549b-9f84-4f92-a788-835929a2f8c7"
+        }
+      ],
+      "services": [
+        { "binding": "IDENTITATE", "service": "xc-identity-staging" },
+        { "binding": "AUTORIZARE", "service": "xc-authz-staging" },
+        { "binding": "COMUNICARE", "service": "xc-communication-staging" },
+        { "binding": "CALENDAR", "service": "xc-calendar-staging" }
+      ],
+      "triggers": { "crons": ["0 * * * *"] },
+      "routes": [{ "pattern": "curatenie.staging.sfantul-ilie.ro", "custom_domain": true }]
+    },
+    "production": {
+      "name": "xc-curatenie-production",
+      "version_metadata": { "binding": "VERSIUNE" },
+      "vars": {
+        "MEDIU": "production",
+        "ORIGINE_PUBLICA": "https://curatenie.sfantul-ilie.ro",
+        "DOMENIU_COOKIE": ".sfantul-ilie.ro",
+        "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
+        "URL_HOME": "https://sfantul-ilie.ro",
+        "URL_CONT": "https://cont.sfantul-ilie.ro",
+        "URL_CALENDAR": "https://calendar.sfantul-ilie.ro",
+        "URL_PROGRAM": "https://program.sfantul-ilie.ro",
+        "URL_CURATENIE": "https://curatenie.sfantul-ilie.ro",
+        "URL_TIPIC": "https://tipic.sfantul-ilie.ro",
+        "URL_BIBLIA": "https://biblia.sfantul-ilie.ro",
+        "URL_BIBLIOTECA": "https://biblioteca.sfantul-ilie.ro",
+        "URL_BULETIN": "https://buletin.sfantul-ilie.ro",
+        "URL_NEWSLETTER": "https://newsletter.sfantul-ilie.ro",
+        "URL_ADMIN": "https://admin.sfantul-ilie.ro"
+      }
+      // ⚠️ Ruta de productie (`curatenie.sfantul-ilie.ro`) e A LUI A6 DIN V1, care e VIU si trimite
+      // singur rapoartele. Nimic rutat de aici pana la cutover-ul cerut anume de utilizator; altfel
+      // cei 29 de voluntari ar primi cate doua scrisori si ar avea doua calendare.
+    }
+  }
+}
