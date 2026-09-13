@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { prefixSiCale } from '../packages/config/src/index.js'
 import { plat } from '../apps/buletin/src/depozit.js'
 import { anul, luna, scurtat } from '../apps/newsletter/src/pagini.js'
 
@@ -34,6 +35,30 @@ describe('buletin · potrivirea cautarii (`plat`)', () => {
 
   it('lasa cifrele si semnele in pace', () => {
     expect(plat('Nr. 615 / 2026-09-06')).toBe('nr. 615 / 2026-09-06')
+  })
+})
+
+/**
+ * ⚠️ Capcana care a scos paginile numerelor din functiune pe staging (reclamata de user,
+ * 13.09.2026, seara): buletinul e singura aplicatie cu o ruta proprie care poarta chiar numele ei,
+ * `/buletin/<nr>-<data>` (adresa din V1). Pe subdomeniu, `prefixSiCale` lua acel `/buletin` drept
+ * prefixul gateway-ului de preview, taia calea si nu se mai potrivea nicio ruta.
+ * De aceea montajul se ia din MEDIU: `/buletin` numai in dev, gol in rest.
+ */
+describe('buletin · adresa unui numar nu se taie singura', () => {
+  it('pe subdomeniu (montaj gol) calea ramane intreaga', () => {
+    const u = new URL('https://buletin.staging.sfantul-ilie.ro/buletin/615-2026-09-06')
+    expect(prefixSiCale(u, '')).toEqual({ prefix: '', cale: '/buletin/615-2026-09-06' })
+  })
+
+  it('prin gateway (dev) se taie DOAR prefixul de montaj, o singura data', () => {
+    const u = new URL('https://rubik:8474/buletin/buletin/615-2026-09-06')
+    expect(prefixSiCale(u, '/buletin')).toEqual({ prefix: '/buletin', cale: '/buletin/615-2026-09-06' })
+  })
+
+  it('radacina aplicatiei ramane „/" in amandoua', () => {
+    expect(prefixSiCale(new URL('https://buletin.staging.sfantul-ilie.ro/'), '').cale).toBe('/')
+    expect(prefixSiCale(new URL('https://rubik:8474/buletin'), '/buletin').cale).toBe('/')
   })
 })
 

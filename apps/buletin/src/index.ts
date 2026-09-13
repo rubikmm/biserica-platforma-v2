@@ -230,7 +230,15 @@ export default {
     const cid = correlationId(req)
     const log = new Logger({ service: SERVICIU, correlationId: cid })
     const url = new URL(req.url)
-    const { prefix, cale } = prefixSiCale(url, '/buletin')
+    /**
+     * ⚠️ MONTAJUL SE IA DIN MEDIU, nu din cale — buletinul e singura aplicatie care are o ruta
+     * proprie cu chiar numele ei: `/buletin/<nr>-<data>`, adresa unui numar, mostenita din V1.
+     * Pe subdomeniu (`buletin.staging.sfantul-ilie.ro/buletin/615-2026-09-06`) `prefixSiCale` lua
+     * acel `/buletin` drept prefixul gateway-ului, taia calea la `/615-2026-09-06` si pagina
+     * numarului dadea 404 — reclamat de user, 13.09.2026. Prin gateway (numai in dev) aplicatia
+     * chiar sta sub `/buletin`; in staging si productie sta la radacina, deci montajul e gol.
+     */
+    const { prefix, cale } = prefixSiCale(url, env.MEDIU === 'dev' ? '/buletin' : '')
     const nav = navigatieDin(cfg)
     const radacina = new URL(prefix || '/', cfg.ORIGINE_PUBLICA).toString().replace(/\/$/, '')
 

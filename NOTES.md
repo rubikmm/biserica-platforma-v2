@@ -995,6 +995,16 @@ forța antetul `Host`**.
 
 ### Capcane tehnice
 
+- **⚠️ O aplicație cu o rută care poartă CHIAR NUMELE ei își taie singură calea** (pățit la buletin,
+  13.09.2026, reclamat de user: „nu merg linkurile de sub ultimul număr"). `prefixSiCale(url, '/x')`
+  nu poate deosebi prefixul de montaj al gateway-ului de preview de o rută adevărată `/x/…`: pe
+  subdomeniu, `buletin.staging…/buletin/615-2026-09-06` ajungea în worker ca `/615-2026-09-06`, nu se
+  potrivea nicio rută și pagina numărului da **404**. Restul linkurilor (PDF, arhivă, căutare) mergeau
+  — de aceea se vede greu. **Leacul**: montajul se ia din MEDIU, nu din cale —
+  `prefixSiCale(url, env.MEDIU === 'dev' ? '/buletin' : '')`; prin gateway (numai în dev) aplicația
+  chiar stă sub `/buletin`, în staging și producție stă la rădăcină. Probe în
+  `tests/buletin-newsletter.test.ts`. Verificat: **buletinul e singura** aplicație cu ciocnirea asta.
+  ⚠️ Se repetă la orice aplicație viitoare a cărei rută V1 începe cu numele ei.
 - **⚠️ Copiile din `tmp/` se desincronizează de container** (pățit 11.09, 21:18). Editez uneori direct
   în container și alteori în copia locală, apoi `docker cp` peste — când copia locală e mai veche,
   **suprascrierea șterge editările din container**. Așa s-a pierdut o regulă din `creier.ts` și a trecut
@@ -1057,6 +1067,15 @@ forța antetul `Host`**.
 ## Jurnal
 
 ### 2026-09-13
+
+- **Reparat, la reclamația userului: paginile numerelor de buletin dădeau 404** („nu merg linkurile
+  de sub ultimul număr"). Cauza, subtilă: aplicația își tăia din cale propriul nume, crezând că e
+  prefixul gateway-ului de preview — vezi „Capcane tehnice". Montajul se ia de acum din MEDIU.
+  Buletin **0.1.1**, trei probe noi (11 în fișier). Verificate pe staging TOATE clasele de linkuri:
+  fișele numerelor, vecinii, hârtiile, anii arhivei, rezultatele căutării și adresa scurtă
+  `/buletin/615` (302 → numărul întreg). **De reținut**: la portarea următoare, plimbă o dată toate
+  linkurile paginii, nu doar rutele pe care le-ai scris tu — `/v1` ieșea identic cu V1 și PDF-ul la
+  fel, deci proba de fidelitate a trecut cu pagina numărului ruptă.
 
 - **BULETINUL (A3) ȘI NEWSLETTERUL (A8) portate în V2** (user, seara: „Mai portează: buletinul
   parohiei, newsletter"). Doi workeri noi pe `buletin.` și `newsletter.staging.sfantul-ilie.ro`,
