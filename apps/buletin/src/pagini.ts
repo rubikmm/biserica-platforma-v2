@@ -160,12 +160,12 @@ const JS_PAGINI = `
 (function(){
   // ABONAREA: butonul deschide fereastra. Inchiderea n-are nevoie de JS — formularul dinauntru e
   // method="dialog", deci si „Abonare", si X-ul o inchid singure (si Escape, de la browser).
-  // ⚠️ Cat timp fereastra e deschisa, pagina din spate NU se deruleaza (user, 12.09.2026).
+  // ⚠️ Cat timp fereastra e deschisa, pagina din spate NU se deruleaza (user, 12.09.2026) — dar
+  // oprirea o face carcasa, la orice showModal(), nu scriptul de aici.
   var b = document.getElementById("b-abonare");
   var d = document.getElementById("d-abonare");
   if (!b || !d || !d.showModal) return;
-  b.addEventListener("click", function(){ document.body.classList.add("cu-fereastra"); d.showModal(); });
-  d.addEventListener("close", function(){ document.body.classList.remove("cu-fereastra"); });
+  b.addEventListener("click", function(){ d.showModal(); });
 })();
 (function(){
   // RĂSFOITUL, cu modulul Real3D FlipBook — acelasi de la jurnaluldeafaceri (cerere user,
@@ -259,7 +259,6 @@ const JS_PAGINI = `
   function deschide(e){
     if (e) e.preventDefault();
     if (!poate) { deschidePdf(); return; }
-    document.body.classList.add("cu-fereastra");
     d.showModal();
     pregateste();
   }
@@ -268,7 +267,6 @@ const JS_PAGINI = `
   for (var i = 0; i < declansatoare.length; i++) declansatoare[i].addEventListener("click", deschide);
 
   document.getElementById("r-inchide").addEventListener("click", function(){ d.close(); });
-  d.addEventListener("close", function(){ document.body.classList.remove("cu-fereastra"); });
 
   // Legatura de-a dreptul catre rasfoit: ?rasfoit=1. Tot ea e si calea prin care se fotografiaza.
   if (poate && /[?&]rasfoit=1/.test(location.search)) deschide();

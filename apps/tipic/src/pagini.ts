@@ -352,16 +352,15 @@ function fereastraAbonare(_ctx: Ctx): string {
 /**
  * Butonul deschide fereastra. Inchiderea n-are nevoie de JS: formularul dinauntru e
  * `method="dialog"`, deci si „Abonare", si X-ul o inchid singure (si Escape, de la browser).
- * ⚠️ `body.cu-fereastra` opreste derularea paginii de sub fereastra si se scoate la `close`, ca sa
- * acopere si Escape, si butoanele dinauntru (asa s-a reparat la Calendar si Program, 12.09.2026).
+ * ⚠️ Derularea paginii de sub fereastra o opreste CARCASA, la orice `showModal()` (@xc/ui) — aici
+ * nu se mai scrie nimic pentru asta (regula generala a ferestrelor, user 13.09.2026).
  */
 const JS_ABONARE = `
 (function(){
   var b = document.getElementById("b-abonare");
   var d = document.getElementById("d-abonare");
   if (!b || !d || !d.showModal) return;
-  b.addEventListener("click", function(){ document.body.classList.add("cu-fereastra"); d.showModal(); });
-  d.addEventListener("close", function(){ document.body.classList.remove("cu-fereastra"); });
+  b.addEventListener("click", function(){ d.showModal(); });
 })();
 `
 

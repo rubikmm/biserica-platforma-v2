@@ -65,3 +65,53 @@ describe('carcasă — masca „vezi ca"', () => {
     expect(html).not.toContain('<details class="cont-meniu">')
   })
 })
+
+/**
+ * REGULA FERESTRELOR (user, 13.09.2026): „popupul de abonare sau preview 3d-flip la buletin să
+ * blocheze scrollul din spate … să fie o regulă generală când faci un pop-up".
+ *
+ * Pana atunci fiecare aplicatie si-o scria singura, si o scria GRESIT: `body.cu-fereastra{overflow:
+ * hidden}`. Carcasa are `html{overflow-y:scroll}`, deci derularea e a radacinii, iar overflow-ul de
+ * pe body nu se mai propaga la fereastra — clasa se punea, si pagina se derula mai departe.
+ * Acum regula sta o singura data, in carcasa, pe <html>, si o capata ORICE <dialog> deschis cu
+ * showModal(), fara ca aplicatia sa stie ceva. Probele de aici pazesc si locul, si generalitatea.
+ */
+describe('carcasă — ferestrele opresc derularea din spate', () => {
+  const cap = pagina({ nume: 'PROGRAMUL', titlu: 'Programul liturgic', corp: '<p>ceva</p>' })
+
+  it('regula de stil stă pe <html>, niciodată doar pe body', () => {
+    expect(cap).toContain('html.cu-fereastra, html.cu-fereastra body { overflow:hidden')
+    expect(cap).not.toContain('body.cu-fereastra {')
+  })
+
+  it('carcasa îmbracă showModal, deci orice fereastră nouă capătă regula fără s-o ceară', () => {
+    expect(cap).toContain('HTMLDialogElement')
+    expect(cap).toContain('D.prototype.showModal = function')
+    // eliberarea vine din „close", ca sa acopere si Escape, si <form method="dialog">
+    expect(cap).toMatch(/addEventListener\('close'/)
+    // si o poarta pentru ferestrele care nu sunt <dialog> (panoul chatului)
+    expect(cap).toContain('window.xcFereastra')
+  })
+
+  // Se prind amândouă felurile de blocare scrise de mână: clasa pe body (abonarea, răsfoitul) și
+  // `overflow` pus direct pe corp (lupa copertei din bibliotecă). Amândouă erau degeaba.
+  it('nicio aplicație nu-și mai scrie regula pe cont propriu', async () => {
+    const { readdirSync, readFileSync, statSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const radacina = new URL('../', import.meta.url).pathname
+    const vinovate: string[] = []
+    const CARCASA = join(radacina, 'packages/ui/src/index.ts') // singurul loc unde regula ARE voie
+    const umbla = (dosar: string) => {
+      for (const nume of readdirSync(dosar)) {
+        const cale = join(dosar, nume)
+        if (statSync(cale).isDirectory()) { if (nume !== 'node_modules' && !nume.startsWith('.')) umbla(cale) }
+        else if (nume.endsWith('.ts') && cale !== CARCASA
+          && /body\.cu-fereastra|classList\.(add|remove)\((["'])cu-fereastra|body\.style\.overflow/.test(readFileSync(cale, 'utf8'))) {
+          vinovate.push(cale.slice(radacina.length))
+        }
+      }
+    }
+    for (const dosar of ['apps', 'packages']) umbla(join(radacina, dosar))
+    expect(vinovate).toEqual([])
+  })
+})

@@ -195,12 +195,9 @@ const JS_ABONARE = `
   if (!b || !d || !d.showModal) return;
   // ⚠️ Cat timp fereastra e deschisa, pagina din spate NU se deruleaza (user, 12.09.2026, 13:42), iar
   // la inchidere isi capata derularea inapoi. <dialog> face pagina inertă, dar rotita mouse-ului tot
-  // misca fundalul, si atunci omul se trezeste in alta parte a lunii cand inchide. Clasa e aceeasi cu
-  // a ferestrei textelor zilei (body.cu-fereastra), deci regula de stil e scrisa o singura data.
-  // Inchiderea o prindem din evenimentul „close": asa acopera si Escape, si butoanele dinauntru
-  // (formularul e method="dialog"), fara sa le ascultam pe fiecare.
-  b.addEventListener("click", function(){ d.showModal(); document.body.classList.add("cu-fereastra"); });
-  d.addEventListener("close", function(){ document.body.classList.remove("cu-fereastra"); });
+  // misca fundalul, si atunci omul se trezeste in alta parte a lunii cand inchide. Oprirea NU se mai
+  // scrie aici: o face carcasa, la orice showModal() (user, 13.09.2026: regula e generala).
+  b.addEventListener("click", function(){ d.showModal(); });
 })();
 `
 
@@ -297,7 +294,6 @@ function script(prefix: string): string {
 
   function deschide(zi, parte) {
     curent = zi + '/' + parte;
-    document.body.classList.add('cu-fereastra');
     if (!fereastra.open) fereastra.showModal();
     if (stiute[zi]) { scrie(stiute[zi], parte); return; }
     cuprins.innerHTML = '<p class="gol">se încarcă…</p>';
@@ -315,7 +311,6 @@ function script(prefix: string): string {
 
   function inchide() {
     curent = '';
-    document.body.classList.remove('cu-fereastra');
     if (fereastra.open) fereastra.close();
   }
 
@@ -334,7 +329,6 @@ function script(prefix: string): string {
   fereastra.querySelector('.inchide').addEventListener('click', function () { fereastra.close(); });
   fereastra.addEventListener('close', function () {
     curent = '';
-    document.body.classList.remove('cu-fereastra');
     if (history.state && history.state.fereastra) history.back();
   });
   window.addEventListener('popstate', function (ev) {

@@ -46,6 +46,13 @@ body { margin:0; padding:0 20px 80px; background:var(--paper); color:var(--ink);
        font:17px/1.55 "Palatino Linotype","Book Antiqua",Palatino,Georgia,serif;
        -webkit-text-size-adjust:100%; touch-action:manipulation;
        -webkit-tap-highlight-color:transparent }
+/* ⚠️ REGULA FERESTRELOR (user, 13.09.2026): cat timp ceva sta deschis PESTE pagina — abonarea,
+   rasfoitul, chatul, orice pop-up de maine — pagina din spate NU se deruleaza. Clasa sta pe
+   <html>, nu pe body: radacina are overflow-y:scroll (mai sus), deci derularea e a ei, iar
+   overflow:hidden scris pe body nu se mai propaga la fereastra si nu opreste nimic — asa a scapat
+   pana acum. scrollbar-gutter:stable tine locul barei, deci nimic nu sare in laturi la blocare.
+   Punerea si scoaterea clasei le face carcasa singura (JS_CAP), nu aplicatia. */
+html.cu-fereastra, html.cu-fereastra body { overflow:hidden; overscroll-behavior:none }
 .w { max-width:680px; margin:0 auto }
 .w.lat { max-width:900px }
 a { color:var(--rosu); text-decoration-thickness:1px; text-underline-offset:2px }
@@ -172,6 +179,40 @@ details[open] summary { margin-bottom:8px }
 // ---------------------------------------------------------------------------
 
 export const JS_CAP = `
+(function () {
+  // ⚠️ REGULA FERESTRELOR, partea care miscă (user, 13.09.2026: „să fie o regulă generală când faci
+  // un pop-up"). Nicio aplicatie nu mai scrie de mana oprirea derularii: ORICE <dialog> deschis cu
+  // showModal() o capata singur, fiindca aici i se imbraca metoda — asa o primesc si ferestrele
+  // scrise maine, fara sa-si aduca aminte cineva. Ferestrele care nu sunt <dialog> (panoul
+  // chatului) cheama xcFereastra.blocheaza() / .dezblocheaza().
+  // Numaratoarea e pentru ferestre suprapuse: fundalul se elibereaza cand se inchide ULTIMA.
+  var de = document.documentElement;
+  var deschise = 0;
+  function blocheaza(){ if (++deschise === 1) de.classList.add('cu-fereastra'); }
+  function dezblocheaza(){ if (deschise > 0 && --deschise === 0) de.classList.remove('cu-fereastra'); }
+  window.xcFereastra = { blocheaza: blocheaza, dezblocheaza: dezblocheaza };
+
+  var D = window.HTMLDialogElement;
+  if (!D || !D.prototype || !D.prototype.showModal) return;
+  var nativ = D.prototype.showModal;
+  D.prototype.showModal = function () {
+    // Intai deschiderea adevarata: daca fereastra era deja deschisa, ea arunca si nu numaram nimic.
+    var r = nativ.apply(this, arguments);
+    var f = this;
+    if (!f.__xcBlocat) {
+      f.__xcBlocat = true;
+      blocheaza();
+      // „close" vine si de la Escape, si de la <form method="dialog">, si de la .close() — deci
+      // orice fel de inchidere elibereaza pagina.
+      f.addEventListener('close', function la(){
+        f.removeEventListener('close', la);
+        f.__xcBlocat = false;
+        dezblocheaza();
+      });
+    }
+    return r;
+  };
+})();
 (function () {
   var radacina = document.documentElement;
   radacina.className += ' cu-js';

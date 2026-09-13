@@ -43,8 +43,8 @@ export const STIL_CHAT = `
                 transition:transform .15s ease, box-shadow .15s ease }
 .xc-chat-cerc:hover { transform:translateY(-1px); box-shadow:0 5px 18px rgba(0,0,0,.2) }
 .xc-chat.deschis .xc-chat-cerc { display:none }
-/* cat e panoul deschis, pagina de dedesubt nu se deruleaza (user, 11.09.2026) */
-html.xc-chat-deschis, html.xc-chat-deschis body { overflow:hidden }
+/* cat e panoul deschis, pagina de dedesubt nu se deruleaza (user, 11.09.2026). Regula nu mai e
+   scrisa aici: panoul cheama xcFereastra din carcasa, ca orice fereastra a platformei. */
 
 /* panoul */
 .xc-chat-panou { display:none; width:min(374px, calc(100vw - 28px));
@@ -228,16 +228,26 @@ export const JS_CHAT = `(function(){
       }).catch(function(){});
   }
 
+  // ⚠️ Panoul nu e <dialog>, deci nu-l prinde imbracamintea lui showModal din carcasa: cere singur
+  // oprirea derularii, prin aceeasi numaratoare (user, 13.09.2026 — regula ferestrelor e generala).
+  // „deschis" e ținut minte in localStorage, deci blocheaza() poate fi chemat de doua ori pe aceeasi
+  // stare: pazim cu un semn al nostru, ca numaratoarea sa nu ramana agatata.
+  var blocat = false;
+  function opresteFundalul(cum){
+    if (cum === blocat || !window.xcFereastra) return;
+    blocat = cum;
+    if (cum) window.xcFereastra.blocheaza(); else window.xcFereastra.dezblocheaza();
+  }
   function deschide(){
     r.classList.add('deschis');
-    document.documentElement.classList.add('xc-chat-deschis');
+    opresteFundalul(true);
     try { localStorage.setItem(CHEIE_DESCHIS, '1'); } catch(e){}
     incarcaDiscutia();
     setTimeout(function(){ camp.focus(); jos(); }, 30);
   }
   function strange(){
     r.classList.remove('deschis');
-    document.documentElement.classList.remove('xc-chat-deschis');
+    opresteFundalul(false);
     try { localStorage.setItem(CHEIE_DESCHIS, '0'); } catch(e){}
   }
 

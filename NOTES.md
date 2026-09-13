@@ -415,6 +415,21 @@ parohiei trăiesc încă aplicațiile V1. Mutarea rutelor rămâne pas explicit,
 
 ## Capcane de ținut minte
 
+- **⚠️ REGULA FERESTRELOR: pop-up deschis → pagina din spate NU se derulează** (user, 13.09.2026:
+  „să fie o regulă generală când faci un pop-up"). Se scrie **o singură dată, în carcasă**
+  (`@xc/ui`), nu la aplicație:
+  - stilul e `html.cu-fereastra, html.cu-fereastra body { overflow:hidden; overscroll-behavior:none }`;
+  - `JS_CAP` **îmbracă `HTMLDialogElement.prototype.showModal`**, deci **orice `<dialog>`** deschis
+    modal capătă regula singur, oriunde ar fi scris, iar „close" (Escape, `<form method="dialog">`,
+    `.close()`) o scoate. Numărătoare pentru ferestre suprapuse;
+  - ce **nu** e `<dialog>` (panoul chatului, lupa copertei din bibliotecă) cheamă
+    `window.xcFereastra.blocheaza()` / `.dezblocheaza()`.
+  **Capcana care a ținut regula stricată** (scrisă de mână în patru aplicații, degeaba): `body`.
+  Carcasa are `html { overflow-y:scroll }`, iar `overflow` de pe `body` **nu se mai propagă** la
+  fereastră când rădăcina are overflow declarat — clasa se punea și pagina se derula mai departe.
+  Blocarea merge **numai pe `<html>`**. (`scrollbar-gutter:stable` ține locul barei, deci nimic nu
+  sare în lături.) Probe: `tests/carcasa.test.ts` — inclusiv una care umblă prin `apps/` și
+  `packages/` și cade dacă o aplicație își rescrie blocarea pe cont propriu.
 - **Intrarea pe local: `123456` merge oricând pentru adresa super-adminului** (⚠️ TEMPORAR, cerere
   user 11.09.2026). Fluxul rămâne întreg: adresă → „Trimite-mi codul" → scrii `123456`. Blocul e în
   `services/identity-worker/src/index.ts`, sub `permiteSecretDebug(cfg)` — pe staging și în
@@ -1143,6 +1158,16 @@ forța antetul `Host`**.
 ## Jurnal
 
 ### 2026-09-13
+
+- **Ferestrele opresc derularea din spate — regulă generală, în carcasă** (cerere user, seara:
+  „la toate aplicațiile… popupul de abonare sau preview 3d-flip la buletin să blocheze scrollul din
+  spate… să fie o regulă generală când faci un pop-up"). Blocarea exista deja, scrisă de mână în
+  patru aplicații, dar **pe `body`** — și nu lucra, fiindcă rădăcina are `overflow-y:scroll`.
+  Mutată în `@xc/ui`: stilul pe `<html>` + îmbrăcarea lui `showModal`, deci o capătă orice fereastră,
+  și cele de mâine. Curățate abonările (calendar, program, tipic, buletin), fereastra textelor zilei,
+  răsfoitul 3D și lupa copertei din bibliotecă (ea scria `overflow` direct pe corp); chatul cere acum
+  aceeași numărătoare, în loc de clasa lui. Trei probe noi în `tests/carcasa.test.ts`, una care
+  păzește ca nicio aplicație să nu-și mai scrie blocarea singură. Amănunte: „Capcane de ținut minte".
 
 - **RĂSFOITUL numărului, în locul deschiderii PDF-ului** (cerere user, seara). Modulul **Real3D
   FlipBook v3.7.10**, chiar cel de la `jurnaluldeafaceri`; asseturile (35 de fișiere, 3,8 MB) stau în

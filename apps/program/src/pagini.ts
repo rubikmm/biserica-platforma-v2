@@ -448,9 +448,8 @@ body:not(.cu-calendar) .zi.ultima { border-bottom:0 }
 /* FEREASTRA DE ABONARE (user, 11.09.2026) — dialog nativ: fundalul intunecat, focusul si Escape vin
    de la browser, noi scriem doar cum arata. Cutia nu creste peste ecran (min cu latimea lui, minus o
    margine), ca pe telefon sa nu iasa in afara. */
-/* ⚠️ Cat timp fereastra e deschisa, pagina din spate nu se deruleaza (user, 12.09.2026, 13:42): clasa
-   o pune si o scoate JS-ul, din „click" si din „close". */
-body.cu-fereastra { overflow:hidden }
+/* ⚠️ Cat timp fereastra e deschisa, pagina din spate nu se deruleaza (user, 12.09.2026, 13:42) — dar
+   regula NU mai e scrisa aici: o tine carcasa (@xc/ui), pentru orice fereastra din platforma. */
 .modal { border:0; padding:0; border-radius:14px; width:min(420px, calc(100vw - 32px));
          background:var(--paper); color:var(--ink); box-shadow:0 18px 50px rgba(0,0,0,.22) }
 .modal::backdrop { background:rgba(10,12,16,.45) }
@@ -584,10 +583,9 @@ export const SCRIPT = `
   if (!b || !d || !d.showModal) return;
   // ⚠️ Cat timp fereastra e deschisa, pagina din spate NU se deruleaza (user, 12.09.2026, 13:42), iar
   // la inchidere isi capata derularea inapoi. <dialog> face pagina inertă, dar rotita mouse-ului tot
-  // misca fundalul, si atunci omul se trezeste in alta parte a saptamanii cand inchide. Inchiderea o
-  // prindem din evenimentul „close": asa acopera si Escape, si butoanele dinauntru.
-  b.addEventListener("click", function(){ d.showModal(); document.body.classList.add("cu-fereastra"); });
-  d.addEventListener("close", function(){ document.body.classList.remove("cu-fereastra"); });
+  // misca fundalul, si atunci omul se trezeste in alta parte a saptamanii cand inchide. Oprirea o
+  // face carcasa, la orice showModal(), nu scriptul de aici (user, 13.09.2026: regula e generala).
+  b.addEventListener("click", function(){ d.showModal(); });
 })();
 `
 

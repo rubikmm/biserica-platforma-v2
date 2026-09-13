@@ -307,8 +307,8 @@ h2.luna { font:400 13px/1 ui-sans-serif,system-ui; letter-spacing:.2em; text-tra
           font:13px ui-sans-serif,system-ui }
 .vecini a { text-decoration:none }
 
-/* ————— fereastra cu textele zilei ————— */
-body.cu-fereastra { overflow:hidden }
+/* ————— fereastra cu textele zilei —————
+   ⚠️ Oprirea derularii din spate nu se scrie aici: o face carcasa (@xc/ui), la orice fereastra. */
 dialog.fereastra { display:flex; flex-direction:column; inset:0; margin:auto;
                    width:min(700px,94vw); max-width:none; max-height:88vh; max-height:88dvh;
                    padding:0; border:none; border-radius:10px;

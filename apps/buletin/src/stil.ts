@@ -41,8 +41,8 @@ export const LOCAL = `
 }
 
 /* ── FEREASTRA DE ABONARE, adusa intocmai de la Program prin Tipic — dialog nativ: fundalul
-   intunecat, focusul si Escape vin de la browser, noi scriem doar cum arata. */
-body.cu-fereastra { overflow:hidden }
+   intunecat, focusul si Escape vin de la browser, noi scriem doar cum arata.
+   ⚠️ Oprirea derularii din spate NU se mai scrie aici: o face carcasa (@xc/ui), la orice fereastra. */
 .modal { border:0; padding:0; border-radius:14px; width:min(420px, calc(100vw - 32px));
          background:var(--paper); color:var(--ink); box-shadow:0 18px 50px rgba(0,0,0,.22) }
 .modal::backdrop { background:rgba(10,12,16,.45) }

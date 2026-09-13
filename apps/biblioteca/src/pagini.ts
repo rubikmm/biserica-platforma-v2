@@ -197,12 +197,18 @@ if(lm)lm.addEventListener("click",function(e){
     if(pas===0){im.removeAttribute("style");ov.classList.remove("marit")}
     else{ov.classList.add("marit");im.style.width=(im.naturalWidth*pas)+"px"}
   });
-  function inchide(){ov.remove();document.removeEventListener("keydown",tasta);document.body.style.overflow=""}
+  /* ⚠️ Coperta marita e o fereastra peste pagina, deci pagina din spate nu se deruleaza cat sta ea
+     deschisa (regula generala a ferestrelor, user 13.09.2026). Oprirea se cere carcasei — nu se mai
+     scrie overflow-ul pe corp: radacina are overflow-y:scroll, si de pe corp nu se propaga. */
+  var inchisa=false;
+  function inchide(){if(inchisa)return;inchisa=true;
+    ov.remove();document.removeEventListener("keydown",tasta);
+    if(window.xcFereastra)window.xcFereastra.dezblocheaza()}
   function tasta(ev){if(ev.key==="Escape")inchide()}
   ov.addEventListener("click",inchide);
   document.addEventListener("keydown",tasta);
   document.body.appendChild(ov);
-  document.body.style.overflow="hidden";
+  if(window.xcFereastra)window.xcFereastra.blocheaza();
 });
 /* „Incarca mai multe" (user, 8 sept. 2026). Randurile de dupa al zecelea sunt deja in
    pagina, ascunse; aici doar se descopera, cate a ales omul. Lotul apasat ramane ales,
