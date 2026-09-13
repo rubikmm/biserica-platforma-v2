@@ -14,6 +14,12 @@ export const CHEI_PERMISIUNI = [
   'bulletin.write',
   'bulletin.publish',
   'cleaning.manage',
+  // Biblioteca (A12 din V1): pangarul tine ecranul de la Hanul Coltei — pregateste cartea ceruta,
+  // o da, o primeste inapoi. A doua cheie e dreptul OMULUI de a cere carti: se da individual, la
+  // cont, si NU vine cu rolul, ca in V1 (acolo era dreptul „imprumut", pus de mana de un admin
+  // dupa ce pangarul vedea cererea — vezi tabelul cererilor de acces al Bibliotecii).
+  'library.manage',
+  'library.borrow',
   'communication.create',
   'communication.send',
   'automation.manage',
@@ -59,6 +65,7 @@ export const PERMISIUNI_IMPLICITE: Record<Rol, readonly Permisiune[]> = {
     'bulletin.write',
     'bulletin.publish',
     'cleaning.manage',
+    'library.manage',
     'communication.create',
     'automation.manage',
     'audit.read',

@@ -1,11 +1,12 @@
 {
-  // Tipicul (A9 din V1): randuiala slujbei zilei — ce se canta si ce se citeste.
-  // Biblioteca de citit: nu decide nimic si nu anunta nimic, atarna de calendar.
-  // Proprietar al celor trei carti (`xc-tipic-*`): Randuiala Tipicului (ROEA), Anuarul liturgic
-  // si tipiconal (IBMO) si Mineiul. Ziua liturgica, sfintii si textul pericopelor se CER de la
-  // calendar (legatura de serviciu), nu se tin aici.
+  // Biblioteca (A12 din V1): catalogul bibliotecii de la Hanul Colței — ce carti exista si in
+  // cate exemplare. **E un catalog, nu o biblioteca de texte**: cartile se imprumuta fizic, de
+  // la pangar. Cele 1349 de titluri, fisele aduse de la librarii si copertile in trei marimi
+  // s-au copiat din depozitul V1 in unul NOU (`xc-biblioteca-*`), obiect cu obiect.
+  //
+  // Doua straturi: catalogul e PUBLIC, iar rezervarile sunt ale omului (D1, numai `user_id`).
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "xc-tipic",
+  "name": "xc-biblioteca",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-25",
   "compatibility_flags": ["nodejs_compat"],
@@ -18,41 +19,38 @@
     "MEDIU": "dev",
     "ORIGINE_PUBLICA": "https://rubik:8474",
     "DOMENIU_COOKIE": "",
-    "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
-    // Secretul dintre workerii nostri, pentru `/_actiuni`. Pe staging: `wrangler secret put`.
-    "SECRET_INTERN": "dev-actiuni-local"
+    "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
   },
 
+  // Depozitul propriu: catalogul, fisele imbogatite, copertile in trei marimi si PDF-urile.
+  "r2_buckets": [{ "binding": "CATALOG", "bucket_name": "xc-biblioteca-staging" }],
+
+  // Cererile de carti si scrisorile compuse. Inauntru numai `user_id`.
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "xc-tipic-staging",
-      "database_id": "8c5ab60e-d3d8-4e96-aa89-f52492fdd83e",
-      "migrations_dir": "../../infrastructure/migrations/tipic"
+      "database_name": "xc-biblioteca-staging",
+      "database_id": "cbf83fce-8c2a-4548-a576-929f460d0bd3"
     }
-  ],
-
-
-  // Cartile scanate (PDF): ROEA, Anuarul si Mineiul pe noiembrie — copiate din bucketul V1
-  // `biserica-tipic` pe 13.09.2026, in depozit NOU.
-  "r2_buckets": [
-    { "binding": "TEXTE", "bucket_name": "xc-tipic-staging" }
   ],
 
   "services": [
     { "binding": "IDENTITATE", "service": "xc-identity" },
     { "binding": "AUTORIZARE", "service": "xc-authz" },
-    { "binding": "AUDIT", "service": "xc-audit" },
-    { "binding": "CALENDAR", "service": "xc-calendar" }
+    { "binding": "COMUNICARE", "service": "xc-communication" }
   ],
+
+  // Ceasul de noapte: stinge rezervarile neridicate si da semn celor intarziati.
+  // 6:00 UTC = 9:00 la Bucuresti vara, 8:00 iarna — dimineata, nu in miez de noapte.
+  "triggers": { "crons": ["0 6 * * *"] },
 
   "env": {
     "staging": {
-      "name": "xc-tipic-staging",
+      "name": "xc-biblioteca-staging",
       "version_metadata": { "binding": "VERSIUNE" },
       "vars": {
         "MEDIU": "staging",
-        "ORIGINE_PUBLICA": "https://tipic.staging.sfantul-ilie.ro",
+        "ORIGINE_PUBLICA": "https://biblioteca.staging.sfantul-ilie.ro",
         "DOMENIU_COOKIE": ".staging.sfantul-ilie.ro",
         "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
         "URL_HOME": "https://staging.sfantul-ilie.ro",
@@ -65,31 +63,28 @@
         "URL_BIBLIOTECA": "https://biblioteca.staging.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.staging.sfantul-ilie.ro"
       },
+      "r2_buckets": [{ "binding": "CATALOG", "bucket_name": "xc-biblioteca-staging" }],
       "d1_databases": [
         {
           "binding": "DB",
-          "database_name": "xc-tipic-staging",
-          "database_id": "8c5ab60e-d3d8-4e96-aa89-f52492fdd83e",
-          "migrations_dir": "../../infrastructure/migrations/tipic"
+          "database_name": "xc-biblioteca-staging",
+          "database_id": "cbf83fce-8c2a-4548-a576-929f460d0bd3"
         }
-      ],
-      "r2_buckets": [
-        { "binding": "TEXTE", "bucket_name": "xc-tipic-staging" }
       ],
       "services": [
         { "binding": "IDENTITATE", "service": "xc-identity-staging" },
         { "binding": "AUTORIZARE", "service": "xc-authz-staging" },
-        { "binding": "AUDIT", "service": "xc-audit-staging" },
-        { "binding": "CALENDAR", "service": "xc-calendar-staging" }
+        { "binding": "COMUNICARE", "service": "xc-communication-staging" }
       ],
-      "routes": [{ "pattern": "tipic.staging.sfantul-ilie.ro", "custom_domain": true }]
+      "triggers": { "crons": ["0 6 * * *"] },
+      "routes": [{ "pattern": "biblioteca.staging.sfantul-ilie.ro", "custom_domain": true }]
     },
     "production": {
-      "name": "xc-tipic-production",
+      "name": "xc-biblioteca-production",
       "version_metadata": { "binding": "VERSIUNE" },
       "vars": {
         "MEDIU": "production",
-        "ORIGINE_PUBLICA": "https://tipic.sfantul-ilie.ro",
+        "ORIGINE_PUBLICA": "https://biblioteca.sfantul-ilie.ro",
         "DOMENIU_COOKIE": ".sfantul-ilie.ro",
         "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
         "URL_HOME": "https://sfantul-ilie.ro",
@@ -102,7 +97,8 @@
         "URL_BIBLIOTECA": "https://biblioteca.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.sfantul-ilie.ro"
       }
-      // Ruta de productie (`tipic.sfantul-ilie.ro`) ramane a lui A9 pana la cutover-ul explicit.
+      // Ruta de productie (`biblioteca.sfantul-ilie.ro`) ramane a lui A12 pana la cutover-ul
+      // explicit, cerut de utilizator. Nimic rutat de aici.
     }
   }
 }

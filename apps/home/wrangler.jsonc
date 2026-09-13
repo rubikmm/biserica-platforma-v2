@@ -36,6 +36,7 @@
         "URL_CURATENIE": "https://curatenie.staging.sfantul-ilie.ro",
         "URL_TIPIC": "https://tipic.staging.sfantul-ilie.ro",
         "URL_BIBLIA": "https://biblia.staging.sfantul-ilie.ro",
+        "URL_BIBLIOTECA": "https://biblioteca.staging.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.staging.sfantul-ilie.ro"
       },
       "services": [{ "binding": "IDENTITATE", "service": "xc-identity-staging" }],
@@ -57,6 +58,7 @@
         "URL_CURATENIE": "https://curatenie.sfantul-ilie.ro",
         "URL_TIPIC": "https://tipic.sfantul-ilie.ro",
         "URL_BIBLIA": "https://biblia.sfantul-ilie.ro",
+        "URL_BIBLIOTECA": "https://biblioteca.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.sfantul-ilie.ro"
       }
       // Apexul productiei e al WordPress-ului V1 pana la o decizie explicita.

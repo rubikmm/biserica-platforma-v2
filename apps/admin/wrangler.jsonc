@@ -45,6 +45,7 @@
         "URL_CURATENIE": "https://curatenie.staging.sfantul-ilie.ro",
         "URL_TIPIC": "https://tipic.staging.sfantul-ilie.ro",
         "URL_BIBLIA": "https://biblia.staging.sfantul-ilie.ro",
+        "URL_BIBLIOTECA": "https://biblioteca.staging.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.staging.sfantul-ilie.ro"
       },
       "services": [
@@ -74,6 +75,7 @@
         "URL_CURATENIE": "https://curatenie.sfantul-ilie.ro",
         "URL_TIPIC": "https://tipic.sfantul-ilie.ro",
         "URL_BIBLIA": "https://biblia.sfantul-ilie.ro",
+        "URL_BIBLIOTECA": "https://biblioteca.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.sfantul-ilie.ro"
       }
     }

@@ -33,6 +33,7 @@ const APLICATII: Array<{ cheie: keyof Navigatie; nume: string }> = [
   { cheie: 'program', nume: 'Programul liturgic' },
   { cheie: 'tipic', nume: 'Tipicul' },
   { cheie: 'biblia', nume: 'Biblia' },
+  { cheie: 'biblioteca', nume: 'Biblioteca' },
   { cheie: 'cont', nume: 'Contul' },
   { cheie: 'admin', nume: 'Admin' },
 ]

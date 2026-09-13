@@ -200,6 +200,30 @@ importers:
         specifier: ^4.1.5
         version: 4.5.4
 
+  apps/biblioteca:
+    dependencies:
+      '@xc/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@xc/authorization':
+        specifier: workspace:*
+        version: link:../../packages/authorization
+      '@xc/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@xc/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@xc/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@xc/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      zod:
+        specifier: ^4.1.5
+        version: 4.5.4
+
   apps/calendar:
     dependencies:
       '@xc/actiuni':

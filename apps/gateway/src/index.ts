@@ -9,6 +9,7 @@ export interface Env {
   PROGRAM?: Fetcher
   CURATENIE?: Fetcher
   BIBLIA?: Fetcher
+  BIBLIOTECA?: Fetcher
   ADMIN: Fetcher
   MEDIU: string
 }
@@ -25,6 +26,7 @@ function alegeAplicatia(env: Env, cale: string): Fetcher | null {
   if (cale === '/tipic' || cale.startsWith('/tipic/')) return env.TIPIC ?? null
   if (cale === '/curatenie' || cale.startsWith('/curatenie/')) return env.CURATENIE ?? null
   if (cale === '/biblia' || cale.startsWith('/biblia/')) return env.BIBLIA ?? null
+  if (cale === '/biblioteca' || cale.startsWith('/biblioteca/')) return env.BIBLIOTECA ?? null
   if (cale === '/admin' || cale.startsWith('/admin/')) return env.ADMIN
   return env.HOME
 }

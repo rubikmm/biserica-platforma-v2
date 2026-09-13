@@ -47,7 +47,42 @@ Etape:
 1. ✅ **Nucleul** — monorepo, identitate fără parolă (email → cod de 6 cifre), autorizare centrală,
    contracte, evenimente, audit, automatizare, comunicare, home.
 2. ✅ **Staging** — publicat pe `*.staging.sfantul-ilie.ro`, email real prin Cloudflare Email Service.
-3. ⏳ **Portarea aplicațiilor**: ✅ calendar (A1), ✅ program (A2), ✅ tipic (A9), ✅ biblia (A10), ⏳ curățenie (A6), apoi A3/A8 → A12 → A7 → A5 → A4 → A13 se stinge.
+3. ⏳ **Portarea aplicațiilor**: ✅ calendar (A1), ✅ program (A2), ✅ tipic (A9), ✅ biblia (A10),
+   ✅ biblioteca (A12), ⏳ curățenie (A6), apoi A3/A8 → A7 → A5 → A4 → A13 se stinge.
+   ⚠️ Biblioteca a fost cerută **înaintea rândului ei** (user, 13.09.2026); curățenia rămâne următoarea.
+
+**Biblioteca (A12)**: catalogul bibliotecii de la Hanul Colței — **1349 de titluri, 1964 de
+exemplare, 520 de autori, 297 de edituri**. E un **catalog, nu o bibliotecă de texte**: cărțile se
+împrumută fizic, de la pangar. Portată pe 13.09.2026 din `biserica-biblioteca` v0.15.0.
+Depozitul: **`xc-biblioteca-staging`** (R2) — 2996 de obiecte, 164 MB, copiate obiect cu obiect din
+bucketul V1 (`catalog.json`, `imbogatire.json`, coperțile în trei mărimi, 2 PDF-uri); **D1
+`xc-biblioteca-staging`** (`cbf83fce-8c2a-4548-a576-929f460d0bd3`) pentru cereri, scrisori și
+cererile de acces — baza V1 era **goală**, deci nu s-a copiat niciun rând.
+
+**Proba portării, cea care contează**: `/v1/carti`, `/v1/autori` și `/v1/edituri` ies din V2
+**identice octet cu octet** cu cele din V1 din producție (verificat 13.09.2026). Toată logica grea —
+despărțirea căsuței de autor în oameni, unirea felurilor de a scrie același om (`ACEIASI`, 33 de
+perechi), întregirea inițialelor (`INTREGI`), curățarea numelor de edituri — a trecut neatinsă.
+
+Ce s-a schimbat față de V1, și de ce:
+- **catalogul e deschis**: în V1 poarta cădea după `/v1`, deci și fișa unei cărți cerea cont; acum
+  cere cont doar ce e AL OMULUI („totul la liber, deocamdată");
+- **scrisorile chiar pleacă**. În V1 se compuneau și rămâneau în tabel cu `trimisa_la` gol: platforma
+  n-avea furnizor de email, iar A12 n-avea voie să ceară adresa nimănui. În V2 pleacă prin
+  `communication-worker`, iar adresa se cere de la identitate **în clipa trimiterii** și nu se
+  păstrează. Tabelul `scrisori` a rămas ca jurnal al bibliotecii, cu o coloană nouă, `necaz`:
+  ce n-a plecat se vede la `/pangar/scrisori`, cu pricina scrisă. **Nu pretindem că a plecat ceva
+  când n-a plecat** — regula ținută din V1;
+- **rolul de pangar e o permisiune a platformei**, `library.manage`, nu `rol === "admin"` citit
+  local; dreptul omului de a cere cărți e `library.borrow`, dat individual la cont;
+- `persoana_id` → `user_id`; **modul de probă a ieșit** cu totul (în V2 local = staging);
+- `/propuneri` (unealta de îmbogățire) trăia în V1 numai pe gazda locală, fiindcă acolo nu exista
+  autorizare; în V2 e o pagină ca oricare, păzită de `library.manage`.
+
+⚠️ **Cererile de acces (`cereri_acces`) au fost păstrate anume** (user, 13.09.2026), deși se abat de
+la „drepturile stau într-un loc": tabelul ține **cererea**, niciodată dreptul. Omul apasă „Solicită
+acces" în „Cărțile mele", pangarul o vede pe ecranul lui și o închide după ce dreptul a fost dat din
+`/admin`. Nimic din ce scrie acolo nu acordă vreun drept.
 
 **Biblia (A10)**: Vechiul și Noul Testament, pe cărți, capitole și versete — ediția **sinodală**,
 preluată în V1 de pe bibliaortodoxa.ro (hotărâre user, 27 aug. 2026). Cele **80 de cărți** (39 VT +
@@ -178,6 +213,27 @@ propunerea automată, ca în V1.
     - ⚠️ **CSS-ul pastilei e acum în trei copii** (Program, Calendar, Tipic). La a patra cerere, locul
       lui e `@xc/ui` — dar atunci se republică toate cele șase aplicații care folosesc carcasa.
 
+12. **Biblioteca (A12), ce a rămas după portare** (13.09.2026):
+    - ⚠️ **fluxul de împrumut n-a fost probat cu un om adevărat**: cererea, ecranul pangarului și
+      scrisorile cer sesiune, iar prin curl nu se poate intra (cookie-uri `Secure`). Probate sunt
+      schema, interogările și poarta (rutele personale duc la cont); **de mers o dată cap-coadă din
+      browser**, cu un cont care are `library.borrow`, și un al doilea cu `library.manage`;
+    - **cele două chei noi nu sunt date nimănui**: `library.manage` vine cu rolul de admin, dar
+      `library.borrow` se dă individual, la cont, din `/admin`. Până atunci nimeni nu poate cere o
+      carte, iar cutia de pe fișă scrie asta;
+    - **cronul de 6:00 UTC e înregistrat, dar n-a rulat încă** (prima oară mâine dimineață). Local se
+      declanșează cu `curl http://127.0.0.1:8787/cdn-cgi/local/scheduled`;
+    - ⚠️ **foaia de îmbogățire din depozit are 800 de fișe, cea de pe discul V1 are 803**: în V1 s-au
+      strâns trei fișe după ultima urcare și n-au mai ajuns niciodată sus. Am copiat fidel ce era în
+      depozitul V1. Se aduc la zi cu `node apps/biblioteca/unelte/urca.mjs sus` — de întrebat întâi;
+    - **cele 131 de propuneri de îmbogățire te așteaptă** la `/propuneri` (aceleași din V1, cu tot cu
+      hotărârile de până acum: ce ai respins nu se mai propune). Uneltele merg în V2 — probate:
+      `actualizeaza.mjs raport` (1349 → 1349, zero schimbări) și `propuneri.mjs`;
+    - **periodicele** (fila a doua a foii parohiei, 651 de rânduri) n-au intrat nici în V1: e altă
+      formă de date, un periodic fiind un teanc de numere. Rămâne întrebarea deschisă din V1;
+    - **abonarea nu există la bibliotecă** (nici în V1 n-avea). Dacă se vrea, e a treia regulă de
+      abonare după Calendar/Program/Tipic — se hotărăște o dată, pentru toate.
+
 ## Aplicațiile de pe staging
 
 | Aplicație | Adresă | Ce ține |
@@ -187,6 +243,8 @@ propunerea automată, ca în V1.
 | calendar | `calendar.staging.sfantul-ilie.ro` | 730 de zile oficiale (2025–2026) + anii calculați |
 | program | `program.staging.sfantul-ilie.ro` | 654 săptămâni / 2619 slujbe copiate din V1 |
 | tipic | `tipic.staging.sfantul-ilie.ro` | 3 cărți: ROEA 97 zile, Anuar 365, Mineiul 366 |
+| biblia | `biblia.staging.sfantul-ilie.ro` | 80 de cărți, ediția sinodală |
+| biblioteca | `biblioteca.staging.sfantul-ilie.ro` | 1349 de titluri, 800 de fișe cu copertă; rezervări |
 | admin | `admin.staging.sfantul-ilie.ro` | audit, livrări, automatizări |
 
 ## Stare tehnică
@@ -802,6 +860,24 @@ cu sfinții de duminică" → PDF 54 KB prin Browser Rendering, în R2, descărc
 - **`home`**: afișarea de la `website.sfantul-ilie.ro` din V1, fără textul de jos și cu **toate
   butoanele la fel** — nimic șters, nimic punctat. O aplicație intră în listă abia când adresa ei
   răspunde.
+- **`biblioteca`** (A12): R2 `xc-biblioteca-staging` (2996 de obiecte, 164 MB) + D1
+  `xc-biblioteca-staging`. Amănuntele, sus, la „Biblioteca (A12)". Câteva lucruri de știut înainte
+  să umbli la ea:
+  - **identitatea unei cărți e numărul de inventar** (`nr`), nu titlul, iar **slugul nu se schimbă**
+    cât timp rândul e aceeași carte: el e adresa fișei, cheia copertei din depozit și `carte_slug`
+    din cereri. Cele două cărți care și-au schimbat rândul stau în `MUTATE` și fac 301;
+  - **copertele au trei mărimi**, și fiecare are rostul ei: `coperti-mici/` (160 px) la începutul
+    fiecărui rând de listă — o căutare are până la 300 de rânduri, iar cu coperțile de fișă ar fi
+    ~10 MB pe pagină —, `coperti/` (480 px) pe fișă, `coperti-mari/` (originalul) numai la lupă;
+  - **uneltele de întreținere sunt în `apps/biblioteca/unelte/`** (portate odată cu aplicația, cerere
+    user): actualizarea catalogului din foaia parohiei (`actualizeaza.mjs`, cu `xlsx.py` alături),
+    îmbogățirea din 19 librării (`imbogatire.mjs` + `librarii.mjs` + `potrivire.mjs`), urcarea
+    coperților (`urca.mjs`) și propunerile (`propuneri.mjs`). Datele lor de lucru — inclusiv
+    **hotărârile utilizatorului**, `respins-de-om.json` și `hotarari.json` — s-au mutat în
+    `/data/imbogatire/` (215 MB). ⚠️ Fără fișierele acelea, unealta ar reface fișele respinse;
+  - **politețea la cules nu e opțională**: un singur fir, pauză între cereri (10–20 s unde cere
+    `robots.txt`), User-Agent care spune cine suntem și duce la `/despre-imbogatire`. Nu se folosește
+    căutarea magazinului — sitemapul o dată, potrivirea local.
 - **`curatenie`** (A6): D1 `xc-curatenie-staging` creată. **Urmează la rând.**
 - **Legătura V2 → V1, singura de acum**: calendarul cere textul pericopelor de la Biblia din V1
   (`URL_BIBLIA`), la afișare, cu cache de o zi. E doar citire și dispare la portarea lui A10.
@@ -904,6 +980,21 @@ forța antetul `Host`**.
 ## Jurnal
 
 ### 2026-09-13
+
+- **BIBLIOTECA (A12) portată în V2**, cu tot cu stratul personal și cu uneltele (user: „portează și
+  aplicația Biblioteca"). Worker nou `xc-biblioteca-staging` pe `biblioteca.staging.sfantul-ilie.ro`,
+  cu cron `0 6 * * *`. Depozitul: 2996 de obiecte / 164 MB copiate obiect cu obiect din R2-ul V1
+  (`infrastructure/import/biblioteca-din-v1.mjs`, reluabil — a lovit 429 la 8 fire, a mers la 3).
+  D1-ul V1 era **gol**, deci stratul personal s-a portat ca funcție, nu ca date; abia în V2 poate
+  funcționa cu adevărat (în V1 Contul era schelet, iar emailul nu putea pleca).
+  **Proba**: `/v1/carti`, `/v1/autori`, `/v1/edituri` identice **octet cu octet** cu V1 din producție.
+  24 de probe noi (`tests/biblioteca.test.ts`, 149 în total), `tsc` curat, poze la 390 și 900 px.
+  Chei noi: `library.manage` (pangarul) și `library.borrow` (dreptul omului) → authz republicat, plus
+  toate aplicațiile, pentru `URL_BIBLIOTECA`.
+  **Trei hotărâri ale userului la pornire**: portăm tot (nu doar catalogul); `cereri_acces` rămâne ca
+  în V1 (deși se abate de la „drepturile stau într-un loc" — i-am spus, a ales-o știind); uneltele se
+  portează acum, cu tot cu cei 215 MB de date de lucru și cu hotărârile lui de până acum.
+  ⚠️ Rămâne de probat fluxul de împrumut **din browser**, cu sesiune — vezi NEXT 12.
 
 - **Tipicul: cărțile scanate, capul paginii și adresele vechi** — cele șase puncte ale inventarului,
   hotărâte de user. **1 reparat**: cele trei PDF-uri copiate în `xc-tipic-staging` (R2 nou) și cardul
