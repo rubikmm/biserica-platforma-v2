@@ -28,6 +28,7 @@ import { type Pericopa, textulPericopei, textulVoscresnei, ziuaCalendarului } fr
 import { acoperire, cartile, mineiZilei, randuialaZilei, tipiconalZilei, zileleCuRanduiala } from './depozit.js'
 import { pomeniriDinAnuar, pomeniriDinMinei } from './sinaxar.js'
 import { type Ctx, paginaMesaj, paginaZilei } from './pagini.js'
+import { eAdresaDeCarte, pdfDinR2 } from './carti-pdf.js'
 
 export interface Env {
   DB: D1Database
@@ -39,10 +40,12 @@ export interface Env {
   ORIGINE_PUBLICA: string
   DOMENIU_COOKIE: string
   EMAIL_SUPERADMIN: string
+  /** Cartile scanate (PDF), in depozitul propriu. */
+  TEXTE: R2Bucket
   /** Data publicarii, pentru subsol — binding-ul `version_metadata`. */
-  VERSIUNE?: { timestamp?: string   /** Secretul dintre workerii nostri; fara el `/_actiuni` nu exista. */
+  VERSIUNE?: { timestamp?: string }
+  /** Secretul dintre workerii nostri; fara el `/_actiuni` nu exista. */
   SECRET_INTERN?: string
-}
 }
 
 const SERVICIU = 'app-tipic'
@@ -164,6 +167,12 @@ export default {
     const raspunsActiuni = await MODUL.ruteaza(req, env, ctxExec, cale)
     if (raspunsActiuni) return raspunsActiuni
 
+    // Cartile intregi (PDF), cu cereri pe bucati — adresele din V1, neatinse.
+    if (eAdresaDeCarte(cale)) {
+      if (req.method !== 'GET' && req.method !== 'HEAD') return new Response('Metoda nu e permisă.', { status: 405 })
+      return pdfDinR2(req, env.TEXTE, cale)
+    }
+
     if (eAdresaDeMasina(cale)) {
       if (req.method === 'OPTIONS') {
         return new Response(null, { status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, HEAD, OPTIONS', 'access-control-allow-headers': 'if-none-match, content-type' } })
@@ -204,6 +213,11 @@ export default {
     try {
       // Adresa unei zile e chiar data ei: /2026-09-13 (decizie user, 30 aug. 2026, adusa din V1).
       let data = azi
+      // Forma veche a adresei, din V1: `/zi/2026-09-13`. Redirectionam permanent, ca legaturile
+      // tiparite ori trimise pe email sa nu cada dupa cutover (user, 13.09.2026).
+      if (cale.startsWith('/zi/')) {
+        return Response.redirect(new URL(`${prefix}/${cale.slice('/zi/'.length)}`, url).toString(), 301)
+      }
       if (cale !== '/') {
         const cerut = /^\/([^/]+)$/.exec(cale)?.[1] ?? ''
         const bun = cerut ? dataCeruta(cerut, azi) : null

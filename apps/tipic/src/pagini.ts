@@ -16,6 +16,7 @@ import type { Navigatie } from '@xc/config'
 import type { CarteTipic, RanduialaZi, TipiconalZi, ZiLiturgica, ZiMinei } from '@xc/contracts'
 import { ICOANE, LUNI, ZILE_SAPTAMANA, dataLunga, esc, pagina, ziuaSaptamanii } from '@xc/ui'
 import type { Pericopa } from './calendar.js'
+import { CARTI_PDF } from './carti-pdf.js'
 import { LOCAL } from './stil.js'
 
 /** Plicul abonarii si sageata inainte — aceleasi desene ca la Program si la Calendar. */
@@ -240,6 +241,42 @@ function capulZilei(zi: ZiLiturgica | null, titluAnuar: string): string {
   return sfinti ? `<p class="praznic">${sfinti}</p>${jos}` : titluAnuar ? `<p class="praznic">${esc(titluAnuar)}</p>${jos}` : jos
 }
 
+/** Foaie cu colțul îndoit și „PDF" scris pe ea, pusă singură lângă numele cărții (ca în V1). */
+const ICOANA_PDF = `<svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><text x="12" y="17.8" font-size="6.2" font-family="ui-sans-serif,system-ui" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none">PDF</text></svg>`
+
+/**
+ * Trimiterea la cartea din care vine rânduiala: foaia PDF în stânga, apoi două rânduri — numele
+ * cărții și pagina zilei. Stă la dreapta, sub text.
+ *
+ * ⚠️ Cartea se deschide în FILĂ NOUĂ (user, 2 sept. 2026): PDF-urile au zeci de MB și se citesc în
+ * vizorul browserului, deci pagina zilei trebuie să rămână deschisă în spate — altfel întoarcerea
+ * înseamnă reîncărcarea ei și pierderea locului.
+ */
+function trimitereaLaCarte(adresa: string, nume: string, rand2: string): string {
+  return `<p class="la-carte"><a class="carte" href="${esc(adresa)}" target="_blank" rel="noopener"
+     title="Deschide cartea în PDF (filă nouă)">
+    <span class="insigna">${ICOANA_PDF}</span>
+    <span class="ce"><b>${esc(nume)}</b><span class="pag">${esc(rand2)}</span></span>
+  </a></p>`
+}
+
+/**
+ * Cardul unei părți, când cartea ei chiar e în depozit. Trimitem la PAGINA ZILEI din carte
+ * (`#page=N`): numerotarea PDF-ului o urmează pe a cărții. Fără pagini scrise, cardul duce la
+ * cartea întreagă — așa e la ROEA, unde rânduiala zilei nu ocupă pagini știute.
+ *
+ * Lunile Mineiului culese de pe sit n-au PDF (nici pagini): acolo cardul nu se scrie deloc.
+ */
+function cardulCartii(carte: CarteTipic | null | undefined, pagini: number[], nume: string): string {
+  const pdf = carte ? CARTI_PDF[carte.cod] : undefined
+  if (!pdf) return ''
+  const prima = pagini[0]
+  const ultima = pagini[pagini.length - 1]
+  const rand2 = prima === undefined ? 'Cartea întreagă' : prima === ultima ? `Pag. ${prima}` : `Pag. ${prima}–${ultima}`
+  const adresa = prima === undefined ? pdf.adresa : `${pdf.adresa}#page=${prima}`
+  return trimitereaLaCarte(adresa, pdf.nume ?? nume, rand2)
+}
+
 // ---------------------------------------------------------------------------
 // Randul de unelte din antet
 // ---------------------------------------------------------------------------
@@ -363,7 +400,11 @@ export interface ContinutZi {
 }
 
 export function paginaZilei(ctx: Ctx, o: ContinutZi): string {
-  const cand = `${ZILE_SAPTAMANA[ziuaSaptamanii(o.data)]}, ${dataLunga(o.data)}`
+  // ⚠️ Capul paginii e cel din V1 (user, 13.09.2026): DATA scrisă cifre și numele zilei AȘA CUM ÎL
+  // SCRIE CARTEA (`DUMINICĂ`, `LUNI`) — nu ziua săptămânii calculată de noi și nu data lungă. Când
+  // nicio carte n-are ziua, rămâne numele calculat, ca pagina să nu aibă capul ciuntit.
+  const numeleZilei = o.randuiala?.zi || o.tipiconal?.zi || ZILE_SAPTAMANA[ziuaSaptamanii(o.data)] || ''
+  const cand = numeleZilei ? `${o.data} — ${numeleZilei}` : o.data
   const praznic = capulZilei(o.zi, o.tipiconal?.titlu ?? '')
 
   const peric = [
@@ -376,16 +417,30 @@ export function paginaZilei(ctx: Ctx, o: ContinutZi): string {
   // „Tipiconal", nu „Rânduiala" (user, 1 sept. 2026): asa se numeste si cartea din care vine —
   // Anuarul liturgic si TIPICONAL —, iar „Rânduiala" ramane a ROEA.
   const detaliat = o.tipiconal
-    ? parte('Tipiconal', numeleCartii(o.carti.tipiconal), taiat(o.tipiconal.paragrafe.map(paragrafAnuar).join('\n  '), 'anuar'))
+    ? parte(
+        'Tipiconal',
+        numeleCartii(o.carti.tipiconal),
+        taiat(o.tipiconal.paragrafe.map(paragrafAnuar).join('\n  '), 'anuar') +
+          cardulCartii(o.carti.tipiconal, o.tipiconal.pagini, numeleCartii(o.carti.tipiconal)),
+      )
     : ''
   // Fara Anuar, randuiala scurta ramane singura: atunci nu e „pe scurt", e Rânduiala.
   const scurt = o.randuiala
-    ? parte(detaliat ? 'Rânduiala (pe scurt)' : 'Rânduiala', numeleCartii(o.carti.randuiala), taiat(randuialaScurta(o.randuiala.tipic), 'roea'))
+    ? parte(
+        detaliat ? 'Rânduiala (pe scurt)' : 'Rânduiala',
+        numeleCartii(o.carti.randuiala),
+        taiat(randuialaScurta(o.randuiala.tipic), 'roea') + cardulCartii(o.carti.randuiala, [], numeleCartii(o.carti.randuiala)),
+      )
     : ''
   // Capitolul poarta numele CARTII si ZIUA din ea: „Mineiul: 22 noiembrie" (user, 1 sept. 2026).
   // Cartea nu tine de an, deci ziua se scrie fara an — asa cum se cauta si in carte.
+  const numeMinei = o.minei ? `Mineiul: ${o.minei.zi} ${LUNI[o.minei.luna - 1] ?? ''}` : ''
   const slujba = o.minei
-    ? parte(`Mineiul: ${o.minei.zi} ${LUNI[o.minei.luna - 1] ?? ''}`, numeleCartii(o.carti.minei), taiat(o.minei.bucati.map(bucataMinei).join('\n  '), 'minei'))
+    ? parte(
+        numeMinei,
+        numeleCartii(o.carti.minei),
+        taiat(o.minei.bucati.map(bucataMinei).join('\n  '), 'minei') + cardulCartii(o.carti.minei, o.minei.pagini, numeMinei),
+      )
     : ''
 
   const corp =

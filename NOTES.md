@@ -83,8 +83,18 @@ e (luna, zi), nu data. Afișarea, markup-ul și textele sunt cele din V1; ce s-a
 - **textul pericopelor vine de la calendar**, nu direct de la Biblia: calendarul e singurul care
   vorbește cu ea. Pentru asta a căpătat `GET /v1/pericopa?ref=` (și `?voscreasna=<1..11>`, ca lista
   celor 11 Evanghelii ale Învierii să nu se copieze în aplicații);
-- **cardurile care duc la PDF-ul cărții lipsesc**: cele trei PDF-uri (Anuarul 41 MB, Mineiul pe
-  noiembrie 67 MB, ROEA) stau în R2-ul V1 și n-au fost încă copiate în `xc-tipic-*`.
+- ✅ **cărțile scanate au intrat** (13.09.2026): cele trei PDF-uri (ROEA 0,4 MB, Anuarul 41 MB,
+  Mineiul pe noiembrie 67 MB) s-au copiat din R2-ul V1 în depozitul NOU `xc-tipic-staging` (R2,
+  binding `TEXTE`), iar **cardul care duce la pagina zilei din carte** e înapoi în pagină, cu
+  adresele publice din V1 neatinse: `/roea-2026.pdf`, `/anuar-2026.pdf`, `/minei-noiembrie.pdf`.
+  Se răspunde și la cereri pe bucăți (`Range` → 206), altfel cititorul de PDF ar trage 67 MB ca să
+  deschidă o pagină. Harta e în `src/carti-pdf.ts`, cu cheia = **codul cărții** din depozit
+  (`roea`, `anuar`, `minei-11`): lunile Mineiului culese de pe sit n-au PDF și n-au nici card.
+- **numele zilei e cel din V1** (13.09.2026): `2026-11-22 — DUMINICĂ` — data cifre și ziua **așa cum
+  o scrie cartea**, nu ziua săptămânii calculată de noi și nu data lungă.
+- **forma veche a adresei** (`/zi/<data>`, din V1) redirectează permanent (301), ca legăturile
+  tipărite să nu cadă după cutover.
+- **fără bulă de chat** (user, 13.09.2026: „6 nu punem") — acțiunile rămân, bula nu se montează.
 
 **Programul (A2)**: baza afișării e V1 (stilul local, markup-ul și textele din `biserica-program`,
 9 sept.), iar **hârtiile — foaia A4, JPG-ul, „Sfinții zilei" — trebuie să rămână identice cu V1**;
@@ -139,8 +149,9 @@ propunerea automată, ca în V1.
    - **un singur host, cu căi** (`/program`, `/cont`) față de subdomenii pe staging;
    - **cache**: în dev paginile ies `no-store`, pe staging `max-age=300` — dinadins.
      (`calendar` n-are ramura asta: și local cachează 5 min.)
-3. **PDF-urile cărților tipicului în R2** — Anuarul (41 MB), Mineiul pe noiembrie (67 MB) și ROEA
-   stau în R2-ul V1 și n-au fost copiate. Fără ele, cardul spre pagina zilei din carte nu se scrie.
+3. ✅ **PDF-urile cărților tipicului** — copiate pe 13.09.2026 în `xc-tipic-staging`; cardurile sunt
+   înapoi în pagină. A rămas: **Mineiul pe celelalte 11 luni** n-are scanare (lunile vin de pe sit),
+   deci acolo cardul lipsește pe drept.
 4. **Curățenia (A6)** — schema, sloturile din slujbele programului (`curatenie: true`), rapoartele
    prin serviciul de comunicare. Voluntarii devin conturi: adresele din V1 trec prin
    `identity /utilizatori/asigura`, iar aplicația ține doar `user_id`.
@@ -893,6 +904,22 @@ forța antetul `Host`**.
 ## Jurnal
 
 ### 2026-09-13
+
+- **Tipicul: cărțile scanate, capul paginii și adresele vechi** — cele șase puncte ale inventarului,
+  hotărâte de user. **1 reparat**: cele trei PDF-uri copiate în `xc-tipic-staging` (R2 nou) și cardul
+  cărții pus înapoi, cu `Range` și cu adresele publice din V1. **2 da**: capul paginii s-a întors la
+  forma V1, `2026-11-22 — DUMINICĂ`. **5**: `/zi/<data>` redirectează 301. **6 nu punem**: fără bulă
+  de chat la Tipic. **7 reparat**: `SECRET_INTERN` ieșise din greșeală ÎNĂUNTRUL tipului `VERSIUNE`.
+  **3**: rândul mărunt rămâne cum e. Tipic **0.3.1**.
+
+- **Toate aplicațiile legate între ele pe staging și pe producție** (user: „vreau să ștergem curând
+  restul și să le înlocuim pe subdomeniile corespunzătoare"). Fiecare worker are acum setul întreg de
+  `URL_*` — calendar +4, program +2, tipic +2, admin +8 — în amândouă mediile, deci antetul și
+  întoarcerea după intrare nu mai cad pe calea de dev. ⚠️ La calendar, `URL_BIBLIA` ajunsese scris de
+  **două ori** în același bloc (o dată vechi, o dată nou): dubluri scoase, valorile erau identice.
+  Republicate: calendar 0.7.2, program 0.6.2, admin 0.1.2, tipic 0.3.1.
+  **Rămâne de hotărât cutover-ul**: mutarea rutelor de producție de pe workerii V1 pe `xc-*` e pas
+  explicit, cerut anume — nimic nu se comută singur.
 
 - **BIBLIA (A10) portată în V2** (user: „să portăm și biblia"). Worker nou `xc-biblia-staging` pe
   `biblia.staging.sfantul-ilie.ro`, cu depozit NOU `xc-biblia-staging`: cele **82 de obiecte** ale

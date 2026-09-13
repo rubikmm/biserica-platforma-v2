@@ -32,6 +32,13 @@
     }
   ],
 
+
+  // Cartile scanate (PDF): ROEA, Anuarul si Mineiul pe noiembrie — copiate din bucketul V1
+  // `biserica-tipic` pe 13.09.2026, in depozit NOU.
+  "r2_buckets": [
+    { "binding": "TEXTE", "bucket_name": "xc-tipic-staging" }
+  ],
+
   "services": [
     { "binding": "IDENTITATE", "service": "xc-identity" },
     { "binding": "AUTORIZARE", "service": "xc-authz" },
@@ -54,6 +61,7 @@
         "URL_PROGRAM": "https://program.staging.sfantul-ilie.ro",
         "URL_CURATENIE": "https://curatenie.staging.sfantul-ilie.ro",
         "URL_TIPIC": "https://tipic.staging.sfantul-ilie.ro",
+        "URL_BIBLIA": "https://biblia.staging.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.staging.sfantul-ilie.ro"
       },
       "d1_databases": [
@@ -63,6 +71,9 @@
           "database_id": "8c5ab60e-d3d8-4e96-aa89-f52492fdd83e",
           "migrations_dir": "../../infrastructure/migrations/tipic"
         }
+      ],
+      "r2_buckets": [
+        { "binding": "TEXTE", "bucket_name": "xc-tipic-staging" }
       ],
       "services": [
         { "binding": "IDENTITATE", "service": "xc-identity-staging" },
@@ -86,6 +97,7 @@
         "URL_PROGRAM": "https://program.sfantul-ilie.ro",
         "URL_CURATENIE": "https://curatenie.sfantul-ilie.ro",
         "URL_TIPIC": "https://tipic.sfantul-ilie.ro",
+        "URL_BIBLIA": "https://biblia.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.sfantul-ilie.ro"
       }
       // Ruta de productie (`tipic.sfantul-ilie.ro`) ramane a lui A9 pana la cutover-ul explicit.
