@@ -48,8 +48,62 @@ Etape:
    contracte, evenimente, audit, automatizare, comunicare, home.
 2. ✅ **Staging** — publicat pe `*.staging.sfantul-ilie.ro`, email real prin Cloudflare Email Service.
 3. ⏳ **Portarea aplicațiilor**: ✅ calendar (A1), ✅ program (A2), ✅ tipic (A9), ✅ biblia (A10),
-   ✅ biblioteca (A12), ⏳ curățenie (A6), apoi A3/A8 → A7 → A5 → A4 → A13 se stinge.
-   ⚠️ Biblioteca a fost cerută **înaintea rândului ei** (user, 13.09.2026); curățenia rămâne următoarea.
+   ✅ biblioteca (A12), ✅ buletin (A3), ✅ newsletter (A8), ⏳ curățenie (A6), apoi A7 → A5 → A4 →
+   A13 se stinge.
+   ⚠️ Biblioteca, buletinul și newsletterul au fost cerute **înaintea rândului lor** (user,
+   13.09.2026); curățenia rămâne următoarea.
+
+**Buletinul (A3)**: foaia periodică față-verso și arhiva ei — **619 numere apărute din 2012
+încoace**. Portat pe 13.09.2026 din `biserica-buletin` v0.5.0. Datele s-au copiat în resurse NOI:
+**D1 `xc-buletin-staging`** (`63edbc94-001d-4097-8a40-9ddd98227e94`) — 619 rânduri, **4.785.016
+semne de text, exact cât în V1** — și **R2 `xc-buletin-staging`** — 1856 de obiecte, 964 MB (PDF-ul
+și două poze ale paginii întâi, `<an>/buletin-<nr>-<data>[-mic].<ext>`).
+
+**Proba portării**: `/v1/curent`, `/v1/arhiva?an=2019` și `/v1/numar/2026/615` ies din V2
+**identice octet cu octet** cu cele din V1 din producție (doar rădăcina adresei diferă), iar PDF-ul
+numărului curent are același md5.
+
+Ce s-a schimbat față de V1, și de ce:
+- **lista de abonați nu mai e a aplicației**: V1 avea tabelul `abonati` (e-mail, nume, `persoana_id`)
+  în baza lui A3. Tabelul **nu s-a copiat** — în V2 abonarea e o **audiență a comunicării**
+  (`buletin-abonati`), iar aplicația nu ține nicio adresă;
+- **abonarea arată ca la Program**: butonul cu plic + fereastra, ca la Calendar și Tipic, nu câmpul
+  de e-mail din rândul de unelte al V1. ⚠️ Ca și acolo, **fereastra nu trimite încă nimic**
+  (`<form method="dialog">`); rutele `POST /abonare` · `/dezabonare` sunt întregi și scriu în
+  audiență — se leagă odată cu celelalte trei;
+- **modul de probă a ieșit** cu totul (`/proba`, persoanele inventate, `PROBA=da`): local = staging;
+- carcasa vine din `@xc/ui`, iar cine e omul se află din sesiunea centrală.
+- **zilele scurte din raft** se scriu cu `LUNI_SCURT` din `@xc/ui` („mart.", „noiem."), unde V1
+  scria „mar.", „noi." — singura vorbă schimbată; restul textelor sunt cuvânt cu cuvânt din V1.
+- ⚠️ `plat()` din `src/depozit.ts` e funcția V1 **neatinsă**, și trebuie să rămână așa: păstrează
+  lungimea literă cu literă, iar căutarea taie fragmentul din `text` la poziția găsită în
+  `text_plat`. `faraDiacritice` din `@xc/ui` NU e bună aici (poate schimba lungimea).
+- ⚠️ **6 numere au semnul U+FFFD în text** — așa au venit din V1 (scoaterea textului din PDF), nu
+  s-au stricat la copiere: V1 și V2 au aceleași 6 rânduri și același număr de semne.
+- **Redactarea unui număr nou** (șablonul față-verso, programul cerut de la A2, sfinții de la A1)
+  nu există nici în V1; rămâne de făcut, ca acolo.
+- `Range` pe PDF-uri: ca în V1, se răspunde întreg (fișierele au ~0,7 MB). Tipicul, cu PDF-uri de
+  zeci de MB, răspunde pe bucăți — aici n-a fost nevoie.
+
+**Newsletterul (A8)**: **arhiva PUBLICĂ a celor 459 de numere** trimise pe email din 2017 încoace,
+aduse în V1 din MailPoet și re-randate cu chiar motorul MailPoet. Portat pe 13.09.2026 din
+`biserica-newsletter` v0.6.5. Depozitul: **R2 `xc-newsletter-staging`** — 1423 de obiecte, 722 MB
+(`lista.json`, `cauta.json`, `stiri/<id>.html`, `media/uploads/…`), copiate obiect cu obiect.
+N-are D1: fișele și textele stau în depozit.
+
+**Proba portării**: corpul unui număr (`/n/535`) iese din V2 **identic octet cu octet** cu cel din
+V1 din producție (13.412 semne, același md5), iar o poză din `media/` are aceiași octeți.
+
+Ce s-a schimbat față de V1, și de ce:
+- ⚠️ **dus-întorsul tăcut prin Cont a ieșit**. În V1, A8 n-avea poartă și nici cookie comun cu
+  celelalte aplicații, așa că întreba Contul „îl cunoști?" la prima navigare (`tacut=1`, cookie
+  `newsletter_recunoscut`, cel mult o dată pe oră) **numai** ca să scrie numele omului în antet. În
+  V2 sesiunea e a platformei și se citește dintr-o dată de la `IDENTITATE` — deci ocolul, cookie-ul
+  și `private, no-store` de pe toate paginile nu mai au rost. Paginile se pot iar ține în cache
+  când nu poartă niciun nume;
+- carcasa vine din `@xc/ui`, nu din `src/comun/` copiat în aplicație.
+- ⚠️ **Trimiterea nu există nici acum** — n-a existat nici în V1 (A8 era numai arhivă). Când se va
+  face, scrisoarea pleacă prin `communication-worker`, iar abonații sunt o audiență a lui.
 
 **Biblioteca (A12)**: catalogul bibliotecii de la Hanul Colței — **1349 de titluri, 1964 de
 exemplare, 520 de autori, 297 de edituri**. E un **catalog, nu o bibliotecă de texte**: cărțile se
@@ -234,6 +288,27 @@ propunerea automată, ca în V1.
     - **abonarea nu există la bibliotecă** (nici în V1 n-avea). Dacă se vrea, e a treia regulă de
       abonare după Calendar/Program/Tipic — se hotărăște o dată, pentru toate.
 
+13. **Buletinul (A3) și Newsletterul (A8), ce a rămas după portare** (13.09.2026):
+    - ⚠️ **abonarea buletinului**: butonul și fereastra sunt acolo, rutele scriu în audiența
+      `buletin-abonati`, dar **fereastra nu trimite încă nimic** — ca la Calendar, Program și Tipic.
+      Acum sunt PATRU ferestre de legat deodată; e cea mai coaptă datorie a interfeței;
+    - ⚠️ **fereastra de abonare e a patra copie de cod** (Program, Calendar, Tipic, Buletin): HTML-ul
+      și ~35 de rânduri de CSS stau la fel în toate patru. La legarea de rute, locul lor e `@xc/ui` —
+      se face o dată, cu republicarea aplicațiilor care folosesc carcasa;
+    - **niciuna din cele două n-are bulă de chat și nici `/_actiuni`**. De hotărât dacă buletinul
+      merită verbe („dă-mi numărul de duminica trecută", „caută «Crăciun» în buletine") — atunci
+      intră și în lista `APLICATII_CU_CHAT` din admin, unde acum nu sunt;
+    - **redactarea unui număr nou de buletin** nu există (nici în V1): șablonul față-verso, programul
+      cerut de la A2 (`/v1/foaie`), sfinții de la A1, apoi urcarea în R2 + rândul în D1. Ăsta e pasul
+      care l-ar face pe A3 să PRODUCĂ, nu doar să păstreze;
+    - **ținerea la zi a arhivelor**: amândouă s-au copiat o dată, cu mâna. În V1, newsletterul se
+      aducea de pe live cu o unealtă rulată manual. Cât timp numerele noi se fac tot în V1, V2 rămâne
+      în urmă — de hotărât dacă se pune un cron sau se grăbește cutover-ul;
+    - ⚠️ **cele două numere fără PDF** (325/2019-12-25 și 368/2020-12-13) au rămas și în V2 doar cu
+      poza — butonul lor scrie „Fără PDF", stins. Întrebarea din V1 (dacă parohia le mai are pe
+      undeva) rămâne deschisă;
+    - **trimiterea newsletterului** nu s-a portat fiindcă nu există: A8 e numai arhivă, și în V1.
+
 ## Aplicațiile de pe staging
 
 | Aplicație | Adresă | Ce ține |
@@ -245,6 +320,8 @@ propunerea automată, ca în V1.
 | tipic | `tipic.staging.sfantul-ilie.ro` | 3 cărți: ROEA 97 zile, Anuar 365, Mineiul 366 |
 | biblia | `biblia.staging.sfantul-ilie.ro` | 80 de cărți, ediția sinodală |
 | biblioteca | `biblioteca.staging.sfantul-ilie.ro` | 1349 de titluri, 800 de fișe cu copertă; rezervări |
+| buletin | `buletin.staging.sfantul-ilie.ro` | 619 numere din 2012 încoace (D1) + 964 MB PDF/poze |
+| newsletter | `newsletter.staging.sfantul-ilie.ro` | 459 de numere trimise din 2017 (R2, 722 MB) |
 | admin | `admin.staging.sfantul-ilie.ro` | audit, livrări, automatizări |
 
 ## Stare tehnică
@@ -980,6 +1057,29 @@ forța antetul `Host`**.
 ## Jurnal
 
 ### 2026-09-13
+
+- **BULETINUL (A3) ȘI NEWSLETTERUL (A8) portate în V2** (user, seara: „Mai portează: buletinul
+  parohiei, newsletter"). Doi workeri noi pe `buletin.` și `newsletter.staging.sfantul-ilie.ro`,
+  amândoi **0.1.0**. Date copiate în resurse noi: buletinul **619 rânduri D1** (4.785.016 semne,
+  exact cât în V1) + **1856 de obiecte R2 / 964 MB**; newsletterul **1423 de obiecte / 722 MB**.
+  Probele care contează, amândouă trecute: `/v1/*` al buletinului iese **identic octet cu octet** cu
+  V1 din producție (și PDF-ul are același md5), iar corpul unui număr de newsletter la fel
+  (13.412 semne, același md5). 8 probe noi (`tests/buletin-newsletter.test.ts`), `tsc` curat.
+  **Verificarea copierii**: liste R2 comparate cheie cu cheie — 0 nepotriviri la amândouă.
+  ⚠️ **Cele două abateri de la V1, amândouă cerute de regulile platformei**: lista de abonați a
+  buletinului **nu s-a copiat** (e audiență a comunicării acum), iar abonarea arată ca la Program
+  (buton + fereastră), nu ca acel câmp de e-mail din antetul V1. Newsletterul a scăpat de ocolul
+  `tacut=1` prin Cont — în V2 sesiunea se citește dintr-o dată.
+  **Toate aplicațiile republicate** pentru `URL_BULETIN`/`URL_NEWSLETTER` (regula de pe 13.09: setul
+  întreg de adrese la fiecare worker, și pe staging, și pe producție): home 0.2.0, account 0.1.5,
+  admin 0.1.3, calendar 0.7.3, program 0.6.3, tipic 0.3.2, biblia 0.1.1, biblioteca 0.1.1.
+  Home le arată acum pe amândouă în lista aplicațiilor.
+  ⚠️ **Rate-limit la Cloudflare** (cod 971) când cele două copieri de 4 fire au mers deodată:
+  407 obiecte au picat la newsletter și 508 la buletin, iar **migrația D1 a fost refuzată de trei
+  ori**. Scriptul e reluabil, așa că nu s-a pierdut nimic — dar regula pentru data viitoare e
+  **un singur transfer o dată, cel mult 4 fire**, și migrațiile ÎNAINTE de copieri, nu în timpul lor.
+  `biblioteca-din-v1.mjs` a devenit **`r2-din-v1.mjs`**, generic (`--din`/`--in`), cu `.html` și
+  `.webp` în tabelul de tipuri.
 
 - **BIBLIOTECA (A12) portată în V2**, cu tot cu stratul personal și cu uneltele (user: „portează și
   aplicația Biblioteca"). Worker nou `xc-biblioteca-staging` pe `biblioteca.staging.sfantul-ilie.ro`,

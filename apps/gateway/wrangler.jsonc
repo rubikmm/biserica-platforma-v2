@@ -28,6 +28,8 @@
     { "binding": "TIPIC", "service": "xc-tipic" },
     { "binding": "BIBLIA", "service": "xc-biblia" },
     { "binding": "BIBLIOTECA", "service": "xc-biblioteca" },
+    { "binding": "BULETIN", "service": "xc-buletin" },
+    { "binding": "NEWSLETTER", "service": "xc-newsletter" },
     { "binding": "ADMIN", "service": "xc-admin" }
   ]
 }

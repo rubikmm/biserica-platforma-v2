@@ -24,6 +24,7 @@ const BAZE = [
   { director: 'curatenie', config: 'apps/curatenie/wrangler.jsonc', binding: 'DB' },
   { director: 'tipic', config: 'apps/tipic/wrangler.jsonc', binding: 'DB' },
   { director: 'biblioteca', config: 'apps/biblioteca/wrangler.jsonc', binding: 'DB' },
+  { director: 'buletin', config: 'apps/buletin/wrangler.jsonc', binding: 'DB' },
   { director: 'communication', config: 'services/communication-worker/wrangler.jsonc', binding: 'DB' },
   { director: 'automation', config: 'services/automation-worker/wrangler.jsonc', binding: 'DB' },
   { director: 'chat', config: 'services/chat-worker/wrangler.jsonc', binding: 'DB' },

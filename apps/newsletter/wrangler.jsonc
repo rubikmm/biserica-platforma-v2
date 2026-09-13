@@ -1,72 +1,78 @@
 {
-  // Aplicatia de cont: BFF pentru identitate. Browserul vorbeste doar cu ea; ea vorbeste
-  // cu `xc-identity` prin Service Binding.
+  // Newsletterul (A8 din V1): arhiva PUBLICA a celor 459 de numere trimise pe email din 2017
+  // incoace, re-randate cu motorul MailPoet. Depozitul (fisele, numerele si media la care trimit)
+  // s-a copiat obiect cu obiect in bucketul NOU `xc-newsletter-*`.
+  //
+  // ⚠️ Trimiterea nu se face de aici — nici in V1 nu se facea. Cand se va face, scrisoarea pleaca
+  // prin `communication-worker`, iar abonatii sunt o audienta a lui: aplicatia nu tine adrese.
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "xc-account",
+  "name": "xc-newsletter",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-25",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
-  // Fara adresa *.workers.dev: cookie-ul si CSRF-ul sunt legate de domeniul propriu.
   "workers_dev": false,
+  // Data publicarii, pentru randul de versiune din subsol.
+  "version_metadata": { "binding": "VERSIUNE" },
 
   "vars": {
     "MEDIU": "dev",
-    "ORIGINE_PUBLICA": "https://rubik:8474/cont",
+    "ORIGINE_PUBLICA": "https://rubik:8474",
     "DOMENIU_COOKIE": "",
     "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
   },
+
+  // Depozitul propriu: lista.json, cauta.json, stiri/<id>.html si media/uploads/…
+  "r2_buckets": [{ "binding": "ARHIVA", "bucket_name": "xc-newsletter-staging" }],
 
   "services": [{ "binding": "IDENTITATE", "service": "xc-identity" }],
 
   "env": {
     "staging": {
-      "name": "xc-account-staging",
+      "name": "xc-newsletter-staging",
       "version_metadata": { "binding": "VERSIUNE" },
       "vars": {
         "MEDIU": "staging",
-        "ORIGINE_PUBLICA": "https://cont.staging.sfantul-ilie.ro",
+        "ORIGINE_PUBLICA": "https://newsletter.staging.sfantul-ilie.ro",
         "DOMENIU_COOKIE": ".staging.sfantul-ilie.ro",
         "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
         "URL_HOME": "https://staging.sfantul-ilie.ro",
         "URL_CONT": "https://cont.staging.sfantul-ilie.ro",
         "URL_CALENDAR": "https://calendar.staging.sfantul-ilie.ro",
+        "URL_PROGRAM": "https://program.staging.sfantul-ilie.ro",
+        "URL_CURATENIE": "https://curatenie.staging.sfantul-ilie.ro",
         "URL_TIPIC": "https://tipic.staging.sfantul-ilie.ro",
         "URL_BIBLIA": "https://biblia.staging.sfantul-ilie.ro",
         "URL_BIBLIOTECA": "https://biblioteca.staging.sfantul-ilie.ro",
         "URL_BULETIN": "https://buletin.staging.sfantul-ilie.ro",
         "URL_NEWSLETTER": "https://newsletter.staging.sfantul-ilie.ro",
-        "URL_CURATENIE": "https://curatenie.staging.sfantul-ilie.ro",
-        "URL_PROGRAM": "https://program.staging.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.staging.sfantul-ilie.ro"
       },
+      "r2_buckets": [{ "binding": "ARHIVA", "bucket_name": "xc-newsletter-staging" }],
       "services": [{ "binding": "IDENTITATE", "service": "xc-identity-staging" }],
-      // Subdomeniu NOU sub `staging.` — nu atinge nicio inregistrare DNS a V1.
-      "routes": [{ "pattern": "cont.staging.sfantul-ilie.ro", "custom_domain": true }]
+      "routes": [{ "pattern": "newsletter.staging.sfantul-ilie.ro", "custom_domain": true }]
     },
     "production": {
-      "name": "xc-account-production",
+      "name": "xc-newsletter-production",
       "version_metadata": { "binding": "VERSIUNE" },
       "vars": {
         "MEDIU": "production",
-        "ORIGINE_PUBLICA": "https://cont.sfantul-ilie.ro",
+        "ORIGINE_PUBLICA": "https://newsletter.sfantul-ilie.ro",
         "DOMENIU_COOKIE": ".sfantul-ilie.ro",
         "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
         "URL_HOME": "https://sfantul-ilie.ro",
         "URL_CONT": "https://cont.sfantul-ilie.ro",
         "URL_CALENDAR": "https://calendar.sfantul-ilie.ro",
+        "URL_PROGRAM": "https://program.sfantul-ilie.ro",
+        "URL_CURATENIE": "https://curatenie.sfantul-ilie.ro",
         "URL_TIPIC": "https://tipic.sfantul-ilie.ro",
         "URL_BIBLIA": "https://biblia.sfantul-ilie.ro",
         "URL_BIBLIOTECA": "https://biblioteca.sfantul-ilie.ro",
         "URL_BULETIN": "https://buletin.sfantul-ilie.ro",
         "URL_NEWSLETTER": "https://newsletter.sfantul-ilie.ro",
-        "URL_CURATENIE": "https://curatenie.sfantul-ilie.ro",
-        "URL_PROGRAM": "https://program.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.sfantul-ilie.ro"
-      },
-      "services": [{ "binding": "IDENTITATE", "service": "xc-identity-production" }]
-      // Ruta de productie se adauga DOAR la cutover-ul explicit al lui A13:
-      // "routes": [{ "pattern": "cont.sfantul-ilie.ro", "custom_domain": true }]
+      }
+      // Ruta de productie (`newsletter.sfantul-ilie.ro`) ramane a lui A8 pana la cutover-ul explicit.
     }
   }
 }

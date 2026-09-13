@@ -34,6 +34,8 @@ const APLICATII: Array<{ cheie: keyof Navigatie; nume: string }> = [
   { cheie: 'tipic', nume: 'Tipicul' },
   { cheie: 'biblia', nume: 'Biblia' },
   { cheie: 'biblioteca', nume: 'Biblioteca' },
+  { cheie: 'buletin', nume: 'Buletinul parohial' },
+  { cheie: 'newsletter', nume: 'Newsletter' },
   { cheie: 'cont', nume: 'Contul' },
   { cheie: 'admin', nume: 'Admin' },
 ]

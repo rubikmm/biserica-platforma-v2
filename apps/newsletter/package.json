@@ -1,6 +1,6 @@
 {
-  "name": "@xc/app-admin",
-  "version": "0.1.3",
+  "name": "@xc/app-newsletter",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,8 +11,6 @@
   },
   "dependencies": {
     "@xc/auth": "workspace:*",
-    "@xc/authorization": "workspace:*",
-    "@xc/chat": "workspace:*",
     "@xc/config": "workspace:*",
     "@xc/contracts": "workspace:*",
     "@xc/observability": "workspace:*",

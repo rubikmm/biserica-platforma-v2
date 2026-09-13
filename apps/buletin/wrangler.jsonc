@@ -1,12 +1,11 @@
 {
-  // Biblioteca (A12 din V1): catalogul bibliotecii de la Hanul Colței — ce carti exista si in
-  // cate exemplare. **E un catalog, nu o biblioteca de texte**: cartile se imprumuta fizic, de
-  // la pangar. Cele 1349 de titluri, fisele aduse de la librarii si copertile in trei marimi
-  // s-au copiat din depozitul V1 in unul NOU (`xc-biblioteca-*`), obiect cu obiect.
+  // Buletinul parohial (A3 din V1): foaia periodica fata-verso si arhiva ei — 619 numere aparute
+  // din 2012 incoace. Cifrele si textul de cautat stau in D1, fisierele (PDF + doua poze ale
+  // paginii intai) in R2; amandoua sunt depozite NOI, `xc-buletin-*`, umplute prin copiere din V1.
   //
-  // Doua straturi: catalogul e PUBLIC, iar rezervarile sunt ale omului (D1, numai `user_id`).
+  // Aplicatia nu tine nicio adresa de e-mail: abonarea e o audienta a comunicarii.
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "xc-biblioteca",
+  "name": "xc-buletin",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-25",
   "compatibility_flags": ["nodejs_compat"],
@@ -22,35 +21,31 @@
     "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
   },
 
-  // Depozitul propriu: catalogul, fisele imbogatite, copertile in trei marimi si PDF-urile.
-  "r2_buckets": [{ "binding": "CATALOG", "bucket_name": "xc-biblioteca-staging" }],
+  // Depozitul propriu: PDF-urile si pozele paginii intai, `<an>/buletin-<nr>-<data>.<ext>`.
+  "r2_buckets": [{ "binding": "FISIERE", "bucket_name": "xc-buletin-staging" }],
 
-  // Cererile de carti si scrisorile compuse. Inauntru numai `user_id`.
+  // Cifrele arhivei si textul dupa care se cauta. Fara abonati: aceia sunt ai comunicarii.
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "xc-biblioteca-staging",
-      "database_id": "cbf83fce-8c2a-4548-a576-929f460d0bd3"
+      "database_name": "xc-buletin-staging",
+      "database_id": "63edbc94-001d-4097-8a40-9ddd98227e94"
     }
   ],
 
   "services": [
     { "binding": "IDENTITATE", "service": "xc-identity" },
-    { "binding": "AUTORIZARE", "service": "xc-authz" },
+    { "binding": "AUDIT", "service": "xc-audit" },
     { "binding": "COMUNICARE", "service": "xc-communication" }
   ],
 
-  // Ceasul de noapte: stinge rezervarile neridicate si da semn celor intarziati.
-  // 6:00 UTC = 9:00 la Bucuresti vara, 8:00 iarna — dimineata, nu in miez de noapte.
-  "triggers": { "crons": ["0 6 * * *"] },
-
   "env": {
     "staging": {
-      "name": "xc-biblioteca-staging",
+      "name": "xc-buletin-staging",
       "version_metadata": { "binding": "VERSIUNE" },
       "vars": {
         "MEDIU": "staging",
-        "ORIGINE_PUBLICA": "https://biblioteca.staging.sfantul-ilie.ro",
+        "ORIGINE_PUBLICA": "https://buletin.staging.sfantul-ilie.ro",
         "DOMENIU_COOKIE": ".staging.sfantul-ilie.ro",
         "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
         "URL_HOME": "https://staging.sfantul-ilie.ro",
@@ -65,28 +60,27 @@
         "URL_NEWSLETTER": "https://newsletter.staging.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.staging.sfantul-ilie.ro"
       },
-      "r2_buckets": [{ "binding": "CATALOG", "bucket_name": "xc-biblioteca-staging" }],
+      "r2_buckets": [{ "binding": "FISIERE", "bucket_name": "xc-buletin-staging" }],
       "d1_databases": [
         {
           "binding": "DB",
-          "database_name": "xc-biblioteca-staging",
-          "database_id": "cbf83fce-8c2a-4548-a576-929f460d0bd3"
+          "database_name": "xc-buletin-staging",
+          "database_id": "63edbc94-001d-4097-8a40-9ddd98227e94"
         }
       ],
       "services": [
         { "binding": "IDENTITATE", "service": "xc-identity-staging" },
-        { "binding": "AUTORIZARE", "service": "xc-authz-staging" },
+        { "binding": "AUDIT", "service": "xc-audit-staging" },
         { "binding": "COMUNICARE", "service": "xc-communication-staging" }
       ],
-      "triggers": { "crons": ["0 6 * * *"] },
-      "routes": [{ "pattern": "biblioteca.staging.sfantul-ilie.ro", "custom_domain": true }]
+      "routes": [{ "pattern": "buletin.staging.sfantul-ilie.ro", "custom_domain": true }]
     },
     "production": {
-      "name": "xc-biblioteca-production",
+      "name": "xc-buletin-production",
       "version_metadata": { "binding": "VERSIUNE" },
       "vars": {
         "MEDIU": "production",
-        "ORIGINE_PUBLICA": "https://biblioteca.sfantul-ilie.ro",
+        "ORIGINE_PUBLICA": "https://buletin.sfantul-ilie.ro",
         "DOMENIU_COOKIE": ".sfantul-ilie.ro",
         "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
         "URL_HOME": "https://sfantul-ilie.ro",
@@ -101,8 +95,7 @@
         "URL_NEWSLETTER": "https://newsletter.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.sfantul-ilie.ro"
       }
-      // Ruta de productie (`biblioteca.sfantul-ilie.ro`) ramane a lui A12 pana la cutover-ul
-      // explicit, cerut de utilizator. Nimic rutat de aici.
+      // Ruta de productie (`buletin.sfantul-ilie.ro`) ramane a lui A3 pana la cutover-ul explicit.
     }
   }
 }

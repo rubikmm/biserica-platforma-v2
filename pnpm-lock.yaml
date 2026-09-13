@@ -224,6 +224,27 @@ importers:
         specifier: ^4.1.5
         version: 4.5.4
 
+  apps/buletin:
+    dependencies:
+      '@xc/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@xc/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@xc/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@xc/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@xc/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      zod:
+        specifier: ^4.1.5
+        version: 4.5.4
+
   apps/calendar:
     dependencies:
       '@xc/actiuni':
@@ -280,6 +301,27 @@ importers:
       '@xc/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+
+  apps/newsletter:
+    dependencies:
+      '@xc/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@xc/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@xc/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@xc/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@xc/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      zod:
+        specifier: ^4.1.5
+        version: 4.5.4
 
   apps/program:
     dependencies:

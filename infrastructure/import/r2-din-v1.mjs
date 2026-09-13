@@ -1,19 +1,16 @@
 #!/usr/bin/env node
 /**
- * Copiaza depozitul Bibliotecii (A12) din bucketul V1 `biserica-biblioteca` in cel NOU,
- * `xc-biblioteca-staging`. Nu se refoloseste nimic: obiectele se citesc si se scriu, unul
- * cate unul, prin API-ul Cloudflare (tokenul din `/backup/_setup/cloudflare.env`).
+ * Copiaza un depozit R2 din V1 in unul NOU, cu prefix `xc-`. Nu se refoloseste nimic:
+ * obiectele se citesc si se scriu, unul cate unul, prin API-ul Cloudflare (tokenul din
+ * `/backup/_setup/cloudflare.env`).
  *
- *   node infrastructure/import/biblioteca-din-v1.mjs [--din <bucket>] [--in <bucket>]
- *                                                    [--fire 6] [--doar <prefix>] [--iar]
+ *   node infrastructure/import/r2-din-v1.mjs --din <bucket> --in <bucket>
+ *                                            [--fire 6] [--doar <prefix>] [--iar]
  *
- * Ce se muta (2.996 de obiecte, 164 MB la 13.09.2026):
- *   catalog.json            1349 de titluri, asa cum le tine foaia parohiei
- *   imbogatire.json         fisele aduse de la librarii (coperta, pagini, ISBN, descriere)
- *   coperti/{slug}.jpg      480 px, coperta de pe fisa
- *   coperti-mici/{slug}.jpg 160 px, randul din liste
- *   coperti-mari/{slug}.jpg originalul de la librarie, pentru lupa
- *   pdfuri/{slug}.pdf       cartile date gratuit de editura (Predania)
+ * Folosit pana acum:
+ *   biserica-biblioteca  -> xc-biblioteca-staging   2.996 obiecte, 164 MB (13.09.2026)
+ *   biserica-buletin     -> xc-buletin-staging      1.856 obiecte, 964 MB (13.09.2026)
+ *   biserica-newsletter  -> xc-newsletter-staging   1.423 obiecte, 722 MB (13.09.2026)
  *
  * Se reia de unde a ramas: ce exista deja in destinatie, cu aceeasi marime, se sare.
  * Cu `--iar` se rescrie tot, fara sa se uite la ce e acolo.
@@ -25,8 +22,12 @@ const opt = (n, implicit = null) => {
 }
 const are = (n) => argumente.includes(`--${n}`)
 
-const DIN = opt('din', 'biserica-biblioteca')
-const IN = opt('in', 'xc-biblioteca-staging')
+const DIN = opt('din')
+const IN = opt('in')
+if (!DIN || !IN) {
+  console.error('folosire: node infrastructure/import/r2-din-v1.mjs --din <bucket> --in <bucket>')
+  process.exit(1)
+}
 const FIRE = Number(opt('fire', '6'))
 const DOAR = opt('doar')
 const IAR = are('iar')
@@ -51,7 +52,11 @@ function tipDupaNume(cheie) {
   if (cheie.endsWith('.json')) return 'application/json'
   if (cheie.endsWith('.jpg') || cheie.endsWith('.jpeg')) return 'image/jpeg'
   if (cheie.endsWith('.png')) return 'image/png'
+  if (cheie.endsWith('.webp')) return 'image/webp'
   if (cheie.endsWith('.pdf')) return 'application/pdf'
+  // Numerele newsletterului sunt bucati de HTML gata randate; servite ca `octet-stream`
+  // s-ar descarca in loc sa se vada.
+  if (cheie.endsWith('.html')) return 'text/html; charset=utf-8'
   return 'application/octet-stream'
 }
 
