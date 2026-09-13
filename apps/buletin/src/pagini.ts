@@ -227,7 +227,13 @@ const JS_PAGINI = `
         sound: true, shadows: true,
         zoomMin: 0.85, zoomStep: 2,
         pageTextureSize: 1600, pageTextureSizeMobile: 1200,
-        singlePageMode: false, singlePageModeIfMobile: true,
+        // ⚠️ PE TELEFON se intampla tot ce se vede mai putin (patit 13.09.2026, reclamat de user:
+        // „deschide varianta free … nu e icoana de sunet pe bara de jos si nici efectele normale").
+        // Modulul are un set de comutatoare numai pentru mobil, iar din fabrica ele TAIE:
+        //   singlePageModeIfMobile -> forteaza o pagina pe ecran si sarace intoarcerea;
+        //   btn*IfMobile nescrise  -> butoanele raman hideOnMobile, deci sunetul dispare.
+        // Asezarea de aici e cea probata pe jurnaluldeafaceri, de unde vine si modulul.
+        singlePageMode: false, singlePageModeIfMobile: false,
         responsiveView: true, responsiveViewTreshold: 768,
         thumbnailsOnStart: false, contentOnStart: false,
         // Butoanele modulului: paginile, zoomul, miniaturile, sunetul. Fara descarcare si fara
@@ -236,6 +242,9 @@ const JS_PAGINI = `
         btnDownloadPdf: { enabled: false }, btnDownloadPages: { enabled: false },
         btnPrint: { enabled: false }, btnShare: { enabled: false },
         btnExpand: { enabled: false },
+        btnSoundIfMobile: true, btnTocIfMobile: true, btnThumbsIfMobile: true,
+        btnDownloadPdfIfMobile: false, btnDownloadPagesIfMobile: false,
+        btnPrintIfMobile: false, btnShareIfMobile: false, btnExpandIfMobile: false,
         deeplinkingEnabled: false,
         height: cutie.clientHeight || 600
       });

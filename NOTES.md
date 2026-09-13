@@ -118,6 +118,20 @@ creativeinteractivemedia), chiar cel de la `jurnaluldeafaceri`, de unde s-au și
   citează newsletterul.
 - **`?rasfoit=1`** deschide răsfoitul de la sine: e și legătura de dat mai departe, și calea prin care
   se fotografiază pagina cu Browser Rendering.
+- ⚠️ **PE TELEFON modulul face ALTCEVA, din fabrică** (reclamat de user, 13.09.2026, 22:14: „scrie
+  Răsfoiește dar deschide varianta free — nu e icoană de sunet pe bara de jos … și nici efectele
+  normale"). Nu era nici cache, nici alt motor: era Real3D în varianta lui de mobil. Două comutatoare
+  o produc, și trebuie scrise ANUME:
+  - `singlePageModeIfMobile` — dacă e `true`, forțează o pagină pe ecran și sărăcește întoarcerea
+    (`isMobile && (P.singlePageMode = !!P.singlePageModeIfMobile || P.singlePageMode)`). Îl pusesem
+    `true` crezând că ajut; pe `jurnaluldeafaceri` e `false`. Acum e `false` și aici;
+  - **butoanele au `hideOnMobile` din fabrică**: fără `btn*IfMobile` scrise, sunetul, cuprinsul și
+    miniaturile dispar de pe telefon. Se scriu toate, pe față.
+  Măsurat înainte/după, pe iPhone și Android simulate: pânza **332×469 → 390×738**, iconițele
+  ajung de la 5 la 7 (apar `fa-volume-up/off`). Buletin **0.3.3**.
+  ⚠️ **De aici, regula**: orice probă a răsfoitului se face cu **user-agent de telefon**
+  (`unelte/`… vezi `tmp/poza-mobil.mjs`, `tmp/diag-mobil.mjs`) — un viewport îngust NU e destul,
+  fiindcă modulul se uită la user-agent, nu la lățime.
 - **Varianta liberă, dacă se renunță vreodată la licență**: a existat și a mers, cu `page-flip` 2.0.7
   (MIT) + `pdf.js` 6.3.289 (Apache-2.0), în commit-ul dinaintea trecerii pe Real3D. ⚠️ Acolo se ia
   build-ul **`legacy/`** al lui pdf.js: cel de serie a căzut cu „n.toHex is not a function" chiar în
