@@ -20,8 +20,8 @@
 
 import { LUNI_RO_MICI, MIN_VOLUNTARI } from "../config.js";
 import {
-  catiAdmini, voluntarDupaId, ultimaMiscare, numar, curataDiacritice, ruleaza, setare,
-  puneSetarea, toate, unu, slugUnic, valoare, idVacantaInLuna, numeScurt,
+  asiguraRandul, catiAdmini, voluntarDupaId, ultimaMiscare, numar, curataDiacritice, ruleaza, setare,
+  puneSetarea, toate, totiVoluntarii, unu, slugUnic, valoare, idVacantaInLuna, numeScurt,
   type Voluntar,
 } from "../depozit.js";
 import { esc, html, json } from "@xc/ui";
@@ -35,6 +35,12 @@ import {
 import { buildVolunteerAddedMessage, sendNotification } from "../notificari.js";
 import { acum, adaugaZile, formatDateRo, formatDtLocal, formatMoment, momentDinYmd, type Moment } from "../timp.js";
 import { ADMIN_FAQ } from "./faq.js";
+import {
+  CHEIE_ADMIN, ETICHETA_ADMIN, ETICHETA_MONITOR, ETICHETA_VOLUNTAR,
+  primesteInEchipa, scoateDinEchipa, scrieDatele, scrieEtichetele, totiUtilizatorii,
+  type Baza,
+} from "../oameni.js";
+import type { MembruAplicatie } from "@xc/contracts";
 
 type Flash = [string, string];
 
@@ -89,7 +95,7 @@ const secundeDePerete = (mo: Moment): number => Date.UTC(mo.y, mo.m - 1, mo.d, m
  * V1, și se compară cu ora locală de acum — verde sub 90 de minute. Ceasul e Cron Trigger-ul
  * workerului, deci „Inactiv" se caută în Cloudflare, nu în cPanel.
  */
-async function statusCron(db: D1Database, mo: Moment, variant: "alert" | "weekly" | "monthly"): Promise<{ status: string; label: string; title: string }> {
+async function statusCron(db: Baza, mo: Moment, variant: "alert" | "weekly" | "monthly"): Promise<{ status: string; label: string; title: string }> {
   const last = await setare(db, "newsletter_cron_last_check", null);
   let status = "never";
   let label = "Neverificat";
@@ -144,18 +150,25 @@ function optiuniZile(cur: number): string {
 
 interface Dest { id: number; first_name: string; last_name: string; email: string | null }
 
-const Q_ADMINI = `SELECT id, first_name, last_name, email FROM volunteers
-                     WHERE is_admin = 1 AND is_active = 1
-                       AND email IS NOT NULL AND email != ''
-                     ORDER BY first_name`;
-const Q_MONITORI = `SELECT id, first_name, last_name, email FROM volunteers
-                     WHERE is_monitor = 1 AND is_active = 1
-                       AND email IS NOT NULL AND email != ''
-                     ORDER BY first_name`;
-const Q_VOLUNTARI = `SELECT id, first_name, last_name, email FROM volunteers
-                     WHERE is_active = 1 AND is_volunteer = 1
-                       AND email IS NOT NULL AND email != ''
-                     ORDER BY first_name`;
+/**
+ * Cele trei coloane de destinatari ale ecranelor de raport. Erau trei interogări SQL; de pe
+ * 14.09.2026 se cern din ECHIPĂ, fiindcă etichetele și adresele stau la identitate.
+ * Cine n-are adresă pe cont rămâne în listă, dar scris roșu — ecranul trebuie să arate lipsa,
+ * nu s-o ascundă (purtarea din V1).
+ */
+async function coloaneDestinatari(db: Baza): Promise<{ admini: Dest[]; monitori: Dest[]; voluntari: Dest[] }> {
+  const catreDest = (v: Voluntar): Dest => ({
+    id: v.id, first_name: v.first_name, last_name: v.last_name, email: v.email,
+  });
+  const echipa = (await totiVoluntarii(db))
+    .filter((v) => v.is_active === 1)
+    .sort((a, b) => a.first_name.localeCompare(b.first_name, "ro", { sensitivity: "base" }));
+  return {
+    admini: echipa.filter((v) => v.is_admin === 1).map(catreDest),
+    monitori: echipa.filter((v) => v.is_monitor === 1).map(catreDest),
+    voluntari: echipa.filter((v) => v.is_volunteer === 1).map(catreDest),
+  };
+}
 
 /** Lista vizuală a unei coloane de destinatari ($fmt_list). */
 function fmtList(items: Dest[], vac: Set<number>): string {
@@ -246,10 +259,60 @@ const badgeCron = (c: { status: string; label: string; title: string }): string 
 
 // =========================================================================================
 
+/**
+ * Comută o etichetă („Voluntar", „Monitor") pe asocierea omului. Etichetele stau de pe 14.09.2026
+ * la identitate, nu în tabelul aplicației: se citesc din cartea oamenilor și se scriu întregi.
+ */
+async function comutaEticheta(
+  env: MediuAdmin,
+  db: Baza,
+  id: number,
+  eticheta: string,
+  isAjax: boolean,
+  mesaj: string,
+): Promise<Response> {
+  const target = await voluntarDupaId(db, id);
+  if (!target) throw new Error("Voluntar inexistent.");
+  const etichete = new Set(db.oameni.om(target.user_id)?.etichete ?? []);
+  const pornit = !etichete.has(eticheta);
+  if (pornit) etichete.add(eticheta);
+  else etichete.delete(eticheta);
+  await scrieEtichetele(env, target.user_id, [...etichete]);
+  if (isAjax) return json({ ok: true, state: pornit ? 1 : 0 });
+  return json({ ok: true, message: mesaj });
+}
+
+/**
+ * Cheia de administrare a curățeniei, acordată pe om la autorizarea centrală. E un grant punctual
+ * (ca `library.borrow`), nu un rol: un administrator al curățeniei nu capătă nimic altceva.
+ */
+async function acordaAdmin(env: MediuAdmin, userId: string): Promise<void> {
+  await env.AUTORIZARE.fetch("https://authz.intern/acorda", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-correlation-id": env.cid },
+    body: JSON.stringify({ userId, permission: CHEIE_ADMIN, scope: "global" }),
+  });
+}
+
+async function retrageAdmin(env: MediuAdmin, userId: string): Promise<void> {
+  await env.AUTORIZARE.fetch("https://authz.intern/retrage", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-correlation-id": env.cid },
+    body: JSON.stringify({ userId, permission: CHEIE_ADMIN, scope: "global" }),
+  });
+}
+
 /** Ce are nevoie panoul din mediu, în afară de bază. */
 export interface MediuAdmin {
-  DB: D1Database;
+  DB: Baza;
   posta: MediuRaport;
+  /** Identitatea: de acolo vin oamenii, acolo se scriu asocierile și etichetele. */
+  IDENTITATE: Fetcher;
+  /** Autorizarea: eticheta „Admin" acordă și retrage cu adevărat `cleaning.manage`. */
+  AUTORIZARE: Fetcher;
+  /** Contul celui care apasă — se scrie pe asocierea pe care o primește. */
+  actor: string | null;
+  cid: string;
 }
 
 /**
@@ -280,6 +343,14 @@ export async function paginaAdmin(
   const isNewsletterSection = ["alert", "weekly", "monthly", "archive"].includes(tab);
   let flash: Flash | null = null;
 
+  /*
+   * Toți oamenii platformei, cu starea asocierii lor. De aici iese lista „+ Adaugă": cei cu
+   * `stare: null` sunt neasociați cu curățenia. Se cere o singură dată, și numai pe fila echipei
+   * ori la o primire — celelalte file (rapoarte, arhivă) n-au ce face cu ea.
+   */
+  const areNevoieDeOameni = tab === "voluntari" || action === "add_volunteer";
+  const totiOamenii: MembruAplicatie[] = areNevoieDeOameni ? await totiUtilizatorii(env) : [];
+
   // ----- Acțiuni POST ------------------------------------------------------
   if (isPost) {
     const cereAdmin = (): void => {
@@ -289,97 +360,143 @@ export async function paginaAdmin(
 
     try {
       switch (action) {
+        /*
+         * PRIMIREA ÎN ECHIPĂ (user, 14.09.2026). A luat locul lui „Adaugă voluntar", care năștea
+         * un om nou în baza aplicației. Acum nu se mai naște nimeni aici: se ia un cont care
+         * EXISTĂ pe platformă și i se aprinde asocierea cu curățenia.
+         *
+         * Același drum servește și cererile în așteptare — „Primește" de pe o cerere trimite
+         * exact aceeași acțiune. De asta n-are nevoie să știe dacă omul a cerut sau nu.
+         */
         case "add_volunteer": {
-          const first = (post.first_name ?? "").trim();
-          const last = (post.last_name ?? "").trim();
-          const email = (post.email ?? "").trim() || null;
-          const phone = (post.phone ?? "").trim() || null;
+          cereAdmin();
+          const userId = (post.user_id ?? "").trim();
+          if (userId === "") throw new Error("Alege un utilizator din listă.");
+          const om = db.oameni.om(userId) ?? totiOamenii.find((u) => u.userId === userId);
+          if (!om) throw new Error("Utilizator inexistent pe platformă.");
 
-          if (first === "" || last === "") {
-            throw new Error("Prenume și nume sunt obligatorii.");
-          }
+          const prenume = (om.firstName ?? "").trim();
+          const numeFam = (om.lastName ?? "").trim();
+          // Rândul local (cheia de care atârnă programările) se face acum, dacă nu exista deja.
+          // Dacă omul a mai fost în echipă cândva, rândul lui vechi se reia — cu istoric cu tot.
+          const newId = await asiguraRandul(db, userId, prenume, numeFam);
+          // Cine intră e voluntar din oficiu; restul etichetelor se pun din comutatoare.
+          const etichete = [...new Set([...(om.etichete ?? []), ETICHETA_VOLUNTAR])];
+          await primesteInEchipa(env, userId, env.actor ?? userId, etichete);
 
-          // În V1, primul voluntar adăugat pe o bază fără admini devenea el admin, cu o parolă
-          // implicită. Nu mai are rost: dreptul de administrare e al platformei, iar eticheta
-          // „Admin" se pune din comutatorul cartelei.
-          const slug = await slugUnic(db, first, last);
-          const r = await ruleaza(
-            db,
-            `INSERT INTO volunteers (first_name, last_name, email, phone, slug)
-                     VALUES (?, ?, ?, ?, ?)`,
-            first, last, email, phone, slug,
-          );
-          const newId = Number(r.meta?.last_row_id ?? 0);
-
-          const v = (await voluntarDupaId(db, newId)) ?? { first_name: first, last_name: last };
-          const msg = buildVolunteerAddedMessage(v);
+          const nume = numeScurt({ first_name: prenume, last_name: numeFam, short_name: om.shortName });
+          const msg = buildVolunteerAddedMessage({ first_name: prenume, last_name: numeFam });
           await sendNotification(db, "volunteer_added", msg, { volunteer_id: newId });
 
-          const msgOk = "Voluntar adăugat: " + numeScurt(v);
+          const msgOk = "Primit în echipă: " + nume;
           if (isAjax) return json({ ok: true, message: msgOk, reload: true });
           flash = ["ok", msgOk];
           break;
         }
 
-        case "toggle_volunteer": {
-          const id = idDin();
-          await ruleaza(db, "UPDATE volunteers SET is_volunteer = 1 - is_volunteer, updated_at = datetime('now') WHERE id = ?", id);
-          if (isAjax) {
-            const v = await voluntarDupaId(db, id);
-            return json({ ok: true, state: Number(v?.is_volunteer ?? 0) });
-          }
-          flash = ["ok", "Status voluntar actualizat."];
+        /**
+         * Refuzul unei cereri, de pe lista Cererilor. Omul n-are încă rând local, deci se lucrează
+         * pe contul lui: asocierea se șterge cu totul. Poate cere din nou oricând.
+         */
+        case "refuza_cererea": {
+          cereAdmin();
+          const userId = (post.user_id ?? "").trim();
+          if (userId === "") throw new Error("Cerere incompletă.");
+          await scoateDinEchipa(env, userId, env.actor ?? userId);
+          const om = totiOamenii.find((u) => u.userId === userId);
+          const msgOk = "Cerere refuzată" + (om ? ": " + numeDinCont(om) : "") + ".";
+          if (isAjax) return json({ ok: true, message: msgOk, reload: true });
+          flash = ["ok", msgOk];
           break;
         }
 
-        case "toggle_monitor": {
+        /** Refuzul unei cereri, ori scoaterea cuiva din echipă. Rândul local rămâne: istoricul e al lui. */
+        case "remove_volunteer": {
+          cereAdmin();
           const id = idDin();
-          await ruleaza(db, "UPDATE volunteers SET is_monitor = 1 - is_monitor, updated_at = datetime('now') WHERE id = ?", id);
-          if (isAjax) {
-            const v = await voluntarDupaId(db, id);
-            return json({ ok: true, state: Number(v?.is_monitor ?? 0) });
-          }
-          flash = ["ok", "Status monitor actualizat."];
+          const target = await voluntarDupaId(db, id);
+          if (!target) throw new Error("Voluntar inexistent.");
+          await scoateDinEchipa(env, target.user_id, env.actor ?? target.user_id);
+          // Cine iese din echipă iese și din administrarea ei: altfel ar rămâne cu cheia în ușă.
+          if (target.is_admin === 1) await retrageAdmin(env, target.user_id);
+          const msgOk = numeScurt(target) + (target.in_asteptare ? " — cerere refuzată." : " nu mai e în echipă.");
+          if (isAjax) return json({ ok: true, message: msgOk, reload: true });
+          flash = ["ok", msgOk];
           break;
         }
 
+        case "toggle_volunteer":
+          return await comutaEticheta(env, db, idDin(), ETICHETA_VOLUNTAR, isAjax, "Status voluntar actualizat.");
+
+        case "toggle_monitor":
+          return await comutaEticheta(env, db, idDin(), ETICHETA_MONITOR, isAjax, "Status monitor actualizat.");
+
+        /*
+         * NUMIREA UNUI ADMINISTRATOR AL CURĂȚENIEI (user, 14.09.2026: „să fie totuși o validare la
+         * nivel de admin.curatenie — numit doar de alt admin sau superadmin… nici chiar oricine nu
+         * poate ajunge în acest punct").
+         *
+         * ⚠️ Comutatorul ăsta NU mai e o etichetă, cum a fost la portare: el ACORDĂ și RETRAGE cu
+         * adevărat `cleaning.manage`, la autorizarea centrală. Cine îl apasă are deja cheia — panoul
+         * o cere ca să se deschidă — deci un admin al curățeniei e numit numai de alt admin al ei
+         * sau de un super-admin, care o are din rol.
+         */
         case "toggle_admin": {
+          cereAdmin();
           const id = idDin();
           const target = await voluntarDupaId(db, id);
           if (!target) throw new Error("Voluntar inexistent.");
           const newAdmin = Number(target.is_admin) === 1 ? 0 : 1;
 
-          // Ultimul „Admin" din echipă nu se mai apără ca în V1: eticheta nu mai ține ușa
-          // panoului, deci nimeni nu rămâne închis afară dacă e stinsă. Cine administrează e
-          // hotărât de permisiunea centrală.
-          await ruleaza(db, "UPDATE volunteers SET is_admin = ?, updated_at = datetime('now') WHERE id = ?", newAdmin, id);
-
-          if (newAdmin) {
-            // Adminii sunt automat și monitori (primesc rapoartele).
-            await ruleaza(db, "UPDATE volunteers SET is_monitor = 1 WHERE id = ?", id);
-            if (isAjax) {
-              return json({
-                ok: true,
-                state: 1,
-                monitor_on: true,
-                message: numeScurt(target) + " e trecut ca Admin în echipă și primește rapoartele. "
-                  + "Dreptul de a intra în panou se dă separat, din Administrarea platformei (cleaning.manage).",
-              });
+          if (!newAdmin) {
+            // Ultimul administrator nu se stinge: altfel n-ar mai avea cine primi pe nimeni în
+            // echipă. (Un super-admin tot ar putea intra — cheia îi vine din rol — dar aici nu ne
+            // bizuim pe asta: echipa trebuie să se poată conduce singură.)
+            const cati = await catiAdmini(db);
+            if (cati <= 1) {
+              throw new Error("E singurul administrator al curățeniei. Numește întâi pe altcineva, apoi scoate-l pe el.");
             }
-            flash = ["ok", numeScurt(target) + " e trecut ca Admin în echipă. Dreptul de a intra în panou se dă din Administrarea platformei."];
-          } else {
-            if (isAjax) return json({ ok: true, state: 0 });
-            flash = ["ok", "Eticheta de Admin a fost scoasă pentru " + numeScurt(target) + "."];
           }
+
+          const etichete = new Set(db.oameni.om(target.user_id)?.etichete ?? []);
+          if (newAdmin) {
+            etichete.add(ETICHETA_ADMIN);
+            // Adminii sunt automat și monitori (primesc rapoartele).
+            etichete.add(ETICHETA_MONITOR);
+          } else {
+            etichete.delete(ETICHETA_ADMIN);
+          }
+          await scrieEtichetele(env, target.user_id, [...etichete]);
+          if (newAdmin) await acordaAdmin(env, target.user_id);
+          else await retrageAdmin(env, target.user_id);
+
+          if (isAjax) {
+            return json({
+              ok: true,
+              state: newAdmin,
+              monitor_on: newAdmin === 1,
+              message: newAdmin
+                ? numeScurt(target) + " e acum administrator al curățeniei: poate primi oameni în echipă și primește rapoartele."
+                : "Administrarea curățeniei i-a fost retrasă lui " + numeScurt(target) + ".",
+            });
+          }
+          flash = ["ok", newAdmin ? numeScurt(target) + " e acum administrator al curățeniei." : "Administrarea i-a fost retrasă lui " + numeScurt(target) + "."];
           break;
         }
 
+        /*
+         * Îndreptarea fișei cuiva. Datele NU mai sunt ale aplicației: se scriu la identitate, pe
+         * contul omului, și se văd de acolo peste tot. E-mailul nu se poate schimba de aici — el e
+         * cheia contului, iar schimbarea lui e a omului, de pe pagina lui.
+         */
         case "update_volunteer": {
+          cereAdmin();
           const id = idDin();
+          const target = await voluntarDupaId(db, id);
+          if (!target) throw new Error("Voluntar inexistent.");
           const first = (post.first_name ?? "").trim();
           const last = (post.last_name ?? "").trim();
-          const email = (post.email ?? "").trim() || null;
-          const phone = (post.phone ?? "").trim() || null;
+          const phone = (post.phone ?? "").trim();
 
           if (first === "" || last === "") {
             throw new Error("Prenume și nume sunt obligatorii.");
@@ -403,32 +520,12 @@ export async function paginaAdmin(
           } else {
             slug = await slugUnic(db, first, last, id);
           }
-          await ruleaza(
-            db,
-            `UPDATE volunteers
-                        SET first_name = ?,
-                            last_name  = ?,
-                            email      = ?,
-                            phone      = ?,
-                            slug       = ?,
-                            updated_at = datetime('now')
-                      WHERE id = ?`,
-            first, last, email, phone, slug, id,
-          );
-          const msgOk = `Voluntar actualizat. Nume scurt: ${slug}`;
+          await ruleaza(db, `UPDATE volunteers SET slug = ?, updated_at = datetime('now') WHERE id = ?`, slug, id);
+          await scrieDatele(env, target.user_id, { firstName: first, lastName: last, phone });
+
+          const msgOk = `Fișa a fost actualizată pe contul platformei. Nume scurt: ${slug}`;
           if (isAjax) return json({ ok: true, message: msgOk, reload: true });
           flash = ["ok", msgOk];
-          break;
-        }
-
-        case "toggle_active": {
-          const id = idDin();
-          await ruleaza(db, "UPDATE volunteers SET is_active = 1 - is_active, updated_at = datetime('now') WHERE id = ?", id);
-          if (isAjax) {
-            const v = await voluntarDupaId(db, id);
-            return json({ ok: true, state: Number(v?.is_active ?? 0) });
-          }
-          flash = ["ok", "Status actualizat (nu s-au șters date)."];
           break;
         }
 
@@ -607,27 +704,37 @@ export async function paginaAdmin(
 
   // ----- Date pentru render ------------------------------------------------
   const mo = acum();
-  const volunteers = await toate<Voluntar>(
-    db,
-    `SELECT * FROM volunteers
-     ORDER BY
-       CASE
-         WHEN is_active = 0 THEN 3
-         WHEN is_admin = 1 THEN 0
-         WHEN is_monitor = 1 THEN 1
-         ELSE 2
-       END,
-       created_at ASC, id ASC`,
-  );
+  /*
+   * Echipa. Sortarea nu mai poate sta în SQL — `is_admin` și restul nu mai sunt coloane, ci
+   * etichete ale asocierii, la identitate. Aceeași ordine, socotită aici: admini, monitori,
+   * voluntari, apoi cei ieșiți din echipă (rândul le rămâne, cu istoricul lor).
+   */
+  const treapta = (v: Voluntar): number =>
+    v.is_active !== 1 ? 3 : v.is_admin === 1 ? 0 : v.is_monitor === 1 ? 1 : 2;
+  const volunteers = (await totiVoluntarii(db))
+    .filter((v) => !v.in_asteptare)
+    .sort((a, b) => treapta(a) - treapta(b) || a.id - b.id);
+
+  /** Cererile în așteptare: oameni care au apăsat comutatorul pe contul lor și nu i-a primit nimeni. */
+  const cereri = totiOamenii.filter((u) => u.stare === "ceruta");
+  /** Cei neasociați cu curățenia — lista din spatele butonului „+ Adaugă". */
+  const neasociati = totiOamenii
+    .filter((u) => u.stare === null && !u.disabledAt)
+    .sort((a, b) => numeDinCont(a).localeCompare(numeDinCont(b), "ro", { sensitivity: "base" }));
 
   // Fetch toate log-urile; filtrarea pe tip se face client-side cu JS.
-  const logs = await toate<LogRow>(
+  // ⚠️ Numele nu mai vin din JOIN: se lipesc din cartea oamenilor, ca peste tot.
+  const logsBrut = await toate<Omit<LogRow, "first_name" | "last_name"> & { user_id: string | null }>(
     db,
-    `SELECT n.*, v.first_name, v.last_name
+    `SELECT n.*, v.user_id
      FROM notifications_log n
      LEFT JOIN volunteers v ON v.id = n.volunteer_id
      ORDER BY n.id DESC LIMIT 200`,
   );
+  const logs: LogRow[] = logsBrut.map((r) => {
+    const om = db.oameni.om(r.user_id);
+    return { ...r, first_name: om?.firstName ?? null, last_name: om?.lastName ?? null };
+  });
 
   const logEventTypes = await toate<{ event_type: string; cnt: number }>(
     db,
@@ -638,7 +745,7 @@ export async function paginaAdmin(
   // ----- Conținutul tab-ului -------------------------------------------------
   let continut = "";
   if (tab === "voluntari") {
-    continut = tabVoluntari(volunteers, campCsrf(ctx));
+    continut = tabVoluntari(volunteers, campCsrf(ctx), cereri, neasociati);
   } else if (tab === "alert" && adminAuthed) {
     continut = await tabAlert(db, posta, mo, campCsrf(ctx));
   } else if (tab === "weekly" && adminAuthed) {
@@ -694,7 +801,18 @@ export async function paginaAdmin(
 // =========================================================================================
 // Tab: Voluntari
 
-function tabVoluntari(volunteers: Voluntar[], CSRF: string): string {
+/** Numele omului așa cum îl știe contul lui: prenume + nume, ori numele afișat, ori adresa. */
+function numeDinCont(u: MembruAplicatie): string {
+  const intreg = `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim();
+  return intreg || (u.displayName ?? "").trim() || u.email;
+}
+
+function tabVoluntari(
+  volunteers: Voluntar[],
+  CSRF: string,
+  cereri: MembruAplicatie[],
+  neasociati: MembruAplicatie[],
+): string {
   let carduri = "";
   if (volunteers.length === 0) {
     carduri = `<div class="empty">Niciun voluntar înregistrat.</div>`;
@@ -787,11 +905,16 @@ function tabVoluntari(volunteers: Voluntar[], CSRF: string): string {
                                     </div>
                                 </div>
                                 <div class="vc-toggles">
+                                    <!-- „Activ" a devenit apartenența la echipă: aprins = asociere
+                                         acceptată la identitate, stins = a ieșit (rândul și
+                                         istoricul rămân). Stingerea îi ia și cheia de admin. -->
                                     <form method="post" class="ios-toggle-form">
-                                        <input type="hidden" name="action" value="toggle_active">${CSRF}
+                                        <input type="hidden" name="action" value="${active ? "remove_volunteer" : "add_volunteer"}">${CSRF}
                                         <input type="hidden" name="id" value="${Number(v.id)}">
-                                        <button type="submit" class="ios-toggle ${active ? "on" : "off"}" aria-label="Activ">
-                                            <span class="ios-toggle-label">Activ</span>
+                                        <input type="hidden" name="user_id" value="${esc(v.user_id)}">
+                                        <button type="submit" class="ios-toggle ${active ? "on" : "off"}" aria-label="În echipă"
+                                                title="${active ? "Scoate din echipă (istoricul rămâne)" : "Primește înapoi în echipă"}">
+                                            <span class="ios-toggle-label">În echipă</span>
                                             <span class="ios-toggle-track"><span class="ios-toggle-knob"></span></span>
                                         </button>
                                     </form>
@@ -837,32 +960,107 @@ function tabVoluntari(volunteers: Voluntar[], CSRF: string): string {
                 </div>`;
   }
 
-  return `<div class="add-volunteer-prompt">
+  /*
+   * CERERILE ÎN AȘTEPTARE (user, 14.09.2026: „tot acolo și lista Cererilor"). Cine a apăsat
+   * comutatorul „Curățenia bisericii" pe contul lui stă aici până îl primește un administrator.
+   * Stau SUS, înaintea echipei: sunt singurul lucru din filă care așteaptă o hotărâre.
+   */
+  const listaCereri = cereri.length === 0
+    ? ""
+    : `<div class="cereri">
+                <div class="toolbar">
+                    <strong>Cereri de intrare în echipă (${cereri.length})</strong>
+                    <span style="font-size:0.85rem; color:var(--text-muted);">
+                        Au cerut singuri, de pe contul lor — nu sunt încă în echipă
+                    </span>
+                </div>
+                ${cereri.map((u) => `<div class="cerere-rand">
+                        <div>
+                            <strong>${esc(numeDinCont(u))}</strong>
+                            <div class="cerere-sub">${esc(u.email)}${u.phone ? " · " + esc(u.phone) : ""}</div>
+                        </div>
+                        <div class="cerere-actiuni">
+                            <form method="post">
+                                <input type="hidden" name="action" value="add_volunteer">${CSRF}
+                                <input type="hidden" name="user_id" value="${esc(u.userId)}">
+                                <button type="submit" class="btn">Primește</button>
+                            </form>
+                            <form method="post">
+                                <input type="hidden" name="action" value="refuza_cererea">${CSRF}
+                                <input type="hidden" name="user_id" value="${esc(u.userId)}">
+                                <button type="submit" class="btn secondary">Refuză</button>
+                            </form>
+                        </div>
+                    </div>`).join("\n")}
+            </div>`;
+
+  /*
+   * „+ Adaugă" (user, 14.09.2026: „o listă +add unde adaugi un user deja existent"). NU naște pe
+   * nimeni: alege dintre conturile care există pe platformă și nu sunt încă legate de curățenie.
+   * Dacă lista e goală, nu mai e nimeni de adus — și scrie asta, nu se ascunde butonul.
+   */
+  const listaAdauga = `<div class="add-volunteer-prompt">
                 <span class="add-volunteer-text">
-                    Dacă vrei să adaugi un nou membru în echipă apasă pe buton:
+                    Adu în echipă un utilizator al platformei:
                 </span>
-                <button type="button" class="btn" id="openAddVolunteerBtn">Adaugă voluntar</button>
-            </div>
+                <button type="button" class="btn" id="openAddVolunteerBtn">+ Adaugă</button>
+            </div>`;
+
+  return `${listaCereri}
+
+            ${listaAdauga}
 
             <div class="toolbar">
-                <strong>Toți voluntarii (${volunteers.length})</strong>
+                <strong>Echipa (${volunteers.filter((v) => Number(v.is_active) === 1).length})</strong>
                 <span style="font-size:0.85rem; color:var(--text-muted);">
-                    Inactivii rămân în istoric, nu se șterg
+                    Cine iese rămâne în istoric, nu se șterge
                 </span>
             </div>
 
             ${carduri}
 
-            <!-- Modal pentru Adaugă / Editează voluntar -->
+            <!-- Lista „+ Adaugă": conturile platformei neasociate cu curățenia. Se caută după
+                 nume sau adresă, fiindcă platforma are mai mulți oameni decât are echipa. -->
+            <div id="addModal" class="vol-modal" hidden>
+                <div class="vol-modal-overlay"></div>
+                <div class="vol-modal-content">
+                    <button type="button" class="vol-modal-close" id="addModalClose" aria-label="Închide">×</button>
+                    <h2 class="card-title">Adu în echipă</h2>
+                    ${neasociati.length === 0
+                      ? `<div class="empty">Toți utilizatorii platformei sunt deja legați de curățenie.
+                            Cine nu are cont trebuie să-și facă întâi unul, de la pagina de intrare.</div>`
+                      : `<input type="search" id="addCauta" placeholder="Caută după nume sau e-mail…"
+                                autocomplete="off" style="width:100%;margin-bottom:10px">
+                         <ul class="add-lista">
+                            ${neasociati.map((u) => `<li data-cheie="${esc((numeDinCont(u) + " " + u.email).toLowerCase())}">
+                                    <form method="post">
+                                        <input type="hidden" name="action" value="add_volunteer">${CSRF}
+                                        <input type="hidden" name="user_id" value="${esc(u.userId)}">
+                                        <button type="submit">
+                                            <strong>${esc(numeDinCont(u))}</strong>
+                                            <span class="add-sub">${esc(u.email)}</span>
+                                        </button>
+                                    </form>
+                                </li>`).join("\n")}
+                         </ul>`}
+                </div>
+            </div>
+
+            <!-- Modal pentru Editează fișa (datele se scriu pe contul platformei) -->
             <div id="volModal" class="vol-modal" hidden>
                 <div class="vol-modal-overlay"></div>
                 <div class="vol-modal-content">
                     <button type="button" class="vol-modal-close" id="volModalClose" aria-label="Închide">×</button>
-                    <h2 class="card-title" id="volModalTitle">Adaugă voluntar nou</h2>
+                    <h2 class="card-title" id="volModalTitle">Editează fișa</h2>
                     <div class="vol-modal-error" id="volModalError" hidden></div>
                     <form id="volModalForm">
-                        <input type="hidden" name="action" id="volModalAction" value="add_volunteer">${CSRF}
+                        <input type="hidden" name="action" id="volModalAction" value="update_volunteer">${CSRF}
                         <input type="hidden" name="id" id="volModalId" value="">
+                        <p class="ajutor" style="margin:0 0 10px;color:var(--text-muted);font-size:0.85rem">
+                            Datele se scriu pe <strong>contul platformei</strong> al omului și se văd de
+                            acolo peste tot. Adresa de e-mail nu se schimbă de aici — e cheia contului
+                            lui, și numai el o poate schimba.
+                        </p>
                         <div class="form-grid">
                             <div>
                                 <label>Prenume *</label>
@@ -873,8 +1071,9 @@ function tabVoluntari(volunteers: Voluntar[], CSRF: string): string {
                                 <input type="text" name="last_name" id="volModalLast" required>
                             </div>
                             <div>
-                                <label>Email</label>
-                                <input type="email" name="email" id="volModalEmail">
+                                <label>Email (al contului)</label>
+                                <input type="email" id="volModalEmail" readonly disabled
+                                       style="background:#f0ecdf;color:var(--text-muted);">
                             </div>
                             <div>
                                 <label>Telefon (pentru WhatsApp)</label>
@@ -925,28 +1124,23 @@ function tabVoluntari(volunteers: Voluntar[], CSRF: string): string {
                     }
                     function clearError() { errEl.hidden = true; errEl.textContent = ''; }
 
-                    function openModal(mode, data = {}) {
+                    // Fereastra are de acum o singură treabă: ÎNDREPTAREA fișei. Adăugarea nu mai
+                    // naște pe nimeni aici — se alege un cont din lista „+ Adaugă", care e altă
+                    // fereastră, mai jos.
+                    function openModal(data = {}) {
                         clearError();
                         formEl.reset();
-                        if (mode === 'edit') {
-                            titleEl.textContent = 'Editează voluntar';
-                            actionEl.value = 'update_volunteer';
-                            idEl.value = data.id || '';
-                            firstEl.value = data.first_name || '';
-                            lastEl.value = data.last_name || '';
-                            emailEl.value = data.email || '';
-                            phoneEl.value = data.phone || '';
-                            dispRow.hidden = false;
-                            dispEl.value = data.display_name || '';
-                            slugRow.hidden = false;
-                            slugEl.value = data.slug || '';
-                        } else {
-                            titleEl.textContent = 'Adaugă voluntar nou';
-                            actionEl.value = 'add_volunteer';
-                            idEl.value = '';
-                            dispRow.hidden = true;
-                            slugRow.hidden = true;
-                        }
+                        titleEl.textContent = 'Editează fișa';
+                        actionEl.value = 'update_volunteer';
+                        idEl.value = data.id || '';
+                        firstEl.value = data.first_name || '';
+                        lastEl.value = data.last_name || '';
+                        emailEl.value = data.email || '';
+                        phoneEl.value = data.phone || '';
+                        dispRow.hidden = false;
+                        dispEl.value = data.display_name || '';
+                        slugRow.hidden = false;
+                        slugEl.value = data.slug || '';
                         modal.removeAttribute('hidden');
                         // ⚠️ REGULA FERESTRELOR (13.09.2026): blocarea derulării din spate o face
                         // CARCASA, nu aplicația. Fereastra asta nu e un <dialog> (e un div vechi din
@@ -960,14 +1154,38 @@ function tabVoluntari(volunteers: Voluntar[], CSRF: string): string {
                         modal.setAttribute('hidden', '');
                     }
 
-                    // Buton "Adaugă voluntar"
-                    document.getElementById('openAddVolunteerBtn').addEventListener('click', () => openModal('add'));
+                    // ---- Fereastra „+ Adaugă": conturile platformei neasociate cu curățenia.
+                    const addModal = document.getElementById('addModal');
+                    const addCauta = document.getElementById('addCauta');
+                    function openAdd() {
+                        if (!addModal) return;
+                        addModal.removeAttribute('hidden');
+                        if (window.xcFereastra) window.xcFereastra.blocheaza();
+                        if (addCauta) setTimeout(() => addCauta.focus(), 50);
+                    }
+                    function closeAdd() {
+                        if (!addModal) return;
+                        if (!addModal.hasAttribute('hidden') && window.xcFereastra) window.xcFereastra.dezblocheaza();
+                        addModal.setAttribute('hidden', '');
+                    }
+                    document.getElementById('openAddVolunteerBtn').addEventListener('click', openAdd);
+                    document.getElementById('addModalClose').addEventListener('click', closeAdd);
+                    addModal.querySelector('.vol-modal-overlay').addEventListener('click', closeAdd);
+                    if (addCauta) {
+                        addCauta.addEventListener('input', () => {
+                            const q = addCauta.value.trim().toLowerCase();
+                            addModal.querySelectorAll('.add-lista li').forEach(li => {
+                                li.hidden = q !== '' && !(li.dataset.cheie || '').includes(q);
+                            });
+                        });
+                    }
+
                     // Buton Editează per card (delegate, .vc-edit-btn cu data attrs)
                     document.addEventListener('click', e => {
                         const btn = e.target.closest('.vc-edit-btn');
                         if (!btn) return;
                         e.preventDefault();
-                        openModal('edit', {
+                        openModal({
                             id:           btn.dataset.id,
                             first_name:   btn.dataset.firstName,
                             last_name:    btn.dataset.lastName,
@@ -982,7 +1200,9 @@ function tabVoluntari(volunteers: Voluntar[], CSRF: string): string {
                     document.getElementById('volModalCancel').addEventListener('click', closeModal);
                     modal.querySelector('.vol-modal-overlay').addEventListener('click', closeModal);
                     document.addEventListener('keydown', e => {
-                        if (e.key === 'Escape' && !modal.hasAttribute('hidden')) closeModal();
+                        if (e.key !== 'Escape') return;
+                        if (!modal.hasAttribute('hidden')) closeModal();
+                        if (addModal && !addModal.hasAttribute('hidden')) closeAdd();
                     });
 
                     formEl.addEventListener('submit', async (e) => {
@@ -1091,7 +1311,7 @@ function tabVoluntari(volunteers: Voluntar[], CSRF: string): string {
 // =========================================================================================
 // Tab: Newsletter → Alertă
 
-async function tabAlert(db: D1Database, posta: MediuRaport, mo: Moment, CSRF: string): Promise<string> {
+async function tabAlert(db: Baza, posta: MediuRaport, mo: Moment, CSRF: string): Promise<string> {
   const alertSunday = nextSundayDate(mo);
   const alertNlData = await newsletterBuildData(db, alertSunday, posta.nume);
   const alertNlHtml = newsletterRenderHtml(alertNlData, posta.acasa);
@@ -1106,9 +1326,10 @@ async function tabAlert(db: D1Database, posta: MediuRaport, mo: Moment, CSRF: st
   const nextAlertLabel = urmatoareaRulare(mo, curAlertWd, curAlertHr) + ", ora " + oraHH(curAlertHr);
 
   // Destinatari: TOȚI voluntarii activi cu email (același principiu ca lunar).
-  const adminEmails = await toate<Dest>(db, Q_ADMINI);
-  const monitorEmails = await toate<Dest>(db, Q_MONITORI);
-  const scheduledEmails = await toate<Dest>(db, Q_VOLUNTARI);
+  const coloane = await coloaneDestinatari(db);
+  const adminEmails = coloane.admini;
+  const monitorEmails = coloane.monitori;
+  const scheduledEmails = coloane.voluntari;
 
   // Voluntarii în vacanță în luna duminicii viitoare.
   const vacYear = Number(alertSunday.slice(0, 4));
@@ -1313,23 +1534,30 @@ async function tabAlert(db: D1Database, posta: MediuRaport, mo: Moment, CSRF: st
 // =========================================================================================
 // Tab: Newsletter → Săptămânal
 
-async function tabWeekly(db: D1Database, posta: MediuRaport, mo: Moment, CSRF: string): Promise<string> {
+async function tabWeekly(db: Baza, posta: MediuRaport, mo: Moment, CSRF: string): Promise<string> {
   const nextS = nextSundayDate(mo);
   const nlData = await newsletterBuildData(db, nextS, posta.nume);
   const nlHtml = newsletterRenderHtml(nlData, posta.acasa);
-  const adminEmails = await toate<Dest>(db, Q_ADMINI);
-  const monitorEmails = await toate<Dest>(db, Q_MONITORI);
-  const scheduledEmails = await toate<Dest & { slot: number }>(
+  const coloane = await coloaneDestinatari(db);
+  const adminEmails = coloane.admini;
+  const monitorEmails = coloane.monitori;
+  // Cine e programat la duminica viitoare, în ordinea pozițiilor. Interogarea aduce doar id-ul și
+  // poziția; numele și adresa se lipesc din echipă (nu mai sunt în tabel).
+  const pozitii = await toate<{ volunteer_id: number; slot: number }>(
     db,
-    `SELECT v.id, v.first_name, v.last_name, v.email, MIN(a.slot_position) AS slot
-                     FROM volunteers v
-                     JOIN assignments a ON a.volunteer_id = v.id
+    `SELECT a.volunteer_id, MIN(a.slot_position) AS slot
+                     FROM assignments a
                      WHERE a.sunday_date = ?
-                       AND v.is_active = 1
-                     GROUP BY v.id
+                     GROUP BY a.volunteer_id
                      ORDER BY slot ASC`,
     nextS,
   );
+  const dupaId = new Map(coloane.voluntari.map((d) => [d.id, d]));
+  const scheduledEmails: (Dest & { slot: number })[] = [];
+  for (const p of pozitii) {
+    const d = dupaId.get(Number(p.volunteer_id));
+    if (d) scheduledEmails.push({ ...d, slot: Number(p.slot) });
+  }
 
   // Voluntarii în vacanță în luna duminicii viitoare — pentru strikethrough în UI.
   const vacYear = Number(nextS.slice(0, 4));
@@ -1564,7 +1792,7 @@ async function tabWeekly(db: D1Database, posta: MediuRaport, mo: Moment, CSRF: s
 // =========================================================================================
 // Tab: Newsletter → Lunar
 
-async function tabMonthly(db: D1Database, posta: MediuRaport, mo: Moment, CSRF: string): Promise<string> {
+async function tabMonthly(db: Baza, posta: MediuRaport, mo: Moment, CSRF: string): Promise<string> {
   const mlSchedule = await newsletterMonthlyNextSchedule(db, mo);
   const mlY = Number(mlSchedule.target_year);
   const mlM = Number(mlSchedule.target_month);
@@ -1580,9 +1808,10 @@ async function tabMonthly(db: D1Database, posta: MediuRaport, mo: Moment, CSRF: 
 
   // Newsletter-ul LUNAR ajunge la TOȚI voluntarii activi cu email. Listele vizuale pe 3 coloane
   // afișează FIECARE categorie integral (duplicate vizuale OK); dedup în pool.
-  const adminEmails = await toate<Dest>(db, Q_ADMINI);
-  const monitorEmails = await toate<Dest>(db, Q_MONITORI);
-  const scheduledEmails = await toate<Dest>(db, Q_VOLUNTARI);
+  const coloane = await coloaneDestinatari(db);
+  const adminEmails = coloane.admini;
+  const monitorEmails = coloane.monitori;
+  const scheduledEmails = coloane.voluntari;
 
   // Voluntarii în vacanță în luna țintă — pentru strikethrough.
   const vacationIds = new Set(await idVacantaInLuna(db, mlY, mlM));
@@ -1835,7 +2064,7 @@ function renderRcptCol(list: Rcpt[]): string {
   }).join("");
 }
 
-async function tabArchive(db: D1Database, url: URL, CSRF: string): Promise<string> {
+async function tabArchive(db: Baza, url: URL, CSRF: string): Promise<string> {
   // Toate trimiterile, ordonate cronologic descrescător (cel mai recent primul).
   const allArchive = await toate<ArhivaRow>(db, "SELECT * FROM newsletter_history ORDER BY id DESC");
 
@@ -1871,10 +2100,9 @@ async function tabArchive(db: D1Database, url: URL, CSRF: string): Promise<strin
   }
   // Fallback pentru intrările vechi fără recipients_json
   if (rcptsRaw.length === 0) {
-    const rows = await toate<{ status: string | null; first_name: string | null; last_name: string | null; email: string | null; is_admin: number | null; is_monitor: number | null }>(
+    const rows = await toate<{ status: string | null; user_id: string | null }>(
       db,
-      `SELECT n.status, v.first_name, v.last_name, v.email,
-                                    v.is_admin, v.is_monitor
+      `SELECT n.status, v.user_id
                              FROM notifications_log n
                              LEFT JOIN volunteers v ON v.id = n.volunteer_id
                              WHERE n.event_type = 'newsletter'
@@ -1885,12 +2113,16 @@ async function tabArchive(db: D1Database, url: URL, CSRF: string): Promise<strin
       current.sunday_date, current.created_at, current.created_at,
     );
     for (const row of rows) {
+      // ⚠️ Ceata (admin/monitor) e cea de ACUM, nu cea de la trimitere: fișa e a contului și se
+      // schimbă. Intrările noi n-au nevoie de socoteala asta — ele au `recipients_json`, scris
+      // în clipa trimiterii. Asta e doar plasa pentru arhiva veche.
+      const om = db.oameni.om(row.user_id);
       let cat = "scheduled";
-      if (Number(row.is_admin ?? 0) === 1) cat = "admin";
-      else if (Number(row.is_monitor ?? 0) === 1) cat = "monitor";
+      if (om?.etichete.includes(ETICHETA_ADMIN)) cat = "admin";
+      else if (om?.etichete.includes(ETICHETA_MONITOR)) cat = "monitor";
       rcptsRaw.push({
-        name: `${row.first_name ?? ""} ${row.last_name ?? ""}`.trim(),
-        email: row.email ?? "",
+        name: `${om?.firstName ?? ""} ${om?.lastName ?? ""}`.trim(),
+        email: om?.email ?? "",
         status: row.status ?? "sent",
         category: cat,
       });
@@ -1905,18 +2137,12 @@ async function tabArchive(db: D1Database, url: URL, CSRF: string): Promise<strin
     const em = String(r.email ?? "").trim().toLowerCase();
     if (em === "" || seen.has(em)) continue;
     seen.add(em);
-    // Asigură că avem categorie — dacă lipsește, lookup în DB curent.
+    // Asigură că avem categorie — dacă lipsește, o căutăm după adresă în echipa de ACUM.
     if (!r.category) {
-      const vrow = await unu<{ is_admin: number; is_monitor: number }>(
-        db, "SELECT is_admin, is_monitor FROM volunteers WHERE lower(email) = ? LIMIT 1", em,
-      );
-      if (vrow) {
-        if (Number(vrow.is_admin) === 1) r.category = "admin";
-        else if (Number(vrow.is_monitor) === 1) r.category = "monitor";
-        else r.category = "scheduled";
-      } else {
-        r.category = "scheduled";
-      }
+      const om = db.oameni.toti().find((o) => (o.email ?? "").toLowerCase() === em);
+      if (om?.etichete.includes(ETICHETA_ADMIN)) r.category = "admin";
+      else if (om?.etichete.includes(ETICHETA_MONITOR)) r.category = "monitor";
+      else r.category = "scheduled";
     }
     rcpts.push(r);
   }
@@ -2523,6 +2749,35 @@ const STIL_ADMIN = `
                 font-size: 1rem;
             }
         }
+
+        /* Cererile de intrare în echipă — stau sus, înaintea echipei, fiindcă așteaptă o hotărâre. */
+        .cereri { margin-bottom: 22px; }
+        .cerere-rand {
+            display: flex; align-items: center; justify-content: space-between; gap: 14px;
+            background: var(--surface); border: 1px solid var(--border);
+            border-left: 3px solid var(--accent, #b3432f);
+            border-radius: 8px; padding: 12px 14px; margin-bottom: 8px;
+        }
+        .cerere-sub { color: var(--text-muted); font-size: 0.85rem; margin-top: 2px; }
+        .cerere-actiuni { display: flex; gap: 8px; }
+        .cerere-actiuni form { margin: 0; }
+        .cerere-actiuni .btn { padding: 6px 14px; font-size: 0.9rem; white-space: nowrap; }
+        @media (max-width: 540px) {
+            .cerere-rand { flex-direction: column; align-items: stretch; }
+            .cerere-actiuni .btn { width: 100%; }
+        }
+
+        /* Lista „+ Adaugă": un rând = un cont al platformei, neasociat cu curățenia. */
+        .add-lista { list-style: none; margin: 0; padding: 0; max-height: 52vh; overflow-y: auto; }
+        .add-lista li { margin: 0 0 6px; }
+        .add-lista form { margin: 0; }
+        .add-lista button {
+            display: block; width: 100%; text-align: left; cursor: pointer;
+            background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+            padding: 9px 12px; color: inherit; font: inherit;
+        }
+        .add-lista button:hover { border-color: var(--accent, #b3432f); }
+        .add-sub { display: block; color: var(--text-muted); font-size: 0.82rem; margin-top: 2px; }
 
         /* Modal voluntar (Adaugă / Editează) */
         .vol-modal {

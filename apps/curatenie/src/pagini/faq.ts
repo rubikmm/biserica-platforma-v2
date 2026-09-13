@@ -12,7 +12,7 @@ import { type Ctx, pagina } from "../pagina.js";
 const FAQ: { q: string; a: string }[] = [
   {
     q: "Cum mă programez la o duminică?",
-    a: "Apasă pe butonul <strong>Autentificare</strong> din colțul dreapta-sus, alege-ți numele din listă, apoi apasă pe oricare slot „liber\" la duminica dorită. Slotul devine verde — ești înscris(ă).",
+    a: "Intră cu <strong>Contul</strong> din colțul dreapta-sus (e-mail și un cod de șase cifre), apoi apasă pe oricare slot „liber\" la duminica dorită. Slotul devine verde — ești înscris(ă). Ca să poți apăsa, trebuie să fii în echipa de curățenie.",
   },
   {
     q: "Cum mă dezînscriu de la o duminică?",
@@ -23,8 +23,8 @@ const FAQ: { q: string; a: string }[] = [
     a: "Apasă pe poziția corectă din aceeași duminică. Slotul vechi se eliberează automat și ocupi pe cel nou — fără mesaje extra.",
   },
   {
-    q: "Nu mă găsesc în lista de voluntari. Ce fac?",
-    a: "Vorbește cu un administrator. Lista lor și datele de contact apar în secțiunea de <strong>Autentificare</strong> (click pe nume să vezi telefon / email). Ei te pot adăuga în sistem.",
+    q: "Nu sunt în echipa de curățenie. Cum intru?",
+    a: "Intră cu contul parohiei, apoi pe pagina contului tău, la <strong>„Aplicațiile mele\" → Curățenia bisericii</strong>, apasă <strong>Cer să intru</strong>. Un administrator al curățeniei primește cererea și te adaugă. Îi poți și scrie direct: numele lor apar pe pagina de intrare.",
   },
   {
     q: "Ce înseamnă „liber\" pe un buton?",
@@ -48,7 +48,11 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Cum mă deconectez?",
-    a: "Apasă pe numele tău din colțul dreapta-sus → <strong>Ieșire</strong>.",
+    a: "Apasă pe numele tău din colțul dreapta-sus → <strong>Ieșire</strong>. Ieși din contul parohiei, deci din toate aplicațiile ei deodată.",
+  },
+  {
+    q: "Cum ies din echipa de curățenie?",
+    a: "De pe pagina contului tău, la <strong>„Aplicațiile mele\"</strong>, apasă <strong>Ies din echipă</strong>. Plecarea nu cere voie de la nimeni. Programările tale trecute rămân în istoric.",
   },
   {
     q: "Aplicația merge pe telefon?",
@@ -56,11 +60,11 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Trebuie să introduc parolă?",
-    a: "Nu, nimeni. Voluntarii își aleg numele din listă și asta e tot. Administratorii intră cu contul parohiei — email și un cod de șase cifre, fără parolă nici ei.",
+    a: "Nu, nimeni. Intrarea se face cu adresa de e-mail și un cod de șase cifre care-ți vine pe ea. Nu există parolă nicăieri pe platformă.",
   },
   {
     q: "Aplicația mă „ține minte\"?",
-    a: "Da. Browser-ul reține pe ce nume te-ai conectat și data viitoare intri direct pe el. Dacă apeși „Ieșire\", trebuie să re-alegi numele — dar butonul tău rămâne evidențiat în listă.",
+    a: "Da. Odată intrat, rămâi intrat — pe toate aplicațiile parohiei, nu doar pe asta. Codul se cere din nou abia după ce expiră sesiunea sau după ce apeși „Ieșire\".",
   },
 ];
 

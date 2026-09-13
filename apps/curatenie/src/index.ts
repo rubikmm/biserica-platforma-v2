@@ -6,25 +6,25 @@
  *
  * Rute:
  *   /health                     starea bazei
- *   /                           programarea: lista de nume (pickerul) ori calendarul
- *   POST /alege                 numele ales din listă („modul simplu")
- *   /iesi                       uită numele ales (contul platformei rămâne, e al lui)
+ *   /                           programarea: calendarul duminicilor
  *   /faq                        întrebări frecvente (public)
  *   POST /api                   ocuparea / eliberarea unui slot, vacanța pe o lună
- *   /admin                      panoul: voluntari, rapoarte, jurnal          (cleaning.manage)
- *   /admin/faq                  întrebările administratorilor               (cleaning.manage)
- *   /admin/curatare-arhiva      subțierea arhivei de rapoarte               (cleaning.manage)
- *   /cron                       pornirea ceasului cu mâna, pentru probe     (cleaning.manage)
+ *   /admin                      panoul: echipa, cererile, rapoarte, jurnal    (cleaning.manage)
+ *   /admin/faq                  întrebările administratorilor                (cleaning.manage)
+ *   /admin/curatare-arhiva      subțierea arhivei de rapoarte                (cleaning.manage)
+ *   /cron                       pornirea ceasului cu mâna, pentru probe      (cleaning.manage)
  *
  * ⚠️ Trei lucruri care se încalcă ușor:
  *
- *  1. **Voluntarii sunt ai aplicației** — nume, e-mail și telefon stau în baza ei, iar omul se
- *     recunoaște alegându-și numele din listă, fără cont. E o abatere de la „datele stau într-un
- *     loc, autentificarea la fel", CERUTĂ ANUME de utilizator (13.09.2026): „pickerul rămâne, ca
- *     mod simplu". I s-a spus limpede ce aduce; a ales-o știind. Nu o „repara" înapoi.
+ *  1. **Voluntarii sunt CONTURI ale platformei** (user, 14.09.2026). Pickerul — lista de nume din
+ *     care omul se alegea singur, fără cont — a ieșit cu totul, împreună cu „Schimbă numele" și
+ *     „Ieși": funcția lor o face acum butonul **Cont** din antet. Aplicația nu mai ține nume,
+ *     e-mail sau telefon: le cere de la identitate (`oameni.ts`).
  *  2. **Emailul nu pleacă de aici** — rapoartele se dau poștei platformei (`xc-communication`).
- *  3. **Dreptul de administrare e central** (`cleaning.manage`). `is_admin` din tabel a rămas doar
- *     etichetă a echipei: cine e „Admin" pe cartelă și primește rapoartele din oficiu.
+ *  3. **Apartenența la echipă se CERE, nu se ia**: omul apasă comutatorul „Curățenia" pe contul
+ *     lui, iar un administrator al curățeniei îl primește din panou. Eticheta „Admin" NU mai e un
+ *     desen — aprinderea ei acordă chiar `cleaning.manage`, deci un admin e numit numai de alt
+ *     admin al curățeniei sau de un super-admin.
  *
  * ⚠️ Și un al patrulea, de ținut minte la cutover: **A6 din V1 e VIU și trimite singur** (alerta de
  * vineri, raportul de sâmbătă, cel lunar). Cât timp pe producție rutează V1, aici trimiterea merge
@@ -43,9 +43,10 @@ import { paginaFaqAdmin } from "./admin/faq.js"
 import { paginaCuratareArhiva } from "./admin/cleanup.js"
 import { numeleDuminicilor } from "./calendar.js"
 import { ruleazaCeasul } from "./cron.js"
-import { numar, voluntarDupaId } from "./depozit.js"
+import { numar, numeScurt } from "./depozit.js"
 import { citestePost, duTe, text } from "./html.js"
-import { puneVoluntarul, uitaVoluntarul, voluntarulCurent } from "./identitate.js"
+import { voluntarulCurent } from "./identitate.js"
+import { cuOameni, incarcaOamenii } from "./oameni.js"
 import type { MediuRaport } from "./newsletter.js"
 import { type Ctx, pagina, paginaMesaj } from "./pagina.js"
 import { paginaFaq } from "./pagini/faq.js"
@@ -97,7 +98,7 @@ export default {
     if (cale === "/admin/faq.php") cale = "/admin/faq"
 
     if (cale === "/health") {
-      const voluntari = await numar(env.DB, `SELECT COUNT(*) FROM volunteers WHERE is_active = 1`)
+      const voluntari = await numar(env.DB, `SELECT COUNT(*) FROM volunteers`)
       const programari = await numar(env.DB, `SELECT COUNT(*) FROM assignments`)
       return json({ ok: true, app: "curatenie", voluntari, programari, ora: new Date().toISOString() })
     }
@@ -112,7 +113,13 @@ export default {
 
     const numeCont = sesiune.user?.displayName ?? null
     const userId = sesiune.user?.id ?? null
-    const voluntar = await voluntarulCurent(env.DB, req, userId, numeCont).catch(() => null)
+    /*
+     * Cartea oamenilor, cerută o dată pe cerere de la identitate, și legată de baza aplicației
+     * pentru tot restul drumului (vezi `oameni.ts`). De aici încolo `db` e învelișul: rândurile
+     * locale au doar `user_id`, iar numele li se lipesc din carte.
+     */
+    const db = cuOameni(env.DB, await incarcaOamenii(env))
+    const voluntar = await voluntarulCurent(db, userId).catch(() => null)
 
     // Jetonul CSRF trăiește patru ore într-un cookie propriu; fiecare formular al paginii îl scrie,
     // iar POST-ul îl cere înapoi.
@@ -126,7 +133,7 @@ export default {
       csrf: csrf.jeton,
       utilizator: numeCont ?? sesiune.user?.email ?? null,
       userId,
-      voluntar: voluntar ? `${voluntar.first_name} ${(voluntar.last_name ?? "").slice(0, 1).toUpperCase()}.`.trim() : null,
+      voluntar: voluntar ? numeScurt(voluntar) : null,
       eAdmin,
       versiune: pkg.version,
       modificata: dataVersiunii(env.VERSIUNE),
@@ -143,25 +150,12 @@ export default {
         if (problema) return html(paginaMesaj(ctx, "Verificare de securitate", problema), 403, antete)
       }
 
-      // ------------------------------------------------------- numele ales
-      if (cale === "/alege" && req.method === "POST") {
-        const post = await citestePost(req)
-        const problema = verificaTokenCsrf(req, post.csrf ?? "")
-        if (problema) return html(paginaMesaj(ctx, "Verificare de securitate", problema), 403, antete)
-        const v = await voluntarDupaId(env.DB, parseInt(post.volunteer_id ?? "0", 10) || 0)
-        if (!v || v.is_active !== 1) return duTe(`${prefix}/?alege=1`)
-        const unde = post.goto_vacation ? `${prefix}/#vacation` : `${prefix}/`
-        return duTe(unde, puneVoluntarul(v.id, cfg.DOMENIU_COOKIE))
-      }
-
       /*
-       * „Ieși" uită numai NUMELE ales din listă. Sesiunea platformei nu se atinge: ea e a contului,
-       * iar ieșirea din el se face din meniul contului, ca în toate aplicațiile. Numele rămâne
-       * ținut minte pentru semnul „tu" de pe listă (al doilea cookie), ca în V1.
+       * Adresele pickerului, scoase pe 14.09.2026. Rămân ca redirect, nu ca 404: o duminică
+       * trecută poate fi salvată la favorite cu `?alege=1`, iar „Ieși" era un link obișnuit.
+       * Ieșirea adevărată se face acum din meniul contului, ca în orice aplicație V2.
        */
-      if (cale === "/iesi") {
-        return duTe(`${prefix}/`, [uitaVoluntarul(cfg.DOMENIU_COOKIE)])
-      }
+      if (cale === "/alege" || cale === "/iesi") return duTe(`${prefix}/`)
 
       if (cale === "/faq") return html(paginaFaq(ctx), 200, antete)
 
@@ -171,8 +165,8 @@ export default {
         const post = await citestePost(req)
         const problema = verificaTokenCsrf(req, post.csrf ?? "")
         if (problema) return json({ ok: false, error: problema }, 403)
-        const cine: CineApasa = { voluntar, eAdmin, numeCont }
-        return api(env, cine, post)
+        const cine: CineApasa = { voluntar, eAdmin, numeCont, userId }
+        return api(env, db, cine, post)
       }
 
       // ------------------------------------------------------- panoul
@@ -188,7 +182,7 @@ export default {
         if (cale === "/admin/faq") return html(paginaFaqAdmin(ctx), 200, antete)
 
         if (cale === "/admin/curatare-arhiva") {
-          return paginaCuratareArhiva(ctx, env.DB, req, antete)
+          return paginaCuratareArhiva(ctx, db, req, antete)
         }
 
         if (cale === "/admin") {
@@ -197,7 +191,15 @@ export default {
             const problema = verificaTokenCsrf(req, postDat.post.csrf ?? "")
             if (problema) return html(paginaMesaj(ctx, "Verificare de securitate", problema), 403, antete)
           }
-          const mediu = { DB: env.DB, posta: await postaDin(env, cfg.ORIGINE_PUBLICA, prefix) }
+          const mediu = {
+            DB: db,
+            posta: await postaDin(env, cfg.ORIGINE_PUBLICA, prefix),
+            IDENTITATE: env.IDENTITATE,
+            AUTORIZARE: env.AUTORIZARE,
+            /** Cine apasă — se scrie pe asocierile pe care le primește sau le stinge. */
+            actor: userId,
+            cid,
+          }
           return paginaAdmin(ctx, mediu, req, url, postDat)
         }
 
@@ -212,7 +214,7 @@ export default {
       if (cale === "/cron") {
         if (!eAdmin) return text("Acces interzis.\n", 403)
         const posta = await postaDin(env, cfg.ORIGINE_PUBLICA, prefix)
-        return text(await ruleazaCeasul(env.DB, posta, url.searchParams.has("acum")))
+        return text(await ruleazaCeasul(db, posta, url.searchParams.has("acum")))
       }
 
       // ------------------------------------------------------- programarea
@@ -220,7 +222,7 @@ export default {
         // Numele duminicilor pentru cele trei luni care se pot vedea deodată (arhiva cerută, luna
         // curentă, luna viitoare) — o singură întrebare la calendar.
         const nume = await numeleDuminicilor(env.CALENDAR ?? null, ...intervalulPaginii(url))
-        return html(await paginaIndex(ctx, env.DB, req, url, voluntar, nume), 200, antete)
+        return html(await paginaIndex(ctx, db, req, url, voluntar, nume), 200, antete)
       }
 
       return html(paginaMesaj(ctx, "Pagina nu există", "Adresa aceasta nu duce nicăieri la curățenie."), 404, antete)
@@ -237,7 +239,9 @@ export default {
   async scheduled(_event: ScheduledController, env: Env): Promise<void> {
     const log = new Logger({ service: SERVICIU, correlationId: "ceas" })
     const posta = await postaDin(env, env.ORIGINE_PUBLICA, "")
-    const raport = await ruleazaCeasul(env.DB, posta, false)
+    // Și ceasul are nevoie de cartea oamenilor: rapoartele scriu nume și pleacă pe adresele lor.
+    const db = cuOameni(env.DB, await incarcaOamenii(env))
+    const raport = await ruleazaCeasul(db, posta, false)
     log.info("ceasul rapoartelor", { raport: raport.trim() })
   },
 } satisfies ExportedHandler<Env>

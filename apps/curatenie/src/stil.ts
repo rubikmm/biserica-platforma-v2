@@ -856,10 +856,8 @@ body:not(.cu-platforma) .cont-lista a[href^="https://cont."] { display: none }
                  color: var(--text); text-decoration: none; font-size: 0.95rem; font-weight: 600 }
 .btn-platforma:hover { border-color: var(--rosu); color: var(--rosu) }
 
-/* Cat timp nu stim cine e, „Autentificare" din antet se vede mai apasat — el e pasul
-   urmator al omului care intra pe pagina (era butonul rosu din varianta veche). */
-.cont[href="#autentificare"] { color: var(--danger); font-weight: 600 }
-.cont[href="#autentificare"]:hover { color: var(--rosu) }
+/* Regula de mai jos a apartinut butonului „Autentificare" din antet, scos pe 14.09.2026 odata cu
+   pickerul: antetul are de acum numai „Cont", al platformei, si el se poarta la fel peste tot. */
 
 /* Mesajul de jos (toast): fundalul ia culoarea scrisului temei, deci scrisul ia hartia. */
 .toast { background: var(--ink); color: var(--paper) }

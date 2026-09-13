@@ -8,6 +8,7 @@
 
 import { LUNI_RO, LUNI_RO_MICI } from "./config.js";
 import { toate, type Voluntar } from "./depozit.js";
+import { ETICHETA_VOLUNTAR, type Baza } from "./oameni.js";
 import { acum, adaugaZile, formatDtLocal, formatDateShort, momentDinYmd, ymdDin, zileInLuna, type Moment } from "./timp.js";
 
 // --- Numele duminicii — de la calendar (A1) ---------------------------------------
@@ -122,7 +123,7 @@ export const eUltimaDuminica = (sunday: string, mo: Moment = acum()): boolean =>
 export interface Luna { year: number; month: number; label: string }
 
 /** Lunile cu programări, descrescător (months_with_assignments). */
-export async function luniCuProgramari(db: D1Database): Promise<Luna[]> {
+export async function luniCuProgramari(db: Baza): Promise<Luna[]> {
   const rows = await toate<{ ym: string }>(
     db, "SELECT DISTINCT substr(sunday_date, 1, 7) AS ym FROM assignments ORDER BY ym DESC",
   );
@@ -140,40 +141,50 @@ export interface StatParticipare {
   id: number;
   first_name: string;
   last_name: string;
+  short_name: string | null;
   attended: number;
   created_at: string | null;
   joined_after: boolean;
 }
 
-/** Toți voluntarii activi cu numărul de prezențe în luna dată (month_participation_stats). */
-export async function participareaLunii(db: D1Database, year: number, month: number): Promise<StatParticipare[]> {
+/**
+ * Toți voluntarii activi cu numărul de prezențe în luna dată (month_participation_stats).
+ * ⚠️ Filtrul „activ și voluntar" nu mai poate sta în SQL: de pe 14.09.2026 sunt etichete ale
+ * asocierii, la identitate. Numărătoarea rămâne în SQL, ca înainte; cernerea se face aici.
+ */
+export async function participareaLunii(db: Baza, year: number, month: number): Promise<StatParticipare[]> {
   const ym = `${year}-${String(month).padStart(2, "0")}`;
-  const rows = await toate<Pick<Voluntar, "id" | "first_name" | "last_name" | "created_at"> & { attended: number }>(
+  const rows = await toate<{ id: number; user_id: string; created_at: string | null; attended: number }>(
     db,
-    `SELECT v.id, v.first_name, v.last_name, v.created_at,
+    `SELECT v.id, v.user_id, v.created_at,
             COALESCE(SUM(CASE WHEN substr(a.sunday_date, 1, 7) = ? THEN 1 ELSE 0 END), 0) AS attended
        FROM volunteers v LEFT JOIN assignments a ON a.volunteer_id = v.id
-      WHERE v.is_active = 1 AND v.is_volunteer = 1
       GROUP BY v.id
-      ORDER BY attended DESC, v.first_name ASC`,
+      ORDER BY attended DESC`,
     ym,
   );
-  return rows.map((r) => {
+  const out: StatParticipare[] = [];
+  for (const r of rows) {
+    const om = db.oameni.om(r.user_id);
+    if (!om || om.stare !== "acceptata" || om.disabled) continue;
+    if (!om.etichete.includes(ETICHETA_VOLUNTAR)) continue;
     const attended = Number(r.attended);
     const created = r.created_at ?? null;
-    return {
+    out.push({
       id: Number(r.id),
-      first_name: r.first_name,
-      last_name: r.last_name,
+      first_name: om.firstName,
+      last_name: om.lastName,
+      short_name: om.shortName,
       attended,
       created_at: created,
       joined_after: attended === 0 && created !== null && created.slice(0, 7) >= ym,
-    };
-  });
+    });
+  }
+  return out.sort((a, b) => b.attended - a.attended || a.first_name.localeCompare(b.first_name, "ro"));
 }
 
 /** [volunteer_id => total prezențe pe tot istoricul] (all_time_attendance_map). */
-export async function prezenteTotale(db: D1Database): Promise<Record<number, number>> {
+export async function prezenteTotale(db: Baza): Promise<Record<number, number>> {
   const rows = await toate<{ volunteer_id: number; c: number }>(
     db, "SELECT volunteer_id, COUNT(*) AS c FROM assignments GROUP BY volunteer_id",
   );
@@ -183,7 +194,7 @@ export async function prezenteTotale(db: D1Database): Promise<Record<number, num
 }
 
 /** [volunteer_id => ultima duminică programată] (last_participation_map). */
-export async function ultimaPrezenta(db: D1Database): Promise<Record<number, string>> {
+export async function ultimaPrezenta(db: Baza): Promise<Record<number, string>> {
   const rows = await toate<{ volunteer_id: number; md: string }>(
     db, "SELECT volunteer_id, MAX(sunday_date) AS md FROM assignments GROUP BY volunteer_id",
   );

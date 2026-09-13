@@ -22,10 +22,12 @@ import { MIN_VOLUNTARI, LUNI_RO_MICI } from "./config.js";
 import { duminicileLunii, type NumeDuminici } from "./calendar.js";
 import {
   programarileLunii, numar, numeIntreg, ruleaza, setare, puneSetarea, toate, idVacantaInLuna,
+  totiVoluntarii, voluntariActivi,
   type Voluntar,
 } from "./depozit.js";
 import { esc } from "@xc/ui";
 import { acum, adaugaZile, dataLocala, formatDateRo, formatDateShort, momentDinYmd, ymdDin, type Moment } from "./timp.js";
+import type { Baza } from "./oameni.js";
 
 export interface SendResult {
   sent: number;
@@ -46,11 +48,11 @@ export function nextSundayDate(mo: Moment = acum()): string {
   return mo.ymd;
 }
 
-export async function nextSundayOccupiedCount(db: D1Database, sunday: string): Promise<number> {
+export async function nextSundayOccupiedCount(db: Baza, sunday: string): Promise<number> {
   return numar(db, "SELECT COUNT(*) FROM assignments WHERE sunday_date = ?", sunday);
 }
 
-export async function nextSundayIsFilled(db: D1Database, sunday: string): Promise<boolean> {
+export async function nextSundayIsFilled(db: Baza, sunday: string): Promise<boolean> {
   return (await nextSundayOccupiedCount(db, sunday)) >= MIN_VOLUNTARI;
 }
 
@@ -87,7 +89,7 @@ export interface MonthlySchedule {
  * Pentru admin: următoarea luni la care se trimite lunarul și ce lună va arăta
  * (sare peste luna deja trimisă — idempotența pe newsletter_monthly_last_sent_for_ym).
  */
-export async function newsletterMonthlyNextSchedule(db: D1Database, mo: Moment = acum()): Promise<MonthlySchedule> {
+export async function newsletterMonthlyNextSchedule(db: Baza, mo: Moment = acum()): Promise<MonthlySchedule> {
   const hour = parseInt((await setare(db, "newsletter_monthly_hour", "9")) ?? "9", 10);
   const lastForYm = (await setare(db, "newsletter_monthly_last_sent_for_ym", "")) ?? "";
 
@@ -114,17 +116,49 @@ export async function newsletterMonthlyNextSchedule(db: D1Database, mo: Moment =
   return { monday: candidate, hour, target_year: c.y, target_month: c.m };
 }
 
-export async function newsletterMonthlyTargetMonth(db: D1Database, mo: Moment = acum()): Promise<[number, number]> {
+export async function newsletterMonthlyTargetMonth(db: Baza, mo: Moment = acum()): Promise<[number, number]> {
   const s = await newsletterMonthlyNextSchedule(db, mo);
   return [s.target_year, s.target_month];
 }
 
-/** Emailurile TUTUROR voluntarilor activi (lower-case, unice) — pentru alertă. */
-export async function allActiveVolunteerEmails(db: D1Database): Promise<string[]> {
-  const rows = await toate<{ email: string }>(
-    db, "SELECT email FROM volunteers WHERE is_active = 1 AND is_volunteer = 1 AND email IS NOT NULL AND email != ''",
+/**
+ * Emailurile TUTUROR voluntarilor activi (lower-case, unice) — pentru alertă.
+ * ⚠️ Adresele nu mai stau în tabel: vin de pe conturile platformei, prin cartea oamenilor.
+ */
+export async function allActiveVolunteerEmails(db: Baza): Promise<string[]> {
+  const echipa = await voluntariActivi(db);
+  const adrese = echipa.map((v) => (v.email ?? "").trim().toLowerCase()).filter((e) => e !== "");
+  return [...new Set(adrese)];
+}
+
+/**
+ * Cele trei cete de destinatari ale unui raport, luate din ECHIPĂ (nu din tabel: etichetele și
+ * adresele stau la identitate de pe 14.09.2026).
+ *
+ *   - `admins`    — cei cu eticheta „Admin";
+ *   - `monitors`  — cei cu „Monitor";
+ *   - `scheduled` — cu o duminică dată: cine e programat la ea; fără (`null`, raportul lunar):
+ *                   toată echipa de voluntari.
+ *
+ * Cine n-are adresă pe cont cade din listă: nu pretindem că i-am scris.
+ */
+async function cete(
+  db: Baza,
+  sunday: string | null,
+): Promise<{ admins: Voluntar[]; monitors: Voluntar[]; scheduled: Voluntar[] }> {
+  const echipa = (await totiVoluntarii(db)).filter(
+    (v) => v.is_active === 1 && (v.email ?? "").trim() !== "",
   );
-  return [...new Set(rows.map((r) => r.email.trim().toLowerCase()))];
+  const admins = echipa.filter((v) => v.is_admin === 1);
+  const monitors = echipa.filter((v) => v.is_monitor === 1);
+  if (sunday === null) {
+    return { admins, monitors, scheduled: echipa.filter((v) => v.is_volunteer === 1) };
+  }
+  const randuri = await toate<{ volunteer_id: number }>(
+    db, "SELECT DISTINCT volunteer_id FROM assignments WHERE sunday_date = ?", sunday,
+  );
+  const ids = new Set(randuri.map((r) => Number(r.volunteer_id)));
+  return { admins, monitors, scheduled: echipa.filter((v) => ids.has(v.id)) };
 }
 
 // --- Săptămânal -------------------------------------------------------------------
@@ -139,10 +173,10 @@ export interface NewsletterData {
   free_count: number;
 }
 
-export async function newsletterBuildData(db: D1Database, sunday: string, nume: NumeDuminici): Promise<NewsletterData> {
-  const rows = await toate<{ slot_position: number; volunteer_id: number; first_name: string; last_name: string }>(
+export async function newsletterBuildData(db: Baza, sunday: string, nume: NumeDuminici): Promise<NewsletterData> {
+  const rows = await toate<{ slot_position: number; volunteer_id: number; user_id: string }>(
     db,
-    `SELECT a.slot_position, a.volunteer_id, v.first_name, v.last_name
+    `SELECT a.slot_position, a.volunteer_id, v.user_id
        FROM assignments a JOIN volunteers v ON v.id = a.volunteer_id
       WHERE a.sunday_date = ? ORDER BY a.slot_position`,
     sunday,
@@ -150,7 +184,8 @@ export async function newsletterBuildData(db: D1Database, sunday: string, nume: 
   const slots: Record<number, string> = {};
   let maxPos = 0;
   for (const r of rows) {
-    slots[Number(r.slot_position)] = numeIntreg(r);
+    const om = db.oameni.om(r.user_id);
+    slots[Number(r.slot_position)] = numeIntreg({ first_name: om?.firstName ?? "?", last_name: om?.lastName ?? "" });
     maxPos = Math.max(maxPos, Number(r.slot_position));
   }
   const slotCount = Math.max(MIN_VOLUNTARI, maxPos);
@@ -487,7 +522,7 @@ async function daPostei(
   }
 }
 
-async function trimiteTuturor(db: D1Database, posta: MediuRaport, dest: Voluntar[], t: Trimitere): Promise<{ sent: number; failed: number; errors: string[]; log: RecipientLog[] }> {
+async function trimiteTuturor(db: Baza, posta: MediuRaport, dest: Voluntar[], t: Trimitere): Promise<{ sent: number; failed: number; errors: string[]; log: RecipientLog[] }> {
   let sent = 0;
   let failed = 0;
   const errors: string[] = [];
@@ -529,7 +564,7 @@ async function trimiteTuturor(db: D1Database, posta: MediuRaport, dest: Voluntar
  * @param isTest       trimitere din admin: intră în arhivă cu is_test=1 și NU atinge idempotența cron-ului
  */
 export async function newsletterSend(
-  db: D1Database, posta: MediuRaport, filterEmails: string[] | null = null, isAlert = false, isTest = false,
+  db: Baza, posta: MediuRaport, filterEmails: string[] | null = null, isAlert = false, isTest = false,
 ): Promise<SendResult> {
   const sunday = nextSundayDate();
   const data = await newsletterBuildData(db, sunday, posta.nume);
@@ -539,14 +574,7 @@ export async function newsletterSend(
     ? "[ALERTĂ] Locuri libere - Duminică " + formatDateShort(sunday)
     : "Programare curățenie Duminică (" + formatDateShort(sunday) + ")";
 
-  const admins = await toate<Voluntar>(db, "SELECT * FROM volunteers WHERE is_admin = 1 AND is_active = 1 AND email IS NOT NULL AND email != ''");
-  const monitors = await toate<Voluntar>(db, "SELECT * FROM volunteers WHERE is_monitor = 1 AND is_active = 1 AND email IS NOT NULL AND email != ''");
-  const scheduled = await toate<Voluntar>(
-    db,
-    `SELECT DISTINCT v.* FROM volunteers v JOIN assignments a ON a.volunteer_id = v.id
-      WHERE a.sunday_date = ? AND v.is_active = 1 AND v.email IS NOT NULL AND v.email != ''`,
-    sunday,
-  );
+  const { admins, monitors, scheduled } = await cete(db, sunday);
   const vacIds = await idVacantaInLuna(db, Number(sunday.slice(0, 4)), Number(sunday.slice(5, 7)));
   const dest = filtreaza(combina(admins, monitors, scheduled), vacIds, filterEmails);
 
@@ -600,7 +628,7 @@ export interface MonthlyData {
   shortage: number;
 }
 
-export async function newsletterBuildMonthlyData(db: D1Database, year: number, month: number, nume: NumeDuminici): Promise<MonthlyData> {
+export async function newsletterBuildMonthlyData(db: Baza, year: number, month: number, nume: NumeDuminici): Promise<MonthlyData> {
   const sundays = duminicileLunii(year, month);
   const byDay = await programarileLunii(db, year, month);
 
@@ -633,13 +661,12 @@ export async function newsletterBuildMonthlyData(db: D1Database, year: number, m
     });
   }
 
-  const totalVolunteers = await numar(db, "SELECT COUNT(*) FROM volunteers WHERE is_active = 1 AND is_volunteer = 1");
-  const onVacation = await numar(
-    db,
-    `SELECT COUNT(DISTINCT vc.volunteer_id) FROM volunteer_vacations vc JOIN volunteers v ON v.id = vc.volunteer_id
-      WHERE vc.year = ? AND vc.month = ? AND v.is_active = 1 AND v.is_volunteer = 1`,
-    year, month,
-  );
+  // Câți voluntari are echipa și câți dintre ei sunt în vacanță luna asta. Cernerea „activ și
+  // voluntar" se face pe echipă, nu în SQL: sunt etichete ale asocierii, la identitate.
+  const voluntari = await voluntariActivi(db);
+  const totalVolunteers = voluntari.length;
+  const idVacanta = new Set(await idVacantaInLuna(db, year, month));
+  const onVacation = voluntari.filter((v) => idVacanta.has(v.id)).length;
   const activeVolunteers = Math.max(0, totalVolunteers - onVacation);
   const sundaysCount = blocks.length;
   const slotsNeeded = sundaysCount * MIN_VOLUNTARI;
@@ -834,7 +861,7 @@ export function newsletterRenderTextMonthly(data: MonthlyData, acasa: string): s
 
 /** Trimite newsletter-ul lunar — newsletter_send_monthly(). */
 export async function newsletterSendMonthly(
-  db: D1Database, posta: MediuRaport, filterEmails: string[] | null = null, year: number | null = null, month: number | null = null, isTest = false,
+  db: Baza, posta: MediuRaport, filterEmails: string[] | null = null, year: number | null = null, month: number | null = null, isTest = false,
 ): Promise<SendResult> {
   if (year === null || month === null) [year, month] = await newsletterMonthlyTargetMonth(db);
 
@@ -844,11 +871,8 @@ export async function newsletterSendMonthly(
   const subject = "Programare curățenie - " + ucfirst(data.month_label);
   const anchor = data.sunday_blocks[0]?.date ?? ymdDin(year, month, 1);
 
-  const admins = await toate<Voluntar>(db, "SELECT * FROM volunteers WHERE is_admin = 1 AND is_active = 1 AND email IS NOT NULL AND email != ''");
-  const monitors = await toate<Voluntar>(db, "SELECT * FROM volunteers WHERE is_monitor = 1 AND is_active = 1 AND email IS NOT NULL AND email != ''");
-  const scheduled = await toate<Voluntar>(
-    db, "SELECT * FROM volunteers WHERE is_active = 1 AND is_volunteer = 1 AND email IS NOT NULL AND email != '' ORDER BY first_name, last_name",
-  );
+  // Raportul lunar merge la toată echipa, nu doar la cei programați într-o anume duminică.
+  const { admins, monitors, scheduled } = await cete(db, null);
   const vacIds = await idVacantaInLuna(db, year, month);
   const dest = filtreaza(combina(admins, monitors, scheduled), vacIds, filterEmails);
 

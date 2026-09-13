@@ -25,12 +25,13 @@ import {
   nextSundayDate, nextSundayIsFilled, type MediuRaport,
 } from './newsletter.js'
 import { acum, dataLocala } from './timp.js'
+import type { Baza } from './oameni.js'
 
 /**
  * Rulează ceasul. `acumSilit` = pornire cu mâna din panou: sare peste toate socotelile de zi și oră
  * și trimite săptămânalul, ca `?force=1` din V1 (bun la probe).
  */
-export async function ruleazaCeasul(db: D1Database, posta: MediuRaport, acumSilit: boolean): Promise<string> {
+export async function ruleazaCeasul(db: Baza, posta: MediuRaport, acumSilit: boolean): Promise<string> {
   const mo = acum()
   const clipa = () => dataLocala('Y-m-d H:i:s')
   let out = ''

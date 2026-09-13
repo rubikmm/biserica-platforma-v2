@@ -1,6 +1,6 @@
 import type { Navigatie } from '@xc/config'
 import { alerta, esc, pagina } from '@xc/ui'
-import type { SesiuneCurenta } from '@xc/contracts'
+import { APLICATII_CU_MEMBRI, type AplicatieCuMembri, type Asociere, type SesiuneCurenta } from '@xc/contracts'
 
 export interface Ctx {
   prefix: string
@@ -26,6 +26,24 @@ form.cod { max-width:420px }
 form.cod input[type=hidden] { width:auto }
 .din-nou { background:none; border:0; padding:0; width:auto; color:var(--rosu);
            font:inherit; text-decoration:underline; cursor:pointer }
+.marunt { color:var(--soft); font-size:0.88rem; max-width:46em }
+/* Un rand = o aplicatie a platformei, cu starea si gestul ei. Randul nu dispare cand esti in
+   afara echipei: se schimba doar ce scrie pe el si ce face butonul. */
+.app-rand { display:flex; align-items:center; justify-content:space-between; gap:16px;
+            border:1px solid var(--rule); border-radius:10px; padding:12px 14px; margin:10px 0;
+            max-width:46em }
+.app-rand form { margin:0 }
+.app-rand button { width:auto; white-space:nowrap }
+.app-rand button.sters { background:none; border:1px solid var(--rule); color:var(--soft) }
+.app-sub { color:var(--soft); font-size:0.86rem; margin-top:3px }
+.app-stare { font-size:0.78rem; border-radius:999px; padding:1px 8px; border:1px solid var(--rule) }
+.app-stare.da { color:var(--ink) }
+.app-stare.astept { color:var(--rosu); border-color:var(--rosu) }
+.app-rand.pornita { border-color:var(--ink) }
+@media (max-width:520px) {
+  .app-rand { flex-direction:column; align-items:stretch }
+  .app-rand button { width:100% }
+}
 @media (max-width:380px) {
   .cod-casute { gap:6px }
   .cod-casute input { width:40px; height:50px; font-size:21px }
@@ -228,12 +246,86 @@ ${cutieDebug}
   })
 }
 
+/**
+ * Comutatorul unei aplicatii pe contul omului (user, 14.09.2026). Trei stari, si toate trei se
+ * VAD — nimic nu se ascunde:
+ *   - stins      → „Cere să intri"; apasarea nu te face membru, ci scrie o cerere;
+ *   - in asteptare → cererea e scrisa, dar un administrator al aplicatiei n-a primit-o inca;
+ *   - aprins     → esti membru, cu etichetele pe care ti le-a pus aplicatia.
+ *
+ * ⚠️ Intrarea cere voie, iesirea nu. Butonul „Ies din echipă" lucreaza pe loc, fara validare:
+ * nimeni nu e tinut cu forta intr-o echipa de voluntari.
+ */
+function aplicatiaMea(
+  p: string,
+  csrf: string,
+  app: AplicatieCuMembri,
+  a: Asociere | undefined,
+  url: string,
+): string {
+  const numeEtichete = (coduri: readonly string[]): string =>
+    coduri
+      .map((c) => app.etichete.find((e) => e.cod === c))
+      .filter((e): e is (typeof app.etichete)[number] => !!e)
+      .map((e) => `<span title="${esc(e.explicatie)}">${esc(e.nume)}</span>`)
+      .join(' ')
+
+  const stare = a?.stare ?? null
+  const legatura = url ? ` <a href="${esc(url)}">deschide aplicația</a>` : ''
+
+  if (stare === 'acceptata') {
+    const et = numeEtichete(a?.etichete ?? [])
+    return `<div class="app-rand pornita">
+  <div>
+    <strong>${esc(app.nume)}</strong> <span class="app-stare da">ești în echipă</span>
+    <div class="app-sub">${esc(app.descriere)}${legatura}</div>
+    ${et ? `<div class="roluri" style="margin-top:6px">${et}</div>` : ''}
+  </div>
+  <form method="post" action="${p}/aplicatii/ies">
+    <input type="hidden" name="csrf" value="${esc(csrf)}">
+    <input type="hidden" name="aplicatie" value="${esc(app.cod)}">
+    <button type="submit" class="sters">Ies din echipă</button>
+  </form>
+</div>`
+  }
+
+  if (stare === 'ceruta') {
+    return `<div class="app-rand asteapta">
+  <div>
+    <strong>${esc(app.nume)}</strong> <span class="app-stare astept">cerere trimisă</span>
+    <div class="app-sub">Un administrator al aplicației trebuie să te primească în echipă.</div>
+  </div>
+  <form method="post" action="${p}/aplicatii/ies">
+    <input type="hidden" name="csrf" value="${esc(csrf)}">
+    <input type="hidden" name="aplicatie" value="${esc(app.cod)}">
+    <button type="submit" class="sters">Retrag cererea</button>
+  </form>
+</div>`
+  }
+
+  return `<div class="app-rand">
+  <div>
+    <strong>${esc(app.nume)}</strong>
+    <div class="app-sub">${esc(app.descriere)}</div>
+  </div>
+  <form method="post" action="${p}/aplicatii/cer">
+    <input type="hidden" name="csrf" value="${esc(csrf)}">
+    <input type="hidden" name="aplicatie" value="${esc(app.cod)}">
+    <button type="submit">Cer să intru</button>
+  </form>
+</div>`
+}
+
 export function paginaProfil(o: {
   ctx: Ctx
   sesiune: SesiuneCurenta
   csrf: string
   mesaj?: string
   spre?: string
+  /** Asocierile omului cu aplicatiile platformei. Goale cand identitatea n-a raspuns. */
+  asocieri?: Asociere[]
+  /** Adresele aplicatiilor, dupa cheia `URL_*` din registrul asocierilor. */
+  adrese?: Record<string, string>
 }): string {
   const u = o.sesiune.user
   if (!u) return paginaIntrare({ ctx: o.ctx, csrf: o.csrf })
@@ -241,6 +333,8 @@ export function paginaProfil(o: {
   const roluri = o.sesiune.roles.length
     ? o.sesiune.roles.map((r) => `<span>${esc(r.role)} · ${esc(r.scope)}</span>`).join(' ')
     : '<span>fără rol</span>'
+  const asocieri = o.asocieri ?? []
+  const adrese = o.adrese ?? {}
   return pagina({
     ...comune(o.ctx, {
       nume: u.displayName ?? u.email,
@@ -263,13 +357,31 @@ ${o.mesaj ? alerta('buna', esc(o.mesaj)) : ''}
   <tr><th>Sesiunea expiră</th><td>${esc(o.sesiune.expiresAt ?? '—')}</td></tr>
 </table>
 
-<h3>Numele afișat</h3>
-<form class="bloc" method="post" action="${p}/auth/nume">
+<h3>Datele mele</h3>
+<p class="marunt">Numele afișat e cel din antet. Restul îl folosesc aplicațiile la care ești
+   în echipă — numele scurt se scrie pe butoane, iar telefonul îl văd doar administratorii lor.</p>
+<form class="bloc" method="post" action="${p}/auth/date">
   <input type="hidden" name="csrf" value="${esc(o.csrf)}">
   <label for="nume">Cum să-ți spunem</label>
   <input id="nume" name="nume" type="text" required maxlength="120" value="${esc(u.displayName ?? '')}">
+  <label for="prenume" style="margin-top:10px">Prenume</label>
+  <input id="prenume" name="prenume" type="text" maxlength="80" value="${esc(u.firstName ?? '')}">
+  <label for="numeFamilie" style="margin-top:10px">Nume</label>
+  <input id="numeFamilie" name="nume_familie" type="text" maxlength="80" value="${esc(u.lastName ?? '')}">
+  <label for="numeScurt" style="margin-top:10px">Nume scurt (pe butoane)</label>
+  <input id="numeScurt" name="nume_scurt" type="text" maxlength="60" placeholder="ex. Mihai P."
+         value="${esc(u.shortName ?? '')}">
+  <label for="telefon" style="margin-top:10px">Telefon</label>
+  <input id="telefon" name="telefon" type="tel" maxlength="40" value="${esc(u.phone ?? '')}">
   <button type="submit" style="margin-top:12px">Salvează</button>
 </form>
+
+<h3>Aplicațiile mele</h3>
+<p class="marunt">Intrarea într-o echipă cere voie: ceri, iar un administrator al aplicației te
+   primește. Ieșirea nu cere voie — pleci când vrei.</p>
+${APLICATII_CU_MEMBRI.map((app) =>
+  aplicatiaMea(p, o.csrf, app, asocieri.find((a) => a.aplicatie === app.cod), adrese[app.cheieUrl] ?? ''),
+).join('\n')}
 
 <h3>Siguranță</h3>
 <p>Închide toate sesiunile deschise, pe orice dispozitiv. Ca să intri din nou, ceri alt cod.</p>

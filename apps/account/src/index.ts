@@ -16,7 +16,7 @@ import {
   type Navigatie,
   type VariabileComune,
 } from '@xc/config'
-import { Masca, SESIUNE_ANONIMA } from '@xc/contracts'
+import { APLICATII_CU_MEMBRI, Masca, SESIUNE_ANONIMA, aplicatieCuMembri, type Asociere } from '@xc/contracts'
 import { Logger, correlationId } from '@xc/observability'
 import { dataVersiunii, html } from '@xc/ui'
 import pkg from '../package.json'
@@ -41,6 +41,29 @@ async function apelIdentitate(env: Env, cale: string, corp: unknown, cid: string
     headers: { 'content-type': 'application/json', 'x-correlation-id': cid },
     body: JSON.stringify(corp),
   })
+}
+
+/** Asocierile omului cu aplicatiile platformei. Daca identitatea tace, pagina se deseneaza goala. */
+async function asocierileMele(env: Env, userId: string, cid: string): Promise<Asociere[]> {
+  try {
+    const raspuns = await apelIdentitate(env, '/asocieri/ale-mele', { userId }, cid)
+    if (!raspuns.ok) return []
+    const date = (await raspuns.json()) as { asocieri?: Asociere[] }
+    return date.asocieri ?? []
+  } catch {
+    return []
+  }
+}
+
+/** Adresele aplicatiilor din registru, luate din `URL_*`-urile mediului. */
+function adreseAplicatiilor(env: Env): Record<string, string> {
+  const out: Record<string, string> = {}
+  const brut = env as unknown as Record<string, unknown>
+  for (const app of APLICATII_CU_MEMBRI) {
+    const v = brut[app.cheieUrl]
+    if (typeof v === 'string' && v) out[app.cheieUrl] = v
+  }
+  return out
 }
 
 /** Cere codul de intrare. Acelasi drum pentru „intra" si „cont nou" — difera doar numele purtat. */
@@ -364,15 +387,55 @@ export default {
         return redirect(`${prefix}/auth/login`, { 'set-cookie': cookieSters(NUME_COOKIE_SESIUNE, domeniu) })
       }
 
-      if (cale === '/auth/nume' && req.method === 'POST') {
+      // Fisa omului, dintr-o singura apasare: numele afisat, prenumele, numele, numele scurt si
+      // telefonul. Pana pe 14.09.2026 ruta se chema `/auth/nume` si salva un singur camp.
+      if (cale === '/auth/date' && req.method === 'POST') {
         const formular = await req.formData()
         const problema = verificaTokenCsrf(req, String(formular.get('csrf') ?? ''))
         if (problema) return html(paginaMesaj({ ctx, cine, titlu: 'Cerere respinsă', fel: 'rea', text: problema }), 403)
         if (!sesiune.authenticated || !sesiune.user) return redirect(`${prefix}/auth/login`)
 
-        const nume = String(formular.get('nume') ?? '').trim().slice(0, 120)
-        if (nume) await apelIdentitate(env, '/nume', { userId: sesiune.user.id, displayName: nume }, cid)
+        const camp = (n: string, max: number): string => String(formular.get(n) ?? '').trim().slice(0, max)
+        const nume = camp('nume', 120)
+        await apelIdentitate(
+          env,
+          '/utilizatori/date',
+          {
+            userId: sesiune.user.id,
+            // Numele afisat nu se poate goli: fara el, antetul n-ar mai avea ce scrie.
+            ...(nume ? { displayName: nume } : {}),
+            firstName: camp('prenume', 80),
+            lastName: camp('nume_familie', 80),
+            shortName: camp('nume_scurt', 60),
+            phone: camp('telefon', 40),
+          },
+          cid,
+        )
         return redirect(`${prefix}/?salvat=1`)
+      }
+
+      // Comutatorul unei aplicatii. „Cer" scrie o CERERE — nu te face membru; primirea o face un
+      // administrator al aplicatiei, din panoul ei. „Ies" lucreaza pe loc: plecarea nu cere voie.
+      if ((cale === '/aplicatii/cer' || cale === '/aplicatii/ies') && req.method === 'POST') {
+        const formular = await req.formData()
+        const problema = verificaTokenCsrf(req, String(formular.get('csrf') ?? ''))
+        if (problema) return html(paginaMesaj({ ctx, cine, titlu: 'Cerere respinsă', fel: 'rea', text: problema }), 403)
+        if (!sesiune.authenticated || !sesiune.user) return redirect(`${prefix}/auth/login`)
+
+        const cod = String(formular.get('aplicatie') ?? '')
+        if (!aplicatieCuMembri(cod)) {
+          return html(paginaMesaj({ ctx, cine, titlu: 'Nu se poate', fel: 'rea', text: 'Aplicație necunoscută.' }), 400)
+        }
+        const cer = cale === '/aplicatii/cer'
+        await apelIdentitate(
+          env,
+          cer ? '/asocieri/cere' : '/asocieri/scoate',
+          cer
+            ? { userId: sesiune.user.id, aplicatie: cod, cerutDe: sesiune.user.id }
+            : { userId: sesiune.user.id, aplicatie: cod, deCatre: sesiune.user.id },
+          cid,
+        )
+        return redirect(`${prefix}/?${cer ? 'cerut' : 'iesit'}=1`)
       }
 
       if (cale === '/' || cale === '/profil') {
@@ -381,10 +444,23 @@ export default {
         const mesaj = url.searchParams.has('bun-venit')
           ? 'Bine ai venit! Contul tău e deschis.'
           : url.searchParams.has('salvat')
-            ? 'Numele a fost salvat.'
-            : undefined
+            ? 'Datele au fost salvate.'
+            : url.searchParams.has('cerut')
+              ? 'Cererea a plecat. Un administrator al aplicației trebuie să te primească în echipă.'
+              : url.searchParams.has('iesit')
+                ? 'Gata — nu mai ești în echipă.'
+                : undefined
+        const asocieri = sesiune.user ? await asocierileMele(env, sesiune.user.id, cid) : []
         return html(
-          paginaProfil({ ctx, sesiune, csrf: csrf.jeton, spre: spreAici, ...(mesaj ? { mesaj } : {}) }),
+          paginaProfil({
+            ctx,
+            sesiune,
+            csrf: csrf.jeton,
+            spre: spreAici,
+            asocieri,
+            adrese: adreseAplicatiilor(env),
+            ...(mesaj ? { mesaj } : {}),
+          }),
           200,
           csrf.setCookie ? { 'set-cookie': csrf.setCookie } : {},
         )

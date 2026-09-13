@@ -10,15 +10,42 @@ export const Email = z
 
 export const NumeAfisat = z.string().trim().min(1).max(120)
 
+/** Telefonul, cum il scrie omul. Se pastreaza forma lui; se curata doar la `tel:`. */
+export const Telefon = z.string().trim().max(40)
+
+/**
+ * Fisa omului, la identitate. Pana pe 14.09.2026 tinea doar `email` + `displayName` — atat cat
+ * trebuia ca sa scrie un nume in antet. Utilizatorul a cerut atunci ca fisa sa cuprinda **tot ce
+ * tinea despre un om aplicatia de curatenie** (prenume, nume, telefon, nume scurt), ca sa nu mai
+ * existe o a doua lista de persoane in platforma. Sunt singurele date personale din V2 si stau
+ * intr-un singur loc — cine are nevoie de ele le CERE de aici.
+ *
+ * ⚠️ Toate cele patru sunt optionale: un cont nascut dintr-o intrare obisnuita n-are decat adresa.
+ */
 export const Utilizator = z.object({
   id: z.string().min(1),
   email: Email,
   displayName: z.string().min(1).nullable(),
+  firstName: z.string().nullable().default(null),
+  lastName: z.string().nullable().default(null),
+  phone: z.string().nullable().default(null),
+  /** Numele scurt, cum se scrie pe un buton: „Mihai P.". Vine din curatenie (V1: `slug`/`numeScurt`). */
+  shortName: z.string().nullable().default(null),
   emailVerifiedAt: z.iso.datetime().nullable(),
   disabledAt: z.iso.datetime().nullable(),
   createdAt: z.iso.datetime(),
 })
 export type Utilizator = z.infer<typeof Utilizator>
+
+/** Ce se poate schimba la fisa unui om. Tot ce lipseste ramane neatins. */
+export const DateUtilizator = z.object({
+  displayName: NumeAfisat.optional(),
+  firstName: z.string().trim().max(80).optional(),
+  lastName: z.string().trim().max(80).optional(),
+  phone: Telefon.optional(),
+  shortName: z.string().trim().max(60).optional(),
+})
+export type DateUtilizator = z.infer<typeof DateUtilizator>
 
 export const AtribuireRol = z.object({
   role: Rol,

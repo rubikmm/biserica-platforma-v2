@@ -11,6 +11,7 @@ import { esc } from "@xc/ui";
 import { citestePost } from "../html.js";
 import { type Ctx, campCsrf, pagina } from "../pagina.js";
 import { formatDtLocal } from "../timp.js";
+import type { Baza } from "../oameni.js";
 
 interface RandArhiva {
   id: number;
@@ -40,7 +41,7 @@ main tr.delete-row td { color: var(--danger); text-decoration: line-through; }
 
 export async function paginaCuratareArhiva(
   ctx: Ctx,
-  db: D1Database,
+  db: Baza,
   request: Request,
   antete: Record<string, string>,
 ): Promise<Response> {

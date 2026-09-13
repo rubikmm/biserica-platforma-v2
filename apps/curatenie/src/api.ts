@@ -27,6 +27,7 @@ import {
 } from "./depozit.js";
 import { json } from "@xc/ui";
 import { adminFaraVoluntar } from "./identitate.js";
+import type { Baza } from "./oameni.js";
 import { buildSlotMessage, sendNotification } from "./notificari.js";
 import { acum, eYmd, formatDateShort, ziuaSaptamanii } from "./timp.js";
 
@@ -36,6 +37,7 @@ export interface CineApasa {
   eAdmin: boolean;
   /** Numele din contul platformei — pentru adminul fără voluntar al lui. */
   numeCont: string | null;
+  userId: string | null;
 }
 
 interface MediuApi {
@@ -46,14 +48,14 @@ type Ok = Record<string, unknown>;
 
 const fail = (msg: string, http = 400): Response => json({ ok: false, error: msg }, http);
 
-export async function api(env: MediuApi, cine: CineApasa, post: Record<string, string>): Promise<Response> {
+export async function api(_env: MediuApi, db: Baza, cine: CineApasa, post: Record<string, string>): Promise<Response> {
   const action = post.action ?? "";
   try {
     switch (action) {
       case "toggle_slot":
-        return await toggleSlot(env, cine, post);
+        return await toggleSlot(db, cine, post);
       case "toggle_vacation_month":
-        return await toggleVacationMonth(env, cine, post);
+        return await toggleVacationMonth(db, cine, post);
       default:
         return fail("Acțiune necunoscută.");
     }
@@ -64,10 +66,9 @@ export async function api(env: MediuApi, cine: CineApasa, post: Record<string, s
 }
 
 // ============================================================================
-async function toggleVacationMonth(env: MediuApi, cine: CineApasa, post: Record<string, string>): Promise<Response> {
-  const db = env.DB;
+async function toggleVacationMonth(db: Baza, cine: CineApasa, post: Record<string, string>): Promise<Response> {
   const volunteer = cine.voluntar;
-  if (volunteer === null) return fail("Trebuie să te identifici mai întâi.", 401);
+  if (volunteer === null) return fail("Trebuie să intri cu contul tău mai întâi.", 401);
 
   const year = parseInt(post.year ?? "0", 10) || 0;
   const month = parseInt(post.month ?? "0", 10) || 0;
@@ -110,12 +111,11 @@ async function toggleVacationMonth(env: MediuApi, cine: CineApasa, post: Record<
 }
 
 // ============================================================================
-async function toggleSlot(env: MediuApi, cine: CineApasa, post: Record<string, string>): Promise<Response> {
-  const db = env.DB;
+async function toggleSlot(db: Baza, cine: CineApasa, post: Record<string, string>): Promise<Response> {
   const isAdmin = cine.eAdmin;
   // Adminul care a intrat cu contul platformei, fără voluntar al lui, lucrează în numele celorlalți.
-  const volunteer = cine.voluntar ?? (isAdmin ? adminFaraVoluntar(cine.numeCont) : null);
-  if (volunteer === null) return fail("Trebuie să te identifici mai întâi.", 401);
+  const volunteer = cine.voluntar ?? (isAdmin ? adminFaraVoluntar(cine.numeCont, cine.userId) : null);
+  if (volunteer === null) return fail("Trebuie să intri cu contul tău mai întâi.", 401);
 
   const sunday = post.sunday_date ?? "";
   const slot = parseInt(post.slot ?? "0", 10) || 0;
@@ -224,7 +224,7 @@ async function toggleSlot(env: MediuApi, cine: CineApasa, post: Record<string, s
  * `release`, pe ORICE duminică. Nu trimite notificare — doar audit în notifications_log.
  */
 async function adminEditSlot(
-  db: D1Database, sunday: string, slot: number, op: string, targetId: number,
+  db: Baza, sunday: string, slot: number, op: string, targetId: number,
   actor: Voluntar, admin: Voluntar, ok: (d: Ok) => Promise<Response>,
 ): Promise<Response> {
   if (op === "release") {
@@ -276,7 +276,7 @@ async function adminEditSlot(
 }
 
 /** Statistica de participare a lunii, gata de randat (participation_payload). */
-export async function participationPayload(db: D1Database, sunday: string, withTotals = false): Promise<Ok> {
+export async function participationPayload(db: Baza, sunday: string, withTotals = false): Promise<Ok> {
   const y = Number(sunday.slice(0, 4));
   const m = Number(sunday.slice(5, 7));
   const totals = await prezenteTotale(db);

@@ -1,5 +1,12 @@
 import { acum, eIncalcareUnicitate, id, ruleaza, toate, unul } from '@xc/db'
-import type { Masca, Utilizator } from '@xc/contracts'
+import type {
+  Asociere,
+  DateUtilizator,
+  Masca,
+  MembruAplicatie,
+  StareAsociere,
+  Utilizator,
+} from '@xc/contracts'
 import {
   INCERCARI_COD,
   aExpirat,
@@ -14,6 +21,11 @@ export interface RandUtilizator {
   id: string
   email: string
   display_name: string | null
+  /** Cele patru venite pe 14.09.2026, cand fisa omului a inghitit datele din curatenie. */
+  first_name: string | null
+  last_name: string | null
+  phone: string | null
+  short_name: string | null
   email_verified_at: string
   disabled_at: string | null
   created_at: string
@@ -24,6 +36,10 @@ export function catreUtilizator(rand: RandUtilizator): Utilizator {
     id: rand.id,
     email: rand.email,
     displayName: rand.display_name,
+    firstName: rand.first_name ?? null,
+    lastName: rand.last_name ?? null,
+    phone: rand.phone ?? null,
+    shortName: rand.short_name ?? null,
     emailVerifiedAt: rand.email_verified_at,
     disabledAt: rand.disabled_at,
     createdAt: rand.created_at,
@@ -266,6 +282,216 @@ export async function actualizeazaNume(
     acum(),
     userId,
   ])
+}
+
+// ---------------------------------------------------------------------------
+// Fisa omului: prenume, nume, telefon, nume scurt (14.09.2026)
+// ---------------------------------------------------------------------------
+
+const COLOANE_DATE: Record<keyof DateUtilizator, string> = {
+  displayName: 'display_name',
+  firstName: 'first_name',
+  lastName: 'last_name',
+  phone: 'phone',
+  shortName: 'short_name',
+}
+
+/**
+ * Schimba doar campurile venite. Un camp dat gol („") se sterge (devine NULL) — e felul prin care
+ * omul isi scoate telefonul de pe fisa; doar `displayName` nu se poate goli, ca sa ramana ceva de
+ * scris in antet.
+ */
+export async function actualizeazaDate(
+  db: D1Database,
+  userId: string,
+  date: DateUtilizator,
+): Promise<void> {
+  const bucati: string[] = []
+  const valori: (string | null)[] = []
+  for (const [cheie, coloana] of Object.entries(COLOANE_DATE) as [keyof DateUtilizator, string][]) {
+    const v = date[cheie]
+    if (v === undefined) continue
+    if (cheie === 'displayName' && v === '') continue
+    bucati.push(`${coloana} = ?`)
+    valori.push(v === '' ? null : v)
+  }
+  if (!bucati.length) return
+  valori.push(acum(), userId)
+  await ruleaza(db, `UPDATE users SET ${bucati.join(', ')}, updated_at = ? WHERE id = ?`, valori)
+}
+
+/**
+ * Toti oamenii platformei, cu starea asocierii lor cu aplicatia ceruta. De aici isi ia panoul unei
+ * aplicatii „lista celor neasociati": sunt randurile cu `stare` NULL.
+ *
+ * Fara paginare, dinadins: parohia are zeci de conturi, nu zeci de mii. Daca ajunge acolo, aici e
+ * locul unde se adauga un `LIMIT`.
+ */
+export async function utilizatoriCuAsociere(
+  db: D1Database,
+  aplicatie: string,
+): Promise<MembruAplicatie[]> {
+  const randuri = await toate<RandUtilizator & RandAsociereScurt>(
+    db,
+    `SELECT u.id, u.email, u.display_name, u.first_name, u.last_name, u.phone, u.short_name,
+            u.disabled_at, a.stare, a.etichete, a.cerut_de, a.acceptat_de
+       FROM users u
+       LEFT JOIN asocieri a ON a.user_id = u.id AND a.aplicatie = ?
+      ORDER BY COALESCE(NULLIF(TRIM(u.last_name), ''), u.display_name, u.email) COLLATE NOCASE`,
+    [aplicatie],
+  )
+  return randuri.map(catreMembru)
+}
+
+interface RandAsociereScurt {
+  stare: string | null
+  etichete: string | null
+  cerut_de: string | null
+  acceptat_de: string | null
+}
+
+function catreMembru(r: RandUtilizator & RandAsociereScurt): MembruAplicatie {
+  let etichete: string[] = []
+  if (r.etichete) {
+    try {
+      const brut = JSON.parse(r.etichete)
+      if (Array.isArray(brut)) etichete = brut.filter((x): x is string => typeof x === 'string')
+    } catch {
+      /* eticheta stricata in baza nu trebuie sa darame lista — o citim ca goala */
+    }
+  }
+  return {
+    userId: r.id,
+    email: r.email,
+    displayName: r.display_name,
+    firstName: r.first_name ?? null,
+    lastName: r.last_name ?? null,
+    phone: r.phone ?? null,
+    shortName: r.short_name ?? null,
+    disabledAt: r.disabled_at,
+    stare: (r.stare as MembruAplicatie['stare']) ?? null,
+    etichete,
+    cerutDe: r.cerut_de,
+    acceptatDe: r.acceptat_de,
+  }
+}
+
+/** Membrii unei aplicatii: cei acceptati, cei doar ceruti, sau amandoua felurile. */
+export async function membriiAplicatiei(
+  db: D1Database,
+  aplicatie: string,
+  stare?: StareAsociere,
+): Promise<MembruAplicatie[]> {
+  const randuri = await toate<RandUtilizator & RandAsociereScurt>(
+    db,
+    `SELECT u.id, u.email, u.display_name, u.first_name, u.last_name, u.phone, u.short_name,
+            u.disabled_at, a.stare, a.etichete, a.cerut_de, a.acceptat_de
+       FROM asocieri a JOIN users u ON u.id = a.user_id
+      WHERE a.aplicatie = ?${stare ? ' AND a.stare = ?' : ''}
+      ORDER BY COALESCE(NULLIF(TRIM(u.last_name), ''), u.display_name, u.email) COLLATE NOCASE`,
+    stare ? [aplicatie, stare] : [aplicatie],
+  )
+  return randuri.map(catreMembru)
+}
+
+/** Asocierile unui singur om, pentru pagina contului lui. */
+export async function asocierileMele(db: D1Database, userId: string): Promise<Asociere[]> {
+  const randuri = await toate<{
+    user_id: string
+    aplicatie: string
+    stare: string
+    etichete: string
+    cerut_de: string | null
+    acceptat_de: string | null
+    created_at: string
+    updated_at: string
+  }>(db, `SELECT * FROM asocieri WHERE user_id = ?`, [userId])
+  return randuri.map((r) => ({
+    userId: r.user_id,
+    aplicatie: r.aplicatie,
+    stare: r.stare as StareAsociere,
+    etichete: citesteEtichete(r.etichete),
+    cerutDe: r.cerut_de,
+    acceptatDe: r.acceptat_de,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }))
+}
+
+function citesteEtichete(brut: string | null): string[] {
+  if (!brut) return []
+  try {
+    const v = JSON.parse(brut)
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Cererea de intrare intr-o aplicatie. Daca omul e deja membru acceptat, nu se intampla nimic —
+ * o cerere nu poate cobori pe cineva inapoi la „in asteptare".
+ */
+export async function cereAsociere(
+  db: D1Database,
+  userId: string,
+  aplicatie: string,
+  cerutDe: string,
+): Promise<StareAsociere> {
+  await ruleaza(
+    db,
+    `INSERT INTO asocieri (id, user_id, aplicatie, stare, etichete, cerut_de, created_at, updated_at)
+     VALUES (?, ?, ?, 'ceruta', '[]', ?, ?, ?)
+     ON CONFLICT (user_id, aplicatie) DO NOTHING`,
+    [id(), userId, aplicatie, cerutDe, acum(), acum()],
+  )
+  const r = await unul<{ stare: string }>(
+    db,
+    `SELECT stare FROM asocieri WHERE user_id = ? AND aplicatie = ?`,
+    [userId, aplicatie],
+  )
+  return (r?.stare as StareAsociere) ?? 'ceruta'
+}
+
+/**
+ * Primirea in echipa. E gestul pe care il face un ADMINISTRATOR al aplicatiei — cine are voie s-o
+ * ceara se hotaraste sus, la aplicatie; aici doar se scrie. Daca randul nu exista (adminul aduce
+ * pe cineva care n-a cerut nimic), se naste direct acceptat.
+ */
+export async function accepta(
+  db: D1Database,
+  userId: string,
+  aplicatie: string,
+  acceptatDe: string,
+  etichete: string[],
+): Promise<void> {
+  await ruleaza(
+    db,
+    `INSERT INTO asocieri (id, user_id, aplicatie, stare, etichete, cerut_de, acceptat_de, created_at, updated_at)
+     VALUES (?, ?, ?, 'acceptata', ?, ?, ?, ?, ?)
+     ON CONFLICT (user_id, aplicatie) DO UPDATE SET
+       stare = 'acceptata', acceptat_de = excluded.acceptat_de, updated_at = excluded.updated_at`,
+    [id(), userId, aplicatie, JSON.stringify(etichete), acceptatDe, acceptatDe, acum(), acum()],
+  )
+}
+
+/** Iesirea din echipa. Nu cere voie si nu lasa urma la identitate — istoricul e al aplicatiei. */
+export async function scoateAsocierea(db: D1Database, userId: string, aplicatie: string): Promise<void> {
+  await ruleaza(db, `DELETE FROM asocieri WHERE user_id = ? AND aplicatie = ?`, [userId, aplicatie])
+}
+
+/** Etichetele pe care aplicatia le pune pe asociere. Inlocuiesc sirul vechi, nu se adauga la el. */
+export async function puneEtichete(
+  db: D1Database,
+  userId: string,
+  aplicatie: string,
+  etichete: string[],
+): Promise<void> {
+  await ruleaza(
+    db,
+    `UPDATE asocieri SET etichete = ?, updated_at = ? WHERE user_id = ? AND aplicatie = ?`,
+    [JSON.stringify(etichete), acum(), userId, aplicatie],
+  )
 }
 
 export async function emailuriDeDebug(

@@ -2,7 +2,9 @@ import { z } from 'zod'
 import {
   CerereConfirmareCod,
   CerereIntrare,
+  DateUtilizator,
   Masca,
+  StareAsociere,
   NIVEL_ROL,
   SCOPE_GLOBAL,
   SESIUNE_ANONIMA,
@@ -19,19 +21,28 @@ import { toate } from '@xc/db'
 import { Logger, correlationId } from '@xc/observability'
 import { DURATA_COD_SEC, DURATA_SESIUNE_SEC } from './jetoane.js'
 import {
+  accepta,
+  actualizeazaDate,
   actualizeazaNume,
+  asocierileMele,
   catreUtilizator,
+  cereAsociere,
   confirmaCodDeIntrare,
   creeazaSesiune,
   creeazaUtilizatorConfirmat,
   emailuriDeDebug,
   emiteCodDeIntrare,
+  membriiAplicatiei,
+  puneEtichete,
   puneMasca,
   revocaSesiune,
   revocaToateSesiunile,
+  scoateAsocierea,
   sesiuneDupaJeton,
   utilizatorDupaEmail,
   utilizatorDupaId,
+  utilizatoriCuAsociere,
+  type RandUtilizator,
 } from './depozit.js'
 import {
   EmailCloudflare,
@@ -120,6 +131,24 @@ async function scrieAudit(
     // Auditul indisponibil nu trebuie sa blocheze intrarea, dar se vede in log.
     log.error('audit indisponibil', { eroare: e instanceof Error ? e.message : String(e) })
   }
+}
+
+/**
+ * Ce se poate scrie fara sa strice nimic: doar campurile GOALE pe fisa de acum. Importul aduce
+ * datele din vechile liste ale aplicatiilor, dar ce si-a scris omul singur pe contul lui e mai
+ * proaspat si mai adevarat decat orice lista veche — deci nu se calca peste el.
+ */
+function doarGolurile(
+  existent: RandUtilizator,
+  venite: Omit<DateUtilizator, 'displayName'>,
+): Omit<DateUtilizator, 'displayName'> {
+  const gol = (v: string | null | undefined): boolean => v === null || v === undefined || v.trim() === ''
+  const out: Omit<DateUtilizator, 'displayName'> = {}
+  if (venite.firstName && gol(existent.first_name)) out.firstName = venite.firstName
+  if (venite.lastName && gol(existent.last_name)) out.lastName = venite.lastName
+  if (venite.phone && gol(existent.phone)) out.phone = venite.phone
+  if (venite.shortName && gol(existent.short_name)) out.shortName = venite.shortName
+  return out
 }
 
 async function atribuieRol(env: Env, userId: string, role: string, cid: string): Promise<void> {
@@ -358,7 +387,28 @@ export default {
 
           const masca = Masca.safeParse(sesiune.vezi_ca)
           const veziCa = masca.success ? masca.data : null
-          const roluriReale = await roluriUtilizator(env, utilizator.id)
+          let roluriReale = await roluriUtilizator(env, utilizator.id)
+          // ⚠️ SUPER-ADMINUL E PERMANENT (user, 14.09.2026: „pe mine chiar dacă mă scoate cineva
+          // — mă pot adăuga singur"). Garantia sta pe ADRESA din `EMAIL_SUPERADMIN`, nu pe un rand
+          // din baza: daca rolul lipseste sau a fost revocat, se pune la loc aici, la prima
+          // citire de sesiune. Pana acum rolul se dadea o SINGURA data, la nasterea contului —
+          // deci o revocare l-ar fi inchis afara pentru totdeauna.
+          if (
+            cfg.EMAIL_SUPERADMIN !== '' &&
+            utilizator.email === cfg.EMAIL_SUPERADMIN.trim().toLowerCase() &&
+            !roluriReale.some((r) => r.role === 'super-admin' && r.scope === SCOPE_GLOBAL)
+          ) {
+            await atribuieRol(env, utilizator.id, 'super-admin', cid)
+            await scrieAudit(env, log, {
+              action: 'identity.superadmin.restored',
+              target: utilizator.id,
+              outcome: 'success',
+              correlationId: cid,
+              summary: { motiv: 'rolul lipsea pe adresa permanenta' },
+            })
+            log.warn('rolul de super-admin lipsea pe adresa permanenta; l-am pus la loc')
+            roluriReale = await roluriUtilizator(env, utilizator.id)
+          }
           // Grupul „Vezi ca" din meniu: pentru super-admin, si — ca sa existe drum de
           // intoarcere — pentru oricine poarta deja o masca.
           const poateVedeaCa =
@@ -472,14 +522,24 @@ export default {
         // aici, nu in bazele aplicatiilor. Omul intra apoi ca oricine: email -> link.
         case '/utilizatori/asigura': {
           const date = z
-            .object({ email: CerereIntrare.shape.email, displayName: NumeAfisat.optional(), sursa: z.string().min(1).default('import') })
+            .object({
+              email: CerereIntrare.shape.email,
+              displayName: NumeAfisat.optional(),
+              sursa: z.string().min(1).default('import'),
+            })
+            .and(DateUtilizator.omit({ displayName: true }))
             .parse(await req.json())
+          // Restul fisei (prenume, nume, telefon, nume scurt) se scrie doar peste locurile GOALE:
+          // importul nu are voie sa strice ce si-a scris omul singur pe contul lui.
+          const restul = { firstName: date.firstName, lastName: date.lastName, phone: date.phone, shortName: date.shortName }
           const existent = await utilizatorDupaEmail(env.DB, date.email)
           if (existent) {
             if (date.displayName && !existent.display_name) await actualizeazaNume(env.DB, existent.id, date.displayName)
+            await actualizeazaDate(env.DB, existent.id, doarGolurile(existent, restul))
             return json({ userId: existent.id, creat: false })
           }
           const creare = await creeazaUtilizatorConfirmat(env.DB, date.email, date.displayName ?? null)
+          await actualizeazaDate(env.DB, creare.utilizator.id, restul)
           if (creare.fel === 'creat') {
             await atribuieRol(env, creare.utilizator.id, 'user', cid)
             await scrieAudit(env, log, {
@@ -500,14 +560,137 @@ export default {
           const date = z.object({ ids: z.array(z.string().min(1)).max(500) }).parse(await req.json())
           if (!date.ids.length) return json({ utilizatori: [] })
           const semne = date.ids.map(() => '?').join(', ')
-          const randuri = await toate<{ id: string; email: string; display_name: string | null; disabled_at: string | null }>(
+          const randuri = await toate<{
+            id: string
+            email: string
+            display_name: string | null
+            first_name: string | null
+            last_name: string | null
+            phone: string | null
+            short_name: string | null
+            disabled_at: string | null
+          }>(
             env.DB,
-            `SELECT id, email, display_name, disabled_at FROM users WHERE id IN (${semne})`,
+            `SELECT id, email, display_name, first_name, last_name, phone, short_name, disabled_at
+               FROM users WHERE id IN (${semne})`,
             date.ids,
           )
           return json({
-            utilizatori: randuri.map((r) => ({ id: r.id, email: r.email, displayName: r.display_name, disabledAt: r.disabled_at })),
+            utilizatori: randuri.map((r) => ({
+              id: r.id,
+              email: r.email,
+              displayName: r.display_name,
+              firstName: r.first_name,
+              lastName: r.last_name,
+              phone: r.phone,
+              shortName: r.short_name,
+              disabledAt: r.disabled_at,
+            })),
           })
+        }
+
+        // -------------------------------------------------------------------
+        // Fisa omului: prenume, nume, telefon, nume scurt. Se cheama si de pe pagina contului
+        // (omul isi scrie datele), si din panoul unei aplicatii (adminul indreapta un telefon).
+        case '/utilizatori/date': {
+          const date = z
+            .object({ userId: z.string().min(1) })
+            .and(DateUtilizator)
+            .parse(await req.json())
+          const { userId, ...campuri } = date
+          await actualizeazaDate(env.DB, userId, campuri)
+          return json({ ok: true })
+        }
+
+        // -------------------------------------------------------------------
+        // Toti oamenii platformei, cu starea asocierii lor cu aplicatia ceruta. De aici isi ia
+        // panoul unei aplicatii „lista celor neasociati" (randurile cu `stare: null`).
+        // Fara `aplicatie` (sau cu una goala) e pur si simplu lista oamenilor platformei, cu
+        // `stare: null` peste tot — asa o cere ecranul de numiri din Administrare.
+        case '/utilizatori/lista': {
+          const date = z.object({ aplicatie: z.string().default('') }).parse(await req.json())
+          return json({ utilizatori: await utilizatoriCuAsociere(env.DB, date.aplicatie) })
+        }
+
+        // -------------------------------------------------------------------
+        // Asocierile: apartenenta omului la o aplicatie a platformei (14.09.2026).
+        // ⚠️ Cine are voie sa accepte pe cineva se hotaraste SUS, in aplicatie (un admin al ei);
+        // aici doar se scrie ce s-a hotarat, ca la orice legatura de serviciu.
+        case '/asocieri/ale-mele': {
+          const date = z.object({ userId: z.string().min(1) }).parse(await req.json())
+          return json({ asocieri: await asocierileMele(env.DB, date.userId) })
+        }
+
+        case '/asocieri/membri': {
+          const date = z
+            .object({ aplicatie: z.string().min(1), stare: StareAsociere.optional() })
+            .parse(await req.json())
+          return json({ membri: await membriiAplicatiei(env.DB, date.aplicatie, date.stare) })
+        }
+
+        case '/asocieri/cere': {
+          const date = z
+            .object({ userId: z.string().min(1), aplicatie: z.string().min(1), cerutDe: z.string().min(1) })
+            .parse(await req.json())
+          const stare = await cereAsociere(env.DB, date.userId, date.aplicatie, date.cerutDe)
+          await scrieAudit(env, log, {
+            action: 'identity.association.request',
+            target: date.userId,
+            outcome: 'success',
+            correlationId: cid,
+            actorId: date.cerutDe,
+            summary: { aplicatie: date.aplicatie, stare },
+          })
+          return json({ ok: true, stare })
+        }
+
+        case '/asocieri/accepta': {
+          const date = z
+            .object({
+              userId: z.string().min(1),
+              aplicatie: z.string().min(1),
+              acceptatDe: z.string().min(1),
+              etichete: z.array(z.string()).default([]),
+            })
+            .parse(await req.json())
+          await accepta(env.DB, date.userId, date.aplicatie, date.acceptatDe, date.etichete)
+          await scrieAudit(env, log, {
+            action: 'identity.association.accept',
+            target: date.userId,
+            outcome: 'success',
+            correlationId: cid,
+            actorId: date.acceptatDe,
+            summary: { aplicatie: date.aplicatie, etichete: date.etichete },
+          })
+          return json({ ok: true })
+        }
+
+        case '/asocieri/scoate': {
+          const date = z
+            .object({ userId: z.string().min(1), aplicatie: z.string().min(1), deCatre: z.string().min(1) })
+            .parse(await req.json())
+          await scoateAsocierea(env.DB, date.userId, date.aplicatie)
+          await scrieAudit(env, log, {
+            action: 'identity.association.remove',
+            target: date.userId,
+            outcome: 'success',
+            correlationId: cid,
+            actorId: date.deCatre,
+            summary: { aplicatie: date.aplicatie },
+          })
+          return json({ ok: true })
+        }
+
+        case '/asocieri/etichete': {
+          const date = z
+            .object({
+              userId: z.string().min(1),
+              aplicatie: z.string().min(1),
+              etichete: z.array(z.string()),
+            })
+            .parse(await req.json())
+          await puneEtichete(env.DB, date.userId, date.aplicatie, date.etichete)
+          return json({ ok: true })
         }
 
         // -------------------------------------------------------------------

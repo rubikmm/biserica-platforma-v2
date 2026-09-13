@@ -329,12 +329,13 @@ propunerea automată, ca în V1.
    înapoi în pagină. A rămas: **Mineiul pe celelalte 11 luni** n-are scanare (lunile vin de pe sit),
    deci acolo cardul lipsește pe drept.
 4. **Curățenia (A6), ce a rămas după portare** (14.09.2026):
-   - ⚠️ **panoul n-a fost umblat cu un om adevărat**: ecranul de voluntari, filele de rapoarte și
-     „Trimite acum" cer sesiune cu `cleaning.manage`, iar prin curl nu se poate intra (cookie-uri
-     `Secure`). Probate sunt schema, TOATE interogările panoului (rulate una câte una pe baza nouă),
-     `tsc` și cele 19 probe noi; **de mers o dată cap-coadă din browser**;
-   - **dreptul `cleaning.manage` nu e dat nimănui anume**: vine cu rolul de admin al platformei. Cine
-     administra curățenia în V1 cu parola locală trebuie să aibă cont de platformă cu rolul acela;
+   - ⚠️ **panoul n-a fost umblat cu un om adevărat**, iar de pe 14.09 seara are ecrane NOI (cererile,
+     „+ Adaugă", comutatorul de admin care acordă cheia): cer sesiune cu `cleaning.manage`, iar prin
+     curl nu se poate intra (cookie-uri `Secure`). Probate sunt schema, interogările, `tsc`, cele
+     196 de probe și pagina publică (poze la 390 și 1100 px); **de mers o dată cap-coadă din browser**:
+     Cereri → Primește, „+ Adaugă", comutatoarele Voluntar/Monitor/Admin, Editează fișa;
+   - ⚠️ **de probat și drumul omului**: cont nou → `cont.staging` → „Aplicațiile mele" → „Cer să intru"
+     → adminul îl primește → poate apăsa pe sloturi. Nimeni n-a mers pe el cap-coadă;
    - **sloturile atârnă de DUMINICI, nu de slujbele programului** — alegere a utilizatorului
      (13.09.2026), pentru că steagul `curatenie` din A2 e „da" din fabrică la 2213 din 2623 de slujbe:
      ar fi ieșit ~10 poziții pe săptămână în loc de una duminica. Dacă se vrea vreodată legătura cu
@@ -342,6 +343,25 @@ propunerea automată, ca în V1.
    - **vacanța e ascunsă din pagină**, ca în V1 (`VACANTA_IN_PAGINA = false`), cu spatele întreg;
    - **cutover-ul cere oprirea ceasului din V1**, altfel cei 29 de voluntari primesc câte două
      scrisori: acolo se stinge `NEWSLETTER_ACTIV`, aici se rutează subdomeniul.
+   ⚠️ **Cutover-ul curățeniei s-a îngreunat pe 14.09 seara**: cei 29 au acum conturi pe platformă, dar
+   **pe STAGING**. Când se face cutover-ul, conturile trebuie să existe pe producție — adică `users`,
+   `asocieri` și granturile de `cleaning.manage` se copiază și acolo, cu același script. Altfel oamenii
+   ajung pe o curățenie fără echipă, iar V1-ul e deja stins.
+
+4b. **Asocierile — echipele aplicațiilor** (14.09.2026, cerere a utilizatorului). Ce a rămas:
+   - ⚠️ **numai curățenia are asocieri.** Registrul (`packages/contracts/src/asocieri.ts`) e generic și
+     ține o singură intrare. Biblioteca are încă tabelul ei de **cereri de acces** (păstrat anume pe
+     13.09) și dreptul `library.borrow` dat de mână — adică **două mecanisme pentru același lucru**.
+     De întrebat utilizatorul dacă biblioteca trece și ea pe asocieri, cu `library.borrow` legat de
+     eticheta ei, ca la curățenie;
+   - **ecranul „Oameni" din Administrare e nou și minimal**: listează conturile și schimbă rolul
+     global. N-are căutare, n-are paginare (merge până pe la o sută de conturi) și nu arată
+     granturile punctuale (`cleaning.manage`, `library.borrow`) — alea se văd doar în aplicația lor;
+   - **omul nu e înștiințat** când i se acceptă sau i se refuză cererea: o vede abia când intră pe
+     contul lui. O scrisoare prin comunicare ar fi firească — de cerut;
+   - **adminul nu e înștiințat** când apare o cerere: o vede la următoarea deschidere a panoului;
+   - ⚠️ `/utilizatori/lista` întoarce **toți** utilizatorii platformei, fără plafon. E bine la zeci de
+     conturi; la mii, aici se pune `LIMIT` (locul e însemnat în `depozit.ts` al identității).
 5. **Testul real de email**, de către utilizator: `https://cont.staging.sfantul-ilie.ro` → cont nou
    cu `rubikmm@gmail.com` → codul vine pe email → super-admin automat.
 6. **Pornire automată în container** — `pnpm dev` se lansează manual; de pus în `app-init.sh`.
@@ -1229,6 +1249,63 @@ forța antetul `Host`**.
   copiere în fiecare aplicație** — de aici costul oricărei schimbări transversale (antetul în 12 locuri).
 
 ## Jurnal
+
+### 2026-09-14
+
+- **Voluntarii curățeniei au devenit CONTURI ale platformei; pickerul a ieșit** (cerere a
+  utilizatorului, noaptea). Pe 13.09 ceruse anume contrariul — „pickerul rămâne, ca mod simplu" —
+  și i se spusese atunci că se abate de la „datele stau într-un loc, autentificarea la fel". S-a
+  răzgândit, și în direcția bună: **ultima abatere de la structura mare a căzut.**
+  Cuvintele lui: „butonul Autentificare dispare și funcția lui (doar în această aplicație) este
+  preluată de Cont. Schimbă numele și Ieși - dispar"; „toate conturile care sunt acum la Curățenie
+  se vor face conturi Utilizator pe platformă"; „datele pentru un utilizator se vor extinde la tot
+  ce are un user în Curățenia acum"; „funcția de Adăugare din Administrare se transformă într-o
+  schimbare de rol a unui utilizator existent".
+- **Fișa omului s-a întregit, la identitate.** `users` a căpătat `first_name`, `last_name`, `phone`,
+  `short_name` (migrația `identity/0003`). Erau exact coloanele pe care le ținea curățenia despre
+  același om — adică o a doua listă de persoane în platformă, tocmai ce nu trebuia să existe.
+- **Asocierea cu o aplicație e acum un comutator pe contul omului** (`asocieri`, tabel generic:
+  `user_id`, `aplicatie`, `stare`, `etichete` JSON). Registrul aplicațiilor cu membri stă în
+  `@xc/contracts`; identitatea nu știe ce e un „monitor" și nu trebuie să știe.
+  ⚠️ **Două stări, nu una**, cerut în aceeași rundă: „să fie totuși o validare la nivel de
+  admin.curatenie… nici chiar oricine nu poate ajunge în acest punct". Omul **cere** de pe contul
+  lui (`ceruta`), un administrator al aplicației îl **primește** (`acceptata`). **Ieșirea nu cere
+  voie** — nimeni nu e ținut cu forța într-o echipă de voluntari.
+- **⚠️ Eticheta „Admin" nu mai e o etichetă.** La portare fusese lăsată ca însemn al echipei, iar
+  dreptul venea separat, de mână, din `cleaning.manage`. Acum comutatorul **acordă și retrage chiar
+  cheia**, la autorizare (`/acorda`, `/retrage`, nou). Cum panoul din care se apasă cere deja
+  `cleaning.manage`, un administrator al curățeniei e numit **numai de alt administrator al ei sau
+  de un super-admin** — exact cum s-a cerut. Pe cale de consecință, **apărarea ultimului
+  administrator s-a întors**: nu se mai poate stinge singurul rămas.
+- **Super-adminul e permanent** („pe mine chiar dacă mă scoate cineva — mă pot adăuga singur").
+  Până acum rolul se dădea **o singură dată, la nașterea contului**: o revocare l-ar fi închis afară
+  pentru totdeauna. Acum garanția stă pe **adresa** din `EMAIL_SUPERADMIN`, iar `/sesiune` pune rolul
+  la loc dacă lipsește. Tot atunci s-a îndreptat și `/atribuie`, care era `INSERT OR IGNORE` și **nu
+  reaprindea** un rol revocat — tăcut.
+- **Ecran nou: „Oameni" în Administrarea platformei** („eu pot să fac pe cineva super-admin — adică
+  doar eu (alt super-admin)"). Poarta e `roles.manage`, cheie care vine numai cu `super-admin`.
+  Până acum rolurile se scriau numai de mână în D1; un al doilea super-admin nu se putea face din
+  platformă. Adresa permanentă se desenează **fără buton**: nu se poate coborî de nicăieri.
+- **Panoul curățeniei, fila Voluntari, rescrisă** („o listă +add unde adaugi un user deja existent
+  în lista de curățenie - tot acolo și lista Cererilor"): sus **Cererile** în așteptare, cu
+  Primește / Refuză; apoi **„+ Adaugă"**, care deschide conturile platformei neasociate, cu căutare;
+  apoi **Echipa**. „Adaugă voluntar" — care năștea un om nou în baza aplicației — a ieșit.
+  Comutatorul „Activ" s-a făcut **„În echipă"**, iar „Editează" scrie de acum pe **contul** omului
+  (adresa nu se poate schimba de acolo: e cheia contului lui).
+- **Migrarea: 28 de conturi noi + unul existent** (al super-adminului), 29 de asocieri acceptate,
+  2 chei de `cleaning.manage`. Toți cei 29 aveau e-mail și telefon, deci n-a rămas nimeni pe dinafară.
+  Apoi `curatenie/0002` a aruncat numele, adresele, telefoanele și steagurile din `volunteers`, care
+  a rămas cu `id`, `user_id`, `slug` și datele rândului. Numărătorile de după: 29 / 82 / 530 / 31.
+- **Cum ține laolaltă**: `apps/curatenie/src/oameni.ts` — **cartea oamenilor**, cerută o dată pe
+  cerere de la identitate și legată de `D1Database` printr-un **înveliș** (`cuOameni`). Așa cele ~45
+  de locuri care cheamă depozitul n-au trebuit rescrise: `Voluntar` și-a păstrat forma
+  (`first_name`, `is_admin`…), doar izvorul s-a schimbat. Interogările care luau numele prin JOIN
+  aduc acum `user_id`, iar numele se lipesc la citire.
+  ⚠️ **Capcana rundei**: `tsc` a trecut curat peste vreo zece interogări care cereau coloane tocmai
+  șterse — `toate<Voluntar>(...)` nu verifică SQL-ul. S-au găsit cu un `grep` după numele coloanelor,
+  nu cu compilatorul. La orice scoatere de coloană: **grep, nu tsc**.
+- Publicat pe staging: `xc-authz`, `xc-identity`, `xc-account`, `xc-admin`, `xc-curatenie` (0.2.0).
+  196 de probe trec (14 noi, în `tests/asocieri.test.ts`). Producția rămâne neatinsă.
 
 ### 2026-09-13
 

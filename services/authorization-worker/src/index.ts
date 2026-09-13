@@ -2,13 +2,13 @@ import { z } from 'zod'
 import {
   CerereAutorizare,
   PERMISIUNI_IMPLICITE,
+  Permisiune,
   Rol,
   SCOPE_GLOBAL,
   Scope,
   type AtribuireRol,
   type Decizie,
   type Masca,
-  type Permisiune,
   scopeAcopera,
 } from '@xc/contracts'
 import { acum, id, ruleaza, toate } from '@xc/db'
@@ -144,6 +144,13 @@ const CerereRevocare = z.object({
   scope: Scope.default('global'),
 })
 
+/** Acordarea sau retragerea unei chei direct pe un om. Cheia se valideaza fata de lista din contracte. */
+const CerereGrant = z.object({
+  userId: z.string().min(1),
+  permission: Permisiune,
+  scope: Scope.default('global'),
+})
+
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const cid = correlationId(req)
@@ -174,10 +181,14 @@ export default {
         case '/atribuie': {
           const date = CerereAtribuire.parse(await req.json())
           // Idempotent: aceeasi pereche (user, rol, scope) nu se dubleaza.
+          // ⚠️ Un rol REVOCAT se reaprinde (14.09.2026). Pana atunci era `INSERT OR IGNORE`, care
+          // lasa `revoked_at` pe loc: o atribuire dupa o revocare nu facea nimic, tacut. De asta
+          // depinde garantia „super-adminul e permanent" — vezi `/sesiune` la identitate.
           await ruleaza(
             env.DB,
-            `INSERT OR IGNORE INTO role_assignments (id, user_id, role, scope, created_at)
-             VALUES (?, ?, ?, ?, ?)`,
+            `INSERT INTO role_assignments (id, user_id, role, scope, created_at)
+             VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT (user_id, role, scope) DO UPDATE SET revoked_at = NULL`,
             [id(), date.userId, date.role, date.scope, acum()],
           )
           log.info('rol atribuit', { userId: date.userId, role: date.role, scope: date.scope })
@@ -193,6 +204,95 @@ export default {
             [acum(), date.userId, date.role, date.scope],
           )
           return json({ ok: true })
+        }
+
+        // -------------------------------------------------------------------
+        // Granturi punctuale: o cheie data DIRECT unui om, peste ce-i da rolul. Pana pe
+        // 14.09.2026 se scriau numai de mana in D1 (asa se dadea `library.borrow`). Acum le cere
+        // si curatenia, cand un admin al ei numeste un alt admin: eticheta „Admin" din panou NU
+        // mai e un desen, ci chiar acordarea lui `cleaning.manage`.
+        //
+        // ⚠️ Aici nu se verifica cine cere. Autorizarea nu stie ce e un „admin de curatenie";
+        // dreptul de a apasa se verifica SUS, in aplicatie, cu `can(...)`, inainte de a ajunge aici.
+        case '/acorda': {
+          const date = CerereGrant.parse(await req.json())
+          await ruleaza(
+            env.DB,
+            `INSERT INTO permission_grants (id, user_id, permission, scope, created_at)
+             VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT (user_id, permission, scope) DO UPDATE SET revoked_at = NULL`,
+            [id(), date.userId, date.permission, date.scope, acum()],
+          )
+          log.info('permisiune acordata', { userId: date.userId, permission: date.permission })
+          return json({ ok: true })
+        }
+
+        case '/retrage': {
+          const date = CerereGrant.parse(await req.json())
+          await ruleaza(
+            env.DB,
+            `UPDATE permission_grants SET revoked_at = ?
+             WHERE user_id = ? AND permission = ? AND scope = ? AND revoked_at IS NULL`,
+            [acum(), date.userId, date.permission, date.scope],
+          )
+          log.info('permisiune retrasa', { userId: date.userId, permission: date.permission })
+          return json({ ok: true })
+        }
+
+        // -------------------------------------------------------------------
+        // Cine are cheia asta, si pe ce drum. Pentru ecranele care deseneaza o echipa: trebuie sa
+        // stie si cui i s-a dat punctual (se poate retrage de acolo), si cui ii vine din rol
+        // (nu se poate retrage din aplicatie — ar trebui coborat rolul, ceea ce e altceva).
+        case '/cine-are': {
+          const date = z
+            .object({ permission: z.string().min(1), scope: Scope.default('global') })
+            .parse(await req.json())
+          const prinGrant = await toate<{ user_id: string }>(
+            env.DB,
+            `SELECT DISTINCT user_id FROM permission_grants
+              WHERE permission = ? AND revoked_at IS NULL AND (scope = ? OR scope = 'global')`,
+            [date.permission, date.scope],
+          )
+          const roluriCare = (Object.keys(PERMISIUNI_IMPLICITE) as Rol[]).filter((r) =>
+            (PERMISIUNI_IMPLICITE[r] as readonly string[]).includes(date.permission),
+          )
+          let prinRol: { user_id: string }[] = []
+          if (roluriCare.length) {
+            const semne = roluriCare.map(() => '?').join(', ')
+            prinRol = await toate<{ user_id: string }>(
+              env.DB,
+              `SELECT DISTINCT user_id FROM role_assignments
+                WHERE role IN (${semne}) AND revoked_at IS NULL AND (scope = ? OR scope = 'global')`,
+              [...roluriCare, date.scope],
+            )
+          }
+          return json({
+            prinGrant: prinGrant.map((r) => r.user_id),
+            prinRol: prinRol.map((r) => r.user_id),
+          })
+        }
+
+        // -------------------------------------------------------------------
+        // Rolurile mai multor oameni deodata — pentru ecranul de numiri, ca sa nu punem o
+        // intrebare pe fiecare rand din lista.
+        case '/roluri-multi': {
+          const date = z.object({ ids: z.array(z.string().min(1)).max(500) }).parse(await req.json())
+          if (!date.ids.length) return json({ roluri: {} })
+          const semne = date.ids.map(() => '?').join(', ')
+          const randuri = await toate<{ user_id: string; role: string; scope: string }>(
+            env.DB,
+            `SELECT user_id, role, scope FROM role_assignments
+              WHERE user_id IN (${semne}) AND revoked_at IS NULL`,
+            date.ids,
+          )
+          const out: Record<string, AtribuireRol[]> = {}
+          for (const r of randuri) {
+            const rol = Rol.safeParse(r.role)
+            const scope = Scope.safeParse(r.scope)
+            if (!rol.success || !scope.success) continue
+            ;(out[r.user_id] ??= []).push({ role: rol.data, scope: scope.data })
+          }
+          return json({ roluri: out })
         }
 
         case '/permisiuni': {

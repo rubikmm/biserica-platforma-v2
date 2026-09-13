@@ -9,6 +9,7 @@ import {
   newsletterBuildData, newsletterMonthlyTriggerToday, newsletterRenderHtml, nextSundayDate,
 } from '../apps/curatenie/src/newsletter.js'
 import type { Moment } from '../apps/curatenie/src/timp.js'
+import { CarteaOamenilor, type Baza } from '../apps/curatenie/src/oameni.js'
 
 /**
  * CURĂȚENIA (A6) — probele care păzesc purtările ușor de stricat la o curățare de cod.
@@ -118,21 +119,33 @@ describe('când pleacă rapoartele', () => {
 })
 
 describe('scrisoarea săptămânală', () => {
-  /** Baza de probă: o duminică cu două poziții ocupate din patru. */
+  /*
+   * Baza de probă: o duminică cu două poziții ocupate din patru.
+   * ⚠️ De pe 14.09.2026 rândurile nu mai poartă numele — aduc `user_id`, iar numele se lipesc din
+   * CARTEA OAMENILOR, cerută de la identitate. Baza de probă poartă deci și cartea, ca învelișul
+   * adevărat (`cuOameni`); altfel scrisoarea n-ar avea de unde lua numele.
+   */
+  const om = (userId: string, firstName: string, lastName: string) => ({
+    userId, email: `${firstName.toLowerCase()}@example.com`, displayName: `${firstName} ${lastName}`,
+    firstName, lastName, phone: null, shortName: null,
+    disabledAt: null, stare: 'acceptata' as const, etichete: ['voluntar'],
+    cerutDe: null, acceptatDe: null,
+  })
   const dbFals = {
+    oameni: new CarteaOamenilor([om('u3', 'Maria', 'Ionescu'), om('u7', 'Andrei', 'Pop')]),
     prepare: (_sql: string) => ({
       bind: (..._p: unknown[]) => ({
         async all() {
           return {
             results: [
-              { slot_position: 1, volunteer_id: 3, first_name: 'Maria', last_name: 'Ionescu' },
-              { slot_position: 2, volunteer_id: 7, first_name: 'Andrei', last_name: 'Pop' },
+              { slot_position: 1, volunteer_id: 3, user_id: 'u3' },
+              { slot_position: 2, volunteer_id: 7, user_id: 'u7' },
             ],
           }
         },
       }),
     }),
-  } as unknown as D1Database
+  } as unknown as Baza
 
   it('numără locurile libere până la pragul de patru și scrie numele liturgic', async () => {
     const date = await newsletterBuildData(dbFals, '2026-09-20', () => 'Duminica după Înălțarea Sfintei Cruci')

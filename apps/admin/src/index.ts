@@ -1,4 +1,4 @@
-import { SCOPE_GLOBAL, SESIUNE_ANONIMA, type SesiuneCurenta } from '@xc/contracts'
+import { ROLURI, Rol, SCOPE_GLOBAL, SESIUNE_ANONIMA, type SesiuneCurenta } from '@xc/contracts'
 import { ClientAutorizare } from '@xc/authorization'
 import { asiguraCsrf, principalDin, sesiuneCurenta, verificaCsrf, verificaTokenCsrf } from '@xc/auth'
 import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
@@ -37,6 +37,40 @@ interface LivrareRand {
   provider: string
   template_id: string
   created_at: string
+}
+
+async function apelAutorizare(env: Env, cale: string, corp: unknown, cid: string): Promise<Response> {
+  return env.AUTORIZARE.fetch(`https://authz.intern${cale}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-correlation-id': cid },
+    body: JSON.stringify(corp),
+  })
+}
+
+interface OmDinLista {
+  userId: string
+  email: string
+  displayName: string | null
+  disabledAt: string | null
+}
+
+async function listaOamenilor(env: Env, cid: string): Promise<OmDinLista[]> {
+  const raspuns = await env.IDENTITATE.fetch('https://identity.intern/utilizatori/lista', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-correlation-id': cid },
+    body: '{}',
+  })
+  if (!raspuns.ok) return []
+  const date = (await raspuns.json()) as { utilizatori?: OmDinLista[] }
+  return date.utilizatori ?? []
+}
+
+async function roluriPentru(env: Env, ids: string[], cid: string): Promise<Record<string, { role: string; scope: string }[]>> {
+  if (!ids.length) return {}
+  const raspuns = await apelAutorizare(env, '/roluri-multi', { ids }, cid)
+  if (!raspuns.ok) return {}
+  const date = (await raspuns.json()) as { roluri?: Record<string, { role: string; scope: string }[]> }
+  return date.roluri ?? {}
 }
 
 function tabelAudit(intrari: IntrareAuditRand[]): string {
@@ -144,6 +178,67 @@ program.adauga_slujba">${esc(o.c.unelte.join('\n'))}</textarea>
   })
 }
 
+/**
+ * Ecranul de NUMIRI (user, 14.09.2026: „eu pot să fac pe cineva super-admin… adică doar eu (alt
+ * super-admin)"). Pana acum rolurile se scriau numai de mana in D1: un cont nou nastea `user` si
+ * atat, iar un al doilea super-admin nu se putea face din platforma.
+ *
+ * Poarta e `roles.manage` — cheie care, dupa `PERMISIUNI_IMPLICITE`, vine NUMAI cu `super-admin`.
+ * Deci un administrator obisnuit nu ajunge aici, si asta e cerut anume.
+ *
+ * ⚠️ Adresa din `EMAIL_SUPERADMIN` nu se poate cobori de nicaieri: e super-admin permanent, iar
+ * identitatea ii pune rolul la loc la prima citire de sesiune. Randul ei se deseneaza fara buton,
+ * ca sa nu para ca gestul ar fi fost de folos.
+ */
+function paginaOameni(o: {
+  comune: ReturnType<typeof comune>
+  oameni: { userId: string; email: string; displayName: string | null; disabledAt: string | null }[]
+  roluri: Record<string, { role: string; scope: string }[]>
+  emailPermanent: string
+  csrf: string
+  prefix: string
+  mesaj?: string
+}): string {
+  const randuri = o.oameni
+    .map((u) => {
+      const aleLui = o.roluri[u.userId] ?? []
+      const acum = aleLui.find((r) => r.scope === SCOPE_GLOBAL)?.role ?? 'user'
+      const permanent = o.emailPermanent !== '' && u.email === o.emailPermanent
+      const etichete = aleLui.length
+        ? aleLui.map((r) => `<span class="eticheta">${esc(r.role)}</span>`).join(' ')
+        : '<span class="eticheta">user</span>'
+      const alege = (v: string, scris: string) =>
+        `<option value="${v}"${acum === v ? ' selected' : ''}>${scris}</option>`
+      return `<tr>
+        <td>${esc(u.displayName ?? '—')}<div class="ajutor">${esc(u.email)}</div></td>
+        <td>${etichete}${u.disabledAt ? ' <span class="eticheta">închis</span>' : ''}</td>
+        <td>${
+          permanent
+            ? '<span class="ajutor">super-admin permanent — nu se poate coborî</span>'
+            : `<form method="post" action="${o.prefix}/oameni" class="numire">
+                 <input type="hidden" name="csrf" value="${esc(o.csrf)}">
+                 <input type="hidden" name="userId" value="${esc(u.userId)}">
+                 <select name="rol">${alege('user', 'Utilizator')}${alege('admin', 'Administrator')}${alege('super-admin', 'Super-administrator')}</select>
+                 <button type="submit">Salvează</button>
+               </form>`
+        }</td>
+      </tr>`
+    })
+    .join('')
+
+  return pagina({
+    ...o.comune,
+    titluPagina: 'Oameni',
+    corp: `<h2>Oameni</h2>
+${o.mesaj ? alerta('buna', esc(o.mesaj)) : ''}
+<p class="ajutor">Rolul hotărăște ce poate fiecare pe toată platforma. <strong>Administratorul</strong>
+ține calendarul, programul, buletinul, curățenia și biblioteca; <strong>super-administratorul</strong>
+poate în plus să numească roluri și să pornească module. Apartenența la o echipă (curățenia, de
+pildă) e altceva și se dă din panoul aplicației ei.</p>
+<table><thead><tr><th>Cine</th><th>Acum</th><th>Numire</th></tr></thead><tbody>${randuri}</tbody></table>`,
+  })
+}
+
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const cfg = citesteConfig(env)
@@ -211,6 +306,56 @@ export default {
       )
     }
 
+    // ------------------------------------------------------------- oameni
+    if (cale === '/oameni') {
+      const comuneAici = comune(env, nav, principal.email, eAdmin, sesiune, adresaPaginii(cfg, url))
+      const potNumi = await authz.can(principal, 'roles.manage', SCOPE_GLOBAL)
+      if (!potNumi.allowed) {
+        return html(
+          pagina({ ...comuneAici, corp: `<h2>Oameni</h2>${alerta('rea', 'Numirea rolurilor e numai a super-administratorilor (<code>roles.manage</code>).')}` }),
+          403,
+        )
+      }
+
+      const permanent = (env.EMAIL_SUPERADMIN ?? '').trim().toLowerCase()
+      const csrf = asiguraCsrf(req, cfg.DOMENIU_COOKIE)
+      let mesaj: string | undefined
+
+      if (req.method === 'POST') {
+        const problemaOrigine = verificaCsrf(req, [cfg.ORIGINE_PUBLICA], cfg.MEDIU === 'dev')
+        const formular = await req.formData()
+        const problemaJeton = verificaTokenCsrf(req, String(formular.get('csrf') ?? ''))
+        if (problemaOrigine || problemaJeton) {
+          return html(
+            pagina({ ...comuneAici, corp: `<h2>Oameni</h2>${alerta('rea', problemaOrigine ?? problemaJeton ?? 'Cerere respinsă.')}` }),
+            403,
+          )
+        }
+        const userId = String(formular.get('userId') ?? '')
+        const rolCerut = Rol.safeParse(String(formular.get('rol') ?? ''))
+        if (!userId || !rolCerut.success) {
+          return html(pagina({ ...comuneAici, corp: `<h2>Oameni</h2>${alerta('rea', 'Cerere incompletă.')}` }), 400)
+        }
+        // Un singur rol global pe om: cel nou se pune, celelalte se sting. Altfel „coborât la
+        // utilizator" ar lasa in urma un `admin` vechi care ar continua sa lucreze.
+        for (const r of ROLURI) {
+          if (r === rolCerut.data) continue
+          await apelAutorizare(env, '/revoca', { userId, role: r, scope: SCOPE_GLOBAL }, cid)
+        }
+        await apelAutorizare(env, '/atribuie', { userId, role: rolCerut.data, scope: SCOPE_GLOBAL, correlationId: cid }, cid)
+        log.info('rol numit', { userId, rol: rolCerut.data, deCatre: principal.userId })
+        mesaj = 'Rolul a fost schimbat. Se vede la următoarea pagină pe care o deschide omul.'
+      }
+
+      const oameni = await listaOamenilor(env, cid)
+      const roluri = await roluriPentru(env, oameni.map((u) => u.userId), cid)
+      return html(
+        paginaOameni({ comune: comuneAici, oameni, roluri, emailPermanent: permanent, csrf: csrf.jeton, prefix, ...(mesaj ? { mesaj } : {}) }),
+        200,
+        csrf.setCookie ? { 'set-cookie': csrf.setCookie } : {},
+      )
+    }
+
     const decizie = await authz.can(principal, 'audit.read', SCOPE_GLOBAL)
 
     if (!decizie.allowed) {
@@ -266,7 +411,8 @@ export default {
     .join(' ')}</p>
   ${alerta('info', `Automatizarea a produs <strong>${actiuni.length}</strong> acțiuni până acum. Nicio comunicare reală nu a plecat: toate adaptoarele sunt în sandbox.`)}
 
-<p><a href="${prefix}/module">Module — pornirea și oprirea chatului</a></p>
+<p><a href="${prefix}/oameni">Oameni — rolurile pe platformă</a><br>
+<a href="${prefix}/module">Module — pornirea și oprirea chatului</a></p>
 
 <h3>Audit — ultimele acțiuni</h3>
   ${tabelAudit(audit)}
@@ -340,4 +486,11 @@ form.module { display:block }
 .eticheta { display:inline-block; border:1px solid var(--rule); border-radius:999px;
             padding:1px 8px; font:12px ui-sans-serif,system-ui; color:var(--soft) }
 .eticheta.publicat { border-color:#2E8A4A; color:#2E8A4A }
+/* Numirea: selectorul si butonul pe acelasi rand, ca tabelul sa nu se inalte la fiecare om. */
+form.numire { display:flex; gap:8px; align-items:center; margin:0 }
+form.numire select { padding:6px 8px; border:1px solid var(--rule); border-radius:8px;
+                     background:var(--paper); color:var(--ink); font:14px/1.3 ui-sans-serif,system-ui }
+form.numire button { padding:6px 12px; border-radius:8px; border:1px solid var(--rosu);
+                     background:var(--rosu); color:#fff; font:600 13px ui-sans-serif,system-ui; cursor:pointer }
+@media (max-width:560px) { form.numire { flex-direction:column; align-items:stretch } }
 `
