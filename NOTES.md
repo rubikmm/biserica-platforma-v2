@@ -331,18 +331,44 @@ propunerea automată, ca în V1.
      buletin 1.891. Verificat prin relistarea ambelor capete (`--socoteala`), nu după log.
      Din D1: conturile și asocierile (29+29) mutate; restul, cu `date-d1.mjs` (are acum răbdare la 971).
 
+   **⚠️ RUTELE AU FOST COMUTATE — 14.09.2026, 22:45–23:05. V2 ESTE LIVE.**
+   Toate cele 11 hostname-uri de producție țin acum de `xc-*-production`: admin, biblia, biblioteca,
+   buletin, calendar, cont (→ `xc-account`), curatenie, newsletter, program, tipic, website (→ `xc-home`).
+   Unealta: `infrastructure/cutover/rute.mjs` (`--muta <nume>`, `--inapoi <nume>`, fără argumente = starea).
+   Probate toate după comutare: `/health` răspunde cu datele reale (biblia 80 de cărți, biblioteca 1.349
+   de titluri, buletin 619 numere, curățenie 29 de voluntari și 82 de programări, tipic 97+365).
+   - **⚠️ `override_existing_origin: true` e obligatoriu** la `PUT /workers/domains`; fără el, 409.
+   - **⚠️ ORDINEA CONTEAZĂ: `cont` se mută devreme.** Un cookie de la `cont` V1 nu e recunoscut de
+     identitatea V2, deci între mutarea lui `cont` și a ultimei aplicații e o fereastră de nepotrivire.
+     De aceea restul se mută **în șir, repede**, nu pe îndelete.
+   - **⚠️ CEASURILE V1 S-AU STINS** (cronurile nu țin de rute, deci supraviețuiau comutării):
+     `biserica-curatenie` (`0 * * * *`, trimitea scrisori voluntarilor), `biserica-biblioteca` (`0 6 * * *`),
+     `biserica-cont` (`0 3 * * *`). Golite cu `PUT /workers/scripts/<w>/schedules` cu `[]`.
+     Pe V2 au rămas cele care trebuie: `xc-curatenie-production` orar, `xc-biblioteca-production` la 6.
+     ⚠️ `xc-account-production` **nu** are cronul de la 3 al lui V1 — de lămurit ce făcea.
+   - **⚠️ Biblia e acum PUBLICĂ**: V1 cerea intrare (303 spre `cont`), V2 primește sesiune anonimă
+     (`apps/biblia/src/index.ts:304`). E din cod, nu din greșeală — dar e o schimbare pe care o vede lumea.
+   - **NU s-au mutat, dinadins**: `comunicari` (A7 nu se portează), `predici`, `rugaciuni` (se șterg),
+     `audio` (adrese vechi), `transmisiuni` (emisia, pas separat — vezi 0b).
+
    **DE FĂCUT, în ordine**:
    1. ~~reia copierile R2 picate~~ **✓ FĂCUT 14.09.2026, 21:30** (vezi mai sus). Regula rămâne:
       **un singur transfer mare o dată**, nimic altceva pe API în acel timp — inclusiv hookul de
       backup de la `git push`, care bate pe același API al contului.
    2. `node infrastructure/cutover/date-d1.mjs --scrie` pentru restul bazelor;
-   3. migrația `communication/0003` pe staging și producție, apoi publicarea Dispeceratului
-      (`admin` + `communication-worker`) pe **amândouă** mediile; `SECRET_INTERN` și pe `admin`;
-   4. pullerul de WhatsApp: `COMUNICARI_URL` → `https://admin.sfantul-ilie.ro/dispecerat` și
-      `SECRET_GATEWAY` = secretul intern al lui `admin`. **Cere recrearea containerului → #agent-server**;
-   5. **comutarea Custom Domains, una câte una, cu utilizatorul de față.** ⚠️ La `curatenie`: întâi
-      se stinge ceasul V1 (`NEWSLETTER_ACTIV`), altfel pleacă două scrisori;
-   6. abia apoi aparatul din biserică (vezi 0b) și curățenia de la final (vezi 0c).
+   3. ~~migrația `communication/0003` + publicarea Dispeceratului~~ **✓ FĂCUT 14.09.2026, 22:30.**
+      ⚠️ 0003 nu era aplicată **nici pe staging**, deși codul o cerea. `d1_migrations` e GOL pe
+      producție (schema a intrat altfel decât prin `migrations apply`), deci migrațiile se aplică
+      acolo cu `d1 execute --file`, nu cu `migrations apply` — altfel reia 0001–0002 peste tabele vii.
+      `SECRET_INTERN` pus pe `admin` în ambele medii; e altul decât cel al celor patru cu `/_actiuni`
+      (`admin` nu are `/_actiuni`, îl folosește doar pentru ușa pullerului).
+   4. ~~pullerul de WhatsApp~~ **trimis la `#agent-server` 14.09.2026, 23:10.** Valoarea secretului
+      i-a fost lăsată în `/volume1/docker/biserica-whatsapp-puller/.secret-v2-nou` (600), ca să nu
+      treacă prin Slack; el o mută în `puller.env` și șterge fișierul. **De verificat că s-a făcut.**
+   5. ~~comutarea Custom Domains~~ **✓ FĂCUT** — vezi mai sus.
+   6. urmează aparatul din biserică (vezi 0b) și curățenia de la final (vezi 0c).
+   7. **⚠️ DE PRIVIT A DOUA ZI, cu ochii pe ele**: prima duminică pe V2 (programul și curățenia),
+      ceasul curățeniei la ora fixă, buletinul de sâmbătă. Toate merg acum pe date proaspăt mutate.
 
    ⚠️ **Abonații**: audiența buletinului are **un singur membru** pe staging — lista din V1 n-a fost
    niciodată importată. User (14.09): „nu cred că avem, dar dacă sunt, importă-i" — **de căutat în
