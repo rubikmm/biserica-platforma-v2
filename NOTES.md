@@ -401,10 +401,16 @@ propunerea automată, ca în V1.
      `broadcast.manage` → `/admin/comanda`). Cere un om intrat cu contul; o apăsare ajunge.
    - ⚠️ pe staging a rămas o telemetrie de probă, cu aparatul numit **„probă-agent (staging)"** —
      nu e un aparat adevărat. Se suprascrie singură la prima telemetrie a celui din biserică.
-   - **ordinea la cutover**: (1) `wrangler deploy --env production` pentru `xc-live` și `xc-radio`,
-     cu rutele `live.` și `radio.sfantul-ilie.ro`; (2) secretele puse și pe producție (aceleași
-     patru); (3) **abia apoi se întoarce aparatul** din biserică spre adresa nouă — din clipa aia
-     directul din V1 amuțește, deci e pas de sine stătător, nu o consecință;
+   - **ordinea la cutover**: (1) ~~`wrangler deploy` pentru `xc-live` și `xc-radio` cu rutele~~
+     **✓ FĂCUT 14.09.2026, 23:20** — `live.` și `radio.sfantul-ilie.ro` legate de `xc-live-production`
+     și `xc-radio-production` cu `rute.mjs --muta live|radio` (gazde NOI, Custom Domain le-a făcut și
+     DNS-ul; certificatele emise pe loc, DNS-ul a mai avut de propagat); (2) ~~secretele~~ ✓ (cele
+     patru, puse din 14.09 seara); (3) **abia apoi se întoarce aparatul** din biserică spre adresa
+     nouă — din clipa aia directul din V1 amuțește, deci e pas de sine stătător, nu o consecință.
+     **⚠️ ACUM: live-ul V2 e „fără semnal" până la (3)**, iar `transmisiuni.sfantul-ilie.ro/live` (V1,
+     public) încă arată directul. **De ce s-a grăbit (1)**: mutarea lui `cont` pe V2 a rupt intrarea
+     în `transmisiuni` V1 (`/radio` cerea `cont.sfantul-ilie.ro/intra?app=A5`, protocol V1), iar
+     home-ul V2 trimitea spre `live.`/`radio.` care nu existau — „domeniile dau eroare", user 23:16;
    - ⚠️ **aparatul e singura piesă din afara Cloudflare**: schimbă `/intern/live/whip`,
      `/intern/mic/whip` și `/intern/aparat/*` pe gazda nouă. Parolele rămân aceleași, dinadins;
    - **`transmisiuni` se șterge** (cerut anume): worker, rută, DNS, container, volume — DAR

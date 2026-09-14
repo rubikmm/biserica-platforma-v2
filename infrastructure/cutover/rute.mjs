@@ -46,6 +46,10 @@ const MUTARI = [
   { nume: 'program', gazda: 'program.sfantul-ilie.ro', v1: 'biserica-program', v2: 'xc-program-production' },
   { nume: 'tipic', gazda: 'tipic.sfantul-ilie.ro', v1: 'biserica-tipic', v2: 'xc-tipic-production' },
   { nume: 'website', gazda: 'website.sfantul-ilie.ro', v1: 'biserica-website', v2: 'xc-home-production' },
+  // Emisia: gazde NOI, nu luate de la V1 (in V1 emisia statea pe `transmisiuni.sfantul-ilie.ro`).
+  // Custom Domain-ul le face si DNS-ul. `--inapoi` n-are unde sa le duca: le dezleaga.
+  { nume: 'live', gazda: 'live.sfantul-ilie.ro', v1: null, v2: 'xc-live-production' },
+  { nume: 'radio', gazda: 'radio.sfantul-ilie.ro', v1: null, v2: 'xc-radio-production' },
 ]
 
 async function cere(cale, optiuni = {}) {
@@ -98,7 +102,10 @@ if (!numeCerut) {
   console.log('Hostname                             tine de                    starea')
   for (const m of MUTARI) {
     const cine = acum.get(m.gazda) ?? '(nelegat)'
-    const unde = cine === m.v2 ? '✓ pe V2' : cine === m.v1 ? 'pe V1' : `⚠️ ${cine}`
+    const unde = cine === m.v2 ? '✓ pe V2'
+      : m.v1 && cine === m.v1 ? 'pe V1'
+      : !m.v1 && !acum.has(m.gazda) ? 'inca nelegata (gazda noua)'
+      : `⚠️ ${cine}`
     console.log(`  ${m.gazda.padEnd(34)} ${cine.padEnd(26)} ${unde}`)
   }
   console.log('\nCu --muta <nume> se muta unul. Nume: ' + MUTARI.map((m) => m.nume).join(', '))
@@ -112,14 +119,24 @@ if (!m) {
 }
 
 const tinta = inapoi ? m.v1 : m.v2
-const acum = (await domenii()).find((d) => d.hostname === m.gazda)?.service ?? '(nelegat)'
+const legat = (await domenii()).find((d) => d.hostname === m.gazda)
+const acum = legat?.service ?? '(nelegat)'
 
 console.log(`${m.gazda}`)
 console.log(`  acum:     ${acum}`)
 console.log(`  inainte:  ${await incearca(m.gazda)}`)
 if (acum === tinta) { console.log(`  ✓ tine deja de ${tinta} — nu ating nimic`); process.exit(0) }
 
-console.log(`  mut →     ${tinta}`)
+if (inapoi && !tinta) {
+  // Gazda noua n-are V1 la care sa se intoarca: se dezleaga, si ramane fara nimic in spate.
+  if (!legat) { console.log('  nu e legata de nimic — nu ating nimic'); process.exit(0) }
+  console.log('  dezleg (n-are V1)')
+  await cere(`/accounts/${CONT}/workers/domains/${legat.id}`, { method: 'DELETE' })
+  console.log(`  dupa:     ${await incearca(m.gazda)}`)
+  process.exit(0)
+}
+
+console.log(`  ${legat ? 'mut' : 'leg'} →     ${tinta}`)
 await leaga(m.gazda, tinta)
 
 // Cateva secunde pana prinde peste tot; se incearca de mai multe ori, ca sa nu para cazut degeaba.
