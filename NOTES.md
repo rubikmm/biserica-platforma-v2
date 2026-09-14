@@ -688,6 +688,19 @@ aparat.
 
 ## Capcane de ținut minte
 
+- **⚠️ UN WORKER PUBLICAT FĂRĂ RUTĂ NU E INOFENSIV — cronurile nu au nevoie de rută.**
+  Descoperit 14.09.2026: `xc-curatenie-production`, publicat fără rută, rulează `0 * * * *` de la
+  publicare — bătaia lui e scrisă în `app_settings.newsletter_cron_last_check` din baza de PRODUCȚIE.
+  Se vede acolo ora exactă a ultimei bătăi; de acolo a ieșit la iveală.
+  - **În V2 NU mai există `NEWSLETTER_ACTIV`** (comutatorul din V1): ceasul decide singur, după ziua
+    și ora din panou (`apps/curatenie/src/cron.ts`) — alertă vineri 9, săptămânal sâmbătă 16, lunar.
+  - **Singura plasă e `LIVRARE_REALA: "nu"`** în `services/communication-worker/wrangler.jsonc`,
+    pusă în toate cele trei medii. Cât e „nu", totul intră în nisip: se înregistrează, nu pleacă.
+  - **⚠️ ORDINEA LA CUTOVER: întâi se stinge ceasul V1, abia apoi `LIVRARE_REALA="da"` pe V2.**
+    Invers, cei 29 de voluntari primesc câte două scrisori.
+  - **Înainte de orice scriere în `xc-*-production`, întreabă-te ce cron s-ar putea trezi peste
+    datele proaspete.** Aici a fost în regulă fiindcă livrarea e stinsă — dar asta s-a *verificat*,
+    nu s-a presupus.
 - **⚠️ REGULA FERESTRELOR: pop-up deschis → pagina din spate NU se derulează** (user, 13.09.2026:
   „să fie o regulă generală când faci un pop-up"). Se scrie **o singură dată, în carcasă**
   (`@xc/ui`), nu la aplicație:
