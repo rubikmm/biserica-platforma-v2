@@ -307,10 +307,16 @@ propunerea automată, ca în V1.
 0. **⚠️ CUTOVER-UL EMISIEI — urmează, cerut de utilizator** (14.09.2026: „urmează să facem
    cutoverul", „când cutover ștergem transmisiuni"). E primul cutover al platformei, deci pașii se
    scriu aici înainte, nu se improvizează. **Nimic din ce urmează nu se face fără cerere explicită.**
-   - **rămâne de probat cu mâna, înainte de orice**: comutatorul LIVE/STOP din panou, apăsat de un
-     om cu `broadcast.manage`. Restul e verificat cap-coadă pe staging (paginile, porțile, muzica,
-     legătura dintre cele două aplicații, următoarea slujbă cerută de la program), dar **comanda
-     n-a fost apăsată de nimeni** — cere sesiune, iar eu n-am una;
+   - **drumul comenzii e PROBAT pe staging** (14.09.2026), prin API-ul mașinii: o telemetrie de
+     probă trimisă la `/intern/aparat/stare` cu `APARAT_SECRET` a trecut prin `preiaDecizia` →
+     `live` a scris ceasul **din celălalt worker** → radioul a pornit pe o selecție adevărată
+     (20 de piese, secunda exactă, se știe ce urmează) → o hotărâre „live" a **stins** ceasul, iar
+     modul a devenit `porneste-live` → repus pe radio. Fișierul piesei curente curge (206).
+     **Excluderea LIVE/radio peste doi workeri e dovedită.**
+   - ⚠️ **ce a rămas neprobat: numai stratul HTTP+autorizare al butonului** (sesiune cu
+     `broadcast.manage` → `/admin/comanda`). Cere un om intrat cu contul; o apăsare ajunge.
+   - ⚠️ pe staging a rămas o telemetrie de probă, cu aparatul numit **„probă-agent (staging)"** —
+     nu e un aparat adevărat. Se suprascrie singură la prima telemetrie a celui din biserică.
    - **ordinea la cutover**: (1) `wrangler deploy --env production` pentru `xc-live` și `xc-radio`,
      cu rutele `live.` și `radio.sfantul-ilie.ro`; (2) secretele puse și pe producție (aceleași
      patru); (3) **abia apoi se întoarce aparatul** din biserică spre adresa nouă — din clipa aia
@@ -1356,8 +1362,10 @@ forța antetul `Host`**.
   deci niciunul nu se putea publica primul (`code: 10143`). Leacul: scos temporar bindingul din
   `live`, publicat `live`, publicat `radio`, pus bindingul la loc, republicat `live`. De ținut minte
   pentru orice altă pereche de workeri legați reciproc.
-- **Ce NU e probat**: comutatorul LIVE/STOP n-a fost apăsat de un om cu drept — cere sesiune. Tot
-  restul e verificat cap-coadă pe staging. V1 e neatinsă și transmite mai departe.
+- **Drumul comenzii, probat fără sesiune de om**: API-ul mașinii (`/intern/aparat/stare`, cu
+  `APARAT_SECRET`) trece prin exact aceeași hotărâre ca butonul. O telemetrie de probă a pornit
+  radioul de la `live`, scriind ceasul din celălalt worker; o hotărâre „live" l-a stins. A rămas
+  neprobat **numai stratul HTTP+autorizare al butonului**. V1 e neatinsă și transmite mai departe.
 - **Voluntarii curățeniei au devenit CONTURI ale platformei; pickerul a ieșit** (cerere a
   utilizatorului, noaptea). Pe 13.09 ceruse anume contrariul — „pickerul rămâne, ca mod simplu" —
   și i se spusese atunci că se abate de la „datele stau într-un loc, autentificarea la fel". S-a
