@@ -119,6 +119,8 @@ export default {
         userId: sesiune.user?.id ?? null,
         eAdmin,
         eSuperAdmin,
+        // Panoul emisiei e unul singur, și stă chiar aici — tot încoace duce și meniul lui `live`.
+        urlPanou: `${prefix}/admin`,
         modificata: dataVersiunii(env.VERSIUNE),
         veziCa: sesiune.veziCa,
         poateVedeaCa: sesiune.poateVedeaCa,

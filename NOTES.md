@@ -538,6 +538,14 @@ numai cu originea lui, iar fiecare aplicație compune răspunsul cerându-i cele
 - **`radio` e a PAROHIEI.** Acolo playerul e cel din V1: cântă radioul, iar când începe slujba
   trece lin pe direct — omul a venit să asculte parohia, nu anume slujba.
 
+**⚠️ „Administrare" din meniul contului duce la PANOUL EMISIEI**, nu la administrarea platformei —
+și duce la **aceeași adresă** din amândouă aplicațiile: panoul de pe `radio` (user, 14.09.2026: „să
+ducă în același admin de la Radio, care e și acum la transmisiuni"). E o **potriveală locală readusă
+dinadins**: în V1 fiecare aplicație trimitea „Administrare" la panoul ei, iar la trecerea pe V2
+lucrul ăsta a fost șters peste tot. Aici s-a refăcut, fiindcă emisia are un singur panou și omul
+care intră pe `live` sau pe `radio` îl caută pe ăla. Probe în `tests/emisie.test.ts` — altfel
+următorul care „aliniază meniul cu restul platformei" îl scoate fără să știe de ce era acolo.
+
 **⚠️ Contul e în antet pe AMÂNDOUĂ paginile publice** (user: „trebuia să fie Cont pe ambele… nu e
 nevoie, dar Cont acolo sus e o invitație"). În V1 pagina de ascultare era singura fără el („un
 player simplu, nu e nevoie de login"). Regula aia a căzut, și **nu din motive tehnice**: ascultatul

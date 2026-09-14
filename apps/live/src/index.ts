@@ -114,6 +114,8 @@ export default {
         userId: sesiune.user?.id ?? null,
         eAdmin,
         eSuperAdmin,
+        // Panoul emisiei e unul singur, și stă pe `radio` — acolo duce „Administrare" din meniu.
+        urlPanou: `${env.URL_RADIO || nav.radio}/admin`,
         modificata: dataVersiunii(env.VERSIUNE),
         veziCa: sesiune.veziCa,
         poateVedeaCa: sesiune.poateVedeaCa,

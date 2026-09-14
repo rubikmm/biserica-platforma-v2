@@ -6,6 +6,9 @@ import { corpPlayer, jsPlayer } from '../packages/comanda/src/player.js'
 import { jsBiblioteca } from '../apps/radio/src/biblioteca-pagina.js'
 import { jsMic } from '../apps/radio/src/mic.js'
 import { caleCurata, eAudio } from '../apps/radio/src/cai.js'
+import { navigatieDin } from '../packages/config/src/index.js'
+import { pagina as paginaLive } from '../apps/live/src/pagina.js'
+import { pagina as paginaRadio } from '../apps/radio/src/pagina.js'
 
 /**
  * EMISIA — `live` și `radio`, cele două aplicații în care s-a împărțit `transmisiuni` din V1.
@@ -251,6 +254,64 @@ describe('panoul — același în amândouă aplicațiile', () => {
   it('poartă playerul cu el — se aude ce comanzi, din aceeași pagină', () => {
     expect(html).toContain('id="audio"')
     expect(html).toContain('id="audio-radio"')
+  })
+})
+
+/*
+ * ⚠️ „Administrare" din meniul contului duce la PANOUL EMISIEI, nu la administrarea platformei
+ * (user, 14.09.2026: „să ducă în același admin de la Radio"). E o potriveală locală readusă
+ * dinadins, după ce la trecerea pe V2 fusese ștearsă peste tot — deci merită păzită, altfel
+ * următorul care „aliniază meniul cu restul platformei" o scoate fără să știe de ce era acolo.
+ */
+describe('meniul contului duce la panoul emisiei', () => {
+  const CTX = {
+    prefix: '',
+    nav: navigatieDin({
+      MEDIU: 'staging',
+      ORIGINE_PUBLICA: 'https://live.staging.sfantul-ilie.ro',
+      DOMENIU_COOKIE: '',
+      EMAIL_SUPERADMIN: '',
+      URL_HOME: 'https://staging.sfantul-ilie.ro',
+      URL_CONT: 'https://cont.staging.sfantul-ilie.ro',
+      URL_CALENDAR: '',
+      URL_PROGRAM: '',
+      URL_CURATENIE: '',
+      URL_TIPIC: '',
+      URL_BIBLIA: '',
+      URL_BIBLIOTECA: '',
+      URL_BULETIN: '',
+      URL_NEWSLETTER: '',
+      URL_LIVE: 'https://live.staging.sfantul-ilie.ro',
+      URL_RADIO: 'https://radio.staging.sfantul-ilie.ro',
+      URL_ADMIN: 'https://admin.staging.sfantul-ilie.ro',
+    }),
+    utilizator: 'Părintele',
+    userId: 'u1',
+    eAdmin: true,
+    eSuperAdmin: false,
+    urlPanou: 'https://radio.staging.sfantul-ilie.ro/admin',
+    modificata: '',
+  }
+
+  it('din `live`, „Administrare" duce la panoul de pe radio', () => {
+    const html = paginaLive(CTX, { corp: '<p>x</p>' })
+    const meniu = html.slice(html.indexOf('</head>'))
+    expect(meniu).toContain('>Administrare</a>')
+    expect(meniu).toContain('https://radio.staging.sfantul-ilie.ro/admin')
+    // NU la administrarea platformei — aia e altă pagină, cu alt rost
+    expect(meniu).not.toContain('admin.staging.sfantul-ilie.ro')
+  })
+
+  it('din `radio`, tot la panoul lui — aceeași destinație, nu două panouri', () => {
+    const html = paginaRadio({ ...CTX, urlPanou: '/admin' }, { corp: '<p>x</p>' })
+    const meniu = html.slice(html.indexOf('</head>'))
+    expect(meniu).toContain('>Administrare</a>')
+    expect(meniu).not.toContain('admin.staging.sfantul-ilie.ro')
+  })
+
+  it('cine n-are dreptul nu vede rândul', () => {
+    const html = paginaLive({ ...CTX, eAdmin: false }, { corp: '<p>x</p>' })
+    expect(html.slice(html.indexOf('</head>'))).not.toContain('>Administrare</a>')
   })
 })
 

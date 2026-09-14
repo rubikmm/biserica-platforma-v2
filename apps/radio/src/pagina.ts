@@ -22,19 +22,31 @@ export interface Ctx {
   /** `broadcast.manage` — hotărât de autorizarea centrală. */
   eAdmin: boolean
   eSuperAdmin: boolean
+  /** Unde duce „Administrare" din meniul contului: panoul emisiei. Vezi nota din `contDin`. */
+  urlPanou: string
   modificata: string
   veziCa?: string | null
   poateVedeaCa?: boolean
   spre?: string
 }
 
+/**
+ * ⚠️ **„Administrare" din meniul contului duce la PANOUL EMISIEI, nu la administrarea platformei**
+ * (user, 14.09.2026: „în meniul de la Cont să fie la ambele administrare și să ducă în același
+ * admin de la Radio — care e și acum la transmisiuni").
+ *
+ * E o **potriveală locală readusă dinadins**: în V1 fiecare aplicație trimitea „Administrare" la
+ * panoul ei, iar la trecerea pe V2 lucrul ăsta a fost șters peste tot. Aici se reface, fiindcă
+ * emisia are un singur panou, iar omul care intră pe `live` sau pe `radio` îl caută pe ăla.
+ * Amândouă duc la **aceeași adresă** — panoul de aici.
+ */
 function contDin(ctx: Ctx): Cont {
   return {
     nume: ctx.utilizator ?? 'Cont',
     intrat: !!ctx.userId,
     admin: ctx.eAdmin,
     urlCont: ctx.nav.cont,
-    urlAdmin: ctx.nav.admin,
+    urlAdmin: ctx.urlPanou,
     poateVedeaCa: ctx.poateVedeaCa,
     veziCa: ctx.veziCa,
     spre: ctx.spre,
