@@ -8,8 +8,7 @@
  * Rute:
  *   /health                      starea aplicației
  *   /                            PUBLIC: ce se transmite acum + playerul
- *   /admin                       panoul: comutatorul LIVE/STOP + informațiile   (broadcast.manage)
- *   /admin/stare|inventar|comanda   datele și comenzile panoului                (broadcast.manage)
+ *   /admin                       NU e panou aici: trimite la panoul de la `radio` (unul singur)
  *   /api/…                       ce cere playerul din pagină (stare, semnalizare, bătăi, jurnal)
  *   /v1/stare                    PUBLIC, JSON: ce transmite parohia acum (contractul platformei)
  *   /v1/radio/biblioteca         PUBLIC, JSON: indicele muzicii, pe adresa veche a aparatului
@@ -26,9 +25,9 @@
  *  3. **`/_intern` NU se servește de pe internet**: fără antetul `x-xc-intern` răspunde 404 (nu
  *     403 — o adresă internă n-are de ce să-și recunoască existența), ca `/_actiuni` din chat.
  */
-import { asiguraCsrf, principalDin, sesiuneCurenta, verificaCsrf } from '@xc/auth'
+import { asiguraCsrf, principalDin, sesiuneCurenta } from '@xc/auth'
 import { ClientAutorizare } from '@xc/authorization'
-import { corpPanou, corpPlayer, jsPanou, jsPlayer } from '@xc/comanda'
+import { corpPlayer, jsPlayer } from '@xc/comanda'
 import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
 import { CererePanou, SCOPE_GLOBAL, SESIUNE_ANONIMA, type Telemetrie } from '@xc/contracts'
 import { Logger, correlationId } from '@xc/observability'
@@ -136,36 +135,25 @@ export default {
         spre: adresaPaginii(cfg, url),
       }
 
-      // ---------------------------------------------------- panoul
+      /*
+       * ---------------------------------------------------- panoul NU e aici
+       *
+       * ⚠️ **Administrarea emisiei nu se dublează** (user, 14.09.2026: „live…/admin — trebuia să
+       * fie doar radio… sub nicio formă să nu fie dublată administrarea"). Panoul e UNUL singur și
+       * stă la `radio`; două panouri care scriu aceeași stare înseamnă două adevăruri despre
+       * același buton LIVE și, mai devreme sau mai târziu, două comenzi care se bat. Aici a rămas
+       * doar drumul într-acolo, ca legăturile vechi și obiceiul degetelor să nu cadă în gol.
+       *
+       * Comenzile trec tot prin aplicația asta — ea ține starea — dar pe `/_intern`, cerute de
+       * workerul radioului prin Service Binding, nu dintr-un browser. Ușa de pe internet
+       * (`/admin/stare`, `/admin/comanda`) s-a închis: nu mai are cine s-o deschidă.
+       *
+       * Nu pune panoul înapoi aici. Dacă `radio` e jos, panoul e jos — asta e alegerea făcută.
+       */
       if (cale === '/admin' || cale.startsWith('/admin/')) {
-        if (!eAdmin) {
-          if (!ctx.userId) return Response.redirect(spreCont(ctx, cfg.ORIGINE_PUBLICA, cale), 303)
-          return html(
-            paginaMesaj(ctx, 'Numai pentru administratori', 'Panoul emisiei cere permisiunea „broadcast.manage".'),
-            403,
-            antete,
-          )
-        }
-
-        if (cale === '/admin/stare' && req.method === 'GET') {
-          return Response.json(await starePanou(env, true, eSuperAdmin), { headers: JSON_VIU })
-        }
-        if (cale === '/admin/inventar' && req.method === 'GET') {
-          return Response.json(await indiceRadio(env), { headers: JSON_VIU })
-        }
-        if (cale === '/admin/comanda' && req.method === 'POST') {
-          const problema = verificaCsrf(req, [cfg.ORIGINE_PUBLICA], cfg.MEDIU === 'dev')
-          if (problema) return json({ motiv: problema }, 403)
-          const corp = CererePanou.safeParse(await req.json().catch(() => null))
-          if (!corp.success) return json({ motiv: 'astept {actiune}' }, 400)
-          const r = await executaComanda(env, corp.data, ctx.utilizator, eSuperAdmin)
-          return json(r.ok ? { ok: true, selectie: r.selectie, comanda: r.comanda } : { motiv: r.motiv }, r.status)
-        }
-
-        if (cale === '/admin' || cale === '/admin/') {
-          return html(paginaAdmin(ctx, env), 200, antete)
-        }
-        return html(paginaMesaj(ctx, 'Pagina nu există', 'Adresa aceasta nu duce nicăieri în panou.'), 404, antete)
+        const panou = new URL(ctx.urlPanou, url).toString()
+        if (cale === '/admin' || cale === '/admin/') return Response.redirect(panou, 303)
+        return json({ motiv: 'panoul emisiei stă la radio', panou }, 404)
       }
 
       // ---------------------------------------------------- publicul
@@ -194,16 +182,6 @@ function paginaPublica(ctx: Ctx): string {
     titluPagina: 'Ascultă',
     corp: `<div class="live">${corpPlayer({ doarDirect: true })}</div>`,
     scripturi: jsPlayer(ctx.prefix, { doarDirect: true }),
-  })
-}
-
-/** Panoul — același în amândouă aplicațiile, de aceea vine întreg din `@xc/comanda`. */
-function paginaAdmin(ctx: Ctx, env: Env): string {
-  const radio = env.URL_RADIO || ctx.nav.radio
-  return pagina(ctx, {
-    titluPagina: 'Panou',
-    corp: corpPanou({ live: `${ctx.prefix}/`, radio: `${radio}/`, biblioteca: `${radio}/biblioteca` }),
-    scripturi: jsPlayer(ctx.prefix) + jsPanou(ctx.prefix),
   })
 }
 

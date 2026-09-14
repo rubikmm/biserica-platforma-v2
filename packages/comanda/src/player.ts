@@ -46,11 +46,18 @@ export function corpPlayer(optiuni: { doarDirect?: boolean } = {}): string {
 </div>
 <!-- slujba de acum, pe direct (user, 7.09.2026): „[ora] – Slujba” SUB butonul play; restul nu -->
 <p class="direct-slujba" id="slujba-acum" hidden></p>
+<!--
+  ⚠️ Ordinea pe pagina radioului: ÎNTÂI ce se aude ACUM, apoi ce urmează (user, 14.09.2026:
+  „când intru pe radio să fie inversate textele — mai întâi despre ce cântă acum, apoi ce slujbe
+  urmează"). Omul a deschis pagina ca să asculte, deci primul rând de sub buton răspunde la
+  „ce aud?"; programul vine după. Pe pagina directului (doarDirect) cartela radioului nu există, deci
+  acolo „următoarea slujbă" rămâne, ca și până acum, imediat sub buton.
+-->
+${optiuni.doarDirect ? '' : corpRadio()}
 <!-- urmatoarea slujba din program, cat nu e direct -->
 <p class="direct-urmatoarea" id="urmatoarea" hidden></p>
 <audio id="audio" playsinline></audio>
-<audio id="audio-radio" playsinline preload="auto"></audio>
-${optiuni.doarDirect ? '' : corpRadio()}`
+<audio id="audio-radio" playsinline preload="auto"></audio>`
 }
 
 export const STIL_PLAYER = `
@@ -62,6 +69,8 @@ export const STIL_PLAYER = `
 .direct-stare[data-stare="reda"]::before { content:"● "; color:var(--rosu) }
 .direct-slujba { font-size:17px; font-weight:600; color:var(--ink); margin:-8px 0 16px; overflow-wrap:anywhere }
 .direct-urmatoarea { font-size:15px; color:var(--soft); margin:-8px 0 16px }
+/* Cand vine DUPA cartela radioului (pagina radioului), nu mai urca sub buton: se desparte de ea. */
+.rad + .direct-urmatoarea { margin-top:18px }
 .direct-urmatoarea .urm-eticheta, .direct-urmatoarea .urm-slujba { display:block }
 .direct-urmatoarea .urm-slujba { color:var(--ink); margin-top:2px }
 .direct-butoane { display:flex; gap:12px; margin:16px 0 24px }
@@ -123,8 +132,9 @@ export function jsPlayer(prefix: string, optiuni: { doarDirect?: boolean } = {})
   let citind = false;
   // directul
   let pc = null, deCurent = null, legLive = false, liveSunet = false, statTimer = null, pornit = null;
-  // radioul
-  let rad = null, versiune = null, urm = null;
+  // radioul: „rad" = piesa pusa in element (ce se aude la noi), „previzualizare" = piesa din
+  // spate, cunoscuta din stare, aratata cat timp omul n-a apasat inca play.
+  let rad = null, versiune = null, urm = null, previzualizare = null;
   // cifrele radioului: de cand ascult, cate opriri de tampon gol, debitul piesei, „se incarca" acum
   let pornitRadio = null, opriri = 0, debitRadio = null, asteapta = false, ignoraPanaLa = 0;
 
@@ -329,15 +339,30 @@ export function jsPlayer(prefix: string, optiuni: { doarDirect?: boolean } = {})
   }
 
   // ---- RADIOUL (fisiere din depozit, dupa ceasul workerului) ----
-  function panou() {
+  /*
+   * ⚠️ Cartela se vede SI INAINTE de play (user, 14.09.2026: „trebuie să scrie ce anume cântă
+   * înainte de a apăsa Play"). Omul intra pe pagina si vedea doar „apasă play" — nu stia ce
+   * apuca sa asculte. Cat nu cantam noi, ceasul e al workerului (secunda din stare, socotita din
+   * cand curge selectia); de indata ce cantam, e al elementului audio.
+   *
+   * De aceea ce se ARATA nu e totuna cu ce se REDA: „rad" e piesa pusa in element, iar
+   * „previzualizare" e piesa din spate, cunoscuta din stare. Nu le contopi — „rad" pus fara sa
+   * cante ar pacali si saritura la piesa noua (vezi „aplica", ramura radio), si oprirea.
+   */
+  function arataRadio(a, redam) {
     const p = $("rad");
     if (!p) return;
-    if (sursa !== "radio" || !rad || !rad.cale) { p.hidden = true; return; }
+    if (!a || !a.cale) { p.hidden = true; return; }
     p.hidden = false;
-    $("rad-piesa").textContent = numeDin(rad.cale);
-    $("rad-album").textContent = albumDin(rad.cale);
-    $("rad-timp").textContent = "Piesa " + (rad.index + 1) + " din " + rad.total + " · " + mmss(auR.currentTime || rad.secunda) + " / " + mmss(rad.durata);
-    $("rad-urmeaza").textContent = rad.urmatoarea ? "Urmează: " + numeDin(rad.urmatoarea) : "";
+    $("rad-piesa").textContent = numeDin(a.cale);
+    $("rad-album").textContent = albumDin(a.cale);
+    const sec = redam ? (auR.currentTime || a.secunda) : a.secunda;
+    $("rad-timp").textContent = "Piesa " + (a.index + 1) + " din " + a.total + " · " + mmss(sec) + " / " + mmss(a.durata);
+    $("rad-urmeaza").textContent = a.urmatoarea ? "Urmează: " + numeDin(a.urmatoarea) : "";
+  }
+  function panou() {
+    if (sursa === "radio") { arataRadio(rad, true); return; }
+    arataRadio(vreau ? null : previzualizare, false);
   }
   function pornesteRadio(a, sariLa) {
     clearTimeout(urm);
@@ -418,12 +443,18 @@ export function jsPlayer(prefix: string, optiuni: { doarDirect?: boolean } = {})
     // devine, pentru pagina asta, „nu se transmite" — si atunci ea arata urmatoarea slujba.
     const mod = (DOAR_DIRECT && s.mod === "radio") ? "oprit" : s.mod;
     arataSlujba(s); arataUrmatoarea(s);
+    // Ce cântă radioul în spate, pentru cartela de dinainte de play. Pe pagina directului nu
+    // există cartelă, deci nici previzualizare.
+    previzualizare = !DOAR_DIRECT && s.mod === "radio" ? s.radio : null;
     if (!vreau) {
+      panou();
       if (s.direct && s.direct.configurat === false && mod !== "radio") { spune("Transmisiunea nu e configurată încă (lipsesc cheile SFU).", "neconfigurat"); buton("play", false); }
       else if (mod === "live") { spune("Se transmite acum — apasă play.", "gata"); buton("play", true); }
-      else if (mod === "radio") { spune("Radioul cântă — apasă play.", "gata"); buton("play", true); }
+      // ⚠️ Rândul de sus NU mai spune că merge radioul (user, 14.09.2026): ce anume cântă se vede
+      // acum pe cartela de dedesubt, iar aici rămâne doar ce are omul de făcut.
+      else if (mod === "radio") { spune("Apasă play", "gata"); buton("play", true); }
       else if (mod === "porneste-live") { spune("Slujba începe — apasă play.", "gata"); buton("play", true); }
-      else if (DOAR_DIRECT) { spune("Nu e nicio transmisiune în direct acum.", "liber"); buton("play", false); }
+      else if (DOAR_DIRECT) { spune("Nu este transmisiune în direct", "liber"); buton("play", false); }
       else { spune("Nu se transmite acum.", "liber"); buton("play", false); }
       return;
     }
@@ -455,7 +486,7 @@ export function jsPlayer(prefix: string, optiuni: { doarDirect?: boolean } = {})
     // oprit: nu e nimic pus in spate. Ramanem „acordati": cand reincepe ceva, pornim singuri.
     if (pc || rad || sursa) { inchideLive(); opresteRadio(); sursa = null; }
     if (s.direct && s.direct.configurat === false) { spune("Transmisiunea nu e configurată încă (lipsesc cheile SFU).", "liber"); return; }
-    spune(DOAR_DIRECT ? "Nu e nicio transmisiune în direct acum — aștept să înceapă…" : "Transmisiunea s-a oprit — aștept să reînceapă…", "liber");
+    spune(DOAR_DIRECT ? "Nu este transmisiune în direct — aștept să înceapă…" : "Transmisiunea s-a oprit — aștept să reînceapă…", "liber");
   }
   async function citeste() {
     if (citind) return; citind = true;

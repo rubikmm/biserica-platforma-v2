@@ -30,7 +30,15 @@ import { asiguraCsrf, principalDin, sesiuneCurenta, verificaCsrf } from '@xc/aut
 import { ClientAutorizare } from '@xc/authorization'
 import { ceSeAude, corpPanou, corpPlayer, jsPanou, jsPlayer } from '@xc/comanda'
 import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
-import { CererePanou, SCOPE_GLOBAL, SESIUNE_ANONIMA, type StareEmisie, type StarePanou } from '@xc/contracts'
+import {
+  CererePanou,
+  type Masca,
+  SCOPE_GLOBAL,
+  SESIUNE_ANONIMA,
+  type StareEmisie,
+  type StarePanou,
+  numeMasca,
+} from '@xc/contracts'
 import { Logger, correlationId } from '@xc/observability'
 import { dataVersiunii, html, json } from '@xc/ui'
 import pkg from '../package.json' with { type: 'json' }
@@ -58,6 +66,29 @@ export interface Env extends EnvCeas, EnvLiveDeparte {
 const SERVICIU = 'app-radio'
 const FARA_STOC = { 'cache-control': 'private, no-store' }
 const JSON_VIU = { 'cache-control': 'no-store' }
+
+/**
+ * ⚠️ **O mască „vezi ca" nu te scoate din pagină** (user, 14.09.2026: „când selectez un mod —
+ * «vezi ca neautentificat» sau «vezi ca administrator» — să nu se mai ducă în Cont, pagină profil,
+ * să rămână în pagina în care sunt").
+ *
+ * Numai radioul are pagini care trimit omul neintrat la autentificare (panoul și microfonul), și
+ * tocmai de aceea aici se vedea: masca „neautentificat" lasă sesiunea FĂRĂ om — identitatea
+ * întoarce sesiune anonimă — iar trimiterea la `cont` îl arunca pe super-adminul mascat tocmai de
+ * pe pagina pe care voia s-o vadă cu alți ochi. Sub mască rămânem aici și arătăm ce ar vedea rolul
+ * împrumutat; Cont-ul din antet ține meniul măștilor, deci drumul înapoi e la o apăsare.
+ *
+ * Drumul spre intrare rămâne întreg pentru omul care chiar nu e intrat (fără mască).
+ */
+function eDeTrimisLaCont(ctx: Ctx): boolean {
+  return !ctx.userId && !ctx.veziCa
+}
+
+/** Sub mască, refuzul e o previzualizare, nu o ușă închisă — se spune pe față a cui e vina. */
+function faraAcces(ctx: Ctx, motiv: string): string {
+  if (!ctx.veziCa) return motiv
+  return `${motiv} Te uiți ca ${numeMasca(ctx.veziCa as Masca)} — apasă „Cont" în antet ca să revii la contul tău.`
+}
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
@@ -130,9 +161,13 @@ export default {
       // ---------------------------------------------------- panoul
       if (cale === '/admin' || cale.startsWith('/admin/')) {
         if (!eAdmin) {
-          if (!ctx.userId) return Response.redirect(spreCont(ctx, cfg.ORIGINE_PUBLICA, cale), 303)
+          if (eDeTrimisLaCont(ctx)) return Response.redirect(spreCont(ctx, cfg.ORIGINE_PUBLICA, cale), 303)
           return html(
-            paginaMesaj(ctx, 'Numai pentru administratori', 'Panoul emisiei cere permisiunea „broadcast.manage".'),
+            paginaMesaj(
+              ctx,
+              'Numai pentru administratori',
+              faraAcces(ctx, 'Panoul emisiei cere permisiunea „broadcast.manage".'),
+            ),
             403,
             antete,
           )
@@ -185,10 +220,10 @@ export default {
       // ---------------------------------------------------- microfonul
       if (cale === '/mic' || cale.startsWith('/mic/')) {
         if (!eSuperAdmin) {
-          if (!ctx.userId) return Response.redirect(spreCont(ctx, cfg.ORIGINE_PUBLICA, cale), 303)
+          if (eDeTrimisLaCont(ctx)) return Response.redirect(spreCont(ctx, cfg.ORIGINE_PUBLICA, cale), 303)
           const mesaj = 'Microfonul bisericii se aude doar cu rol de super-administrator.'
           if (cale !== '/mic') return json({ motiv: mesaj }, 403)
-          return html(paginaMesaj(ctx, 'Fără acces', mesaj), 403, antete)
+          return html(paginaMesaj(ctx, 'Fără acces', faraAcces(ctx, mesaj)), 403, antete)
         }
         if (cale === '/mic') {
           return html(pagina(ctx, { titluPagina: 'Microfonul', corp: corpMic(), scripturi: jsMic(prefix) }), 200, antete)

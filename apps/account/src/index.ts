@@ -166,6 +166,17 @@ export default {
 
     try {
       // ---------------------------------------------------------------- intrare
+      /*
+       * `/intra` e numele scurt cu care celelalte aplicatii trimit omul la autentificare
+       * (`radio`, `curatenie`, `biblioteca`) — dar ruta adevarata e `/auth/login`, asa ca pana
+       * acum cadeau toate pe „Pagina inexistenta" a contului. Aici se leaga, cu tot cu `spre`,
+       * ca sa nu umblam prin patru aplicatii dupa acelasi link.
+       */
+      if (cale === '/intra' && req.method === 'GET') {
+        const spre = spreDinCerere(url)
+        return redirect(`${prefix}/auth/login${spre ? `?spre=${encodeURIComponent(spre)}` : ''}`)
+      }
+
       if (cale === '/auth/login' && req.method === 'GET') {
         const csrf = asiguraCsrf(req, domeniu)
         return html(

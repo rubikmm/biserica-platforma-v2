@@ -202,13 +202,26 @@ describe('scripturile paginilor', () => {
 describe('pagina directului se poartă altfel decât cea a radioului', () => {
   it('pe `live`, radioul din spate e citit ca „nu se transmite"', () => {
     expect(jsPlayer('', { doarDirect: true })).toContain('const DOAR_DIRECT = true')
-    expect(jsPlayer('', { doarDirect: true })).toContain('Nu e nicio transmisiune în direct acum')
+    expect(jsPlayer('', { doarDirect: true })).toContain('Nu este transmisiune în direct')
   })
 
   it('pe `radio`, playerul rămâne cel din V1: radio, cu trecere lină pe direct', () => {
     const js = jsPlayer('')
     expect(js).toContain('const DOAR_DIRECT = false')
-    expect(js).toContain('Radioul cântă — apasă play.')
+    // Rândul de sus spune doar ce are omul de făcut; CE cântă se vede pe cartelă (user, 14.09.2026).
+    expect(js).toContain('spune("Apasă play", "gata")')
+    expect(js).not.toContain('Radioul cântă')
+  })
+
+  /*
+   * ⚠️ Cartela radioului se vede ȘI ÎNAINTE de play (user, 14.09.2026: „trebuie să scrie ce anume
+   * cântă înainte de a apăsa Play"). Proba păzește tocmai despărțirea care face lucrul cu putință:
+   * piesa REDATĂ („rad") și piesa din spate („previzualizare") sunt două variabile, nu una.
+   */
+  it('pe `radio`, cartela cu ce cântă se arată și înainte de play', () => {
+    const js = jsPlayer('')
+    expect(js).toContain('previzualizare = !DOAR_DIRECT && s.mod === "radio" ? s.radio : null')
+    expect(js).toContain('arataRadio(vreau ? null : previzualizare, false)')
   })
 
   it('pagina directului nu randează cartela radioului — acolo nu se aude niciodată', () => {
