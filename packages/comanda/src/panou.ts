@@ -11,7 +11,7 @@ import { butonPlayStop } from './buton.js'
  *
  * Așezarea e cea din V1 (`dashboard.html` de pe Raspberry Pi, apoi `/control`), ca Părintele să nu
  * învețe nimic nou. De sus în jos:
- *   - comutatorul **LIVE | STOP** (+ OPRIT, numai pentru super-admin) — al doilea tap pe cel activ
+ *   - comutatorul **RADIO | LIVE** (+ OPRIT, numai pentru super-admin) — al doilea tap pe cel activ
  *     nu face nimic, iar oprirea directului cere confirmare;
  *   - CARTELA DE STARE, mereu vizibilă: ÎN DIRECT / RADIO + piesa / OPRIT — nu dispare niciodată;
  *   - PLAYERUL: aici se aude ce merge acum, cu același script ca paginile publice;
@@ -19,7 +19,16 @@ import { butonPlayStop } from './buton.js'
  *   - „Spațiu pe aparatul din biserică", numai dacă aparatul e legat;
  *   - „Detalii tehnice", strâns implicit: telemetria brută + starea canalelor din SFU.
  *
- * ⚠️ **STOP nu înseamnă liniște**, înseamnă „oprește directul": radioul reia de unde rămăsese.
+ * ⚠️ **Butonul din stânga scrie RADIO, dar modul se numește `stop` în cod și pe sârmă**
+ * (`ActiunePanou`, telemetria, testele). Nu e o scăpare: apăsat, el oprește directul, iar radioul
+ * reia de unde rămăsese — adică **STOP nu înseamnă liniște**. Cuvântul de pe buton spune ce se
+ * aude după apăsare (așa era și în V1, unde butonul se chema `radio`), numele intern spune ce se
+ * întâmplă cu directul. Dacă vreodată se unifică vocabularul, se schimbă în același timp contractul
+ * `ActiunePanou`, `stare.ts` din `live`, aplicația `radio` și testele — nu doar eticheta.
+ *
+ * ⚠️ **Ordinea în pastilă: RADIO | LIVE | OPRIT** (user, 14.09.2026: „la admin trebuie să fie LIVE
+ * pe mijloc și RADIO stânga"). În V1 LIVE era primul; s-a mutat la mijloc dinadins, ca butonul care
+ * pornește transmisiunea să nu mai stea la marginea din stânga, unde degetul ajunge din greșeală.
  * Liniștea de tot e OPRIT, și a rămas la super-admin, ca în V1 („RADIO vreau să meargă
  * permanent… opritul manual nu are sens decât pentru mine ca super-admin" — Părintele dă mute).
  *
@@ -53,8 +62,8 @@ export function corpPanou(legaturi: { live: string; radio: string; biblioteca: s
   return `<div class="ctl">
   <section class="ctl-toggle">
     <div class="ctl-pill" role="group" aria-label="Emisia parohiei">
+      <button type="button" class="ctl-pill-btn ctl-pill-stop" data-mod="stop" disabled><span class="ctl-pill-text">RADIO</span></button>
       <button type="button" class="ctl-pill-btn ctl-pill-live" data-mod="live" disabled><span class="ctl-bulina"></span><span class="ctl-pill-text">LIVE</span></button>
-      <button type="button" class="ctl-pill-btn ctl-pill-stop" data-mod="stop" disabled><span class="ctl-pill-text">STOP</span></button>
       <button type="button" class="ctl-pill-btn ctl-pill-oprit" data-mod="oprit" disabled hidden><span class="ctl-pill-text">OPRIT</span></button>
     </div>
   </section>
@@ -304,7 +313,9 @@ export function jsPanou(prefix: string): string {
   let tranzitie = null;
   const TRANZITIE_MS = 20000;
   let eroareLocala = null;
-  const ETICHETA = { live: "LIVE", stop: "STOP", oprit: "OPRIT" };
+  // Eticheta de pe buton (ce se aude), nu numele modului (ce se intampla cu directul): modul "stop"
+  // scrie RADIO. Scriptul rescrie textul la fiecare tranzitie, deci si aici sta cuvantul nou.
+  const ETICHETA = { live: "LIVE", stop: "RADIO", oprit: "OPRIT" };
   let ocupat = false;
   let caleCurenta = "";
   let grupuriDeschise = {};

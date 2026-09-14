@@ -228,11 +228,24 @@ describe('pagina directului se poartă altfel decât cea a radioului', () => {
 describe('panoul — același în amândouă aplicațiile', () => {
   const html = corpPanou({ live: '/live/', radio: '/radio/', biblioteca: '/radio/biblioteca' })
 
-  it('are comutatorul cerut: LIVE și STOP', () => {
+  it('are comutatorul cerut: RADIO și LIVE', () => {
     expect(html).toContain('data-mod="live"')
     expect(html).toContain('data-mod="stop"')
     expect(html).toContain('>LIVE<')
-    expect(html).toContain('>STOP<')
+    // Modul se numeste `stop` in cod si pe sarma, dar pe buton scrie ce se AUDE dupa apasare.
+    expect(html).toContain('>RADIO<')
+    expect(html).not.toContain('>STOP<')
+  })
+
+  /*
+   * Ordinea cerută de user (14.09.2026): „LIVE pe mijloc și RADIO stânga". Nu e o chestiune de
+   * gust — LIVE la marginea din stânga se apasă din greșeală, iar apăsarea aia pornește
+   * transmisiunea din biserică. De aceea ordinea se probează, nu doar prezența butoanelor.
+   */
+  it('ține LIVE la mijloc, cu RADIO în stânga lui', () => {
+    const unde = (m: string) => html.indexOf(`data-mod="${m}"`)
+    expect(unde('stop')).toBeLessThan(unde('live'))
+    expect(unde('live')).toBeLessThan(unde('oprit'))
   })
 
   /*

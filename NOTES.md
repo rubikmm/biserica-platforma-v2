@@ -551,8 +551,13 @@ nevoie, dar Cont acolo sus e o invitație"). În V1 pagina de ascultare era sing
 player simplu, nu e nevoie de login"). Regula aia a căzut, și **nu din motive tehnice**: ascultatul
 rămâne la liber, dar omul care ascultă e chemat să-și facă un cont. Nu-l scoate înapoi.
 
-**Comutatorul**, cum a fost cerut: **LIVE | STOP**, plus **OPRIT** rămas doar la super-admin.
-⚠️ **STOP nu e liniște** — oprește directul, iar radioul reia de unde rămăsese. Liniștea de tot e
+**Comutatorul**, cum a fost cerut: **RADIO | LIVE**, plus **OPRIT** rămas doar la super-admin.
+⚠️ Ordinea e cea cerută pe 14.09.2026 („la admin trebuie să fie LIVE pe mijloc și RADIO stânga"):
+în V1 LIVE era primul, acum stă la **mijloc**, ca butonul care pornește transmisiunea din biserică
+să nu mai fie cel de la marginea din stânga. Pe butonul din stânga scrie **RADIO**, dar modul se
+cheamă `stop` în cod și pe sârmă (`ActiunePanou`) — eticheta spune ce se aude, numele intern spune
+ce se întâmplă cu directul; se unifică numai amândouă odată (contract + `live/stare.ts` + `radio` +
+teste). ⚠️ **STOP nu e liniște** — oprește directul, iar radioul reia de unde rămăsese. Liniștea de tot e
 OPRIT, și a rămas la super-admin ca în V1 („radioul vreau să meargă permanent… opritul manual nu
 are sens decât pentru mine ca super-admin" — Părintele dă mute).
 
