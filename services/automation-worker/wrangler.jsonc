@@ -45,7 +45,19 @@
     },
     "production": {
       "name": "xc-automation-production",
-      "vars": { "MEDIU": "production" }
+      "vars": { "MEDIU": "production" },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "xc-automation-production",
+          "database_id": "7c4dd88d-f392-45a7-a7a7-0096f9fc2a2c",
+          "migrations_dir": "../../infrastructure/migrations/automation"
+        }
+      ],
+      "services": [
+        { "binding": "COMUNICARE", "service": "xc-communication-production" },
+        { "binding": "AUDIT", "service": "xc-audit-production" }
+      ]
     }
   }
 }

@@ -47,16 +47,23 @@ if (local === remote) {
   process.exit(1)
 }
 
-if (remote && mediu !== 'staging') {
+// Productia s-a deschis pe 14.09.2026, la cererea utilizatorului („pornește înlocuirea v1 cu v2").
+// Bariera n-a cazut, s-a mutat: pe productie se cere `--chiar-productia`, scris anume de fiecare data.
+if (remote && mediu !== 'staging' && mediu !== 'production') {
+  console.error('Refuz: `--remote` merge cu `--env staging` sau `--env production`.')
+  process.exit(1)
+}
+
+if (remote && mediu === 'production' && !argumente.includes('--chiar-productia')) {
   console.error(
-    'Refuz: `--remote` e permis doar cu `--env staging` in aceasta faza.\n' +
-      'Productia nu se atinge fara o decizie explicita a utilizatorului.',
+    'Refuz: migratiile pe PRODUCTIE cer `--chiar-productia` pe linia de comanda.\n' +
+      'Acolo stau datele parohiei; nu se atinge din obisnuinta.',
   )
   process.exit(1)
 }
 
 function numeBazaDin(director) {
-  return `xc-${director === 'authz' ? 'authz' : director}-staging`
+  return `xc-${director}-${mediu ?? 'staging'}`
 }
 
 let totalFisiere = 0

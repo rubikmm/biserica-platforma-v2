@@ -68,7 +68,8 @@
         "URL_LIVE": "https://live.sfantul-ilie.ro",
         "URL_RADIO": "https://radio.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.sfantul-ilie.ro"
-      }
+      },
+      "services": [{ "binding": "IDENTITATE", "service": "xc-identity-production" }]
       // Apexul productiei e al WordPress-ului V1 pana la o decizie explicita.
     }
   }

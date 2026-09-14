@@ -136,7 +136,32 @@
         "URL_RADIO": "https://radio.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.sfantul-ilie.ro"
       },
-      "browser": { "binding": "BROWSER" }
+      "browser": { "binding": "BROWSER" },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "xc-program-production",
+          "database_id": "75c595db-de40-4821-a0ed-7cd80cab22ca",
+          "migrations_dir": "../../infrastructure/migrations/program"
+        }
+      ],
+      "services": [
+        { "binding": "IDENTITATE", "service": "xc-identity-production" },
+        { "binding": "AUTORIZARE", "service": "xc-authz-production" },
+        { "binding": "AUDIT", "service": "xc-audit-production" },
+        { "binding": "CALENDAR", "service": "xc-calendar-production" },
+        { "binding": "TIPIC", "service": "xc-tipic-production" },
+        { "binding": "COMUNICARE", "service": "xc-communication-production" },
+        { "binding": "MEDIA", "service": "xc-media-production" },
+        { "binding": "CHAT", "service": "xc-chat-production" }
+      ],
+      "kv_namespaces": [
+        { "binding": "CONFIG", "id": "5d9c6f96328743858c40c577fbbdb947" }
+      ],
+      "queues": {
+        "producers": [{ "binding": "EVENIMENTE", "queue": "xc-events-production" }]
+      },
+      "triggers": { "crons": ["*/5 * * * *"] }
       // Ruta de productie (`program.sfantul-ilie.ro`) e a lui A2 pana la cutover-ul explicit.
     }
   }

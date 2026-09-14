@@ -109,7 +109,20 @@
         "URL_LIVE": "https://live.sfantul-ilie.ro",
         "URL_RADIO": "https://radio.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.sfantul-ilie.ro"
-      }
+      },
+      "durable_objects": {
+        "bindings": [
+          { "name": "DIRECT", "class_name": "Direct" },
+          { "name": "APARAT", "class_name": "Aparat" },
+          { "name": "ASCULTATORI", "class_name": "Ascultatori" }
+        ]
+      },
+      "services": [
+        { "binding": "IDENTITATE", "service": "xc-identity-production" },
+        { "binding": "AUTORIZARE", "service": "xc-authz-production" },
+        { "binding": "RADIO", "service": "xc-radio-production" },
+        { "binding": "PROGRAM", "service": "xc-program-production" }
+      ]
       // ⚠️ Nicio ruta de productie pana la cutover-ul cerut anume. In V1 directul trăiește pe
       // `transmisiuni.sfantul-ilie.ro`, iar aparatul din biserica emite intr-acolo: doua tinte
       // deodata ar insemna doua transmisiuni si niciun ascultator intreg.

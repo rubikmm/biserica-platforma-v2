@@ -21,7 +21,8 @@
     },
     "production": {
       "name": "xc-media-production",
-      "vars": { "MEDIU": "production" }
+      "vars": { "MEDIU": "production" },
+      "r2_buckets": [{ "binding": "FISIERE", "bucket_name": "xc-media-production" }]
     }
   }
 }

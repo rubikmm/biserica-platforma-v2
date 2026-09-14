@@ -84,7 +84,13 @@
         "URL_LIVE": "https://live.sfantul-ilie.ro",
         "URL_RADIO": "https://radio.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.sfantul-ilie.ro"
-      }
+      },
+      "r2_buckets": [
+        { "binding": "TEXTE", "bucket_name": "xc-biblia-production" }
+      ],
+      "services": [
+        { "binding": "IDENTITATE", "service": "xc-identity-production" }
+      ]
       // Ruta de productie (`biblia.sfantul-ilie.ro`) ramane a lui A10 pana la cutover-ul explicit.
     }
   }

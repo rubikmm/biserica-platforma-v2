@@ -35,7 +35,15 @@
     },
     "production": {
       "name": "xc-audit-production",
-      "vars": { "MEDIU": "production" }
+      "vars": { "MEDIU": "production" },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "xc-audit-production",
+          "database_id": "2a5ad207-2493-449b-8cd9-feb0c3e88fed",
+          "migrations_dir": "../../infrastructure/migrations/audit"
+        }
+      ]
     }
   }
 }

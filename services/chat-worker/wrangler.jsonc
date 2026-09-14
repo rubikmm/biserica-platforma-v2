@@ -86,6 +86,37 @@
         { "binding": "TIPIC", "service": "xc-tipic-staging" },
         { "binding": "AUDIT", "service": "xc-audit-staging" }
       ]
+    },
+    "production": {
+      "name": "xc-chat-production",
+      "version_metadata": { "binding": "VERSIUNE" },
+      "vars": {
+        "MEDIU": "production",
+        "MODEL_CHAT": "@cf/openai/gpt-oss-120b",
+        "MODEL_CLAUDE": "claude-opus-4-8",
+        "EFORT_CLAUDE": "medium",
+        "AI_GATEWAY": "xc-chat",
+        "CLOUDFLARE_ACCOUNT_ID": "5d487c9612d6ebf0ef63b7f3047a316d"
+        // SECRET_INTERN si ANTHROPIC_API_KEY: `wrangler secret put … --env production`
+      },
+      "ai": { "binding": "AI" },
+      "kv_namespaces": [
+        { "binding": "CONFIG", "id": "5d9c6f96328743858c40c577fbbdb947" }
+      ],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "xc-chat-production",
+          "database_id": "fc262cfc-2879-4ce5-b5f0-45d3f754fe09",
+          "migrations_dir": "../../infrastructure/migrations/chat"
+        }
+      ],
+      "services": [
+        { "binding": "PROGRAM", "service": "xc-program-production" },
+        { "binding": "CALENDAR", "service": "xc-calendar-production" },
+        { "binding": "TIPIC", "service": "xc-tipic-production" },
+        { "binding": "AUDIT", "service": "xc-audit-production" }
+      ]
     }
   }
 }

@@ -100,7 +100,16 @@
         "URL_LIVE": "https://live.sfantul-ilie.ro",
         "URL_RADIO": "https://radio.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.sfantul-ilie.ro"
-      }
+      },
+      "durable_objects": {
+        "bindings": [{ "name": "RADIO", "class_name": "Radio" }]
+      },
+      "r2_buckets": [{ "binding": "FISIERE", "bucket_name": "biserica-transmisiuni" }],
+      "services": [
+        { "binding": "IDENTITATE", "service": "xc-identity-production" },
+        { "binding": "AUTORIZARE", "service": "xc-authz-production" },
+        { "binding": "LIVE", "service": "xc-live-production" }
+      ]
       // ⚠️ Nicio ruta de productie pana la cutover-ul cerut anume.
     }
   }

@@ -75,7 +75,9 @@
         "URL_LIVE": "https://live.sfantul-ilie.ro",
         "URL_RADIO": "https://radio.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.sfantul-ilie.ro"
-      }
+      },
+      "r2_buckets": [{ "binding": "ARHIVA", "bucket_name": "xc-newsletter-production" }],
+      "services": [{ "binding": "IDENTITATE", "service": "xc-identity-production" }]
       // Ruta de productie (`newsletter.sfantul-ilie.ro`) ramane a lui A8 pana la cutover-ul explicit.
     }
   }

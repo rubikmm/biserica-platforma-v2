@@ -80,6 +80,14 @@
       "services": [
         { "binding": "AUTORIZARE", "service": "xc-authz-production" },
         { "binding": "AUDIT", "service": "xc-audit-production" }
+      ],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "xc-identity-production",
+          "database_id": "4d8cd18f-6a5b-4555-b9f0-b3d46bec10ff",
+          "migrations_dir": "../../infrastructure/migrations/identity"
+        }
       ]
     }
   }

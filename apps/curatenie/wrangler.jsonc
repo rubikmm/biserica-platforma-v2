@@ -111,7 +111,21 @@
         "URL_LIVE": "https://live.sfantul-ilie.ro",
         "URL_RADIO": "https://radio.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.sfantul-ilie.ro"
-      }
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "xc-curatenie-production",
+          "database_id": "19733db9-6b13-4937-bdf3-70286b74d2a2"
+        }
+      ],
+      "services": [
+        { "binding": "IDENTITATE", "service": "xc-identity-production" },
+        { "binding": "AUTORIZARE", "service": "xc-authz-production" },
+        { "binding": "COMUNICARE", "service": "xc-communication-production" },
+        { "binding": "CALENDAR", "service": "xc-calendar-production" }
+      ],
+      "triggers": { "crons": ["0 * * * *"] }
       // ⚠️ Ruta de productie (`curatenie.sfantul-ilie.ro`) e A LUI A6 DIN V1, care e VIU si trimite
       // singur rapoartele. Nimic rutat de aici pana la cutover-ul cerut anume de utilizator; altfel
       // cei 29 de voluntari ar primi cate doua scrisori si ar avea doua calendare.

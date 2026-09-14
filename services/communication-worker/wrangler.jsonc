@@ -53,7 +53,15 @@
         "POSTA_DE_LA": "no-reply@posta.sfantul-ilie.ro",
         "POSTA_NUME": "Biserica Sfântul Ilie – Hanul Colței"
       },
-      "send_email": [{ "name": "POSTA" }]
+      "send_email": [{ "name": "POSTA" }],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "xc-communication-production",
+          "database_id": "107b0ae4-8b3b-4b04-b629-2aa53079672f",
+          "migrations_dir": "../../infrastructure/migrations/communication"
+        }
+      ]
     }
   }
 }

@@ -104,7 +104,21 @@
         "URL_LIVE": "https://live.sfantul-ilie.ro",
         "URL_RADIO": "https://radio.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.sfantul-ilie.ro"
-      }
+      },
+      "r2_buckets": [{ "binding": "CATALOG", "bucket_name": "xc-biblioteca-production" }],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "xc-biblioteca-production",
+          "database_id": "20a9b980-f065-46a3-904d-d42bc097f579"
+        }
+      ],
+      "services": [
+        { "binding": "IDENTITATE", "service": "xc-identity-production" },
+        { "binding": "AUTORIZARE", "service": "xc-authz-production" },
+        { "binding": "COMUNICARE", "service": "xc-communication-production" }
+      ],
+      "triggers": { "crons": ["0 6 * * *"] }
       // Ruta de productie (`biblioteca.sfantul-ilie.ro`) ramane a lui A12 pana la cutover-ul
       // explicit, cerut de utilizator. Nimic rutat de aici.
     }

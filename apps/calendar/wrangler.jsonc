@@ -117,7 +117,27 @@
         "URL_LIVE": "https://live.sfantul-ilie.ro",
         "URL_RADIO": "https://radio.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.sfantul-ilie.ro"
-      }
+      },
+      "browser": { "binding": "BROWSER" },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "xc-calendar-production",
+          "database_id": "03c9980e-406c-419f-ae4b-4da6eae956ec",
+          "migrations_dir": "../../infrastructure/migrations/calendar"
+        }
+      ],
+      "services": [
+        { "binding": "IDENTITATE", "service": "xc-identity-production" },
+        { "binding": "AUTORIZARE", "service": "xc-authz-production" },
+        { "binding": "AUDIT", "service": "xc-audit-production" },
+        { "binding": "COMUNICARE", "service": "xc-communication-production" },
+        { "binding": "BIBLIA", "service": "xc-biblia-production" }
+      ],
+      "queues": {
+        "producers": [{ "binding": "EVENIMENTE", "queue": "xc-events-production" }]
+      },
+      "triggers": { "crons": ["*/5 * * * *"] }
       // Ruta de productie (`calendar.sfantul-ilie.ro`) e a lui A1 pana la cutover-ul explicit.
     }
   }

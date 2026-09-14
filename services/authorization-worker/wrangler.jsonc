@@ -50,7 +50,15 @@
         "ORIGINE_PUBLICA": "https://cont.sfantul-ilie.ro",
         "DOMENIU_COOKIE": ".sfantul-ilie.ro",
         "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
-      }
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "xc-authz-production",
+          "database_id": "a4290844-79ce-494a-b791-e852dc6c1f40",
+          "migrations_dir": "../../infrastructure/migrations/authz"
+        }
+      ]
     }
   }
 }

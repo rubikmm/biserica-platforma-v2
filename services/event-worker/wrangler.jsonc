@@ -60,7 +60,26 @@
     },
     "production": {
       "name": "xc-events-production",
-      "vars": { "MEDIU": "production" }
+      "vars": { "MEDIU": "production" },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "xc-audit-production",
+          "database_id": "2a5ad207-2493-449b-8cd9-feb0c3e88fed"
+        }
+      ],
+      "services": [{ "binding": "AUTOMATIZARE", "service": "xc-automation-production" }],
+      "queues": {
+        "consumers": [
+          {
+            "queue": "xc-events-production",
+            "max_batch_size": 10,
+            "max_batch_timeout": 5,
+            "max_retries": 5,
+            "dead_letter_queue": "xc-events-dlq-production"
+          }
+        ]
+      }
     }
   }
 }

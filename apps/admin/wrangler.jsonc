@@ -85,7 +85,17 @@
         "URL_LIVE": "https://live.sfantul-ilie.ro",
         "URL_RADIO": "https://radio.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.sfantul-ilie.ro"
-      }
+      },
+      "services": [
+        { "binding": "IDENTITATE", "service": "xc-identity-production" },
+        { "binding": "AUTORIZARE", "service": "xc-authz-production" },
+        { "binding": "AUDIT", "service": "xc-audit-production" },
+        { "binding": "AUTOMATIZARE", "service": "xc-automation-production" },
+        { "binding": "COMUNICARE", "service": "xc-communication-production" }
+      ],
+      "kv_namespaces": [
+        { "binding": "CONFIG", "id": "5d9c6f96328743858c40c577fbbdb947" }
+      ]
     }
   }
 }

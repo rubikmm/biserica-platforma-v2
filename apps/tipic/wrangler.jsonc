@@ -109,7 +109,24 @@
         "URL_LIVE": "https://live.sfantul-ilie.ro",
         "URL_RADIO": "https://radio.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.sfantul-ilie.ro"
-      }
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "xc-tipic-production",
+          "database_id": "82283f8f-701a-47b6-b0da-05dbd3a9e024",
+          "migrations_dir": "../../infrastructure/migrations/tipic"
+        }
+      ],
+      "r2_buckets": [
+        { "binding": "TEXTE", "bucket_name": "xc-tipic-production" }
+      ],
+      "services": [
+        { "binding": "IDENTITATE", "service": "xc-identity-production" },
+        { "binding": "AUTORIZARE", "service": "xc-authz-production" },
+        { "binding": "AUDIT", "service": "xc-audit-production" },
+        { "binding": "CALENDAR", "service": "xc-calendar-production" }
+      ]
       // Ruta de productie (`tipic.sfantul-ilie.ro`) ramane a lui A9 pana la cutover-ul explicit.
     }
   }
