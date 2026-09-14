@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { PERMISIUNI_IMPLICITE, STRUCTURA_CANONICA, type BibliotecaRadio, type SelectieRadio } from '../packages/contracts/src/index.js'
 import { ceSeAude, ordineNaturala, pieseDin, playlist, toateDirectoarele } from '../packages/comanda/src/ceas.js'
 import { corpPanou, jsPanou } from '../packages/comanda/src/panou.js'
-import { jsPlayer } from '../packages/comanda/src/player.js'
+import { corpPlayer, jsPlayer } from '../packages/comanda/src/player.js'
 import { jsBiblioteca } from '../apps/radio/src/biblioteca-pagina.js'
 import { jsMic } from '../apps/radio/src/mic.js'
 import { caleCurata, eAudio } from '../apps/radio/src/cai.js'
@@ -187,6 +187,38 @@ describe('scripturile paginilor', () => {
   it('scripturile respectă montajul: prin gateway, adresele pornesc de la prefix', () => {
     expect(jsPlayer('/live')).toContain('const P = "/live"')
     expect(jsPanou('/radio')).toContain('const P = "/radio"')
+  })
+})
+
+/*
+ * ⚠️ Cele două pagini publice NU se poartă la fel (user, 14.09.2026: „Live — dacă nu se transmite
+ * Live nu merge radio. Scrie că nu e în acest moment nicio transmisiune live / următoarea slujbă
+ * este la…"). Pe `live` se aude numai slujba; radioul care cântă în spate nu umple liniștea, ci
+ * pagina spune că nu se transmite și arată următoarea slujbă.
+ */
+describe('pagina directului se poartă altfel decât cea a radioului', () => {
+  it('pe `live`, radioul din spate e citit ca „nu se transmite"', () => {
+    expect(jsPlayer('', { doarDirect: true })).toContain('const DOAR_DIRECT = true')
+    expect(jsPlayer('', { doarDirect: true })).toContain('Nu e nicio transmisiune în direct acum')
+  })
+
+  it('pe `radio`, playerul rămâne cel din V1: radio, cu trecere lină pe direct', () => {
+    const js = jsPlayer('')
+    expect(js).toContain('const DOAR_DIRECT = false')
+    expect(js).toContain('Radioul cântă — apasă play.')
+  })
+
+  it('pagina directului nu randează cartela radioului — acolo nu se aude niciodată', () => {
+    expect(corpPlayer({ doarDirect: true })).not.toContain('id="rad"')
+    expect(corpPlayer()).toContain('id="rad"')
+  })
+
+  it('amândouă arată următoarea slujbă cât nu se transmite în direct', () => {
+    for (const js of [jsPlayer('', { doarDirect: true }), jsPlayer('')]) {
+      expect(js).toContain('Următoarea slujbă transmisă:')
+      // se ascunde numai cât chiar se transmite
+      expect(js).toContain('s.mod === "live" || s.mod === "porneste-live"')
+    }
   })
 })
 

@@ -6,9 +6,10 @@ import pkg from '../package.json' with { type: 'json' }
 /**
  * Carcasa pusă pe LIVE: antetul cu numele aplicației și contul, adresa platformei, subsolul.
  *
- * Pagina publică NU are cont în antet (`cont: null`) — transmisiunea slujbei e pentru oricine, ca
- * pe site-ul vechi, iar utilizatorul a cerut anume „un player simplu, nu e nevoie de login".
- * Panoul îl are, ca orice pagină de administrare din V2.
+ * ⚠️ **Contul e în antet pe TOATE paginile, inclusiv pe cea publică** (user, 14.09.2026: „trebuia
+ * să fie Cont pe ambele… nu e nevoie, dar Cont acolo sus e o invitație"). În V1 pagina de ascultare
+ * era singura fără el — „un player simplu, nu e nevoie de login". Motivul schimbării nu e tehnic:
+ * ascultatul rămâne la liber, dar omul care ascultă e chemat să-și facă un cont. Nu-l scoate.
  */
 
 export interface Ctx {
@@ -41,8 +42,6 @@ function contDin(ctx: Ctx): Cont {
 export interface OptiuniPaginaApp {
   titluPagina?: string
   corp: string
-  /** Pagina publică: fără cont în antet. */
-  faraCont?: boolean
   local?: string
   scripturi?: string
   clasaCorp?: string
@@ -56,7 +55,7 @@ export function pagina(ctx: Ctx, o: OptiuniPaginaApp): string {
     acasa: `${ctx.prefix}/`,
     urlPlatforma: ctx.nav.home,
     local: STIL_EMISIE + (o.local ?? ''),
-    cont: o.faraCont ? null : contDin(ctx),
+    cont: contDin(ctx),
     corp: o.corp,
     versiune: pkg.version,
     modificata: ctx.modificata,

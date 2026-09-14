@@ -166,16 +166,18 @@ export default {
 } satisfies ExportedHandler<Env>
 
 /**
- * Pagina PUBLICĂ: ce se transmite acum, cu playerul sub ea. Fără cont în antet și fără cifre
- * tehnice — utilizatorul a cerut-o anume simplă.
+ * Pagina PUBLICĂ: ce se transmite acum, cu playerul sub ea. Fără cifre tehnice — utilizatorul a
+ * cerut-o anume simplă (alea sunt în panou).
+ *
+ * ⚠️ **Cu Cont în antet** (user, 14.09.2026: „trebuia să fie Cont pe ambele"). În V1 pagina de
+ * ascultare era singura fără cont — „un player simplu, nu e nevoie de login". Regula aia a căzut:
+ * ascultatul rămâne la liber, dar antetul arată la fel ca peste tot. Nu o scoate înapoi.
  */
 function paginaPublica(ctx: Ctx): string {
   return pagina(ctx, {
     titluPagina: 'Ascultă',
-    faraCont: true,
-    clasaCorp: '',
-    corp: `<div class="live">${corpPlayer()}</div>`,
-    scripturi: jsPlayer(ctx.prefix),
+    corp: `<div class="live">${corpPlayer({ doarDirect: true })}</div>`,
+    scripturi: jsPlayer(ctx.prefix, { doarDirect: true }),
   })
 }
 

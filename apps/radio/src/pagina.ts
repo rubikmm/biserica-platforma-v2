@@ -6,8 +6,12 @@ import { STIL_BIBLIOTECA } from './biblioteca-pagina.js'
 import { STIL_MIC } from './mic.js'
 
 /**
- * Carcasa pusă pe RADIO. Pagina publică n-are cont în antet — radioul se ascultă fără cont, ca și
- * directul; restul paginilor (panoul, muzica, microfonul) îl au, ca orice pagină de lucru din V2.
+ * Carcasa pusă pe RADIO.
+ *
+ * ⚠️ **Contul e în antet pe TOATE paginile, inclusiv pe cea publică** (user, 14.09.2026: „trebuia
+ * să fie Cont pe ambele… nu e nevoie, dar Cont acolo sus e o invitație"). În V1 pagina de ascultare
+ * era singura fără el. Motivul schimbării nu e tehnic: ascultatul rămâne la liber, dar omul care
+ * ascultă e chemat să-și facă un cont. Nu-l scoate.
  */
 
 export interface Ctx {
@@ -40,7 +44,6 @@ function contDin(ctx: Ctx): Cont {
 export interface OptiuniPaginaApp {
   titluPagina?: string
   corp: string
-  faraCont?: boolean
   local?: string
   scripturi?: string
 }
@@ -53,7 +56,7 @@ export function pagina(ctx: Ctx, o: OptiuniPaginaApp): string {
     acasa: `${ctx.prefix}/`,
     urlPlatforma: ctx.nav.home,
     local: STIL_EMISIE + STIL_BIBLIOTECA + STIL_MIC + (o.local ?? ''),
-    cont: o.faraCont ? null : contDin(ctx),
+    cont: contDin(ctx),
     corp: o.corp,
     versiune: pkg.version,
     modificata: ctx.modificata,

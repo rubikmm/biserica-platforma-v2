@@ -529,6 +529,20 @@ playerul cu două surse și trecere lină, **panoul de administrare** și butonu
 montat identic la `/admin` în amândouă; el nu știe care aplicație îl servește, fiindcă vorbește
 numai cu originea lui, iar fiecare aplicație compune răspunsul cerându-i celeilalte partea ei.
 
+**⚠️ Cele două pagini publice NU se poartă la fel** (user, 14.09.2026, după ce le-a văzut):
+
+- **`live` e a SLUJBEI.** Dacă nu se transmite în direct, pagina **nu pornește radioul ca să umple
+  liniștea** — scrie „Nu e nicio transmisiune în direct acum" și arată **următoarea slujbă** din
+  program („Următoarea slujbă transmisă: … — mâine, la 18:00"). Cartela radioului nici nu se
+  randează acolo. În cod: `jsPlayer(prefix, { doarDirect: true })`.
+- **`radio` e a PAROHIEI.** Acolo playerul e cel din V1: cântă radioul, iar când începe slujba
+  trece lin pe direct — omul a venit să asculte parohia, nu anume slujba.
+
+**⚠️ Contul e în antet pe AMÂNDOUĂ paginile publice** (user: „trebuia să fie Cont pe ambele… nu e
+nevoie, dar Cont acolo sus e o invitație"). În V1 pagina de ascultare era singura fără el („un
+player simplu, nu e nevoie de login"). Regula aia a căzut, și **nu din motive tehnice**: ascultatul
+rămâne la liber, dar omul care ascultă e chemat să-și facă un cont. Nu-l scoate înapoi.
+
 **Comutatorul**, cum a fost cerut: **LIVE | STOP**, plus **OPRIT** rămas doar la super-admin.
 ⚠️ **STOP nu e liniște** — oprește directul, iar radioul reia de unde rămăsese. Liniștea de tot e
 OPRIT, și a rămas la super-admin ca în V1 („radioul vreau să meargă permanent… opritul manual nu

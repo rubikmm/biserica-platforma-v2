@@ -34,9 +34,12 @@ export function corpRadio(): string {
 
 /**
  * Pagina publică de ascultare: un player SIMPLU — un singur buton play/stop, ce se aude, și atât.
- * Cifrele tehnice sunt în panou, nu aici (user, 6.09.2026: „un player simplu, nu e nevoie de login").
+ * Cifrele tehnice sunt în panou, nu aici (user, 6.09.2026: „un player simplu").
+ *
+ * Pe pagina directului (`doarDirect`) nu se randează cartela radioului: acolo radioul nu se aude
+ * niciodată, deci n-are ce căuta în pagină nici măcar ascunsă.
  */
-export function corpPlayer(): string {
+export function corpPlayer(optiuni: { doarDirect?: boolean } = {}): string {
   return `<p class="direct-stare" id="stare" data-stare="necunoscut">Verific dacă se transmite…</p>
 <div class="direct-butoane">
   ${butonPlayStop('direct-btn')}
@@ -47,7 +50,7 @@ export function corpPlayer(): string {
 <p class="direct-urmatoarea" id="urmatoarea" hidden></p>
 <audio id="audio" playsinline></audio>
 <audio id="audio-radio" playsinline preload="auto"></audio>
-${corpRadio()}`
+${optiuni.doarDirect ? '' : corpRadio()}`
 }
 
 export const STIL_PLAYER = `
@@ -76,11 +79,20 @@ export const STIL_PLAYER = `
  * Scriptul playerului. `prefix` e montajul aplicației (gol pe subdomeniu, `/live` ori `/radio`
  * prin gateway-ul de preview) — toate adresele pleacă de la el, deci pagina vorbește numai cu
  * originea ei, oricare dintre cele două aplicații ar servi-o.
+ *
+ * ⚠️ `doarDirect` face deosebirea dintre cele două pagini publice (user, 14.09.2026: „Live — dacă
+ * nu se transmite Live nu merge radio. Scrie că nu e în acest moment nicio transmisiune live /
+ * următoarea slujbă este la…"):
+ *   - pe **`live`** (`doarDirect: true`) se aude NUMAI slujba. Când nu se transmite, pagina o spune
+ *     limpede și arată următoarea slujbă din program — nu pornește radioul ca să umple liniștea;
+ *   - pe **`radio`** (implicit) se aude radioul, iar când începe slujba se trece lin pe direct,
+ *     ca în V1 — acolo omul a venit să asculte parohia, nu anume slujba.
  */
-export function jsPlayer(prefix: string): string {
+export function jsPlayer(prefix: string, optiuni: { doarDirect?: boolean } = {}): string {
   return `
 (() => {
   const P = ${JSON.stringify(prefix)};
+  const DOAR_DIRECT = ${optiuni.doarDirect ? 'true' : 'false'};
   const $ = (id) => document.getElementById(id);
   const stare = $("stare"), btn = $("asculta");
   // Un SINGUR buton: triunghi cat sta oprit, patrat cat canta. Forma aratata (data-mod) e si
@@ -402,13 +414,16 @@ export function jsPlayer(prefix: string): string {
     catch (e) { esecuri++; raporteaza("stare", { mesaj: e.message, nume: e.name, esecuri }); if (esecuri >= 3) spune("Nu pot verifica starea (" + e.message + ") — reîncerc…", "eroare"); return null; }
   }
   function aplica(s) {
-    const mod = s.mod;
+    // Pe pagina directului radioul NU se aude: aici e locul slujbei. Ce cantă radioul in spate
+    // devine, pentru pagina asta, „nu se transmite" — si atunci ea arata urmatoarea slujba.
+    const mod = (DOAR_DIRECT && s.mod === "radio") ? "oprit" : s.mod;
     arataSlujba(s); arataUrmatoarea(s);
     if (!vreau) {
       if (s.direct && s.direct.configurat === false && mod !== "radio") { spune("Transmisiunea nu e configurată încă (lipsesc cheile SFU).", "neconfigurat"); buton("play", false); }
       else if (mod === "live") { spune("Se transmite acum — apasă play.", "gata"); buton("play", true); }
       else if (mod === "radio") { spune("Radioul cântă — apasă play.", "gata"); buton("play", true); }
       else if (mod === "porneste-live") { spune("Slujba începe — apasă play.", "gata"); buton("play", true); }
+      else if (DOAR_DIRECT) { spune("Nu e nicio transmisiune în direct acum.", "liber"); buton("play", false); }
       else { spune("Nu se transmite acum.", "liber"); buton("play", false); }
       return;
     }
@@ -439,7 +454,8 @@ export function jsPlayer(prefix: string): string {
     }
     // oprit: nu e nimic pus in spate. Ramanem „acordati": cand reincepe ceva, pornim singuri.
     if (pc || rad || sursa) { inchideLive(); opresteRadio(); sursa = null; }
-    spune(s.direct && s.direct.configurat === false ? "Transmisiunea nu e configurată încă (lipsesc cheile SFU)." : "Transmisiunea s-a oprit — aștept să reînceapă…", "liber");
+    if (s.direct && s.direct.configurat === false) { spune("Transmisiunea nu e configurată încă (lipsesc cheile SFU).", "liber"); return; }
+    spune(DOAR_DIRECT ? "Nu e nicio transmisiune în direct acum — aștept să înceapă…" : "Transmisiunea s-a oprit — aștept să reînceapă…", "liber");
   }
   async function citeste() {
     if (citind) return; citind = true;

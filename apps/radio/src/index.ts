@@ -203,12 +203,15 @@ export default {
         return new Response(r.body, { status: r.status, headers: JSON_VIU })
       }
 
-      // ---------------------------------------------------- publicul
+      /*
+       * Publicul. ⚠️ **Cu Cont în antet** (user, 14.09.2026: „trebuia să fie Cont pe ambele"). În V1
+       * pagina de ascultare era singura fără cont — „un player simplu, nu e nevoie de login".
+       * Regula aia a căzut: ascultatul rămâne la liber, dar antetul arată la fel ca peste tot.
+       */
       if (cale === '/' || cale === '') {
         return html(
           pagina(ctx, {
             titluPagina: 'Ascultă',
-            faraCont: true,
             corp: `<div class="live">${corpPlayer()}</div>`,
             scripturi: jsPlayer(prefix),
           }),
