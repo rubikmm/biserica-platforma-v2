@@ -15,6 +15,8 @@ export interface Env {
   COMUNICARE: Fetcher
   /** Comutatoarele modulelor. Panoul asta e SINGURUL loc din care se scriu. */
   CONFIG?: KVNamespace
+  /** Cu el se legitimeaza pullerul de WhatsApp de pe NAS. Fara el, coada nu se deschide deloc. */
+  SECRET_INTERN?: string
   MEDIU: string
   ORIGINE_PUBLICA: string
   DOMENIU_COOKIE: string
@@ -239,6 +241,133 @@ pildă) e altceva și se dă din panoul aplicației ei.</p>
   })
 }
 
+interface AudientaRand {
+  id: string
+  nume: string
+  email: number
+  whatsapp: number
+}
+
+interface StareDispecerat {
+  livrareReala: boolean
+  audiente: AudientaRand[]
+  coadaWhatsapp: number
+  ultimaLuareDePuller: string | null
+}
+
+interface CerereTrimisa {
+  id: string
+  subject: string | null
+  created_at: string
+  destinatari: number
+  esuate: number
+}
+
+/**
+ * Dispeceratul: cele doua drumuri pe care iese un cuvant din parohie, intr-un singur ecran.
+ *
+ * ⚠️ Nu se poarta la fel: e-mailul pleaca DIN Cloudflare, pe loc; WhatsApp-ul intra in coada si
+ * pleaca DE ACASA, prin pullerul care intreaba din minut in minut. De aceea starile sunt scrise
+ * separat — un mesaj „in coada" nu inseamna „trimis", si pagina n-are voie sa para ca inseamna.
+ */
+function paginaDispecerat(o: {
+  comune: ReturnType<typeof comune>
+  stare: StareDispecerat | null
+  cereri: CerereTrimisa[]
+  potTrimite: boolean
+  csrf: string
+  prefix: string
+  mesaj?: string
+  mesajRau?: string
+}): string {
+  const s = o.stare
+  const audiente = s?.audiente ?? []
+
+  const cartonas = (titlu: string, stare: string, bine: boolean, lamurire: string) => `<div class="canal">
+      <h4>${titlu}</h4>
+      <p class="stare ${bine ? 'merge' : 'tace'}">${esc(stare)}</p>
+      <p class="ajutor">${lamurire}</p>
+    </div>`
+
+  const randAudienta = (a: AudientaRand) => `<tr>
+      <td>${esc(a.nume)}<div class="ajutor">${esc(a.id)}</div></td>
+      <td>${a.email}</td>
+      <td>${a.whatsapp}</td>
+    </tr>`
+
+  const randCerere = (c: CerereTrimisa) => `<tr>
+      <td>${esc(c.subject ?? '—')}</td>
+      <td>${c.destinatari}</td>
+      <td>${c.esuate ? `<span class="eticheta rau">${c.esuate} eșuate</span>` : '<span class="eticheta publicat">toate</span>'}</td>
+      <td>${esc(c.created_at)}</td>
+    </tr>`
+
+  const optiuniAudiente = audiente.length
+    ? audiente.map((a) => `<option value="${esc(a.id)}">${esc(a.nume)} (${a.email} e-mail · ${a.whatsapp} WhatsApp)</option>`).join('')
+    : '<option value="">— nicio audiență —</option>'
+
+  return pagina({
+    ...o.comune,
+    titluPagina: 'Dispecerat',
+    corp: `<h2>Dispecerat</h2>
+${o.mesaj ? alerta('buna', esc(o.mesaj)) : ''}
+${o.mesajRau ? alerta('rea', esc(o.mesajRau)) : ''}
+<p class="ajutor">Cele două drumuri pe care iese un cuvânt din parohie. Aplicațiile nu trimit singure
+nimic: ele cer, iar de aici pleacă — într-un singur loc, cu o singură arhivă.</p>
+
+<div class="canale">
+  ${cartonas(
+    'E-mail',
+    s?.livrareReala ? 'trimite' : 'sandbox — nu pleacă nimic',
+    !!s?.livrareReala,
+    'Prin Cloudflare Email Service. Cât timp scrie „sandbox", scrisorile se înregistrează, dar nu ies din casă.',
+  )}
+  ${cartonas(
+    'WhatsApp',
+    s ? `${s.coadaWhatsapp} în coadă` : 'necunoscut',
+    !!s && s.coadaWhatsapp === 0,
+    `Nu pleacă din Cloudflare: mesajele așteaptă aici, iar aparatul din casă (WAHA, pe NAS) le ia prin puller.
+     Ultima dată când a întrebat: ${esc(s?.ultimaLuareDePuller ?? 'niciodată')}.`,
+  )}
+</div>
+
+<h3>Audiențe</h3>
+${
+  audiente.length
+    ? `<table><thead><tr><th>Audiență</th><th>E-mail</th><th>WhatsApp</th></tr></thead><tbody>${audiente.map(randAudienta).join('')}</tbody></table>`
+    : '<p class="gol">Nicio audiență încă. Abonările aplicațiilor se strâng aici.</p>'
+}
+
+<h3>Trimite</h3>
+${
+  o.potTrimite
+    ? `<form method="post" action="${o.prefix}/dispecerat" class="module">
+  <input type="hidden" name="csrf" value="${esc(o.csrf)}">
+  <h4>Către</h4>
+  <select name="audienta" class="model">${optiuniAudiente}</select>
+  <h4>Pe ce drum</h4>
+  <div class="trepte">
+    <label class="bifa"><input type="radio" name="canal" value="email" checked> <span>E-mail <small>pleacă acum, din Cloudflare</small></span></label>
+    <label class="bifa"><input type="radio" name="canal" value="whatsapp"> <span>WhatsApp <small>intră în coadă; pleacă de acasă</small></span></label>
+  </div>
+  <h4>Subiect <small>(numai la e-mail)</small></h4>
+  <input type="text" name="subiect" maxlength="300" class="subiect">
+  <h4>Textul</h4>
+  <textarea name="text" class="indrumari" rows="8" maxlength="8000" required></textarea>
+  <p><button type="submit">Trimite</button></p>
+</form>`
+    : alerta('info', 'Poți vedea dispeceratul, dar trimiterea cere <code>communication.send</code>.')
+}
+
+<h3>Ce a plecat de aici</h3>
+${
+  o.cereri.length
+    ? `<table><thead><tr><th>Subiect</th><th>Destinatari</th><th>Livrare</th><th>Când</th></tr></thead><tbody>${o.cereri.map(randCerere).join('')}</tbody></table>`
+    : '<p class="gol">Nimic încă.</p>'
+}`,
+  })
+}
+
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const cfg = citesteConfig(env)
@@ -246,6 +375,28 @@ export default {
     const cid = correlationId(req)
     const log = new Logger({ service: 'app-admin', correlationId: cid })
     const url = new URL(req.url)
+
+    /**
+     * ⚠️ Singura usa a Dispeceratului deschisa spre internet FARA sesiune: pullerul de WhatsApp de
+     * pe NAS (`biserica-whatsapp-puller`) nu e om, n-are cont si nu poate avea unul. Se legitimeaza
+     * cu `x-xc-intern`; fara antet raspundem 404, nu 403 — ca sa nu se afle ca usa exista.
+     *
+     * Trece prin `admin` fiindca `communication-worker` n-are adresa publica si nici nu capata una:
+     * serviciile raman interne, aplicatia e BFF-ul lor. Aici nu se decide nimic, doar se duce mai
+     * departe cererea.
+     */
+    if (url.pathname.endsWith('/dispecerat/coada') || url.pathname.endsWith('/dispecerat/livrat')) {
+      const secret = (env.SECRET_INTERN ?? '').trim()
+      if (req.method !== 'POST' || !secret || req.headers.get('x-xc-intern') !== secret) {
+        return new Response('not found', { status: 404 })
+      }
+      const catre = url.pathname.endsWith('/coada') ? '/coada' : '/livrat'
+      return env.COMUNICARE.fetch(`https://comunicare.intern${catre}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-correlation-id': cid },
+        body: await req.text(),
+      })
+    }
 
     const sesiune = await sesiuneCurenta(env.IDENTITATE, req).catch(() => SESIUNE_ANONIMA)
     const principal = principalDin(sesiune)
@@ -356,6 +507,96 @@ export default {
       )
     }
 
+    // ------------------------------------------------------------- dispecerat
+    /**
+     * DISPECERATUL (user, 14.09.2026). Din A7 „comunicari" al V1 nu se porteaza aplicatia, ci
+     * doua functii: e-mailul (Cloudflare) si WhatsApp-ul (WAHA de pe NAS, prin puller). Sta AICI,
+     * in Administrare — „fara subdomeniu nou", cerut anume.
+     *
+     * Ecranul e BFF: nu tine nimic. Audientele, sabloanele, coada si arhiva stau la
+     * `communication-worker`, ca pana acum.
+     */
+    if (cale === '/dispecerat') {
+      const comuneAici = comune(env, nav, principal.email, eAdmin, sesiune, adresaPaginii(cfg, url))
+      const potVedea = await authz.can(principal, 'communication.create', SCOPE_GLOBAL)
+      if (!potVedea.allowed) {
+        return html(
+          pagina({ ...comuneAici, corp: `<h2>Dispecerat</h2>${alerta('rea', 'Îți trebuie permisiunea <code>communication.create</code>.')}` }),
+          403,
+        )
+      }
+      const potTrimite = (await authz.can(principal, 'communication.send', SCOPE_GLOBAL)).allowed
+
+      const cereComunicare = async <T>(ruta: string, corp: unknown): Promise<T | null> => {
+        const raspuns = await env.COMUNICARE.fetch(`https://comunicare.intern${ruta}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-correlation-id': cid },
+          body: JSON.stringify(corp),
+        })
+        return raspuns.ok ? ((await raspuns.json()) as T) : null
+      }
+
+      const csrf = asiguraCsrf(req, cfg.DOMENIU_COOKIE)
+      let mesaj: string | undefined
+      let mesajRau: string | undefined
+
+      if (req.method === 'POST') {
+        const problemaOrigine = verificaCsrf(req, [cfg.ORIGINE_PUBLICA], cfg.MEDIU === 'dev')
+        const formular = await req.formData()
+        const problemaJeton = verificaTokenCsrf(req, String(formular.get('csrf') ?? ''))
+        if (problemaOrigine || problemaJeton) {
+          return html(pagina({ ...comuneAici, corp: `<h2>Dispecerat</h2>${alerta('rea', problemaOrigine ?? problemaJeton ?? 'Cerere respinsă.')}` }), 403)
+        }
+        if (!potTrimite) {
+          mesajRau = 'Trimiterea cere permisiunea communication.send.'
+        } else {
+          const audienceId = String(formular.get('audienta') ?? '')
+          const channel = String(formular.get('canal') ?? 'email') === 'whatsapp' ? 'whatsapp' : 'email'
+          const subiect = String(formular.get('subiect') ?? '').trim()
+          const text = String(formular.get('text') ?? '').trim()
+          if (!audienceId || !text) {
+            mesajRau = 'Alege audiența și scrie textul.'
+          } else {
+            const raspuns = await cereComunicare<{ plecate: number; asteapta: number; suprimate: number }>('/trimite-audienta', {
+              audienceId,
+              channel,
+              subiect,
+              text,
+              sursa: 'dispecerat',
+              idempotencyKey: `dispecerat:${principal.userId}:${Date.now()}`,
+              correlationId: cid,
+            })
+            if (!raspuns) mesajRau = 'Comunicarea n-a primit cererea.'
+            else {
+              log.info('dispecerat: trimitere', { audienceId, channel, ...raspuns, deCatre: principal.userId })
+              mesaj =
+                channel === 'whatsapp'
+                  ? `${raspuns.asteapta} mesaje au intrat în coadă. Pleacă de acasă, prin puller, în cel mult un minut.`
+                  : `${raspuns.plecate} scrisori înregistrate${raspuns.suprimate ? `, ${raspuns.suprimate} oprite de preferințe` : ''}.`
+            }
+          }
+        }
+      }
+
+      const stare = await cereComunicare<StareDispecerat>('/stare', {})
+      const istoric = await cereComunicare<{ cereri: CerereTrimisa[] }>('/istoric', { sursa: 'dispecerat', limita: 15 })
+
+      return html(
+        paginaDispecerat({
+          comune: comuneAici,
+          stare,
+          cereri: istoric?.cereri ?? [],
+          potTrimite,
+          csrf: csrf.jeton,
+          prefix,
+          ...(mesaj ? { mesaj } : {}),
+          ...(mesajRau ? { mesajRau } : {}),
+        }),
+        200,
+        csrf.setCookie ? { 'set-cookie': csrf.setCookie } : {},
+      )
+    }
+
     const decizie = await authz.can(principal, 'audit.read', SCOPE_GLOBAL)
 
     if (!decizie.allowed) {
@@ -412,6 +653,7 @@ export default {
   ${alerta('info', `Automatizarea a produs <strong>${actiuni.length}</strong> acțiuni până acum. Nicio comunicare reală nu a plecat: toate adaptoarele sunt în sandbox.`)}
 
 <p><a href="${prefix}/oameni">Oameni — rolurile pe platformă</a><br>
+<a href="${prefix}/dispecerat">Dispecerat — e-mailul și WhatsApp-ul parohiei</a><br>
 <a href="${prefix}/module">Module — pornirea și oprirea chatului</a></p>
 
 <h3>Audit — ultimele acțiuni</h3>
@@ -486,6 +728,18 @@ form.module { display:block }
 .eticheta { display:inline-block; border:1px solid var(--rule); border-radius:999px;
             padding:1px 8px; font:12px ui-sans-serif,system-ui; color:var(--soft) }
 .eticheta.publicat { border-color:#2E8A4A; color:#2E8A4A }
+.eticheta.rau { border-color:var(--rosu); color:var(--rosu) }
+/* Dispecerat: cele doua canale, unul langa altul; pe telefon se aseaza unul sub altul. */
+.canale { display:flex; gap:14px; flex-wrap:wrap; margin:14px 0 4px }
+.canal { flex:1 1 0; min-width:240px; border:1px solid var(--rule); border-radius:10px; padding:12px 14px }
+.canal h4 { margin:0 0 6px; font:600 13px/1 ui-sans-serif,system-ui; letter-spacing:.04em;
+            text-transform:uppercase; color:var(--faint) }
+.canal .stare { margin:0 0 6px; font:600 17px/1.3 ui-sans-serif,system-ui }
+.canal .stare.merge { color:#2E8A4A }
+.canal .stare.tace { color:var(--rosu) }
+.module input.subiect { width:100%; padding:9px 11px; border:1px solid var(--rule); border-radius:8px;
+                        background:var(--paper); color:var(--ink); font:15px/1.45 ui-sans-serif,system-ui }
+.module h4 small { text-transform:none; letter-spacing:normal; color:var(--faint); font-weight:400 }
 /* Numirea: selectorul si butonul pe acelasi rand, ca tabelul sa nu se inalte la fiecare om. */
 form.numire { display:flex; gap:8px; align-items:center; margin:0 }
 form.numire select { padding:6px 8px; border:1px solid var(--rule); border-radius:8px;

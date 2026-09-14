@@ -47,12 +47,20 @@ Etape:
 1. ✅ **Nucleul** — monorepo, identitate fără parolă (email → cod de 6 cifre), autorizare centrală,
    contracte, evenimente, audit, automatizare, comunicare, home.
 2. ✅ **Staging** — publicat pe `*.staging.sfantul-ilie.ro`, email real prin Cloudflare Email Service.
-3. ⏳ **Portarea aplicațiilor**: ✅ calendar (A1), ✅ program (A2), ✅ tipic (A9), ✅ biblia (A10),
-   ✅ biblioteca (A12), ✅ buletin (A3), ✅ newsletter (A8), ✅ curățenie (A6),
-   ✅ **transmisiuni (A5) — împărțită în DOUĂ: `live` + `radio`** (14.09.2026), apoi A7 → A4 →
-   A13 se stinge.
+3. ✅ **Portarea aplicațiilor — ÎNCHISĂ pe 14.09.2026**: ✅ calendar (A1), ✅ program (A2),
+   ✅ tipic (A9), ✅ biblia (A10), ✅ biblioteca (A12), ✅ buletin (A3), ✅ newsletter (A8),
+   ✅ curățenie (A6), ✅ **transmisiuni (A5) — împărțită în DOUĂ: `live` + `radio`**.
    ⚠️ Biblioteca, buletinul și newsletterul au fost cerute **înaintea rândului lor** (user,
    13.09.2026).
+   **Ultimele trei nu mai sunt portări** (user, 14.09.2026, patru mesaje scurte):
+   - **A7 comunicări — NU se portează.** Din el rămân **două funcții**, e-mailul (Cloudflare) și
+     WhatsApp-ul (WAHA de pe NAS, prin puller), puse în **Dispecerat** — **anexă în `admin`**, fără
+     subdomeniu nou, „cum am făcut Contul";
+   - **A4 website „este chiar pagina de staging.sfantul-ilie.ro"**, adică `home` — gata;
+   - **A13 cont se stinge** (îi ia locul `cont` + `identity`).
+4. ⏳ **CUTOVER — pornit pe 14.09.2026** („pornește înlocuirea v1 cu v2"). Vezi NEXT, punctul 0.
+5. ⏳ **Curățenia de la final**: nicio urmă V1 pe Cloudflare, **și staging-ul dispare** (user:
+   „aștept să nu mai avem staging și să nu mai avem V1"). Poartă: backupul pe Syno.
 
 **Curățenia (A6)**: programarea voluntarilor la duminici, pe poziții, plus cele trei rapoarte care ies
 din ea. Portată pe 14.09.2026. ⚠️ **V1-ul ei NU e aplicația PHP de pe cPanel**, ci un Worker scris pe
@@ -304,7 +312,55 @@ propunerea automată, ca în V1.
 
 ## NEXT
 
-0. **⚠️ CUTOVER-UL EMISIEI — urmează, cerut de utilizator** (14.09.2026: „urmează să facem
+0. **⚠️ CUTOVER — pornit 14.09.2026, seara. Unde s-a ajuns și ce urmează.**
+
+   **Descoperirea care schimbă tot**: producția V2 **nu exista deloc** (zero `xc-*-production`),
+   deci cutover-ul nu e mutarea rutelor, e **construirea mediului de producție**. Rutarea V1 nu stă
+   pe `zones/.../workers/routes` (lista e goală), ci pe **Custom Domains** — un hostname ține de un
+   singur worker, deci comutarea e o reasignare cu drum înapoi de câteva minute.
+
+   **FĂCUT** (uneltele sunt în `infrastructure/cutover/`, toate reluabile):
+   - 12 baze D1, 6 depozite R2, 2 cozi, 1 KV — toate `xc-*-production`; migrațiile rulate (19 fișiere);
+   - blocurile `env.production` din cele 22 de configurații, umplute cu `scrie-productie.mjs`
+     (⚠️ **fără `routes`, dinadins**: ruta se adaugă la comutare, una câte una);
+   - **cei 21 de workeri de producție, publicați fără rute** — există, merg, nu-i vede nimeni.
+     Cercurile `program↔chat` și `live↔radio` cer ocolul din `publica-cu-ocol.mjs` (cod 10143);
+   - secretele: `SECRET_INTERN` **nou** pe cei patru cu acțiuni, emisia cu valorile din V1, AI Gateway;
+   - datele: R2 biblia ✓, tipic ✓ (108 MB), media (gol); **biblioteca și newsletterul au picat pe 971
+     și trebuie reluate**; buletinul era în lucru la închiderea sesiunii. Din D1: conturile și
+     asocierile (29+29) mutate; restul, cu `date-d1.mjs` (are acum răbdare la 971).
+
+   **DE FĂCUT, în ordine**:
+   1. reia copierile R2 picate: `node infrastructure/import/r2-din-v1.mjs --din xc-<b>-staging --in xc-<b>-production`
+      (biblioteca, newsletter, buletin) — **una câte una**, nimic altceva pe API în acel timp;
+   2. `node infrastructure/cutover/date-d1.mjs --scrie` pentru restul bazelor;
+   3. migrația `communication/0003` pe staging și producție, apoi publicarea Dispeceratului
+      (`admin` + `communication-worker`) pe **amândouă** mediile; `SECRET_INTERN` și pe `admin`;
+   4. pullerul de WhatsApp: `COMUNICARI_URL` → `https://admin.sfantul-ilie.ro/dispecerat` și
+      `SECRET_GATEWAY` = secretul intern al lui `admin`. **Cere recrearea containerului → #agent-server**;
+   5. **comutarea Custom Domains, una câte una, cu utilizatorul de față.** ⚠️ La `curatenie`: întâi
+      se stinge ceasul V1 (`NEWSLETTER_ACTIV`), altfel pleacă două scrisori;
+   6. abia apoi aparatul din biserică (vezi 0b) și curățenia de la final (vezi 0c).
+
+   ⚠️ **Abonații**: audiența buletinului are **un singur membru** pe staging — lista din V1 n-a fost
+   niciodată importată. User (14.09): „nu cred că avem, dar dacă sunt, importă-i" — **de căutat în
+   V1 înainte de comutarea buletinului**, altfel foaia pleacă spre nimeni.
+
+0c. **⚠️ CURĂȚENIA DE LA FINAL** (user, 14.09.2026). Trei cerințe:
+   - **nicio urmă de V1 pe Cloudflare** — se șterge tot ce n-are prefixul `xc-`. Excepție știută:
+     depozitul `biserica-transmisiuni` (11 GB), refolosit dinadins;
+   - **și staging-ul dispare** („aștept să nu mai avem staging și să nu mai avem V1");
+   - **repo-urile V1 se curăță din git la câteva zile DUPĂ trecere**, nu în ziua cutover-ului.
+   **POARTA**: `node infrastructure/cutover/backup-syno.mjs` — coboară în `/backup/_arhiva-cloudflare/<zi>/`
+   bazele D1 (și ale V1, luate prin API), depozitele R2, KV-urile, logurile AI Gateway și inventarul
+   contului. **Nimic nu se șterge până nu e scrisă și verificată.** Secretele nu se pot exporta —
+   în inventar rămân doar numele lor.
+   **`predici` și `rugaciuni`**: aplicații V1 vii, niciodată în lista celor 12 (de acolo golul A11).
+   User: „șterge și le facem când ajungem acolo" — deci intră la ștergere, se refac în V2 mai târziu.
+   **AI Gateway**: rămâne **o singură poartă, `xc-chat`** (nu se face una de producție: staging-ul
+   oricum dispare). Din `biserica` (poarta V1) se salvează logurile, apoi se șterge.
+
+0b. **⚠️ CUTOVER-UL EMISIEI — urmează, cerut de utilizator** (14.09.2026: „urmează să facem
    cutoverul", „când cutover ștergem transmisiuni"). E primul cutover al platformei, deci pașii se
    scriu aici înainte, nu se improvizează. **Nimic din ce urmează nu se face fără cerere explicită.**
    - **drumul comenzii e PROBAT pe staging** (14.09.2026), prin API-ul mașinii: o telemetrie de
@@ -503,6 +559,34 @@ parohiei trăiesc încă aplicațiile V1. Mutarea rutelor rămâne pas explicit,
   respins → SSO pe a doua aplicație → intrare repetată fără dublarea contului → publicare
   eveniment → outbox → coadă → automatizare → livrare simulată. 31 de teste unitare, typecheck
   curat pe 20 de pachete.
+
+## DISPECERATUL — ce a rămas din A7 „comunicări" (14.09.2026)
+
+**Nu e o portare și nu e o aplicație**: e o **anexă în `admin`**, la `/dispecerat` (user: „pe
+Dispecerat le-aș pune", „nu vreau să mai am un alt subdomeniu", „dispeceratul este o anexă în
+admin"). Din A7 se iau **două funcții**: e-mailul (Cloudflare) și WhatsApp-ul (WAHA de pe NAS).
+
+Ce are ecranul: **cele două canale scrise separat** (e-mailul: „trimite" / „sandbox"; WhatsApp:
+câte-s în coadă + când a întrebat ultima oară pullerul), **audiențele** cu membri pe canal,
+**trimiterea** către o audiență și **arhiva** a ce a plecat de acolo. Ecranul e BFF — nu ține nimic.
+
+Patru lucruri care se încalcă ușor:
+
+1. **⚠️ „În coadă" NU înseamnă „trimis".** E-mailul pleacă din Cloudflare, pe loc; WhatsApp-ul pleacă
+   **de acasă**, prin puller. Paginile n-au voie să le scrie la fel — e păzit de probe.
+2. **⚠️ Coada stă în `deliveries`**, nu într-un tabel nou: arhiva a ce a plecat rămâne **una
+   singură**. Stări: `in_asteptare` → `in_lucru` (luat de puller) → `sent` / `failed`
+   (migrația `communication/0003`).
+3. **⚠️ Ușa pullerului e singurul loc din Administrare fără sesiune.** `admin/dispecerat/coada` și
+   `/livrat`, numai POST, legitimare cu `x-xc-intern`; fără el **404, nu 403**. Trece prin `admin`
+   fiindcă `communication-worker` n-are adresă publică și nici nu capătă una. Probe:
+   `tests/dispecerat.test.ts` (5), inclusiv „dacă workerul n-are secret, ușa e închisă pentru toți".
+4. **Drepturi**: vederea cere `communication.create` (vine cu `admin`), trimiterea
+   `communication.send` — care azi vine **numai cu super-admin**. ⚠️ **De întrebat utilizatorul**
+   dacă părintele (administrator) trebuie să poată trimite: e o schimbare de model, nu o potriveală.
+
+⚠️ **Pullerul nu e încă întors spre V2**: `COMUNICARI_URL` arată spre `comunicari.sfantul-ilie.ro`.
+Schimbarea cere recrearea containerului → **#agent-server**, nu acest agent.
 
 ## LIVE și RADIO (A5 din V1) — emisia parohiei, în două aplicații
 

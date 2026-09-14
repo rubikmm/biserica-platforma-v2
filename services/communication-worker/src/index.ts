@@ -210,6 +210,103 @@ export default {
         return json({ livrari: randuri })
       }
 
+      // ------------------------------------------------------------ Dispeceratul: trimitere pe audienta
+      /**
+       * Scrisoare compusa de OM, in Dispecerat, catre o audienta intreaga. Deosebirea fata de
+       * `/cerere` e ca nu cere sablon: textul vine din pagina. Deosebirea fata de `/trimite` e ca
+       * destinatarii nu se numesc, ci se afla din audienta.
+       *
+       * ⚠️ Pe WhatsApp nu pleaca nimic de aici: mesajele intra in coada, iar pullerul de pe NAS le ia.
+       */
+      if (cale === '/trimite-audienta') {
+        const date = z
+          .object({
+            audienceId: z.string().min(1),
+            channel: z.enum(['email', 'whatsapp']),
+            subiect: z.string().max(300).default(''),
+            text: z.string().min(1),
+            sursa: z.string().min(1).max(40).default('dispecerat'),
+            idempotencyKey: z.string().min(1),
+            correlationId: z.string().min(1),
+          })
+          .parse(await req.json())
+
+        const existent = await unul<{ id: string }>(env.DB, `SELECT id FROM requests WHERE idempotency_key = ?`, [date.idempotencyKey])
+        if (existent) return json({ ok: true, requestId: existent.id, reluat: true })
+
+        const requestId = id()
+        await ruleaza(
+          env.DB,
+          `INSERT INTO requests (id, audience_id, template_id, channel, idempotency_key, correlation_id, created_at, sursa, subject, body_html)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [requestId, date.audienceId, `direct:${date.sursa}`, date.channel, date.idempotencyKey, date.correlationId, acum(), date.sursa, date.subiect, date.text],
+        )
+
+        const lista = await destinatari(env.DB, date.audienceId, date.channel)
+        let plecate = 0
+        let asteapta = 0
+        let suprimate = 0
+        const postas = date.channel === 'email' ? alegePostasul(env, livrareReala, (m) => log.warn(m)) : null
+
+        for (const d of lista) {
+          if (d.opted_out === 1) {
+            await ruleaza(env.DB, `INSERT INTO deliveries (id, request_id, channel, recipient, status, provider, created_at, user_id) VALUES (?, ?, ?, ?, 'suppressed', ?, ?, ?)`, [id(), requestId, date.channel, d.adresa, postas?.nume ?? 'whatsapp-puller', acum(), d.user_id])
+            suprimate++
+            continue
+          }
+          if (date.channel === 'whatsapp') {
+            // Intra in coada. Cine chiar trimite e pullerul din casa, nu workerul asta.
+            await ruleaza(env.DB, `INSERT INTO deliveries (id, request_id, channel, recipient, status, provider, created_at, user_id, corp) VALUES (?, ?, 'whatsapp', ?, 'in_asteptare', 'whatsapp-puller', ?, ?, ?)`, [id(), requestId, d.adresa, acum(), d.user_id, date.text])
+            asteapta++
+            continue
+          }
+          const rezultat = await postas!.trimite({ catre: d.adresa, subiect: date.subiect || '(fără subiect)', text: date.text, correlationId: date.correlationId })
+          await ruleaza(env.DB, `INSERT INTO deliveries (id, request_id, channel, recipient, status, provider, created_at, user_id, detaliu) VALUES (?, ?, 'email', ?, ?, ?, ?, ?, ?)`, [id(), requestId, d.adresa, rezultat.stare, postas!.nume, acum(), d.user_id, rezultat.detaliu.slice(0, 300)])
+          plecate++
+        }
+        log.info('dispecerat: trimitere pe audienta', { requestId, canal: date.channel, plecate, asteapta, suprimate })
+        return json({ ok: true, requestId, plecate, asteapta, suprimate, adaptor: postas?.nume ?? 'whatsapp-puller' })
+      }
+
+      // ------------------------------------------------------------ coada WhatsApp (pullerul de pe NAS)
+      if (cale === '/coada') {
+        const date = z.object({ channel: z.enum(['whatsapp']).default('whatsapp'), limita: z.number().int().min(1).max(50).default(20) }).parse(await req.json().catch(() => ({})))
+        const randuri = await toate<{ id: string; recipient: string; corp: string | null }>(
+          env.DB,
+          `SELECT id, recipient, corp FROM deliveries WHERE channel = ? AND status = 'in_asteptare' ORDER BY created_at LIMIT ?`,
+          [date.channel, date.limita],
+        )
+        for (const r of randuri) {
+          await ruleaza(env.DB, `UPDATE deliveries SET status = 'in_lucru', luat_la = ?, incercari = incercari + 1 WHERE id = ?`, [acum(), r.id])
+        }
+        return json({ mesaje: randuri.map((r) => ({ id: r.id, catre: r.recipient, text: r.corp ?? '' })) })
+      }
+
+      if (cale === '/livrat') {
+        const date = z.object({ id: z.string().min(1), stare: z.enum(['sent', 'failed']), detaliu: z.string().max(300).default('') }).parse(await req.json())
+        await ruleaza(env.DB, `UPDATE deliveries SET status = ?, detaliu = ?, livrat_la = ? WHERE id = ?`, [date.stare, date.detaliu, acum(), date.id])
+        return json({ ok: true })
+      }
+
+      // ------------------------------------------------------------ starea dispeceratului
+      if (cale === '/stare') {
+        const audiente = await toate(
+          env.DB,
+          `SELECT a.id, a.nume,
+                  (SELECT count(*) FROM audience_members m WHERE m.audience_id = a.id AND m.channel = 'email') AS email,
+                  (SELECT count(*) FROM audience_members m WHERE m.audience_id = a.id AND m.channel = 'whatsapp') AS whatsapp
+           FROM audiences a ORDER BY a.nume`,
+        )
+        const coada = await unul<{ n: number }>(env.DB, `SELECT count(*) AS n FROM deliveries WHERE channel = 'whatsapp' AND status IN ('in_asteptare','in_lucru')`)
+        const ultimaLuare = await unul<{ luat_la: string | null }>(env.DB, `SELECT luat_la FROM deliveries WHERE luat_la IS NOT NULL ORDER BY luat_la DESC LIMIT 1`)
+        return json({
+          livrareReala,
+          audiente,
+          coadaWhatsapp: coada?.n ?? 0,
+          ultimaLuareDePuller: ultimaLuare?.luat_la ?? null,
+        })
+      }
+
       if (cale === '/preferinte') {
         const date = z.object({ userId: z.string().min(1), channel: z.enum(['email', 'whatsapp']), optedOut: z.boolean() }).parse(await req.json())
         await ruleaza(
