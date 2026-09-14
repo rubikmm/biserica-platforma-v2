@@ -5,7 +5,7 @@
  * `/backup/_setup/cloudflare.env`).
  *
  *   node infrastructure/import/r2-din-v1.mjs --din <bucket> --in <bucket>
- *                                            [--fire 6] [--doar <prefix>] [--iar]
+ *                                            [--fire 6] [--doar <prefix>] [--iar] [--socoteala]
  *
  * Folosit pana acum:
  *   biserica-biblioteca  -> xc-biblioteca-staging   2.996 obiecte, 164 MB (13.09.2026)
@@ -31,6 +31,8 @@ if (!DIN || !IN) {
 const FIRE = Number(opt('fire', '6'))
 const DOAR = opt('doar')
 const IAR = are('iar')
+/** Doar numara ce lipseste, fara sa copieze — ca sa se vada starea fara sa se atinga nimic. */
+const SOCOTEALA = are('socoteala')
 
 const CONT = process.env.CLOUDFLARE_ACCOUNT_ID
 const TOKEN = process.env.CLOUDFLARE_API_TOKEN
@@ -60,18 +62,35 @@ function tipDupaNume(cheie) {
   return 'application/octet-stream'
 }
 
-/** Cererile catre API pica din cand in cand cu 5xx; se incearca de trei ori, cu rabdare. */
-async function cuRabdare(ce, incercari = 3) {
+const asteapta = (ms) => new Promise((s) => setTimeout(s, ms))
+
+/**
+ * Cererile catre API pica din cand in cand cu 5xx; se incearca de mai multe ori, cu rabdare.
+ * La 429 (cod 971, „throttling") rabdarea e alta: R2 taie robinetul pentru zeci de secunde,
+ * iar reincercarile scurte doar aduc alte 429. Deci: pauze lungi, si tot firul asteapta —
+ * degeaba se potoleste un fir daca celelalte trei bat in continuare in aceeasi usa.
+ */
+let tacere = 0 // momentul (ms) pana cand toate firele stau pe loc
+async function cuRabdare(ce, incercari = 6) {
   let ultima
   for (let i = 0; i < incercari; i++) {
+    const deAsteptat = tacere - Date.now()
+    if (deAsteptat > 0) await asteapta(deAsteptat)
     try {
       const r = await ce()
       if (r.ok || r.status === 404) return r
-      ultima = new Error(`HTTP ${r.status} ${await r.text().catch(() => '')}`)
+      const text = await r.text().catch(() => '')
+      ultima = new Error(`HTTP ${r.status} ${text}`)
+      if (r.status === 429) {
+        const dinAntet = Number(r.headers.get('retry-after'))
+        const pauza = (dinAntet > 0 ? dinAntet * 1000 : 5000) * (i + 1)
+        tacere = Math.max(tacere, Date.now() + pauza)
+        continue
+      }
     } catch (e) {
       ultima = e
     }
-    await new Promise((s) => setTimeout(s, 800 * (i + 1)))
+    await asteapta(800 * (i + 1))
   }
   throw ultima
 }
@@ -105,6 +124,7 @@ console.log(
   `${sursa.length} obiecte in sursa (${omeneste(total)}); ` +
     `${tinta.size} deja in tinta; de copiat ${deFacut.length}`,
 )
+if (SOCOTEALA) process.exit(deFacut.length === 0 ? 0 : 2)
 if (deFacut.length === 0) {
   console.log('nimic de facut')
   process.exit(0)

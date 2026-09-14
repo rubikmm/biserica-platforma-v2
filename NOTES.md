@@ -326,13 +326,15 @@ propunerea automată, ca în V1.
    - **cei 21 de workeri de producție, publicați fără rute** — există, merg, nu-i vede nimeni.
      Cercurile `program↔chat` și `live↔radio` cer ocolul din `publica-cu-ocol.mjs` (cod 10143);
    - secretele: `SECRET_INTERN` **nou** pe cei patru cu acțiuni, emisia cu valorile din V1, AI Gateway;
-   - datele: R2 biblia ✓, tipic ✓ (108 MB), media (gol); **biblioteca și newsletterul au picat pe 971
-     și trebuie reluate**; buletinul era în lucru la închiderea sesiunii. Din D1: conturile și
-     asocierile (29+29) mutate; restul, cu `date-d1.mjs` (are acum răbdare la 971).
+   - datele: **R2 GATA în întregime** (14.09.2026, 21:30) — toate cele **6.310 obiecte, 1,97 GB**, în
+     `xc-*-production`: biblia 82, tipic 3 (108 MB), media 0, biblioteca 2.996, newsletter 1.423,
+     buletin 1.891. Verificat prin relistarea ambelor capete (`--socoteala`), nu după log.
+     Din D1: conturile și asocierile (29+29) mutate; restul, cu `date-d1.mjs` (are acum răbdare la 971).
 
    **DE FĂCUT, în ordine**:
-   1. reia copierile R2 picate: `node infrastructure/import/r2-din-v1.mjs --din xc-<b>-staging --in xc-<b>-production`
-      (biblioteca, newsletter, buletin) — **una câte una**, nimic altceva pe API în acel timp;
+   1. ~~reia copierile R2 picate~~ **✓ FĂCUT 14.09.2026, 21:30** (vezi mai sus). Regula rămâne:
+      **un singur transfer mare o dată**, nimic altceva pe API în acel timp — inclusiv hookul de
+      backup de la `git push`, care bate pe același API al contului.
    2. `node infrastructure/cutover/date-d1.mjs --scrie` pentru restul bazelor;
    3. migrația `communication/0003` pe staging și producție, apoi publicarea Dispeceratului
       (`admin` + `communication-worker`) pe **amândouă** mediile; `SECRET_INTERN` și pe `admin`;
