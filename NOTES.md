@@ -583,6 +583,13 @@ câteva zile înainte de cutover. **La curățenia de la final bucketul ăsta NU
 V1 cu aceleași valori, dinadins: așa aparatul din biserică are de schimbat **numai adresa** la
 cutover, nu și parolele.
 
+**Adresa veche a indicelui, ținută dinadins**: aparatul cere duratele de la Worker, de pe
+`GET /v1/radio/biblioteca` (`aparat/worker.py: ia_indice`) — cu ele își ține ceasul radioului în
+boxe. Muzica stă acum pe `radio` (`/v1/biblioteca`), deci `live` răspunde și pe adresa veche,
+luând indicele prin binding-ul RADIO. Fără ea, promisiunea „aparatul schimbă NUMAI adresa" era
+falsă: daemonul ar fi mers pe indicele din cache, scriind „nu pot lua indicele de la Worker" la
+fiecare rundă. Probat pe staging: 777 de piese, aceeași semnătură ca în V1 (`eb7e0df1747616c0`).
+
 **Ce NU s-a adus din V1**: `/schema` (pagina de documentație a împărțirii — nu mai descrie
 realitatea, aplicația e acum două) și `/intern/aparat/continut` a rămas ca o adresă care răspunde
 politicos, dar **nu mai scrie indicele**: de când muzica stă în depozit, adevărul e acolo, nu pe

@@ -12,6 +12,7 @@
  *   /admin/stare|inventar|comanda   datele și comenzile panoului                (broadcast.manage)
  *   /api/…                       ce cere playerul din pagină (stare, semnalizare, bătăi, jurnal)
  *   /v1/stare                    PUBLIC, JSON: ce transmite parohia acum (contractul platformei)
+ *   /v1/radio/biblioteca         PUBLIC, JSON: indicele muzicii, pe adresa veche a aparatului
  *   /intern/aparat/…             aparatul din biserică, cu `APARAT_SECRET`
  *   /intern/live|mic/whip        emițătorul WHIP al aparatului, cu `WHIP_SECRET`
  *   /_intern/…                   numai pentru workerul radioului (Service Binding)
@@ -85,6 +86,19 @@ export default {
       // ---------------------------------------------------- contractul public
       if (cale === '/v1/stare' && req.method === 'GET') {
         return Response.json(await stareEmisie(env), { headers: JSON_VIU })
+      }
+      /*
+       * ⚠️ Indicele bibliotecii pe adresa VECHE, a aparatului. Muzica s-a mutat pe `radio`
+       * (`/v1/biblioteca`), dar daemonul din biserică cere indicele de la Worker, de pe
+       * `/v1/radio/biblioteca` (`aparat/worker.py: ia_indice`) — și în el stau duratele exacte cu
+       * care își ține ceasul radioului în boxe. Fără adresa asta, aparatul rămâne pe indicele din
+       * cache și scrie „nu pot lua indicele de la Worker" la fiecare rundă.
+       *
+       * Aici se ține promisiunea din NOTES: **aparatul are de schimbat NUMAI adresa**, nimic din
+       * codul lui. Indicele vine prin binding-ul RADIO, nu prin internet.
+       */
+      if (cale === '/v1/radio/biblioteca' && req.method === 'GET') {
+        return Response.json(await indiceRadio(env), { headers: JSON_VIU })
       }
 
       // ---------------------------------------------------- ce cere playerul din pagină
