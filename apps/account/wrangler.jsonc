@@ -36,6 +36,8 @@
         "URL_BIBLIOTECA": "https://biblioteca.staging.sfantul-ilie.ro",
         "URL_BULETIN": "https://buletin.staging.sfantul-ilie.ro",
         "URL_NEWSLETTER": "https://newsletter.staging.sfantul-ilie.ro",
+        "URL_LIVE": "https://live.staging.sfantul-ilie.ro",
+        "URL_RADIO": "https://radio.staging.sfantul-ilie.ro",
         "URL_CURATENIE": "https://curatenie.staging.sfantul-ilie.ro",
         "URL_PROGRAM": "https://program.staging.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.staging.sfantul-ilie.ro"
@@ -60,6 +62,8 @@
         "URL_BIBLIOTECA": "https://biblioteca.sfantul-ilie.ro",
         "URL_BULETIN": "https://buletin.sfantul-ilie.ro",
         "URL_NEWSLETTER": "https://newsletter.sfantul-ilie.ro",
+        "URL_LIVE": "https://live.sfantul-ilie.ro",
+        "URL_RADIO": "https://radio.sfantul-ilie.ro",
         "URL_CURATENIE": "https://curatenie.sfantul-ilie.ro",
         "URL_PROGRAM": "https://program.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.sfantul-ilie.ro"

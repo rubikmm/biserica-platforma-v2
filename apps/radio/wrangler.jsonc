@@ -1,58 +1,57 @@
 {
-  // Tipicul (A9 din V1): randuiala slujbei zilei — ce se canta si ce se citeste.
-  // Biblioteca de citit: nu decide nimic si nu anunta nimic, atarna de calendar.
-  // Proprietar al celor trei carti (`xc-tipic-*`): Randuiala Tipicului (ROEA), Anuarul liturgic
-  // si tipiconal (IBMO) si Mineiul. Ziua liturgica, sfintii si textul pericopelor se CER de la
-  // calendar (legatura de serviciu), nu se tin aici.
+  // RADIO — muzica psaltica a parohiei, plus tot ce era pe `transmisiuni` in V1: playerul public,
+  // panoul de comanda, muzica radioului si microfonul bisericii (cerere user, 14.09.2026).
+  // Cealalta jumatate, `live`, tine creierul: starea emisiei, aparatul din biserica si SFU-ul.
+  //
+  // Trei lucruri de stiut inainte sa umbli aici:
+  //  - **radioul nu are nevoie de niciun aparat**: muzica sta in depozit, iar obiectul durabil
+  //    `Radio` tine doar CEASUL (ce selectie curge si de cand). Ce se aude se socoteste, nu se
+  //    scrie nicaieri — de aceea radioul merge singur la nesfarsit, fara cron;
+  //  - **directul nu se comanda de aici**: panoul trimite comenzile la `xc-live`, care tine starea.
+  //    Daca aplicatia asta ajunge sa porneasca singura directul, cele doua se contrazic;
+  //  - **⚠️ depozitul e cel din V1, REFOLOSIT** (hotarare user, 14.09.2026: „cei 11gb poti sa ii
+  //    folosesti… ca sa nu mai faci atatea operatii"). E o abatere STIUTA de la „nu se refoloseste
+  //    nimic din V1, tot ce e nou poarta prefixul `xc-`": am fi copiat 11 GB dintr-un bucket in
+  //    altul cu cateva zile inainte de cutover. Bucketul are trei directoare — `mp3player/` (muzica,
+  //    a noastra), `remote/` (inregistrarile aparatului) si `predici/` (arhiva) — iar codul nu iese
+  //    niciodata din primul. La curatenia de la final, bucketul asta NU se sterge: se pastreaza.
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "xc-tipic",
+  "name": "xc-radio",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-25",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
   "workers_dev": false,
-  // Data publicarii, pentru randul de versiune din subsol.
   "version_metadata": { "binding": "VERSIUNE" },
 
   "vars": {
     "MEDIU": "dev",
     "ORIGINE_PUBLICA": "https://rubik:8474",
     "DOMENIU_COOKIE": "",
-    "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
-    // Secretul dintre workerii nostri, pentru `/_actiuni`. Pe staging: `wrangler secret put`.
-    "SECRET_INTERN": "dev-actiuni-local"
+    "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
   },
 
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "xc-tipic-staging",
-      "database_id": "8c5ab60e-d3d8-4e96-aa89-f52492fdd83e",
-      "migrations_dir": "../../infrastructure/migrations/tipic"
-    }
-  ],
+  // Ceasul radioului: o singura cheie, cu selectia si clipa de la care curge.
+  "durable_objects": {
+    "bindings": [{ "name": "RADIO", "class_name": "Radio" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Radio"] }],
 
-
-  // Cartile scanate (PDF): ROEA, Anuarul si Mineiul pe noiembrie — copiate din bucketul V1
-  // `biserica-tipic` pe 13.09.2026, in depozit NOU.
-  "r2_buckets": [
-    { "binding": "TEXTE", "bucket_name": "xc-tipic-staging" }
-  ],
+  "r2_buckets": [{ "binding": "FISIERE", "bucket_name": "biserica-transmisiuni" }],
 
   "services": [
     { "binding": "IDENTITATE", "service": "xc-identity" },
     { "binding": "AUTORIZARE", "service": "xc-authz" },
-    { "binding": "AUDIT", "service": "xc-audit" },
-    { "binding": "CALENDAR", "service": "xc-calendar" }
+    { "binding": "LIVE", "service": "xc-live" }
   ],
 
   "env": {
     "staging": {
-      "name": "xc-tipic-staging",
+      "name": "xc-radio-staging",
       "version_metadata": { "binding": "VERSIUNE" },
       "vars": {
         "MEDIU": "staging",
-        "ORIGINE_PUBLICA": "https://tipic.staging.sfantul-ilie.ro",
+        "ORIGINE_PUBLICA": "https://radio.staging.sfantul-ilie.ro",
         "DOMENIU_COOKIE": ".staging.sfantul-ilie.ro",
         "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
         "URL_HOME": "https://staging.sfantul-ilie.ro",
@@ -69,31 +68,23 @@
         "URL_RADIO": "https://radio.staging.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.staging.sfantul-ilie.ro"
       },
-      "d1_databases": [
-        {
-          "binding": "DB",
-          "database_name": "xc-tipic-staging",
-          "database_id": "8c5ab60e-d3d8-4e96-aa89-f52492fdd83e",
-          "migrations_dir": "../../infrastructure/migrations/tipic"
-        }
-      ],
-      "r2_buckets": [
-        { "binding": "TEXTE", "bucket_name": "xc-tipic-staging" }
-      ],
+      "durable_objects": {
+        "bindings": [{ "name": "RADIO", "class_name": "Radio" }]
+      },
+      "r2_buckets": [{ "binding": "FISIERE", "bucket_name": "biserica-transmisiuni" }],
       "services": [
         { "binding": "IDENTITATE", "service": "xc-identity-staging" },
         { "binding": "AUTORIZARE", "service": "xc-authz-staging" },
-        { "binding": "AUDIT", "service": "xc-audit-staging" },
-        { "binding": "CALENDAR", "service": "xc-calendar-staging" }
+        { "binding": "LIVE", "service": "xc-live-staging" }
       ],
-      "routes": [{ "pattern": "tipic.staging.sfantul-ilie.ro", "custom_domain": true }]
+      "routes": [{ "pattern": "radio.staging.sfantul-ilie.ro", "custom_domain": true }]
     },
     "production": {
-      "name": "xc-tipic-production",
+      "name": "xc-radio-production",
       "version_metadata": { "binding": "VERSIUNE" },
       "vars": {
         "MEDIU": "production",
-        "ORIGINE_PUBLICA": "https://tipic.sfantul-ilie.ro",
+        "ORIGINE_PUBLICA": "https://radio.sfantul-ilie.ro",
         "DOMENIU_COOKIE": ".sfantul-ilie.ro",
         "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
         "URL_HOME": "https://sfantul-ilie.ro",
@@ -110,7 +101,7 @@
         "URL_RADIO": "https://radio.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.sfantul-ilie.ro"
       }
-      // Ruta de productie (`tipic.sfantul-ilie.ro`) ramane a lui A9 pana la cutover-ul explicit.
+      // ⚠️ Nicio ruta de productie pana la cutover-ul cerut anume.
     }
   }
 }

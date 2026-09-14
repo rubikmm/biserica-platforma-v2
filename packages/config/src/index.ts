@@ -34,6 +34,9 @@ export const VariabileComune = z.object({
   URL_BIBLIOTECA: z.string().default(''),
   URL_BULETIN: z.string().default(''),
   URL_NEWSLETTER: z.string().default(''),
+  /** Emisia parohiei, doua aplicatii: directul din biserica si radioul. */
+  URL_LIVE: z.string().default(''),
+  URL_RADIO: z.string().default(''),
   URL_ADMIN: z.string().default(''),
 })
 export type VariabileComune = z.infer<typeof VariabileComune>
@@ -60,6 +63,8 @@ export interface Navigatie {
   biblioteca: string
   buletin: string
   newsletter: string
+  live: string
+  radio: string
   admin: string
 }
 
@@ -75,6 +80,8 @@ export function navigatieDin(cfg: VariabileComune): Navigatie {
     biblioteca: cfg.URL_BIBLIOTECA || '/biblioteca',
     buletin: cfg.URL_BULETIN || '/buletin',
     newsletter: cfg.URL_NEWSLETTER || '/newsletter',
+    live: cfg.URL_LIVE || '/live',
+    radio: cfg.URL_RADIO || '/radio',
     admin: cfg.URL_ADMIN || '/admin',
   }
 }

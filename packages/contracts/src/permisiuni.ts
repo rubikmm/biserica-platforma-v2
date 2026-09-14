@@ -20,6 +20,13 @@ export const CHEI_PERMISIUNI = [
   // dupa ce pangarul vedea cererea — vezi tabelul cererilor de acces al Bibliotecii).
   'library.manage',
   'library.borrow',
+  /*
+   * Emisia parohiei — LIVE-ul din biserica si radioul. O SINGURA cheie pentru amandoua
+   * aplicatiile (`live` si `radio`), fiindca panoul e unul singur si comanda un singur aparat:
+   * cine poate porni directul poate schimba si muzica. In V1 poarta era rolul `admin` verificat
+   * local, cu parola aplicatiei; aici o hotaraste autorizarea centrala, ca peste tot.
+   */
+  'broadcast.manage',
   'communication.create',
   'communication.send',
   'automation.manage',
@@ -66,6 +73,8 @@ export const PERMISIUNI_IMPLICITE: Record<Rol, readonly Permisiune[]> = {
     'bulletin.publish',
     'cleaning.manage',
     'library.manage',
+    // Parintele comanda emisia din panou — in V1 `/control` cerea chiar rolul `admin`.
+    'broadcast.manage',
     'communication.create',
     'automation.manage',
     'audit.read',

@@ -12,6 +12,8 @@ export interface Env {
   BIBLIOTECA?: Fetcher
   BULETIN?: Fetcher
   NEWSLETTER?: Fetcher
+  LIVE?: Fetcher
+  RADIO?: Fetcher
   ADMIN: Fetcher
   MEDIU: string
 }
@@ -31,6 +33,8 @@ function alegeAplicatia(env: Env, cale: string): Fetcher | null {
   if (cale === '/biblioteca' || cale.startsWith('/biblioteca/')) return env.BIBLIOTECA ?? null
   if (cale === '/buletin' || cale.startsWith('/buletin/')) return env.BULETIN ?? null
   if (cale === '/newsletter' || cale.startsWith('/newsletter/')) return env.NEWSLETTER ?? null
+  if (cale === '/live' || cale.startsWith('/live/')) return env.LIVE ?? null
+  if (cale === '/radio' || cale.startsWith('/radio/')) return env.RADIO ?? null
   if (cale === '/admin' || cale.startsWith('/admin/')) return env.ADMIN
   return env.HOME
 }

@@ -1,0 +1,118 @@
+{
+  // LIVE — transmisiunea in direct a slujbelor. Una din cele doua aplicatii in care s-a impartit
+  // `transmisiuni` din V1 (cerere user, 14.09.2026); cealalta e `radio`.
+  //
+  // Trei lucruri de stiut inainte sa umbli aici:
+  //  - **aici sta CREIERUL**: starea emisiei, aparatul din biserica si semnalizarea WebRTC. `radio`
+  //    tine doar muzica si ceasul ei, si CERE de aici cand e vorba de direct. LIVE si radioul se
+  //    exclud, iar hotararea e mereu a acestei aplicatii;
+  //  - **sunetul nu trece prin worker**: aparatul emite WHIP catre Cloudflare Realtime SFU, iar
+  //    ascultatorii trag pista de acolo. Workerul schimba doar SDP-uri. Daca cineva trece sunetul
+  //    prin worker, platim fiecare ascultator;
+  //  - **obiectele durabile nu sunt resurse de cont**: traiesc cu workerul, nu apar in registru.
+  //    `Direct` = cine emite (doua canale: slujba si microfonul); `Aparat` = comanda + telemetria;
+  //    `Ascultatori` = cati asculta acum (bataile paginilor).
+  //
+  // Secrete (wrangler secret put): SFU_APP_ID, SFU_APP_SECRET (aplicatia Realtime din cont),
+  // WHIP_SECRET (parola emitatorului) si APARAT_SECRET (parola cu care aparatul vorbeste pe
+  // /intern/aparat/*). Fara ele pagina spune limpede „nu e configurata inca".
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "xc-live",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "workers_dev": false,
+  "version_metadata": { "binding": "VERSIUNE" },
+
+  "vars": {
+    "MEDIU": "dev",
+    "ORIGINE_PUBLICA": "https://rubik:8474",
+    "DOMENIU_COOKIE": "",
+    "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
+  },
+
+  "durable_objects": {
+    "bindings": [
+      { "name": "DIRECT", "class_name": "Direct" },
+      { "name": "APARAT", "class_name": "Aparat" },
+      { "name": "ASCULTATORI", "class_name": "Ascultatori" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Direct", "Aparat", "Ascultatori"] }],
+
+  // RADIO: ceasul si muzica stau dincolo — le cerem prin binding, nu prin internet.
+  // PROGRAM: urmatoarea slujba, pentru pagina publica („Următoarea slujbă transmisă: …").
+  "services": [
+    { "binding": "IDENTITATE", "service": "xc-identity" },
+    { "binding": "AUTORIZARE", "service": "xc-authz" },
+    { "binding": "RADIO", "service": "xc-radio" },
+    { "binding": "PROGRAM", "service": "xc-program" }
+  ],
+
+  "env": {
+    "staging": {
+      "name": "xc-live-staging",
+      "version_metadata": { "binding": "VERSIUNE" },
+      "vars": {
+        "MEDIU": "staging",
+        "ORIGINE_PUBLICA": "https://live.staging.sfantul-ilie.ro",
+        "DOMENIU_COOKIE": ".staging.sfantul-ilie.ro",
+        "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
+        "URL_HOME": "https://staging.sfantul-ilie.ro",
+        "URL_CONT": "https://cont.staging.sfantul-ilie.ro",
+        "URL_CALENDAR": "https://calendar.staging.sfantul-ilie.ro",
+        "URL_PROGRAM": "https://program.staging.sfantul-ilie.ro",
+        "URL_CURATENIE": "https://curatenie.staging.sfantul-ilie.ro",
+        "URL_TIPIC": "https://tipic.staging.sfantul-ilie.ro",
+        "URL_BIBLIA": "https://biblia.staging.sfantul-ilie.ro",
+        "URL_BIBLIOTECA": "https://biblioteca.staging.sfantul-ilie.ro",
+        "URL_BULETIN": "https://buletin.staging.sfantul-ilie.ro",
+        "URL_NEWSLETTER": "https://newsletter.staging.sfantul-ilie.ro",
+        "URL_LIVE": "https://live.staging.sfantul-ilie.ro",
+        "URL_RADIO": "https://radio.staging.sfantul-ilie.ro",
+        "URL_ADMIN": "https://admin.staging.sfantul-ilie.ro"
+      },
+      "durable_objects": {
+        "bindings": [
+          { "name": "DIRECT", "class_name": "Direct" },
+          { "name": "APARAT", "class_name": "Aparat" },
+          { "name": "ASCULTATORI", "class_name": "Ascultatori" }
+        ]
+      },
+      "services": [
+        { "binding": "IDENTITATE", "service": "xc-identity-staging" },
+        { "binding": "AUTORIZARE", "service": "xc-authz-staging" },
+        { "binding": "RADIO", "service": "xc-radio-staging" },
+        { "binding": "PROGRAM", "service": "xc-program-staging" }
+      ],
+      "routes": [{ "pattern": "live.staging.sfantul-ilie.ro", "custom_domain": true }]
+    },
+    "production": {
+      "name": "xc-live-production",
+      "version_metadata": { "binding": "VERSIUNE" },
+      "vars": {
+        "MEDIU": "production",
+        "ORIGINE_PUBLICA": "https://live.sfantul-ilie.ro",
+        "DOMENIU_COOKIE": ".sfantul-ilie.ro",
+        "EMAIL_SUPERADMIN": "rubikmm@gmail.com",
+        "URL_HOME": "https://sfantul-ilie.ro",
+        "URL_CONT": "https://cont.sfantul-ilie.ro",
+        "URL_CALENDAR": "https://calendar.sfantul-ilie.ro",
+        "URL_PROGRAM": "https://program.sfantul-ilie.ro",
+        "URL_CURATENIE": "https://curatenie.sfantul-ilie.ro",
+        "URL_TIPIC": "https://tipic.sfantul-ilie.ro",
+        "URL_BIBLIA": "https://biblia.sfantul-ilie.ro",
+        "URL_BIBLIOTECA": "https://biblioteca.sfantul-ilie.ro",
+        "URL_BULETIN": "https://buletin.sfantul-ilie.ro",
+        "URL_NEWSLETTER": "https://newsletter.sfantul-ilie.ro",
+        "URL_LIVE": "https://live.sfantul-ilie.ro",
+        "URL_RADIO": "https://radio.sfantul-ilie.ro",
+        "URL_ADMIN": "https://admin.sfantul-ilie.ro"
+      }
+      // ⚠️ Nicio ruta de productie pana la cutover-ul cerut anume. In V1 directul trăiește pe
+      // `transmisiuni.sfantul-ilie.ro`, iar aparatul din biserica emite intr-acolo: doua tinte
+      // deodata ar insemna doua transmisiuni si niciun ascultator intreg.
+    }
+  }
+}

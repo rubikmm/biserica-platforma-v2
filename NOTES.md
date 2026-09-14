@@ -48,7 +48,8 @@ Etape:
    contracte, evenimente, audit, automatizare, comunicare, home.
 2. ✅ **Staging** — publicat pe `*.staging.sfantul-ilie.ro`, email real prin Cloudflare Email Service.
 3. ⏳ **Portarea aplicațiilor**: ✅ calendar (A1), ✅ program (A2), ✅ tipic (A9), ✅ biblia (A10),
-   ✅ biblioteca (A12), ✅ buletin (A3), ✅ newsletter (A8), ✅ curățenie (A6), apoi A7 → A5 → A4 →
+   ✅ biblioteca (A12), ✅ buletin (A3), ✅ newsletter (A8), ✅ curățenie (A6),
+   ✅ **transmisiuni (A5) — împărțită în DOUĂ: `live` + `radio`** (14.09.2026), apoi A7 → A4 →
    A13 se stinge.
    ⚠️ Biblioteca, buletinul și newsletterul au fost cerute **înaintea rândului lor** (user,
    13.09.2026).
@@ -303,6 +304,22 @@ propunerea automată, ca în V1.
 
 ## NEXT
 
+0. **⚠️ CUTOVER-UL EMISIEI — urmează, cerut de utilizator** (14.09.2026: „urmează să facem
+   cutoverul", „când cutover ștergem transmisiuni"). E primul cutover al platformei, deci pașii se
+   scriu aici înainte, nu se improvizează. **Nimic din ce urmează nu se face fără cerere explicită.**
+   - **rămâne de probat cu mâna, înainte de orice**: comutatorul LIVE/STOP din panou, apăsat de un
+     om cu `broadcast.manage`. Restul e verificat cap-coadă pe staging (paginile, porțile, muzica,
+     legătura dintre cele două aplicații, următoarea slujbă cerută de la program), dar **comanda
+     n-a fost apăsată de nimeni** — cere sesiune, iar eu n-am una;
+   - **ordinea la cutover**: (1) `wrangler deploy --env production` pentru `xc-live` și `xc-radio`,
+     cu rutele `live.` și `radio.sfantul-ilie.ro`; (2) secretele puse și pe producție (aceleași
+     patru); (3) **abia apoi se întoarce aparatul** din biserică spre adresa nouă — din clipa aia
+     directul din V1 amuțește, deci e pas de sine stătător, nu o consecință;
+   - ⚠️ **aparatul e singura piesă din afara Cloudflare**: schimbă `/intern/live/whip`,
+     `/intern/mic/whip` și `/intern/aparat/*` pe gazda nouă. Parolele rămân aceleași, dinadins;
+   - **`transmisiuni` se șterge** (cerut anume): worker, rută, DNS, container, volume — DAR
+     **bucketul R2 `biserica-transmisiuni` NU**, e chiar depozitul folosit de `radio`;
+   - de dus și restul aplicațiilor pe producție odată cu ele, altfel `URL_*` din antet duc în gol.
 1. **Modulul de Chat, ce a rămas** (11.09.2026):
    - ⚠️ **credite AI Gateway** — fără ele nici Claude, nici Workers AI nu răspund (402). Dashboard:
      AI Gateway → Credits Available → Manage → Top-up. Apoi un token dedicat cu „AI Gateway – Run"
@@ -452,6 +469,8 @@ propunerea automată, ca în V1.
 | biblioteca | `biblioteca.staging.sfantul-ilie.ro` | 1349 de titluri, 800 de fișe cu copertă; rezervări |
 | buletin | `buletin.staging.sfantul-ilie.ro` | 619 numere din 2012 încoace (D1) + 964 MB PDF/poze |
 | newsletter | `newsletter.staging.sfantul-ilie.ro` | 459 de numere trimise din 2017 (R2, 722 MB) |
+| live | `live.staging.sfantul-ilie.ro` | directul slujbei: starea emisiei, aparatul din biserică, SFU |
+| radio | `radio.staging.sfantul-ilie.ro` | 777 de piese / 62,5 ore (R2 refolosit), ceasul, muzica, microfonul |
 | admin | `admin.staging.sfantul-ilie.ro` | audit, livrări, automatizări |
 
 ## Stare tehnică
@@ -478,6 +497,68 @@ parohiei trăiesc încă aplicațiile V1. Mutarea rutelor rămâne pas explicit,
   respins → SSO pe a doua aplicație → intrare repetată fără dublarea contului → publicare
   eveniment → outbox → coadă → automatizare → livrare simulată. 31 de teste unitare, typecheck
   curat pe 20 de pachete.
+
+## LIVE și RADIO (A5 din V1) — emisia parohiei, în două aplicații
+
+Portat pe 14.09.2026. `transmisiuni` din V1 a fost **împărțită în două aplicații**, cerere a
+utilizatorului: „una se numește radio și alta live". Pe `radio` a venit **tot ce era pe
+transmisiuni** (playerul public, panoul, muzica, microfonul); `live` e al doilea subdomeniu, cu
+publicul „ce se transmite acum" și **același panou**.
+
+**Cine ce ține** — asta e singura decizie care contează, restul decurge din ea:
+
+- **`live` e CREIERUL**: starea emisiei, aparatul din biserică (comandă + telemetrie),
+  semnalizarea WebRTC (două canale: slujba și microfonul), numărătoarea ascultătorilor.
+  Obiecte durabile: `Direct`, `Aparat`, `Ascultatori`.
+- **`radio` ține muzica și CEASUL**: ce selecție curge și de când. Obiect durabil: `Radio`.
+- ⚠️ **LIVE și radioul se exclud**, ca pe aparatul din V1 — dar acum trăiesc în workeri diferiți.
+  Regula: **`live` hotărăște, `radio` ascultă.** Când pornește directul, `live` stinge ceasul
+  radioului; la STOP îl pornește la loc. **Dacă `radio` ajunge vreodată să comande directul singur,
+  cele două se contrazic și se aud amândouă.**
+- Vorbesc prin **Service Binding**, pe adrese `/_intern/…` care **nu se servesc de pe internet**
+  (fără antetul `x-xc-intern` → **404**, nu 403 — ca `/_actiuni` din chat, ADR 0007). Verificat.
+
+**Ce e scris o singură dată** (`packages/comanda`, `@xc/comanda`): socoteala ceasului (`ceSeAude`),
+playerul cu două surse și trecere lină, **panoul de administrare** și butonul play/stop. Panoul e
+montat identic la `/admin` în amândouă; el nu știe care aplicație îl servește, fiindcă vorbește
+numai cu originea lui, iar fiecare aplicație compune răspunsul cerându-i celeilalte partea ei.
+
+**Comutatorul**, cum a fost cerut: **LIVE | STOP**, plus **OPRIT** rămas doar la super-admin.
+⚠️ **STOP nu e liniște** — oprește directul, iar radioul reia de unde rămăsese. Liniștea de tot e
+OPRIT, și a rămas la super-admin ca în V1 („radioul vreau să meargă permanent… opritul manual nu
+are sens decât pentru mine ca super-admin" — Părintele dă mute).
+
+**Patru lucruri care se încalcă ușor:**
+
+1. **Sunetul NU trece prin worker.** Directul: aparat → WHIP → Cloudflare Realtime SFU → ascultător;
+   radioul: depozit → browser. Workerul schimbă doar SDP-uri și servește fișiere. Cine „optimizează"
+   trecând sunetul prin worker plătește fiecare ascultător.
+2. **Ceasul, nu starea.** Nu se ține scris ce piesă se aude — se ține DE CÂND curge selecția și se
+   socotește. De aceea radioul merge singur la nesfârșit, fără cron și fără aparat. Corolar:
+   **duratele trebuie să fie EXACTE** (numărate din cadre), altfel eroarea se adună și după o oră
+   pagina arată altă melodie decât se aude — asta era „schimbă melodia în mijlocul uneia" din V1.
+3. **Se servește numai ce e în indice.** Bucketul ține și `remote/` (înregistrările slujbelor) și
+   `predici/`. Ruta de fișier verifică lista înainte să dea ceva, iar `caleCurata` **refuză** (nu
+   „repară") orice cale absolută, cu `..` sau cu componente ascunse. Probat.
+4. **Paginile vorbesc numai cu originea lor.** Cele două stau pe subdomenii diferite; dacă un script
+   ar cere direct de la celălalt, ar avea nevoie de CORS și de cookie-uri între origini. O probă
+   păzește regula (`tests/emisie.test.ts`).
+
+**⚠️ Depozitul e cel din V1, REFOLOSIT** — hotărâre a utilizatorului (14.09.2026: „cei 11gb poți să
+îi folosești sau să redenumești R2-ul… ca să nu mai faci atâtea operații"). Redenumirea unui bucket
+R2 **nu există** la Cloudflare, deci s-a ales refolosirea: `biserica-transmisiuni`, cu `mp3player/`
+(muzica, 777 de piese, 62,5 ore), `remote/` și `predici/`. E o **abatere știută** de la „nu se
+refolosește nimic din V1, tot ce e nou poartă prefixul `xc-`" — luată ca să nu copiem 11 GB cu
+câteva zile înainte de cutover. **La curățenia de la final bucketul ăsta NU se șterge.**
+
+**Secretele** (`SFU_APP_ID`, `SFU_APP_SECRET`, `WHIP_SECRET`, `APARAT_SECRET`) au fost trecute din
+V1 cu aceleași valori, dinadins: așa aparatul din biserică are de schimbat **numai adresa** la
+cutover, nu și parolele.
+
+**Ce NU s-a adus din V1**: `/schema` (pagina de documentație a împărțirii — nu mai descrie
+realitatea, aplicația e acum două) și `/intern/aparat/continut` a rămas ca o adresă care răspunde
+politicos, dar **nu mai scrie indicele**: de când muzica stă în depozit, adevărul e acolo, nu pe
+aparat.
 
 ## Capcane de ținut minte
 
@@ -1252,6 +1333,31 @@ forța antetul `Host`**.
 
 ### 2026-09-14
 
+- **Emisia (A5) portată în V2, ca DOUĂ aplicații**: `live.staging.sfantul-ilie.ro` și
+  `radio.staging.sfantul-ilie.ro`, publicate și legate una de alta. Radio vede cele 777 de piese din
+  depozitul refolosit; `live` compune starea din amândouă și cere următoarea slujbă de la program
+  (probat: „Sfântul Maslu, 15.09, 18:00"). Panoul, playerul și socoteala ceasului stau într-un
+  pachet nou, `@xc/comanda`, scrise **o singură dată** pentru amândouă. 31 de probe noi (227 în
+  total), typecheck curat pe 34 de pachete. Amănuntele: secțiunea „LIVE și RADIO" de mai sus.
+- ⚠️ **Împărțirea în două a tăiat o legătură care în V1 era o chemare de funcție**: LIVE și radioul
+  se exclud, dar acum trăiesc în workeri diferiți. Am întrebat înainte să mă apuc unde stă starea, și
+  răspunsul a fost „`live` ține starea, `radio` o ascultă" — de aceea creierul e tot într-un loc, iar
+  `radio` cere, nu hotărăște. **Asta e regula care ține cele două aplicații să nu se certe.**
+- **Cererea a crescut în patru completări, toate în timpul lucrului**, și fiecare a mărit-o: de la
+  „felia cerută" la „tot ce e pe transmisiuni acum pe radio", apoi subdomeniul `live`, apoi
+  refolosirea bucketului, apoi cutover-ul și website-ul. **De reținut**: la utilizatorul ăsta,
+  cererea de la început e un punct de plecare, nu conturul lucrării — merită așteptat până termină
+  de vorbit înainte de a fixa arhitectura. Aici am avut noroc că împărțeala aleasă a suportat
+  creșterea fără să fie refăcută.
+- ⚠️ **A răsturnat regula prefixului `xc-`, tot el**: bucketul de 11 GB al V1 se REFOLOSEȘTE, ca să
+  nu copiem degeaba cu câteva zile înainte de cutover. I-am spus că redenumirea unui bucket R2 nu
+  există la Cloudflare. **La curățenia de la final, bucketul ăsta nu se șterge.**
+- **Bootstrap între doi workeri care se leagă unul de altul**: fiecare avea binding spre celălalt,
+  deci niciunul nu se putea publica primul (`code: 10143`). Leacul: scos temporar bindingul din
+  `live`, publicat `live`, publicat `radio`, pus bindingul la loc, republicat `live`. De ținut minte
+  pentru orice altă pereche de workeri legați reciproc.
+- **Ce NU e probat**: comutatorul LIVE/STOP n-a fost apăsat de un om cu drept — cere sesiune. Tot
+  restul e verificat cap-coadă pe staging. V1 e neatinsă și transmite mai departe.
 - **Voluntarii curățeniei au devenit CONTURI ale platformei; pickerul a ieșit** (cerere a
   utilizatorului, noaptea). Pe 13.09 ceruse anume contrariul — „pickerul rămâne, ca mod simplu" —
   și i se spusese atunci că se abate de la „datele stau într-un loc, autentificarea la fel". S-a

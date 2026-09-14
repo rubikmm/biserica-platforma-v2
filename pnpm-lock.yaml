@@ -326,6 +326,33 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui
 
+  apps/live:
+    dependencies:
+      '@xc/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@xc/authorization':
+        specifier: workspace:*
+        version: link:../../packages/authorization
+      '@xc/comanda':
+        specifier: workspace:*
+        version: link:../../packages/comanda
+      '@xc/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@xc/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@xc/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@xc/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      zod:
+        specifier: ^4.1.5
+        version: 4.5.4
+
   apps/newsletter:
     dependencies:
       '@xc/auth':
@@ -376,6 +403,33 @@ importers:
       '@xc/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@xc/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
+      '@xc/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      zod:
+        specifier: ^4.1.5
+        version: 4.5.4
+
+  apps/radio:
+    dependencies:
+      '@xc/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@xc/authorization':
+        specifier: workspace:*
+        version: link:../../packages/authorization
+      '@xc/comanda':
+        specifier: workspace:*
+        version: link:../../packages/comanda
+      '@xc/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@xc/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@xc/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -451,6 +505,12 @@ importers:
       '@xc/actiuni':
         specifier: workspace:*
         version: link:../actiuni
+      '@xc/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+
+  packages/comanda:
+    dependencies:
       '@xc/contracts':
         specifier: workspace:*
         version: link:../contracts

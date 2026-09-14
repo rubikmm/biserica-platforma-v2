@@ -31,6 +31,10 @@ export interface Env {
 const APLICATII: Array<{ cheie: keyof Navigatie; nume: string }> = [
   { cheie: 'calendar', nume: 'Calendarul' },
   { cheie: 'program', nume: 'Programul liturgic' },
+  // Emisia parohiei, doua butoane fiindca sunt doua aplicatii (user, 14.09.2026): directul slujbei
+  // si radioul. Stau langa program, fiindca de acolo vin slujbele care se transmit.
+  { cheie: 'live', nume: 'Transmisiunea în direct' },
+  { cheie: 'radio', nume: 'Radioul parohiei' },
   { cheie: 'curatenie', nume: 'Curățenia bisericii' },
   { cheie: 'tipic', nume: 'Tipicul' },
   { cheie: 'biblia', nume: 'Biblia' },
