@@ -345,7 +345,9 @@ propunerea automată, ca în V1.
      `biserica-curatenie` (`0 * * * *`, trimitea scrisori voluntarilor), `biserica-biblioteca` (`0 6 * * *`),
      `biserica-cont` (`0 3 * * *`). Golite cu `PUT /workers/scripts/<w>/schedules` cu `[]`.
      Pe V2 au rămas cele care trebuie: `xc-curatenie-production` orar, `xc-biblioteca-production` la 6.
-     ⚠️ `xc-account-production` **nu** are cronul de la 3 al lui V1 — de lămurit ce făcea.
+     ⚠️ ~~`xc-account-production` nu are cronul de la 3 al lui V1~~ **✓ LĂMURIT ȘI REPARAT 15.09.2026**:
+     mătura sesiunile și codurile trecute (`oameni.matura`). Readus la **`xc-identity`** (acolo stau
+     tabelele), `0 3 * * *`, worker 0.3.0 — vezi „Ceasul de noapte al identității".
    - **⚠️ Biblia e acum PUBLICĂ**: V1 cerea intrare (303 spre `cont`), V2 primește sesiune anonimă
      (`apps/biblia/src/index.ts:304`). E din cod, nu din greșeală — dar e o schimbare pe care o vede lumea.
    - **NU s-au mutat, dinadins**: `comunicari` (A7 nu se portează), `predici`, `rugaciuni` (se șterg),
@@ -403,15 +405,29 @@ propunerea automată, ca în V1.
      existau doar pe staging. Copiate pe producție. **La cutover s-au mutat D1 și R2, dar nu KV.**
    **UNEALTA**: `node infrastructure/cutover/curatenie-cloudflare.mjs --v1|--staging [--chiar]`.
    Fără `--chiar` doar arată lista. **Poarta e în ea**: refuză să șteargă orice bază D1 sau depozit R2
-   care n-are pereche în arhiva zilei. Apărate pe feluri: depozitul R2 `biserica-transmisiuni` și
-   KV-ul `CONFIG-production` (⚠️ **configurația VIE a producției, rămasă fără prefixul `xc-`** — de
-   redenumit în `xc-config-production`; bindingurile merg pe id, deci nu se rupe nimic).
-   **RĂMAS**: terminarea copierii R2 → `--v1 --chiar` (16 workeri, 8 baze, 8 depozite, KV
-   `biserica-proba`, gateway `biserica`) → `--staging --chiar`. **Ștergerile cer cererea userului.**
-   **Containerele V1 de pe NAS** (16) se șterg de către **#agent-server**, după ce verifică întâi că
-   n-a rămas cod necommis în ele; datele lor sunt deja `.tgz` în `/backup/<proiect>/`.
-   ⚠️ **`biserica-site` NU intră în listă**: e pagina principală a parohiei (`sfantul-ilie.ro`, pe
-   cPanel/FTP), vie. `biserica-website` e altceva — workerul de pe `website.`.
+   care n-are pereche în arhiva zilei. La depozitele de staging are un **al doilea drum**: trece dacă
+   geamănul `-production` rămâne în picioare, cu cel puțin tot atâtea obiecte (numărate, nu presupuse).
+
+   **✅ TERMINATĂ — 15.09.2026, 10:30. Contul are un singur mediu: producția.**
+   - **V1 dusă**: 3 adrese, 16 workeri, 8 baze D1, 8 depozite (~6.600 obiecte), KV `biserica-proba`,
+     gateway `biserica`;
+   - **staging dus**: 13 adrese, 21 workeri, 12 baze D1, 2 cozi, KV, 6 depozite;
+   - **inventarul final**: 21 workeri, 15 adrese, 12 baze D1, 7 depozite, 1 KV, 2 cozi, 1 gateway —
+     **totul `xc-*-production`**, cu singura excepție știută `biserica-transmisiuni` (R2).
+   - **Containerele V1 de pe NAS** (15, fără `biserica-site`) — verificate 15.09: **niciun commit
+     nepushat**; necommise sunt doar fișiere `src/comun/` din 11 volume, adică versiunea V1 a funcției
+     „vezi ca", **deja reimplementată în V2**. Gata de șters — le șterge **#agent-server**.
+     ⚠️ **`biserica-site` NU intră în listă**: e pagina principală a parohiei (`sfantul-ilie.ro`, pe
+     cPanel/FTP), vie. `biserica-website` e altceva — workerul de pe `website.`.
+   - **KV-ul a fost recreat cu prefix**: `CONFIG-production` → **`xc-config-production`**
+     (`f63560361bd9489aa34e873732807696`). Cloudflare nu redenumește un spațiu KV, deci: spațiu nou,
+     cheia `modul:chat` mutată și verificată bit cu bit, **trei** workeri republicați, vechiul șters.
+     ⚠️ **Trei, nu doi**: `xc-admin`, `xc-chat` **și `xc-program`** — al treilea s-a aflat numărând
+     bindingurile workerilor PUBLICAȚI, nu citind fișierele.
+   ⚠️ **Arhiva KV a zilei era MINCINOASĂ**: `CONFIG-production.json` avea 2 octeți (`[]`), fiindcă
+   `wrangler kv key list` citește **local** dacă nu i se dă `--remote`. Conținutul adevărat a fost
+   salvat abia la recreare, în `kv/CONFIG-production__modul-chat.json`. **La orice `wrangler kv`, dă
+   `--remote`** — altfel „copia" e un fișier gol care trece de orice poartă.
 
 0b. **⚠️ CUTOVER-UL EMISIEI — urmează, cerut de utilizator** (14.09.2026: „urmează să facem
    cutoverul", „când cutover ștergem transmisiuni"). E primul cutover al platformei, deci pașii se
@@ -1546,6 +1562,30 @@ forța antetul `Host`**.
 
 ### 2026-09-15
 
+- **V1 și staging-ul s-au închis de tot.** Contul Cloudflare are de acum **un singur mediu**: 21 de
+  workeri, 15 adrese, 12 baze D1, 7 depozite, 1 KV, 2 cozi, 1 gateway — toate `xc-*-production`, cu
+  singura excepție știută `biserica-transmisiuni`. Socoteala e în NEXT, 0c. Harta întregului cont, pe
+  aplicații și resurse, a fost dată utilizatorului.
+- **O coadă rămăsese pe staging în fișiere, nu pe Cloudflare.** `local-spre-productie.mjs` mutase D1,
+  R2 și KV, dar **sărise cozile**: blocul de bază din `calendar`, `program` și `event-worker` arăta
+  spre `xc-events-staging`, ștearsă. Workerii publicați erau corecți, deci nimic nu s-a stricat — dar
+  primul `wrangler deploy` fără `--env production` ar fi legat producția de o coadă inexistentă.
+  **Când muți un mediu, numără toate FELURILE de resurse, nu doar pe cele la care te gândești.**
+- **Ceasul de noapte al identității, readus.** V1 avea la `biserica-cont` un cron la 3 care mătura
+  sesiunile și codurile trecute; la trecerea pe V2 s-a pierdut, și o săptămână nimic n-a măturat.
+  Acum e la `xc-identity` (acolo stau tabelele), 0.3.0. A ieșit la iveală și `curataIncercariVechi()`,
+  scrisă odată cu limitarea încercărilor, **pe care n-o chema nimeni** — tot din lipsa cronului.
+  ⚠️ **Capcana zilei**: prima scriere ștergea și din `login_challenges`, tabelă pe care migrația 0002
+  o aruncă odată cu linkul de intrare. **`tsc` a trecut curat ȘI deploy-ul a reușit** — ceasul ar fi
+  căzut tăcut în fiecare noapte, la o oră la care nu se uită nimeni. S-a prins numărând rândurile pe
+  baza ADEVĂRATĂ, înainte de publicare. Interogările unui cron se probează pe baza vie, nu la tastatură.
+- **KV-ul a căpătat prefixul casei**: `CONFIG-production` → `xc-config-production`. Cloudflare nu
+  redenumește spații KV, deci a fost recreat. Două lucruri de ținut minte: bindingul `CONFIG` îl aveau
+  **trei** workeri (și `program`, nu doar `admin` și `chat`) — aflat numărând bindingurile celor
+  PUBLICAȚI, nu citind fișierele; iar **arhiva de dimineață a KV-ului era goală** (2 octeți), fiindcă
+  `wrangler kv key list` citește local fără `--remote`. Conținutul adevărat s-a salvat abia acum.
+- **Containerele V1 de pe NAS, verificate**: niciun commit nepushat în cele 15; necommisele sunt
+  versiunea V1 a funcției „vezi ca", deja în V2. Pot fi șterse de #agent-server.
 - **Aparatul din biserică a trecut pe producție** și cu el s-a închis cutover-ul emisiei. Pornirea de
   la „nu pot porni LIVE": LIVE cere telemetrie de sub 75 s, iar aparatul bătea în `live.staging`.
   Amănuntele și proba secretului: NEXT, punctul 0b.

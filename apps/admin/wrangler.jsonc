@@ -26,7 +26,7 @@
 
   // Comutatoarele modulelor. Panoul de administrare e singurul care SCRIE aici.
   "kv_namespaces": [
-    { "binding": "CONFIG", "id": "5d9c6f96328743858c40c577fbbdb947" }
+    { "binding": "CONFIG", "id": "f63560361bd9489aa34e873732807696" }
   ],
 
   "env": {
@@ -94,7 +94,7 @@
         { "binding": "COMUNICARE", "service": "xc-communication-production" }
       ],
       "kv_namespaces": [
-        { "binding": "CONFIG", "id": "5d9c6f96328743858c40c577fbbdb947" }
+        { "binding": "CONFIG", "id": "f63560361bd9489aa34e873732807696" }
       ]
     }
   }

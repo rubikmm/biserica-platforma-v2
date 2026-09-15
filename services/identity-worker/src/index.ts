@@ -32,6 +32,7 @@ import {
   creeazaUtilizatorConfirmat,
   emailuriDeDebug,
   emiteCodDeIntrare,
+  matura,
   membriiAplicatiei,
   puneEtichete,
   puneMasca,
@@ -53,6 +54,7 @@ import {
 import {
   LIMITA_LOGIN_EMAIL,
   LIMITA_LOGIN_IP,
+  curataIncercariVechi,
   eBlocat,
   inregistreazaIncercare,
   resetIncercari,
@@ -710,6 +712,25 @@ export default {
       }
       log.error('eroare neasteptata', { eroare: e instanceof Error ? e.message : String(e) })
       return json({ eroare: 'eroare interna' }, 500)
+    }
+  },
+
+  /**
+   * Ceasul de noapte, la 3 dimineata: scoate sesiunile si codurile trecute.
+   *
+   * Readus pe 15.09.2026 — V1 il avea (`biserica-cont`, acelasi ceas), iar la trecerea pe V2 s-a
+   * pierdut, asa ca vreme de o saptamana nimic n-a maturat. Nu e o poarta si nu tine nimic in
+   * picioare: ce a expirat e refuzat oricum la citire. De aceea o greseala aici nu se vede in
+   * pagini — se vede doar in mărimea tabelelor, si de aceea socoteala se scrie in log.
+   */
+  async scheduled(_c: ScheduledController, env: Env): Promise<void> {
+    const log = new Logger({ service: SERVICIU, correlationId: 'ceas' })
+    try {
+      const socoteala = await matura(env.DB)
+      await curataIncercariVechi(env.DB)
+      log.info('maturare', { ...socoteala })
+    } catch (e) {
+      log.error('maturarea a cazut', { eroare: e instanceof Error ? e.message : String(e) })
     }
   },
 }

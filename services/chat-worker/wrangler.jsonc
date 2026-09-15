@@ -34,7 +34,7 @@
 
   // Comutatoarele modulelor: de aici afla chatul daca e pornit si cu ce creier raspunde.
   "kv_namespaces": [
-    { "binding": "CONFIG", "id": "5d9c6f96328743858c40c577fbbdb947" }
+    { "binding": "CONFIG", "id": "f63560361bd9489aa34e873732807696" }
   ],
 
   "d1_databases": [
@@ -101,7 +101,7 @@
       },
       "ai": { "binding": "AI" },
       "kv_namespaces": [
-        { "binding": "CONFIG", "id": "5d9c6f96328743858c40c577fbbdb947" }
+        { "binding": "CONFIG", "id": "f63560361bd9489aa34e873732807696" }
       ],
       "d1_databases": [
         {

@@ -34,6 +34,12 @@
     { "binding": "AUDIT", "service": "xc-audit" }
   ],
 
+  // Ceasul de noapte: sterge sesiunile si codurile trecute. Ora e cea din V1 (`biserica-cont`),
+  // aleasa ca sa cada cand nu e nimeni pe platforma. Nu trimite nimic si nu atinge pe nimeni.
+  "triggers": {
+    "crons": ["0 3 * * *"]
+  },
+
   "env": {
     "staging": {
       "name": "xc-identity-staging",
@@ -60,7 +66,8 @@
       "services": [
         { "binding": "AUTORIZARE", "service": "xc-authz-staging" },
         { "binding": "AUDIT", "service": "xc-audit-staging" }
-      ]
+      ],
+      "triggers": { "crons": ["0 3 * * *"] }
     },
 
     // Pregatit configurational, dar fara resurse create si fara ruta: productia nu se atinge
@@ -88,7 +95,8 @@
           "database_id": "4d8cd18f-6a5b-4555-b9f0-b3d46bec10ff",
           "migrations_dir": "../../infrastructure/migrations/identity"
         }
-      ]
+      ],
+      "triggers": { "crons": ["0 3 * * *"] }
     }
   }
 }

@@ -506,3 +506,45 @@ export async function emailuriDeDebug(
     [catre, limita],
   )
 }
+
+/** Cate randuri a sters fiecare maturare — se scriu in log, ca sa se vada ca ceasul chiar lucreaza. */
+export interface SocotealaMaturarii {
+  sesiuni: number
+  coduri: number
+}
+
+/**
+ * Ceasul de noapte: scoate din baza ce a expirat si nu mai foloseste nimanui.
+ *
+ * Vine din V1 (`oameni.matura`, cronul de la 3 dimineata al lui `biserica-cont`), care s-a pierdut
+ * la trecerea pe V2 — pana la 15.09.2026 nimic nu matura, iar sesiunile si codurile se adunau.
+ * „Nimic critic", spunea comentariul de acolo, si asa e: nicio poarta nu se sprijina pe stergerea
+ * asta. O sesiune expirata e deja refuzata de `aExpirat` la citire, iar un cod trecut nu se mai
+ * confirma — maturarea tine doar tabelele mici.
+ *
+ * ⚠️ Rabdarea de sapte zile la coduri e mostenita tot din V1 si e dinadins: cand cineva se plange
+ * ca „n-a primit codul", randul trebuie sa mai fie acolo ca sa se vada daca a fost emis si daca a
+ * fost consumat. La sesiuni nu e nevoie de asa ceva.
+ *
+ * `login_attempts` se curata cu fereastra lui de 24 de ore (`curataIncercariVechi`), scrisa
+ * odata cu limitarea, dar pe care pana acum n-o chema nimeni.
+ *
+ * ⚠️ `login_challenges` (biletele V1) NU se matura, fiindca nu mai exista: migratia 0002 o sterge
+ * odata cu linkul de intrare, inlocuit de codul de sase cifre. Prima scriere a acestei functii o
+ * stergea si pe ea, `tsc` a trecut curat peste — SQL-ul nu e verificat de typecheck — si ceasul ar
+ * fi cazut in fiecare noapte cu „no such table". S-a prins numarand randurile pe baza ADEVARATA.
+ *
+ * `emails_iesire` NU se atinge: e jurnalul a ce a trimis platforma, ca `newsletter_history` la
+ * curatenie sau `scrisori` la biblioteca. Daca se hotaraste vreodata o limita pentru el, e alta
+ * discutie decat maturarea asta.
+ */
+export async function matura(db: D1Database): Promise<SocotealaMaturarii> {
+  const t = acum()
+  const acumSapteZile = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const randuri = await db.batch([
+    db.prepare(`DELETE FROM sessions WHERE expires_at < ?`).bind(t),
+    db.prepare(`DELETE FROM coduri_intrare WHERE expires_at < ?`).bind(acumSapteZile),
+  ])
+  const sterse = (i: number) => randuri[i]?.meta.changes ?? 0
+  return { sesiuni: sterse(0), coduri: sterse(1) }
+}

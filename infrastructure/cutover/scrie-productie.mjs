@@ -31,8 +31,13 @@ const D1 = {
   'xc-automation-production': '7c4dd88d-f392-45a7-a7a7-0096f9fc2a2c',
   'xc-chat-production': 'fc262cfc-2879-4ce5-b5f0-45d3f754fe09',
 }
-/** Singurul KV (`CONFIG`, panoul de module), perechea de productie. */
-const KV_PRODUCTIE = '5d9c6f96328743858c40c577fbbdb947'
+/**
+ * Singurul KV (`CONFIG`, panoul de module), perechea de productie.
+ * ⚠️ Spatiul s-a RECREAT pe 15.09.2026, ca sa poarte si el prefixul casei: vechiul
+ * `CONFIG-production` (`5d9c6f96…`) a fost golit si sters, iar continutul a trecut in
+ * `xc-config-production`. Cloudflare nu redenumeste un spatiu KV — de aceea id nou.
+ */
+const KV_PRODUCTIE = 'f63560361bd9489aa34e873732807696'
 
 /** Ce nu se imprumuta de la staging: numele, variabilele si ruta. */
 const SARITE = new Set(['name', 'vars', 'routes'])

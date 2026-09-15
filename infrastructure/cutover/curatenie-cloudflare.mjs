@@ -50,7 +50,12 @@ if (!CONT || !TOKEN) {
  * transmisiuni` e si worker (pleaca), si depozit R2 (ramane). Un singur set le-ar confunda.
  */
 const NEATINSE_R2 = new Set(['biserica-transmisiuni'])
-const NEATINSE_KV = new Set(['CONFIG-production'])
+/*
+ * Gol din 15.09.2026: `CONFIG-production`, singurul nume aparat aici, a fost recreat ca
+ * `xc-config-production` si sters. Acum orice KV din cont are prefixul casei, deci `eV1` nu mai
+ * are pe cine prinde. Setul ramane, fiindca e locul in care se scrie urmatoarea exceptie.
+ */
+const NEATINSE_KV = new Set()
 
 /** Raspunsul INTREG: la liste, cursorul paginarii sta in `result_info`, nu in `result`. */
 const apiPlin = async (cale, init) => {
