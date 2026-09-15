@@ -6,12 +6,16 @@ import {
   type Ctx,
   anul,
   luna,
+  nenumerotate,
+  numerotate,
+  paginaAltele,
   paginaArhiva,
   paginaCautare,
   paginaGoala,
   paginaNou,
   paginaNumar,
   scurtat,
+  titluNumar,
 } from '../apps/newsletter/src/pagini.js'
 
 /**
@@ -215,6 +219,43 @@ describe('newsletter · meniul din antet', () => {
 })
 
 /*
+ * TITLUL NUMARULUI din pagina (user, 16.09.2026: „modifică-l așa: Buletinul Online nr. 571 / 15
+ * septembrie 2026 și scrie mai mic ca să intre pe un rând și pe mobil… eventual prescurtează luna").
+ */
+describe('newsletter · titlul numarului', () => {
+  it('„Parohiei" cade, restul subiectului ramane neatins', () => {
+    expect(titluNumar('Buletinul Parohiei Online nr. 571 / 15 septembrie 2026').lung)
+      .toBe('Buletinul Online nr. 571 / 15 septembrie 2026')
+  })
+
+  it('forma scurta prescurteaza luna, ca titlul sa intre pe un rand', () => {
+    expect(titluNumar('Buletinul Parohiei Online nr. 571 / 15 septembrie 2026').scurt)
+      .toBe('Buletinul Online nr. 571 / 15 sept. 2026')
+  })
+
+  it('un subiect care nu incepe cu numele foii ramane intreg', () => {
+    const t = titluNumar('Schimbare de program')
+    expect(t.lung).toBe('Schimbare de program')
+    expect(t.scurt).toBe('Schimbare de program')
+  })
+
+  it('se taie NUMAI „Parohiei" de dupa „Buletinul", nu oriunde', () => {
+    expect(titluNumar('Anunț: hramul Parohiei noastre').lung).toBe('Anunț: hramul Parohiei noastre')
+  })
+
+  it('amandoua formele se scriu in pagina, iar CSS-ul alege', () => {
+    const lista = [{ id: 1, nr: 571, subiect: 'Buletinul Parohiei Online nr. 571 / 15 septembrie 2026', trimis: '2026-09-15 17:19:04', rezumat: '' }]
+    const h = paginaNumar({
+      prefix: '', nav: {} as never, utilizator: null, eAdmin: false, versiune: '0', modificata: '0',
+    }, lista, 0, '<p>x</p>')
+    expect(h).toContain('<span class="lung">Buletinul Online nr. 571 / 15 septembrie 2026</span>')
+    expect(h).toContain('<span class="scurt">Buletinul Online nr. 571 / 15 sept. 2026</span>')
+    // ⚠️ subiectul din depozit NU se atinge: acolo e arhiva, nu afisajul
+    expect(lista[0]!.subiect).toBe('Buletinul Parohiei Online nr. 571 / 15 septembrie 2026')
+  })
+})
+
+/*
  * BARA CU ANII, coborata din cheia Arhivei (user, 15.09.2026: „când apăs pe History, să apară o bară
  * cu anii, la fel cum este la Program"). Se poarta ca sora ei de la Program: ascunsa pe paginile
  * obisnuite, coborata permanent pe /arhiva, unde cheia devine inerta.
@@ -263,5 +304,70 @@ describe('newsletter · bara cu anii', () => {
   it('un an cerut care nu exista cade pe cel mai nou, nu pe cel mai vechi', () => {
     const h = paginaArhiva(ctx(), lista, 1999)
     expect(h).toContain('class="an-buton activ" href="/newsletter/arhiva/2026"')
+  })
+})
+
+/*
+ * „ALTELE" — trimiterile fără număr (user, 16.09.2026: „mută toate newsletterele trimise, în afară
+ * de cele numerotate… să rămână listate în ARHIVĂ doar numerele").
+ */
+describe('newsletter · Altele', () => {
+  const nr = (id: number, n: number | null, trimis: string, subiect: string) =>
+    ({ id, nr: n, subiect, trimis, rezumat: '' })
+  const lista = [
+    nr(1, 300, '2024-03-02 10:00:00', 'Buletinul Parohiei Online nr. 300 / 2 martie 2024'),
+    nr(2, null, '2024-07-11 10:00:00', 'Actualizare program liturgic'),
+    nr(3, 301, '2026-09-13 10:00:00', 'Buletinul Parohiei Online nr. 301 / 13 septembrie 2026'),
+    nr(4, null, '2026-09-14 10:00:00', 'Astă seară nu este Vecernie'),
+  ]
+  const ctx = (): Ctx => ({
+    prefix: '/newsletter',
+    nav: {} as Ctx['nav'],
+    utilizator: null,
+    eAdmin: false,
+    versiune: '0.5.0',
+    modificata: '16.09.2026',
+  })
+
+  it('despartirea se face dupa numar, nu dupa subiect', () => {
+    expect(numerotate(lista).map((f) => f.id)).toEqual([1, 3])
+    expect(nenumerotate(lista).map((f) => f.id)).toEqual([2, 4])
+  })
+
+  it('in ARHIVA raman listate doar numerele', () => {
+    const h = paginaArhiva(ctx(), lista, 2026)
+    // ⚠️ se cauta in LISTA paginii, nu in toata pagina: bulina din antet duce oricum la cel mai nou
+    // trimis, numerotat sau nu — aia e alta treaba decat ce se insira aici
+    const listaPaginii = h.slice(h.indexOf('<ul class="numere">'), h.lastIndexOf('</ul>'))
+    expect(listaPaginii).toContain('/newsletter/n/3')
+    expect(listaPaginii).not.toContain('/newsletter/n/4')
+    // socoteala e tot a numerelor, altfel ar spune altceva decat lista de dedesubt
+    expect(h).toContain('1 număr trimis în 2026 · 2 cu totul')
+  })
+
+  it('segmentul „Altele" sta la CAPATUL fasiei, dupa cel mai vechi an', () => {
+    const h = paginaArhiva(ctx(), lista, 2026)
+    const iUltimulAn = h.lastIndexOf('/newsletter/arhiva/2024')
+    const iAltele = h.indexOf('/newsletter/arhiva/altele')
+    expect(iUltimulAn).toBeGreaterThan(0)
+    expect(iAltele).toBeGreaterThan(iUltimulAn)
+  })
+
+  it('pagina „Altele" le arata pe toate cele fara numar, pe ani', () => {
+    const h = paginaAltele(ctx(), lista)
+    expect(h).toContain('/newsletter/n/2')
+    expect(h).toContain('/newsletter/n/4')
+    expect(h).not.toContain('/newsletter/n/1')
+    expect(h).toContain('2 trimiteri fără număr')
+    expect(h).toContain('<h2 class="anul">2026</h2>')
+    expect(h).toContain('<h2 class="anul">2024</h2>')
+    // segmentul ei ramane marcat, iar niciun an nu e marcat in acelasi timp
+    expect(h).toContain('class="an-buton altele activ"')
+    expect(h).not.toContain('class="an-buton activ"')
+  })
+
+  it('un an fara numere nu deschide o pagina goala — nu intra in fasie', () => {
+    const doarAnunt = [nr(9, null, '2015-01-01 10:00:00', 'Anunț')]
+    expect(ANII(doarAnunt)).toEqual([])
   })
 })

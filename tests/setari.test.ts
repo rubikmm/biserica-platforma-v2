@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ruteazaSetari, type MediuSetari } from '../packages/setari/src/index.js'
 import { CHEI_PERMISIUNI, PERMISIUNI_IMPLICITE } from '../packages/contracts/src/permisiuni.js'
 import { pagina } from '../packages/ui/src/index.js'
+import { rubricaSablon } from '../apps/newsletter/src/pagini.js'
 
 /**
  * SETĂRILE APLICAȚIEI (user, 15.09.2026: „să afișăm un alt buton, în afară de Administrare, numit
@@ -259,5 +260,66 @@ describe('aplicațiile fără serviciu de trimis', () => {
     const h = await r!.text()
     expect(h).toContain('nu trimite nimic pe e-mail')
     expect(h).toContain('E-mailul de la platformă')
+  })
+})
+
+/*
+ * RUBRICILE APLICAȚIEI — punctul de prindere cerut de newsletter (user, 16.09.2026: antetul și
+ * subsolul buletinului, arătate în Setări). Ce se păzește aici: că bucata aplicației chiar ajunge în
+ * pagină, că primește treptele deja socotite (ca să nu întrebe a doua oară autorizarea) și că
+ * aplicațiile care NU dau nimic rămân exact cum erau.
+ */
+describe('rubricile aplicației în Setări', () => {
+  it('bucata aplicației ajunge în pagină, înaintea lui „Înapoi"', async () => {
+    const r = await ruteazaSetari(new Request('https://calendar.test/setari'), '/setari', mediu([]), {
+      ...unelte(OM),
+      rubrici: () => '<section class="set-grup"><h2>Bucata mea</h2></section>',
+    })
+    const h = await r!.text()
+    expect(h).toContain('<h2>Bucata mea</h2>')
+    expect(h.indexOf('Bucata mea')).toBeLessThan(h.indexOf('Înapoi în'))
+  })
+
+  it('primește treptele gata socotite, nu le întreabă singură', async () => {
+    let vazut: { eAdmin: boolean; eSuper: boolean } | null = null
+    await ruteazaSetari(new Request('https://calendar.test/setari'), '/setari', mediu([], { poate: true }), {
+      ...unelte(OM),
+      rubrici: (t) => {
+        vazut = t
+        return ''
+      },
+    })
+    expect(vazut).toEqual({ eAdmin: true, eSuper: true })
+  })
+
+  it('aplicația care nu dă nimic are pagina neschimbată', async () => {
+    const fara = await ruteazaSetari(new Request('https://calendar.test/setari'), '/setari', mediu([]), unelte(OM))
+    const gol = await ruteazaSetari(new Request('https://calendar.test/setari'), '/setari', mediu([]), {
+      ...unelte(OM),
+      rubrici: () => '',
+    })
+    // ⚠️ jetonul CSRF se naște altul la fiecare cerere — se scoate, altfel proba compară zgomot
+    const curat = (h: string) => h.replace(/value="[^"]*"/g, 'value="…"').replace(/\s+/g, ' ')
+    expect(curat(await fara!.text())).toBe(curat(await gol!.text()))
+  })
+
+  it('rubrica newsletterului arată amândouă bucățile, și spune că nu ating arhiva', () => {
+    const h = rubricaSablon({ antet: '<tr><td>antetul</td></tr>', subsol: '<tr><td>subsolul</td></tr>' }, true)
+    expect(h).toContain('Antetul și subsolul buletinului')
+    expect(h).toContain('antetul')
+    expect(h).toContain('subsolul')
+    expect(h).toContain('Nu ating arhiva')
+    // se arată și cum se vede (în carcasa .email), și cum e scrisă
+    expect(h).toContain('class="email sab-proba"')
+    expect(h).toContain('<pre>')
+  })
+
+  it('bucata lipsă din depozit se spune pe față, nu se tace', () => {
+    const h = rubricaSablon({ antet: null, subsol: '<tr><td>x</td></tr>' }, true)
+    expect(h).toContain('Nu e încă în depozit')
+  })
+
+  it('⚠️ rubrica e numai a adminilor: bucățile astea intră în ce pleacă pe e-mail', () => {
+    expect(rubricaSablon({ antet: '<tr><td>x</td></tr>', subsol: null }, false)).toBe('')
   })
 })

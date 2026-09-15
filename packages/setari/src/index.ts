@@ -67,6 +67,18 @@ export interface UneltleSetarilor {
   urlTermeni: string
   /** carcasa aplicației: primește corpul, dă pagina întreagă */
   carcasa: (o: { titluPagina: string; corp: string; scripturi?: string }) => string
+  /**
+   * RUBRICILE APLICAȚIEI — bucăți de pagină scrise de ea, așezate la sfârșit, după cele comune
+   * (abonarea mea · abonații · jurnalul) și înainte de „Înapoi în …".
+   *
+   * ⚠️ Punct de prindere, nu ușă din dos: Setările rămân aceleași peste tot, iar aplicația adaugă
+   * numai ce ține CHIAR de ea. Prima care l-a cerut: newsletterul, cu antetul și subsolul care se
+   * lipesc la fiecare buletin nou (user, 16.09.2026).
+   *
+   * Primește treptele deja socotite, ca aplicația să nu întrebe a doua oară autorizarea. Cine nu-l
+   * dă nu pierde nimic — pagina arată exact ca până acum.
+   */
+  rubrici?: (t: { eAdmin: boolean; eSuper: boolean }) => Promise<string> | string
 }
 
 /** Un abonat, așa cum îl întoarce comunicarea. */
@@ -474,6 +486,8 @@ function corpulSetarilor(o: {
   eSuper: boolean
   areAudit: boolean
   jurnal: RandJurnal[] | null
+  /** rubricile aplicației (vezi `rubrici` din `UneltleSetarilor`); gol = n-are niciuna */
+  rubriciApp: string
   mesaj?: string
   mesajRau?: string
 }): string {
@@ -496,6 +510,7 @@ ${o.mesajRau ? alerta('rea', esc(o.mesajRau)) : ''}
 ${mele}
 ${o.eAdmin ? rubricaAbonati({ a: o.a, abonati: o.abonati, prefix: o.prefix, csrf: o.csrf }) : ''}
 ${o.eSuper ? rubricaJurnal({ nume: o.nume, areAudit: o.areAudit, randuri: o.jurnal }) : ''}
+${o.rubriciApp}
 <nav class="vecini"><a href="${esc(o.prefix)}/">← Înapoi în ${esc(o.nume)}</a></nav>`
 }
 
@@ -660,6 +675,8 @@ export async function ruteazaSetari(
   ])
 
   const csrf = asiguraCsrf(req, o.cfg.DOMENIU_COOKIE)
+  // rubricile aplicației: se cer DUPĂ ce se știu treptele, ca să nu întrebe și ele autorizarea
+  const rubriciApp = o.rubrici ? await o.rubrici({ eAdmin, eSuper }) : ''
   const felul = new URL(req.url).searchParams.get('f') ?? ''
   const vorbe: Record<string, [bun: boolean, text: string]> = {
     abonat: [true, 'Gata — ești abonat.'],
@@ -695,6 +712,7 @@ export async function ruteazaSetari(
         eSuper,
         areAudit: !!env.AUDIT,
         jurnal: jurnal ? jurnal.intrari : null,
+        rubriciApp,
         ...(vorba?.[0] ? { mesaj: vorba[1] } : {}),
         ...(vorba && !vorba[0] ? { mesajRau: vorba[1] } : {}),
       }),

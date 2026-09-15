@@ -71,6 +71,8 @@ export interface Meniu {
   ani?: number[]
   /** anul deschis in arhiva, marcat rosu in fasie (ca luna deschisa din bara Calendarului) */
   anDeschis?: number
+  /** pagina deschisa e „Altele" — segmentul de la capatul fasiei ramane marcat */
+  altele?: boolean
 }
 
 const IC_ARHIVA = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></svg>`
@@ -124,6 +126,28 @@ export function paginaCarcasa(ctx: Ctx, o: { titluPagina: string; corp: string; 
     ...(o.scripturi ? { scripturi: o.scripturi } : {}),
     corp: o.corp,
   })
+}
+
+/**
+ * TITLUL NUMARULUI, asa cum se scrie in pagina — in doua forme, ca scrisul din pastila.
+ *
+ * ⚠️ „Parohiei" IESE (user, 15.09.2026: „modifică-l așa: Buletinul Online nr. 571 / 15 septembrie
+ * 2026"): numele intreg al foii se repeta in 9 subiecte din 10, iar deasupra scrie oricum NEWSLETTER
+ * — parohia e limpede din antet. Se taie NUMAI cuvantul acela, nu se rescrie subiectul: restul e ce
+ * a scris parohia si ramane cum l-a scris.
+ * ⚠️ Forma scurta prescurteaza LUNA („15 sept. 2026"), ca titlul sa intre pe un rand si pe telefon.
+ * Se scrie ALATURI de cea lunga si se schimba din CSS, ca peste tot in aplicatie.
+ *
+ * ⚠️ Subiectul NU e curatat in depozit, ci doar la scris: `lista.json` pastreaza ce a plecat pe
+ * email, fiindca acolo e arhiva, nu afisajul. Cautarea cauta tot in subiectul intreg.
+ */
+export function titluNumar(subiect: string): { lung: string; scurt: string } {
+  const lung = subiect.replace(/^(\s*Buletinul)\s+Parohiei\s+/i, '$1 ').trim()
+  const scurt = lung.replace(
+    new RegExp(`\\b(${LUNI.join('|')})\\b`, 'i'),
+    (m) => LUNI_SCURT[LUNI.findIndex((l) => l.toLowerCase() === m.toLowerCase())] ?? m,
+  )
+  return { lung, scurt }
 }
 
 /** Data unui numar, intreg si scurt — scrisul din pastila pe numerele care nu sunt cel curent. */
@@ -265,13 +289,26 @@ function baraAnilor(ctx: Ctx, m: Meniu): string {
   const p = esc(ctx.prefix)
   const butoane = m.ani
     .map((a) => {
-      const activ = m.arhiva && m.anDeschis === a ? ' activ' : ''
+      const activ = m.arhiva && !m.altele && m.anDeschis === a ? ' activ' : ''
       return `<a class="an-buton${activ}" href="${p}/arhiva/${a}" data-an="${a}"`
         + `${activ ? ' aria-current="page"' : ''}>${a}</a>`
     })
     .join('')
+  /*
+   * ⚠️ „ALTELE", DUPA ULTIMUL AN (user, 16.09.2026: „în arhivă, după 2017, un nou buton numit
+   * «Altele»"). Acolo stau newsletterele FARA numar — actualizarile de program si anunturile —, ca
+   * lista anilor sa ramana curata: numai numerele buletinului. Vezi `paginaAltele`.
+   *
+   * ⚠️ STA IN AFARA FASIEI, lipit de capatul din dreapta al barei, NU printre ani. Inauntru era la
+   * locul lui logic (dupa 2017, anii mergand descrescator) — dar fasia se deruleaza, iar cei zece ani
+   * o umplu: pe un ecran de 1100 px butonul cadea dincolo de margine si nu se vedea deloc pana nu
+   * derulai. Un buton cerut anume n-are voie sa fie ascuns. Afara, ramane mereu la vedere, iar anii se
+   * deruleaza pe langa el.
+   */
+  const altele = `<a class="an-buton altele${m.altele ? ' activ' : ''}" href="${p}/arhiva/altele"`
+    + `${m.altele ? ' aria-current="page"' : ''} title="Actualizări de program și anunțuri">Altele</a>`
   return `<div class="bara-ani" id="bara-ani"${m.arhiva ? '' : ' hidden'}><div class="fasie">`
-    + `<nav class="ani" aria-label="Anii arhivei">${butoane}</nav></div></div>`
+    + `<nav class="ani" aria-label="Anii arhivei">${butoane}</nav></div>${altele}</div>`
 }
 
 /**
@@ -337,8 +374,10 @@ const JS_BARE = `
       sageti[0].disabled=fasie.scrollLeft<2;
       sageti[1].disabled=fasie.scrollLeft>fasie.scrollWidth-fasie.clientWidth-2;
     };
+    // ⚠️ sageata din dreapta se pune INDATA dupa fasie, nu la capatul barei: dupa ea sta „Altele",
+    // care nu e un an si n-are ce cauta dincolo de sageata anilor.
     bAni.insertBefore(sageti[0],fasie);
-    bAni.appendChild(sageti[1]);
+    fasie.insertAdjacentElement("afterend",sageti[1]);
     fasie.addEventListener("scroll",capete,{passive:true});
     window.addEventListener("resize",capete);
     // pe pagina Arhivei bara vine coborata de la server: latimile sunt reale, deci se aseaza acum
@@ -362,8 +401,21 @@ const JS_BARE = `
   });
 })();`
 
-/** Anii in care au plecat numere, descrescator — cel de care e nevoie mereu, primul. */
-export const ANII = (lista: Fisa[]): number[] => [...new Set(lista.map(anul))].sort((a, b) => b - a)
+/**
+ * NUMEROTATE / NENUMEROTATE — despartirea cerută de user (16.09.2026): în ARHIVĂ rămân listate
+ * numai NUMERELE buletinului, iar actualizările de program și anunțurile trec la „Altele".
+ * Semnul e `nr`, adică numărul citit din subiect la import („nr. 571"); anunțurile n-au.
+ */
+export const numerotate = (lista: Fisa[]): Fisa[] => lista.filter((f) => f.nr != null)
+export const nenumerotate = (lista: Fisa[]): Fisa[] => lista.filter((f) => f.nr == null)
+
+/**
+ * Anii in care au plecat NUMERE, descrescator — cel de care e nevoie mereu, primul.
+ * ⚠️ Se socotesc numai numerele: un an care n-ar avea decat anunturi ar deschide o pagina goala,
+ * fiindca listele anilor nu le mai arata. Ele se gasesc la „Altele".
+ */
+export const ANII = (lista: Fisa[]): number[] =>
+  [...new Set(numerotate(lista).map(anul))].sort((a, b) => b - a)
 
 /** `q` null = bara cautarii sta inchisa; sir (chiar gol) = e coborata de la server. */
 function sablon(o: {
@@ -428,12 +480,13 @@ export function paginaGoala(ctx: Ctx): string {
  */
 export function paginaNumar(ctx: Ctx, lista: Fisa[], i: number, corp: string | null): string {
   const f = lista[i]!
+  const titlu = titluNumar(f.subiect)
   return sablon({
     ctx,
     titlu: f.subiect,
     lista,
     meniu: { peEcran: f, acum: i === lista.length - 1 },
-    corp: `<h2>${esc(f.subiect)}</h2>
+    corp: `<h2 class="titlu-numar"><span class="lung">${esc(titlu.lung)}</span><span class="scurt">${esc(titlu.scurt)}</span></h2>
 ${corp ? `<div class="email">${corp}</div>` : `<p class="gol">Numărul acesta nu se găsește în depozit.</p>`}`,
   })
 }
@@ -442,7 +495,52 @@ ${corp ? `<div class="email">${corp}</div>` : `<p class="gol">Numărul acesta nu
 const rand = (ctx: Ctx, f: Fisa): string =>
   `<li><span class="cand">${esc(zilaScurt(f))}</span><a href="${esc(ctx.prefix)}/n/${f.id}">${esc(scurtat(f.subiect))}</a></li>`
 
-/** Arhiva: patratele cu anii, iar dedesubt anul ales, spart pe luni. */
+/** O listă de fișe, spartă pe luni, de la cea mai nouă lună spre cea mai veche: cine intră în arhivă
+ *  caută mai degrabă ce a fost duminica trecută decât ce a fost în ianuarie. */
+function peLuni(ctx: Ctx, fise: Fisa[]): string {
+  const grupe = new Map<number, Fisa[]>()
+  for (const f of fise) {
+    const l = luna(f)
+    if (!grupe.has(l)) grupe.set(l, [])
+    grupe.get(l)!.push(f)
+  }
+  return [...grupe.keys()]
+    .sort((a, b) => b - a)
+    .map(
+      (l) =>
+        `<h2 class="luna">${LUNI[l - 1] ?? ''}</h2>
+<ul class="numere">${grupe.get(l)!.slice().reverse().map((f) => rand(ctx, f)).join('')}</ul>`,
+    )
+    .join('')
+}
+
+/**
+ * ALTELE — newsletterele FĂRĂ număr: actualizările de program și anunțurile (user, 16.09.2026:
+ * „mută toate newsletterele trimise, în afară de cele numerotate… să rămână listate în ARHIVĂ doar
+ * numerele"). Se ajunge din segmentul de la capătul fâșiei anilor.
+ *
+ * ⚠️ Aici anii se scriu ÎN PAGINĂ, nu în fâșie: sunt puține (55 în zece ani) și n-ar merita o pagină
+ * pe an — dar fără anul scris nu s-ar ști la ce se uită omul, fiindcă rândurile poartă doar ziua.
+ */
+export function paginaAltele(ctx: Ctx, lista: Fisa[]): string {
+  const fise = nenumerotate(lista)
+  const ani = [...new Set(fise.map(anul))].sort((a, b) => b - a)
+  const corp = ani
+    .map((a) => `<h2 class="anul">${a}</h2>\n${peLuni(ctx, fise.filter((f) => anul(f) === a))}`)
+    .join('')
+  return sablon({
+    ctx,
+    titlu: 'Altele',
+    lista,
+    meniu: meniuLista({ arhiva: true, altele: true }),
+    corp: fise.length
+      ? `<p class="cate">${fise.length} ${fise.length === 1 ? 'trimitere' : 'trimiteri'} fără număr — actualizări de program și anunțuri</p>
+${corp}`
+      : `<p class="gol">Nu e nicio trimitere fără număr.</p>`,
+  })
+}
+
+/** Arhiva: anul ales, spart pe luni — NUMAI numerele buletinului (celelalte stau la „Altele"). */
 export function paginaArhiva(ctx: Ctx, lista: Fisa[], an: number | null): string {
   // ⚠️ PATRATELELE CU ANI AU IESIT DIN CORPUL PAGINII la 15.09.2026, odata cu bara de sub antet
   // („când apăs pe History, să apară o bară cu anii, la fel cum este la Program"). Anii se aleg acum
@@ -452,37 +550,18 @@ export function paginaArhiva(ctx: Ctx, lista: Fisa[], an: number | null): string
   if (!ani.length) return paginaGoala(ctx)
   const ales = an && ani.includes(an) ? an : ani[0]!
 
-  // Anul, de la luna cea mai noua spre cea mai veche: cine intra in arhiva cauta mai degraba ce a
-  // fost duminica trecuta decat ce a fost in ianuarie.
-  const aleAnului = lista.filter((f) => anul(f) === ales)
-  const peLuni = new Map<number, Fisa[]>()
-  for (const f of aleAnului) {
-    const l = luna(f)
-    if (!peLuni.has(l)) peLuni.set(l, [])
-    peLuni.get(l)!.push(f)
-  }
-
-  const corp = [...peLuni.keys()]
-    .sort((a, b) => b - a)
-    .map(
-      (l) =>
-        `<h2 class="luna">${LUNI[l - 1] ?? ''}</h2>
-<ul class="numere">${peLuni
-          .get(l)!
-          .slice()
-          .reverse()
-          .map((f) => rand(ctx, f))
-          .join('')}</ul>`,
-    )
-    .join('')
+  // ⚠️ NUMAI NUMERELE (user, 16.09.2026): anunțurile și actualizările de program s-au mutat la
+  // „Altele", deci și socoteala de mai jos e a numerelor — altfel ar fi spus altceva decât lista.
+  const toateNumerele = numerotate(lista)
+  const aleAnului = toateNumerele.filter((f) => anul(f) === ales)
 
   return sablon({
     ctx,
     titlu: `Arhiva ${ales}`,
     lista,
     meniu: meniuLista({ arhiva: true, anDeschis: ales }),
-    corp: `<p class="cate">${aleAnului.length} ${aleAnului.length === 1 ? 'număr trimis' : 'numere trimise'} în ${ales} · ${lista.length} cu totul, din ${ani[ani.length - 1]} încoace</p>
-${corp}`,
+    corp: `<p class="cate">${aleAnului.length} ${aleAnului.length === 1 ? 'număr trimis' : 'numere trimise'} în ${ales} · ${toateNumerele.length} cu totul, din ${ani[ani.length - 1]} încoace</p>
+${peLuni(ctx, aleAnului)}`,
   })
 }
 
@@ -553,6 +632,41 @@ ${ultimul
       ? `<p class="cate">Ultimul număr: <a href="${esc(ctx.prefix)}/n/${ultimul.id}">${esc(scurtat(ultimul.subiect))}</a>, ${esc(ziuaLunga(ultimul))}.</p>`
       : ''}`,
   })
+}
+
+/**
+ * RUBRICA DIN SETARI cu cele doua bucati fixe — antetul si subsolul care se lipesc la fiecare buletin
+ * nou (user, 16.09.2026). Se aseaza la sfarsitul paginii de Setari, prin punctul de prindere
+ * `rubrici` din `@xc/setari`.
+ *
+ * Fiecare bucata se arata in DOUA feluri: cum SE VEDE (randata in aceeasi carcasa `.email` ca
+ * numerele din arhiva, deci exact cum va iesi in buletin) si cum e SCRISA (HTML-ul, intr-o cutie
+ * pliata). A doua e pentru cine vine sa umble la ea.
+ *
+ * ⚠️ DEOCAMDATA SE CITESC, NU SE SCRIU. Userul a cerut intai sa fie salvate si aratate („o să le mai
+ * fac eu câteva modificări după ce le avem salvate la setări") — schimbarea din pagina e pasul
+ * urmator. Pana atunci se schimba cu unealta, din numarul ales.
+ * ⚠️ Numai adminii: bucatile astea intra in ce pleaca pe email catre toata parohia.
+ */
+export function rubricaSablon(sablon: { antet: string | null; subsol: string | null }, eAdmin: boolean): string {
+  if (!eAdmin) return ''
+  const bucata = (nume: string, spune: string, corp: string | null) => `
+    <h3 class="sab-nume">${esc(nume)}</h3>
+    <p class="set-spune">${esc(spune)}</p>
+    ${corp === null
+      ? `<p class="set-gol">Nu e încă în depozit. Se pune cu unealta, dintr-un număr trimis.</p>`
+      : `<div class="email sab-proba">${corp}</div>
+    <details class="sab-sursa"><summary>Cum e scrisă (HTML, ${new TextEncoder().encode(corp).length} octeți)</summary>
+      <pre>${esc(corp)}</pre></details>`}`
+  return `<section class="set-grup">
+  <h2>Antetul și subsolul buletinului</h2>
+  <p class="set-spune">Zona fixă — bucățile care se lipesc la fiecare buletin nou, sus și jos.
+  Formele sunt cele din ultimul newsletter trimis.</p>
+  <p class="set-spune"><strong>Nu ating arhiva.</strong> Fiecare număr trimis își păstrează forma
+  lui, așa cum a plecat pe e-mail; o schimbare aici se vede abia la buletinul următor.</p>
+  ${bucata('Antetul', 'Cele două poze: crucea și titlul.', sablon.antet)}
+  ${bucata('Subsolul', 'Poza, cuvântul părintelui Arsenie Papacioc, grupul de WhatsApp și adresa.', sablon.subsol)}
+</section>`
 }
 
 /** Pagina scurta de mesaj (nu există, eroare) — cu antetul intreg. */

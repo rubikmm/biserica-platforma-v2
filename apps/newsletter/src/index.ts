@@ -39,7 +39,8 @@ import pkg from '../package.json'
 import { type Fisa, citesteLista, citesteNumarul, citesteTextele } from './depozit.js'
 import { abonamentul, ruteazaAbonare } from '@xc/abonare'
 import { ruteazaSetari } from '@xc/setari'
-import { type Ctx, paginaArhiva, paginaCarcasa, paginaCautare, paginaGoala, paginaMesaj, paginaNou, paginaNumar } from './pagini.js'
+import { type Ctx, paginaAltele, paginaArhiva, paginaCarcasa, paginaCautare, paginaGoala, paginaMesaj, paginaNou, paginaNumar, rubricaSablon } from './pagini.js'
+import { citesteSablon } from './sablon.js'
 
 export interface Env {
   ARHIVA: R2Bucket
@@ -259,6 +260,13 @@ export default {
       urlCont: nav.cont,
       urlTermeni: `${nav.home || ''}/termeni`,
       carcasa: (p) => paginaCarcasa(ctx, p),
+      /*
+       * ANTETUL SI SUBSOLUL buletinului — bucatile fixe, aratate la sfarsitul Setarilor (user,
+       * 16.09.2026). Se cer din depozit DOAR cand chiar se scrie pagina, nu la fiecare cerere.
+       * ⚠️ Numai adminii: bucatile astea intra in ce pleaca pe email catre toata parohia.
+       */
+      rubrici: async ({ eAdmin }) =>
+        eAdmin ? rubricaSablon(await citesteSablon(env.ARHIVA), true) : '',
     })
     if (raspunsSetari) return raspunsSetari
 
@@ -295,6 +303,13 @@ export default {
         const gasite = await cauta(env, lista, cuvinte)
         return html(paginaCautare(ctx, lista, intrebare, gasite, null), 200, cachePagina)
       }
+
+      /*
+       * ALTELE — trimiterile fara numar (actualizari de program, anunturi), scoase din listele
+       * anilor la 16.09.2026, cerute de user. ⚠️ Se incearca INAINTEA rutei anilor: aceea prinde doar
+       * patru cifre, dar daca vreodata se largeste, `/arhiva/altele` ar cadea in ea.
+       */
+      if (/^\/arhiva\/altele\/?$/.test(cale)) return html(paginaAltele(ctx, lista), 200, cachePagina)
 
       const ma = /^\/arhiva(?:\/(\d{4}))?\/?$/.exec(cale)
       if (ma) return html(paginaArhiva(ctx, lista, ma[1] ? Number(ma[1]) : null), 200, cachePagina)

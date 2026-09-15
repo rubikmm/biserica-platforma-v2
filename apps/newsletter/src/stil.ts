@@ -25,6 +25,21 @@ export const LOCAL = `
 .numere.cu-an .cand { min-width:88px }
 .cate { color:var(--faint); font-size:14px; margin:2px 0 0 }
 
+/* TITLUL NUMARULUI. ⚠️ Scris MAI MIC decat un titlu obisnuit, ca sa intre pe UN RAND si pe telefon
+   (user, 15.09.2026: "scrie mai mic ca sa intre pe un rand si pe mobil... eventual prescurteaza
+   luna"). Doua parghii, folosite in ordinea asta: intai cade luna pe forma scurta ("15 sept. 2026"),
+   apoi scade scrisul. Masurat cu Browser Rendering la 320-900 px.
+   ⚠️ Fara white-space:nowrap: daca vreun subiect iese totusi mai lung decat randul (parohia scrie ce
+   vrea in subiect), e mai bine sa se rupa pe doua randuri decat sa iasa din pagina. */
+.titlu-numar { font-size:22px; line-height:1.25; margin:22px 0 4px }
+.titlu-numar .scurt { display:none }
+@media (max-width:600px) {
+  .titlu-numar { font-size:17px }
+  .titlu-numar .lung { display:none }
+  .titlu-numar .scurt { display:inline }
+}
+@media (max-width:400px) { .titlu-numar { font-size:15.5px } }
+
 /* NEWSLETTERUL. Ce se vede aici e emailul asa cum a plecat — tabele si culori
    proprii, scrise acum ani. De-aia are nevoie de doua lucruri:
    1. sa scape de stilul global de tabel (chenare, padding, majuscule la <th>),
@@ -32,7 +47,18 @@ export const LOCAL = `
       are tema, iar culorile lui sunt scrise in el cu inline style. */
 .email { background:#fff; color:#111; border:1px solid var(--rule); border-radius:12px;
          overflow:hidden; margin:18px 0 0 }
+/* ⚠️ width:auto e aici ca sa scape de regula carcasei (table cu width 100%), care ar umfla la
+   toata latimea si tabelele de asezare ale emailului — cele doua coloane alaturate, de pilda.
+   ⚠️⚠️ DAR NU TREBUIE SA CALCE PESTE CE SPUNE EMAILUL (15.09.2026, reclamatia userului: "textele
+   care urmeaza nu sunt centrate... pe e-mail ajung asa centrate"). Latimea de 100% de pe tabel e un
+   ATRIBUT de prezentare, adica o regula cu specificitate zero: selectorul .email table o batea, iar
+   tabelele MailPoet se strangeau la latimea continutului. Urmarea nu se vedea la paragrafele lungi (care
+   umplu randul oricum), ci la cele SCURTE: "text-align:center" centra textul intr-o cutie ingusta,
+   lipita la stanga, deci pe ecran parea nealiniat — desi alinierea era, de fapt, pusa.
+   Acelasi lucru stramta si corpul intreg al emailului la 660 px intr-un chenar de 680.
+   Deci: auto pentru tabelele care NU-si spun latimea, 100% pentru cele care si-o spun. */
 .email table { border-collapse:collapse; width:auto; font-size:inherit }
+.email table[width="100%"] { width:100% }
 /* Resetul NU atinge text-align si vertical-align: emailul isi spune singur alinierea prin
    atributele "align" si "valign" de pe celule, iar acelea pierd in fata oricarei reguli
    de autor. O regula text-align:inherit aici ar descentra tot ce emailul a centrat. */
@@ -45,6 +71,22 @@ export const LOCAL = `
    dar numai in celulele care CHIAR cer centrare (crucea din capul fiecarui numar, poza
    de antet, ilustratiile). Cerere user, 8 sept. 2026: "centreaza crucea". */
 .email td[align="center"] img { margin-left:auto; margin-right:auto }
+/* POZELE CAT TOATA LATIMEA EMAILULUI (15.09.2026, reclamatia userului: "imaginea mare nu este suta
+   la suta"). MailPoet scrie in atributul width latimea la care a randat poza, iar corpul emailului
+   are 660 px — deci width 660 inseamna "cat tot randul". In inbox umplea exact; in pagina noastra chenarul
+   e putin mai lat, asa ca poza ramanea cu o dunga alba de-o parte si de alta.
+   ⚠️ Se cere ANUME 660: pozele mai mici (crucea din cap, ilustratiile) trebuie sa ramana la masura
+   lor, altfel s-ar umfla toate. Daca parohia schimba vreodata latimea sablonului MailPoet, numarul de
+   aici se schimba odata cu ea — de-aia sta scris pe fata, nu ascuns intr-o socoteala. */
+.email .mailpoet_image img[width="660"] { width:100% }
+/* ⚠️ …iar ca poza sa aiba unde se intinde, se ridica si PLAFONUL CORPULUI. MailPoet inchide tot
+   newsletterul intr-un tabel cu max-width 660px scris INLINE (mailpoet_content-wrapper) — masura
+   ferestrei de inbox. In pagina noastra chenarul are 680, deci corpul statea inauntru cu o dunga de
+   vreo noua pixeli de fiecare parte, iar poza „cat tot randul" se oprea si ea acolo.
+   ⚠️ !important e obligatoriu: plafonul e scris inline, si niciun selector nu bate stilul inline.
+   Cele 18 px castigate se impart la tot ce e inauntru, deci asezarea emailului nu se schimba — se
+   intinde. (Aceeasi socoteala ca la scanarea buletinului, doar ca acolo se lucra pe divul ei.) */
+.email .mailpoet_content-wrapper { width:100% !important; max-width:100% !important }
 /* Previzualizarea buletinului parohiei — pagina scanata a foii. In email sta intr-o
    coloana de 220 px, langa una de 440: bine pentru un inbox, prea mic pentru o pagina
    scrisa marunt. Aici randul se desface pe verticala si scanarea ia toata latimea.
@@ -188,6 +230,15 @@ export const LOCAL = `
 /* anul deschis: rosu si plin, ca segmentul pe care esti din pastila */
 .an-buton.activ { color:var(--rosu); font-weight:700;
                   background:color-mix(in srgb, var(--rosu) 11%, transparent) }
+/* „ALTELE", ultimul segment al barei (16.09.2026) — AFARA din fasie, ca sa nu se poata derula
+   dincolo de margine (vezi lamurirea din pagini.ts). Isi duce singur linia despartitoare, fiindca
+   vecinul lui din stanga nu mai e un an, ci fasia (ori sageata ei). */
+.bara-ani > .an-buton.altele { flex:none; border-left:1px solid var(--rule); letter-spacing:.04em }
+
+/* ANUL scris in corpul paginii „Altele" — acolo trimiterile vin din zece ani deodata, iar randurile
+   poarta doar ziua si luna; fara anul deasupra nu s-ar sti la ce se uita omul. */
+.anul { margin:26px 0 2px; font-size:19px; color:var(--soft) }
+.anul + .luna { margin-top:8px }
 /* Sagetile — segmentele de la capetele barei, pentru cine n-are deget. JS-ul le ascunde cu totul cand
    anii incap, ca sa nu stea doua segmente moarte in bara. */
 .bara-ani .sageata { flex:none; border:0; background:transparent; color:var(--faint); cursor:pointer;
@@ -293,6 +344,19 @@ export const LOCAL = `
                  flex:0 0 34px; width:34px }
   .btns .pastila .acum { padding:11px 5px; font-size:12.5px }
 }
+/* SABLONUL din Setari — cele doua bucati fixe, aratate si cum se vad, si cum sunt scrise.
+   ⚠️ Proba se randeaza in aceeasi carcasa .email ca numerele din arhiva, ca sa arate EXACT cum va
+   iesi in buletin; de-aia nu-si are stil propriu, doar o masura mai strinsa. */
+.sab-nume { margin:18px 0 2px; font:600 15px/1.3 ui-sans-serif,system-ui }
+.sab-proba { margin:8px 0 0 }
+.sab-sursa { margin:10px 0 0 }
+.sab-sursa > summary { cursor:pointer; color:var(--faint);
+                       font:600 12px/1.3 ui-sans-serif,system-ui; letter-spacing:.04em }
+.sab-sursa pre { margin:8px 0 0; padding:10px 12px; overflow-x:auto;
+                 background:var(--tinta); border:1px solid var(--rule); border-radius:10px;
+                 font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
+                 white-space:pre-wrap; word-break:break-word }
+
 mark { background:var(--azi-fund); color:inherit; padding:0 2px; border-radius:3px }
 .gol { color:var(--soft) }
 ` + STIL_SETARI

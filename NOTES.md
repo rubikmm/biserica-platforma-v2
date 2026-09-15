@@ -1747,6 +1747,59 @@ forța antetul `Host`**.
 
 ## Jurnal
 
+### 2026-09-16
+
+- **NEWSLETTERUL, RUNDA A DOUA** (user, în noapte). Newsletter **0.6.0**, publicat pe producție în
+  patru pași (0.4.0 → 0.6.0). ⚠️ **Din 16.09.2026 se publică DUPĂ FIECARE BUCATĂ**, cerut anume:
+  „de fapt de fiecare dată urcă online ce lucrăm".
+
+- **ZONA FIXĂ DIN SUBSOL — ce se vedea altfel decât în e-mail** (user: „imaginea mare nu este sută la
+  sută, iar textele care urmează nu sunt centrate"). **O singură regulă era de vină**, și explica
+  amândouă reclamațiile: `.email table { width:auto }` din `stil.ts`.
+  - `width="100%"` de pe tabelele MailPoet e un **atribut de prezentare**, adică o regulă cu
+    specificitate zero — selectorul `.email table` o bătea, iar tabelele se strângeau la lățimea
+    conținutului. La paragrafele lungi nu se vedea (umplu rândul oricum); la cele **scurte**,
+    `text-align:center` centra textul într-o cutie îngustă, lipită la stânga — deci pe ecran părea
+    nealiniat, deși alinierea era pusă. Leacul: `.email table[width="100%"] { width:100% }`.
+  - Poza mare: MailPoet închide tot newsletterul într-un `mailpoet_content-wrapper` cu
+    **max-width:660px scris INLINE** (măsura ferestrei de inbox). Chenarul nostru are 680, deci
+    rămânea o dungă albă. Ridicat cu `!important` (inline nu se bate altfel) + `img[width="660"]`
+    trece pe `width:100%`. ⚠️ Se cere anume 660: pozele mici trebuie să rămână la măsura lor.
+  - „Eu recomand o stare de veselie…" a rămas **justify**, cum s-a cerut.
+  - ⚠️ **Lecție de măsurare**: tăierea scrisului NU se vede pe `.acum`/pe celulă — `text-overflow`
+    taie elementul `b` dinăuntru fără ca părintele să crească. Se măsoară `scrollWidth` vs
+    `clientWidth` pe **elementul vizibil**.
+- **TITLUL DE PE PRIMA PAGINĂ**: „Buletinul Online nr. 571 / 15 septembrie 2026" — cade cuvântul
+  „Parohiei", scrisul e mai mic, iar pe telefon luna se prescurtează („15 sept."). Intră pe **un
+  rând** de la 320 px în sus (măsurat). ⚠️ Subiectul din `lista.json` **nu se atinge**: acolo e
+  arhiva, nu afișajul; se curăță doar la scris.
+- **ARHIVA: „ALTELE"** (user: „un nou buton numit «Altele»… să rămână listate în ARHIVĂ doar
+  numerele"). Despărțirea se face după `nr` — **405 numerotate, 55 fără număr** (actualizări de
+  program și anunțuri), la `/arhiva/altele`, pe ani.
+  ⚠️ **Butonul stă ÎN AFARA fâșiei**, lipit de capătul barei: înăuntru era la locul lui logic (după
+  2017), dar fâșia se derulează și cei zece ani o umplu — pe 1100 px cădea dincolo de margine și nu
+  se vedea deloc. Un buton cerut anume n-are voie să fie ascuns.
+- **ȘABLONUL — antetul și subsolul, în Setări** (user: „două bucăți de HTML… pe care să mai putem
+  interveni pe viitor"). Luate din **ultimul newsletter**, nu scrise de mână:
+  `sablon/antet.html` (crucea + titlul, 975 o.) și `sablon/subsol.html` (poza părintelui Arsenie,
+  cuvântul, citatul, WhatsApp, adresa, 5196 o.). Unealta:
+  `infrastructure/import/newsletter-live/sablon-din-numar.mjs`.
+  ⚠️ **ȘABLONUL NU E ARHIVA**: fiecare număr trimis își păstrează forma lui în `stiri/<id>.html` —
+  o fotografie a clipei. Bucățile se **inserează** la buletinul următor; o schimbare în ele nu
+  rescrie niciun număr vechi. Regula e scrisă în capul lui `sablon.ts` — nu o încălca.
+  ⚠️ `@xc/setari` a căpătat un **punct de prindere**: `rubrici({eAdmin, eSuper})`, rubrici ale
+  aplicației, așezate după cele comune. Aplicațiile care nu-l dau au pagina **neschimbată** (probă).
+- **AUDITUL NUMERELOR**, cerut de user. Din 405 numerotate (174 → 571):
+  - **11 numere dublate**: 202, 203, 204, 205 (retrimise cu aceleași numere o lună mai târziu, în
+    vara lui 2018), 326, 393, 466, 511, 535, 541, 546. Cazul 326: al doilea poartă în subiect chiar
+    data primului („15 decembrie 2020"), deși a plecat pe 22 — subiect copiat, nu corectat.
+    Cazul 546: **trimis de două ori în aceeași zi** (5 feb. 2026, 13:18 și 21:23), al doilea mai mare
+    cu 700 de octeți — pare o retrimitere corectată.
+  - **4 numere sărite**: 359 (între 4 și 9 aug. 2021) și 481–483 (între 13 și 20 mai 2024). ⚠️ În
+    amândouă cazurile ritmul săptămânal e **neîntrerupt**, deci numerele au fost sărite la numărătoare
+    — nu lipsesc numere din arhivă.
+  - ⚠️ **Nu se îndreaptă de la noi** (regula buletinului): arhiva e mărturia a ce a plecat.
+
 ### 2026-09-15
 
 - **NEWSLETTERUL (A8): MENIUL REFĂCUT, ABONARE VIE, ARHIVA LA ZI** (user, seara). Newsletter **0.3.0**,
