@@ -913,21 +913,42 @@ Baza afișării e **V1 verbatim** (10.09.2026: „identice ca program.sfantul-il
 și textele din `stil.ts` + `pagini.ts` ale V1. Ce urmează sunt **abaterile cerute explicit** — nu le
 „repara" înapoi spre V1.
 
-### Rândul de unelte din antet (refăcut 11.09.2026, trei runde într-o oră — starea finală)
+### Rândul de unelte din antet (refăcut 15.09.2026, după chipul Calendarului)
 
-Două grupuri, despărțite de bara verticală:
+⚠️ **Asta e starea de acum; cea de dinainte — două grupuri despărțite de bara verticală, cu
+întrerupătorul și cele trei hârtii în dreapta — a ținut din 11.09 până în 15.09.2026.** Cererea nouă a
+venit în șase puncte („butonul cu bulina să fie primul… o zonă de scris (ca la Calendar)… iconița cu
+săgeata dreapta - însemna săptămâna viitoare… Arhiva vine după săptămâna viitoare… butonul de abonare
+o să vină ultimul ca în Calendar… întrerupătorul vine în pastilă după arhivă și după urmează un buton
+download care adună butoanele").
 
-- **STÂNGA — pastila navigării**, care ia tot spațiul rămas (`flex:1`; prisosul îl ia doar segmentul
-  cu scris). Trei segmente: **Arhiva** (iconița cutiei, numai la admini), **bulina** săptămânii de azi
-  și **„Săptămâna viitoare"** scris în litere (datele au trecut în `title`/`aria-label`). Segmentul pe
-  care ești e roșu și neapăsabil. Navigarea „săptămâna trecută" a ieșit: „nu se mai deschide săptămâna
-  trecută, se poate selecta din pagina arhivei".
-- **DREAPTA, lipit de margine** (`.unelte-dr`, `margin-left:auto` — 10:48: „tot ce este după bara
-  verticală… să fie aliniate la dreapta, dar restul spațiului să fie folosit de butoanele celelalte"):
-  **întrerupătorul „Calendar"**, **butonul de download**, **PDF**, **JPG**. Numai pentru admini.
-- **Abonarea** stă îndată după pastilă, la omul FĂRĂ drepturi de admin.
-- **Căsuța `.nav-jos` a dispărut cu totul** — PDF și JPG au urcat în rând. A căzut și golul de 34 px
-  de sub antet.
+**PASTILA ia tot rândul** (`flex:1 1 auto`), cu șase segmente în ordinea cerută:
+
+1. **bulina** săptămânii de azi (măsură fixă, 46 px; 42 pe telefon);
+2. **ZONA DE SCRIS** (`.acum`), care ia tot prisosul: „Săptămâna curentă" / „Săptămâna viitoare" /
+   intervalul săptămânii deschise din arhivă / „Arhiva" pe pagina arhivei (`scrisulSaptamanii`).
+   ⚠️ **Nu e buton, e zonă de semnalizare**, ca la Calendar: fundal de hârtie (`--paper`), scris roșu,
+   fără `:hover`, fără `cursor:pointer`. Forma scurtă („Săpt. curentă") se scrie alături și o alege
+   CSS-ul sub 600 px; datele stau în `title`;
+3. **săgeata-dreapta** = săptămâna viitoare, **numai iconița, la orice lățime** (cuvintele ei s-au
+   mutat în zona de scris — scrise în amândouă, ar fi spus de două ori același lucru);
+4. **Arhiva** (iconița cutiei, numai la admini);
+5. **întrerupătorul „Calendar"**, intrat în pastilă;
+6. **butonul de DESCĂRCARE**, ultimul (numai la admini), cu meniul celor trei hârtii sub el.
+
+**AFARĂ a rămas NUMAI Abonarea** (18:08: „butonul de download trebuie să fie în pastilă, ultimul, iar
+butonul de abonare să fie singurul la dreapta, în exterior"). **Bara verticală și învelișul
+`.unelte-dr` au căzut** — la Calendar n-au existat niciodată; pastila ia tot prisosul, deci abonarea
+ajunge oricum lipită de marginea din dreapta (`margin-left:auto` o ține acolo și când rândul se rupe).
+
+⚠️ **Pastila NU mai are `overflow:hidden`** — cu meniul descărcării atârnat de ultimul segment, l-ar
+tăia și meniul n-ar mai apărea deloc (capcană plătită la Calendar cu o zi înainte). Rotunjirea
+colțurilor o duc acum segmentele de la capete (`.pastila > :first-child` / `:last-child`, plus
+`summary`-ul descărcării când ea e ultima).
+
+Segmentul pe care ești e roșu și neapăsabil. Navigarea „săptămâna trecută" rămâne ieșită: „nu se mai
+deschide săptămâna trecută, se poate selecta din pagina arhivei". Căsuța `.nav-jos` a dispărut de la
+11.09.2026 și nu se întoarce.
 
 **⚠️ Butoanele se sting, nu se ascund** (11.09, 23:23: „când intru pe Arhivă, întrerupătorul doar se
 dezactivează și la fel și butonul lui de download, acum se ascund și strică interfața"; 12.09, 00:06:
@@ -956,31 +977,26 @@ la cererea utilizatorului. Nu o readuce.
 
 ### Pe telefon
 
-**⚠️ TOT RÂNDUL STĂ PE O LINIE** (11.09, 15:43: „nu încap restul butoanelor pe aceeași linie"). Două
-lucruri își lasă scrisul sub 600 px: **„Săptămâna viitoare" devine o săgeată-dreapta** (`IC_INAINTE`,
-clasele `.cuv`/`.sgt` scrise amândouă, alege CSS-ul) și **PDF/JPG rămân doar iconițele** (`.fel`
-ascuns; de aceea au căpătat `aria-label`). Restul se strânge la padding; sub **380 px** cade și bara
-verticală. **Cifre măsurate** pe pagina unui super-admin: rândul cerea **431 px**, un telefon de 390
-are 335 de folosit, unul de 360 doar 305. Sub ~330 px tot se rupe — `flex-wrap` a rămas dinadins, ca
-plasă. Pe desktop nu s-a schimbat nimic.
+**⚠️ CADE SCRISUL BUTOANELOR, NU ZONA DE SCRIS** (regula Calendarului, 15.09.2026: „pe mobil, neapărat
+să se vadă scrisul"). Sub 600 px: Abonarea rămâne numai plic (din `@xc/abonare`), zona de scris trece
+pe forma scurtă, butoanele-iconiță ale pastilei se fac **pătrate de 42 px** (38 sub 380 px) și
+padingul se strânge. Numele întregi stau în `title`/`aria-label`, deci nu se pierd.
 
-**⚠️ ANTETUL ARE DOUĂ ÎNFĂȚIȘĂRI, după drepturi** (11.09, 16:02). Pastila omului **fără** drepturi
-poartă clasa **`larga`** (`ctx.eAdmin` o decide) și, sub 600 px: se întinde cât rândul, segmentul
-„viitoare" scrie **cuvintele ȘI săgeata** (cerute anume în ordinea asta), iar **bulina stă lată**
-(22 px în laturi, „să fie mai ușor de apăsat"). ⚠️ `flex:1 1 0`, NU `1 1 auto`: cu măsura de pornire
-`auto` cuvintele umflau pastila peste ecran și întrerupătorul sărea pe rândul doi.
+**⚠️ FORMA DE TELEFON A ZONEI E UN SINGUR CUVÂNT: „Curentă" / „Viitoare"** — nu „Săpt. curentă".
+Măsurat pe un telefon de 390: pastila ia tot rândul (335), butoanele ei cer 42×3 = 126 + întrerupătorul
+(~74) + descărcarea (~36) = **236**, deci zonei îi rămân ~79 px, iar „Săpt. curentă" cere ~85 și **ieșea
+tăiată la amândouă capetele** (scrisul e centrat). Cuvântul singur cere ~55 și încape și la 360.
+Plasă: `text-overflow:ellipsis` pe scris — la o strâmtare și mai mare se taie cu trei puncte, nu la
+mijlocul literelor.
 
-**Și pastila adminului ia spațiul rămas** (16:20): `flex:1 1 auto` pe pastilă (măsura de pornire rămâne
-`auto` — înăuntru sunt numai iconițe, deci rândul se rupe cinstit când nu încape, în loc să le taie) și
-`1 1 auto` pe `.viit`. La admin butoanele-iconiță s-au făcut **pătrate** (padding 9 px în laturi, cât
-cel de sus din carcasă → ținte de ~36×36; „să fie atâta spațiu sus cât este stânga dreapta"), iar
-bulina 15 px. Rămâne strâmt: 331 px din 335 la un telefon de 390.
+**⚠️ LA ADMIN RÂNDUL SE RUPE ÎN DOUĂ pe telefon**, și e plătit dinadins pentru zona de scris: pastila
+(311 px cu tot cu scris) + abonarea (44) + spațiu cer ~360 din 335. **Pastila sus, cât ecranul;
+abonarea dedesubt, lipită la dreapta.** **La enoriaș** — fără Arhivă și fără descărcare — rândul încape
+întreg pe o linie. Dacă se cere o singură linie și la admin, ce se poate tăia e **becul
+întrerupătorului** (~35 px); nu s-a făcut, fiindcă becul e singurul care spune starea.
 
-**⚠️ Dacă adaugi ceva în rândul de unelte, măsoară din nou** (rețeta e mai jos).
-
-⚠️ **La utilizatorul simplu rândul se rupe în două**: bulina + „Săptămâna viitoare" scrisă + abonarea +
-întrerupătorul cer ~380 px. Nimic nu se taie — pastila rămâne sus, abonarea și întrerupătorul coboară.
-Ca să încapă ar trebui prescurtat textul („Săpt. viitoare") sau strâmtată bulina; utilizatorul știe.
+**⚠️ Dacă adaugi ceva în rândul de unelte, măsoară din nou** (rețeta e mai jos) — zona de scris e prima
+care se strânge.
 
 ### Întrerupătorul „Calendar" și butonul de download
 
@@ -1005,10 +1021,23 @@ Ca să încapă ar trebui prescurtat textul („Săpt. viitoare") sau strâmtat�
   la **bulină**, nu la el. Nu-l scoate decât la o cerere care-l numește.
 - **Becul aprins NU e roșu** (11:14: „întrerupătorul să fie alb"): pista se umple cu `--soft`, bila se
   face `--paper`. Roșul e rezervat locului în care te afli (pastila, masca din meniu).
-- **Butonul de download** dă exact ce se vede: aprins → săgeată **dublă** + `?coloane=2`, stins →
-  săgeată **simplă** + `?coloane=1`. Se scriu **amândouă înfățișările** (`.poza-1`/`.poza-2`), iar
-  CSS-ul o alege pe cea potrivită după `cu-calendar` — JS-ul nu umblă la `href`, deci nu clipește.
-  Implicitul rutei a rămas `coloane=2`. Poza calendarului de la A1 a ieșit din antet, definitiv.
+- **Butonul de download e UNUL SINGUR, cu meniu sub el, și stă ULTIMUL ÎN PASTILĂ** (15.09.2026: „un
+  buton download care adună butoanele download program afișat (singur/dublu), program tipar pdf,
+  program tipar jpg"; la 18:08: „în pastilă, ultimul") — aceeași
+  mutare ca la cele trei cruci ale Calendarului, cu o zi înainte. Trei rânduri: **Programul afișat**
+  (poza paginii), **Program tipar — PDF**, **Program tipar — JPG**; fiecare cu numele scris, nu doar
+  cu iconița.
+  - **Rândul „Programul afișat" dă exact ce se vede**: aprins → săgeată **dublă** + `?coloane=2`,
+    stins → săgeată **simplă** + `?coloane=1`. Se scriu **amândouă rândurile** (`.poza-1`/`.poza-2`),
+    iar CSS-ul îl alege pe cel potrivit după `cu-calendar` — JS-ul nu umblă la `href`, deci nu
+    clipește. Implicitul rutei a rămas `coloane=2`.
+  - ⚠️ **E un `<details>`, deci merge fără JS**; JS-ul adaugă doar închiderea la Escape și la apăsare
+    în afară. ⚠️ **Carcasa îmbracă orice `<details>` într-o cutie** — cele șase linii care o scot sunt
+    în STIL, la `.btns .desc` (aceeași capcană ca la meniul crucii din Calendar).
+  - ⚠️ **Când nu e nimic de apăsat, butonul se scrie STINS, fără meniu** (un `<span>`, nu un
+    `<details>`): pagina Arhivei și adminul simplu pe o săptămână veche. Pricina stă în `title`.
+    Rândurile PDF/JPG rămân scrise, dar pălite, când săptămâna n-are program validat.
+  - Poza calendarului de la A1 a ieșit din antet, definitiv.
 
 ### Pagina săptămânii
 
@@ -1600,6 +1629,22 @@ forța antetul `Host`**.
 ## Jurnal
 
 ### 2026-09-15
+
+- **ANTETUL PROGRAMULUI, REFĂCUT DUPĂ CHIPUL CALENDARULUI** (user, 17:52, în șase puncte; la 18:08 a
+  mutat și descărcarea în pastilă). Program **0.7.1** pe producție. Ordinea de acum: **bulina · zona de
+  scris · săgeata-dreapta · Arhiva · întrerupătorul · descărcarea**, toate în pastilă, iar afară numai
+  **Abonarea**. Amănuntele, în „Rândul de unelte din antet". Patru lucruri învățate sau plătite:
+  - **Cuvintele „Săptămâna viitoare" au ieșit de pe buton** și au trecut în zona de scris: scrise în
+    amândouă, ar fi spus de două ori același lucru și ar fi umflat rândul. Săgeata rămâne singură, la
+    orice lățime.
+  - ⚠️ **`overflow:hidden` pe pastilă TAIE meniul** atârnat de ultimul segment — a doua oară în două
+    zile (prima la Calendar). Rotunjirea colțurilor trece atunci pe segmentele de la capete.
+  - ⚠️ **Scrisul centrat într-o cutie cu `overflow:hidden` se ciuntește la AMÂNDOUĂ capetele**, nu doar
+    la coadă: pe telefon „Săpt. curentă" cerea 85 px și avea 79. De aceea forma de telefon e un singur
+    cuvânt („Curentă"), cu `text-overflow:ellipsis` ca plasă.
+  - **Cele trei hârtii au devenit un meniu** — al doilea buton-cu-meniu din platformă, scris după
+    tiparul crucii din Calendar (`<details>` + cele șase linii care scot cutia carcasei + închiderea la
+    Escape/clic în afară). Câștigul: fiecare hârtie își are numele scris, nu doar iconița.
 
 - **⚠️ Dungă roșie în mijlocul pastilei** (user: „pare o linie roșie border left pe cruce"). Pricina:
   două reguli scrise pe vremea când crucea era buton de sine stătător, cu chenar de jur împrejur —
