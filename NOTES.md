@@ -1562,6 +1562,21 @@ forța antetul `Host`**.
 
 ### 2026-09-15
 
+- **Schema platformei a intrat în admin**, la `admin/schema` (0.3.0), cerută în doi pași: întâi un
+  link, apoi „detalieri pe toate aplicațiile și configurația generală". Pagina are desenul, ce e
+  scris la fel peste tot (o dată, nu de 21 de ori) și o fișă pentru fiecare worker: versiune, adresă,
+  ce ține, ce cheamă, ceas, ultima publicare, variabilele ei proprii, unde e codul. Poartă `audit.read`.
+  Unealta: `infrastructure/harta/schema-cloudflare.mjs` — citește **workerii publicați**, scoate
+  pagină / `--fragment` / `--ts`. ⚠️ **Conținutul din admin e o FOTOGRAFIE adusă în cod**, nu citit
+  live (tokenul contului n-are ce căuta într-un worker); se reface cu `--ts` + deploy.
+  ⚠️ **Descrierile aplicațiilor se citesc din comentariul de sus al fiecărui `wrangler.jsonc`** —
+  nicio a doua copie care să se învechească singură.
+  ⚠️ Două capcane de desen, plătite: **SVG-ul nu taie și nu rupe textul** (ce nu încape curge peste
+  cutia vecină, fără nicio eroare — de aceea unealta își măsoară singură etichetele și se plânge la
+  stderr); și **un cron scris într-un comentariu de bloc îl închide**, fiindcă începe cu stea-slash.
+- **⚠️ De lămurit: `URL_HOME` e `https://sfantul-ilie.ro` la toate cele 13** — „Platforma" din meniul
+  contului duce la pagina de pe cPanel, nu la `website.sfantul-ilie.ro` (`xc-home`). Poate e voit,
+  poate e rămășiță de la cutover. Întrebat, fără răspuns încă; dacă se schimbă, se schimbă peste tot.
 - **V1 și staging-ul s-au închis de tot.** Contul Cloudflare are de acum **un singur mediu**: 21 de
   workeri, 15 adrese, 12 baze D1, 7 depozite, 1 KV, 2 cozi, 1 gateway — toate `xc-*-production`, cu
   singura excepție știută `biserica-transmisiuni`. Socoteala e în NEXT, 0c. Harta întregului cont, pe
