@@ -989,11 +989,18 @@ tăiată la amândouă capetele** (scrisul e centrat). Cuvântul singur cere ~55
 Plasă: `text-overflow:ellipsis` pe scris — la o strâmtare și mai mare se taie cu trei puncte, nu la
 mijlocul literelor.
 
-**⚠️ LA ADMIN RÂNDUL SE RUPE ÎN DOUĂ pe telefon**, și e plătit dinadins pentru zona de scris: pastila
-(311 px cu tot cu scris) + abonarea (44) + spațiu cer ~360 din 335. **Pastila sus, cât ecranul;
-abonarea dedesubt, lipită la dreapta.** **La enoriaș** — fără Arhivă și fără descărcare — rândul încape
-întreg pe o linie. Dacă se cere o singură linie și la admin, ce se poate tăia e **becul
-întrerupătorului** (~35 px); nu s-a făcut, fiindcă becul e singurul care spune starea.
+**⚠️ TOT RÂNDUL STĂ PE O SINGURĂ LINIE, ȘI LA ADMIN** (user, 15.09.2026, 18:20: „nu trebuie să fie pe
+mai multe rânduri meniul mai ales la admini"). Ce a făcut loc: **becul întrerupătorului, care cerea
+35 px** — pe telefon segmentul rămâne un pătrat cu iconița, iar **starea o spune segmentul: aprins, se
+umple cu cerneală și iconița se face hârtie** (exact ce făcea becul; roșul rămâne interzis aici, după
+regula din 11.09). Pe desktop becul e neatins.
+
+**Socoteala, la un super-admin (rândul cel mai plin), pe un telefon de 390 cu 335 de folosit**:
+42×3 = 126 (bulină, săgeată, Arhivă) + întrerupătorul 42 + descărcarea 35 + zona de scris ~75 = **278**,
+plus spațiul de 5 și abonarea de 44 = **327**. Încape, cu 8 px de prisos. **La 360** (305 de folosit)
+butoanele scad la 36, descărcarea la 29 și padingul zonei la 6 → **~300**; cu 38/31 și padding 8 cerea
+312 și se rupea, deci marja e de un deget. ⚠️ **Dacă mai adaugi ceva în rând, socoteala asta se reface
+— nu mai e loc de împrumut.**
 
 **⚠️ Dacă adaugi ceva în rândul de unelte, măsoară din nou** (rețeta e mai jos) — zona de scris e prima
 care se strânge.
@@ -1645,6 +1652,12 @@ forța antetul `Host`**.
   - **Cele trei hârtii au devenit un meniu** — al doilea buton-cu-meniu din platformă, scris după
     tiparul crucii din Calendar (`<details>` + cele șase linii care scot cutia carcasei + închiderea la
     Escape/clic în afară). Câștigul: fiecare hârtie își are numele scris, nu doar iconița.
+  - **⚠️ 18:20, a treia cerere: „nu trebuie să fie pe mai multe rânduri meniul mai ales la admini".**
+    Rândul se rupea pe telefon fiindcă zona de scris ceruse lățime. Locul l-a dat **becul
+    întrerupătorului** (35 px), care pe telefon iese cu totul: starea trece pe segment (cerneală +
+    iconiță hârtie). Acum ține o linie și la 390, și la 360. **Program 0.7.2.** De ținut minte:
+    când un rând nu mai încape, întreabă-te ce element are un al doilea fel de a-și spune starea —
+    becul avea unul, cuvintele butoanelor aveau `title`, zona de scris n-are niciunul.
 
 - **⚠️ Dungă roșie în mijlocul pastilei** (user: „pare o linie roșie border left pe cruce"). Pricina:
   două reguli scrise pe vremea când crucea era buton de sine stătător, cu chenar de jur împrejur —

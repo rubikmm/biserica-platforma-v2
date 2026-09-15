@@ -328,16 +328,16 @@ export const STIL = `
 .desc-meniu .poza-2 { display:none }
 body.cu-calendar .desc-meniu .poza-1 { display:none }
 body.cu-calendar .desc-meniu .poza-2 { display:flex }
-/* ⚠️ PE TELEFON CADE SCRISUL BUTOANELOR, NU ZONA DE SCRIS (regula Calendarului, 15.09.2026: „pe
-   mobil, neapărat să se vadă scrisul"). Abonarea ramane numai plic, iar zona de scris trece pe forma
-   scurta („Săpt. curentă"); numele intregi stau in title si aria-label, deci nu se pierd.
-   ⚠️ Cifrele, la un super-admin (el are cel mai plin rand): pastila cere 42×3 = 126 px de butoane plus
-   intrerupatorul (~74) = 202, iar afara descarcarea (36) si abonarea (44), cu doua spatii de 5 = 292
-   din 335 cati are un telefon de 390. Zonei de scris i-ar ramane vreo 43 px, prea putin pentru
-   „Săpt. curentă" (~85) — deci randul SE RUPE cinstit in doua: pastila sus, cat ecranul, cu scrisul
-   incapator, iar descarcarea si abonarea dedesubt, lipite la dreapta (de aceea a ramas .unelte-dr).
-   La enorias, fara Arhiva si fara descarcare, randul incape intreg. Asta e alegerea platita pentru
-   zona de scris ceruta azi: pe telefonul unui admin, o linie in plus. */
+/* ⚠️ PE TELEFON, TOT RANDUL STA PE O SINGURA LINIE, SI LA ADMIN (user, 15.09.2026, 18:20: „nu trebuie
+   să fie pe mai multe rânduri meniul mai ales la admini"). Ce cade e scrisul BUTOANELOR, niciodata
+   zona de scris (regula Calendarului: „pe mobil, neapărat să se vadă scrisul"): abonarea ramane numai
+   plic, iar zona trece pe cuvantul singur („Curentă"); numele intregi stau in title si aria-label.
+   ⚠️ CE A FACUT LOC: BECUL INTRERUPATORULUI, care cerea 35 px (pista de 30 + spatiul dintre el si
+   iconita). Fara el, la un super-admin (randul cel mai plin) socoteala la un telefon de 390, cu 335
+   de folosit, iese asa: pastila 42×3 = 126 (bulina, sageata, Arhiva) + intrerupatorul 42 +
+   descarcarea 35 + zona de scris ~75 = 278, plus spatiul de 5 si abonarea de 44 = 327. Incape, cu 8
+   px de prisos. La 360 (305 de folosit) butoanele scad la 38 si iese 300.
+   ⚠️ DACA MAI ADAUGI CEVA IN RAND, SOCOTEALA ASTA SE REFACE — nu mai e loc de imprumut. */
 @media (max-width:600px) {
   .btns { gap:5px; flex-wrap:wrap }
   .btns .btn { flex:0 0 auto; white-space:nowrap }
@@ -347,8 +347,16 @@ body.cu-calendar .desc-meniu .poza-2 { display:flex }
      laturi: iconita de 17–18 px iese intr-o tinta de ~36×36, mai usor de nimerit cu degetul decat
      dreptunghiul ingust de pana acum. Se aplica la TOATE cele din rand — si la cele din pastila. */
   .btns .mic { padding:9px }
-  .btns .com-cal { gap:5px; padding:9px }
   .btns .pastila .punct, .btns .pastila .viit, .btns .pastila .arh { flex:0 0 42px; width:42px }
+  /* ⚠️ INTRERUPATORUL ISI LASA BECUL PE TELEFON si ramane un patrat ca celelalte. Starea o spune
+     atunci SEGMENTUL: aprins, se umple cu cerneala si iconita se face hartie — exact ce facea becul
+     (user, 11.09.2026: „să nu mai fie roșu; întrerupătorul să fie alb"), doar ca acum e pe toata
+     casuta, nu pe o pista de 30 px. Stins, ramane ca oricare alt segment. Pe desktop becul e neatins. */
+  .btns .pastila .com-cal { flex:0 0 42px; width:42px; padding:0; gap:0 }
+  .btns .pastila .com-cal .bec { display:none }
+  .btns .pastila .com-cal[aria-pressed="true"] { background:var(--soft); color:var(--paper) }
+  /* descarcarea, tot patrata */
+  .btns .pastila .desc-cheie, .btns .pastila .desc-stins { flex:0 0 35px; width:35px; padding:0 }
   /* zona de scris: strange padingul si scrisul, dar nu se ascunde niciodata */
   .btns .pastila .acum { padding:11px 10px; font-size:13px }
   .btns .pastila .acum .lung { display:none }
@@ -356,12 +364,17 @@ body.cu-calendar .desc-meniu .poza-2 { display:flex }
   /* meniul descarcarii nu e mai lat decat ecranul, oricat de ingust ar fi telefonul */
   .desc-meniu { min-width:0; width:max-content; max-width:calc(100vw - 32px) }
 }
-/* Telefoanele inguste (Android de 360 px si mai jos): butoanele lasa un pixel din laturi si zona de
-   scris se strange si ea — nu mai sunt patrate la milimetru, dar nimic nu se taie. */
+/* Telefoanele inguste (Android de 360 px si mai jos): butoanele mai lasa cativa pixeli si zona de
+   scris se strange si ea — nu mai sunt patrate la milimetru, dar randul ramane pe o linie. */
 @media (max-width:380px) {
-  .btns .mic, .btns .com-cal { padding-left:7px; padding-right:7px }
-  .btns .pastila .punct, .btns .pastila .viit, .btns .pastila .arh { flex:0 0 38px; width:38px }
-  .btns .pastila .acum { padding:11px 8px; font-size:12.5px }
+  .btns { gap:4px }
+  .btns .mic { padding-left:7px; padding-right:7px }
+  .btns .pastila .punct, .btns .pastila .viit, .btns .pastila .arh,
+  .btns .pastila .com-cal { flex:0 0 36px; width:36px }
+  .btns .pastila .desc-cheie, .btns .pastila .desc-stins { flex:0 0 29px; width:29px }
+  /* ⚠️ Masurat la 360 px (305 de folosit): cu 38/31 si padding de 8 randul cerea ~312 si se rupea —
+     doar cu vreo zece pixeli. De aceea si padingul zonei scade la 6: prisosul e de un deget. */
+  .btns .pastila .acum { padding:11px 6px; font-size:12.5px }
 }
 
 /* o zi din program */
