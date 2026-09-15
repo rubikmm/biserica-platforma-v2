@@ -24,6 +24,8 @@ import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
 const CHIAR = process.argv.includes('--chiar')
+/** `--fara-r2`: lasă depozitele pe altă rundă. Ștergerea lor e mii de cereri; nu se amestecă cu o copiere mare. */
+const FARA_R2 = process.argv.includes('--fara-r2')
 const CE = process.argv.includes('--staging') ? 'staging' : process.argv.includes('--v1') ? 'v1' : null
 const arg = (n, implicit = null) => {
   const i = process.argv.indexOf(`--${n}`)
@@ -50,7 +52,8 @@ if (!CONT || !TOKEN) {
 const NEATINSE_R2 = new Set(['biserica-transmisiuni'])
 const NEATINSE_KV = new Set(['CONFIG-production'])
 
-const api = async (cale, init) => {
+/** Raspunsul INTREG: la liste, cursorul paginarii sta in `result_info`, nu in `result`. */
+const apiPlin = async (cale, init) => {
   const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${CONT}${cale}`, {
     ...init,
     headers: { authorization: `Bearer ${TOKEN}`, ...(init?.headers ?? {}) },
@@ -58,35 +61,38 @@ const api = async (cale, init) => {
   if (r.status === 429) {
     const asteapta = Number(r.headers.get('retry-after') ?? 5)
     await new Promise((g) => setTimeout(g, asteapta * 1000))
-    return api(cale, init)
+    return apiPlin(cale, init)
   }
   const d = await r.json().catch(() => ({ success: r.ok }))
   if (!d.success) throw new Error(`${cale}: ${JSON.stringify(d.errors ?? d).slice(0, 180)}`)
-  return d.result
+  return d
 }
+const api = async (cale, init) => (await apiPlin(cale, init)).result
 
 const eV1 = (n) => !n.startsWith('xc-')
 const eStaging = (n) => n.endsWith('-staging')
 const alege = CE === 'v1' ? eV1 : eStaging
 
 // ---------------------------------------------------------------- ce avem si ce pleaca
-const [workeri, domenii, baze, galeti, spatii, gateways] = await Promise.all([
+const [workeri, domenii, baze, galeti, spatii, gateways, cozi] = await Promise.all([
   api('/workers/scripts'),
   api('/workers/domains?per_page=200'),
   api('/d1/database?per_page=100'),
   api('/r2/buckets?per_page=100').then((r) => r.buckets ?? r),
   api('/storage/kv/namespaces?per_page=100'),
   api('/ai-gateway/gateways').catch(() => []),
+  api('/queues?per_page=100').catch(() => []),
 ])
 
 const deSters = {
   domenii: domenii.filter((d) => alege(d.service)),
   workeri: workeri.map((w) => w.id).filter(alege),
   baze: baze.filter((b) => alege(b.name)),
-  galeti: galeti.map((b) => b.name).filter((n) => alege(n) && !NEATINSE_R2.has(n)),
+  galeti: FARA_R2 ? [] : galeti.map((b) => b.name).filter((n) => alege(n) && !NEATINSE_R2.has(n)),
   spatii: spatii.filter((k) => alege(k.title) && !NEATINSE_KV.has(k.title)),
   // Poarta AI Gateway ramane UNA singura, `xc-chat`; cea a V1 (`biserica`) pleaca, cu loguri cu tot.
   gateways: CE === 'v1' ? gateways.map((g) => g.id).filter((g) => !g.startsWith('xc-')) : [],
+  cozi: cozi.filter((q) => alege(q.queue_name)),
 }
 
 console.log(`Curatenie ${CE.toUpperCase()} — ${CHIAR ? 'SE STERGE' : 'doar arat (fara --chiar)'}`)
@@ -96,6 +102,7 @@ console.log(`  baze D1:   ${deSters.baze.map((b) => b.name).join(', ') || '—'}
 console.log(`  depozite:  ${deSters.galeti.join(', ') || '—'}`)
 console.log(`  spatii KV: ${deSters.spatii.map((k) => k.title).join(', ') || '—'}`)
 console.log(`  gateway:   ${deSters.gateways.join(', ') || '—'}`)
+console.log(`  cozi:      ${deSters.cozi.map((q) => q.queue_name).join(', ') || '—'}`)
 
 // ---------------------------------------------------------------- poarta: arhiva de pe NAS
 const lipsesc = []
@@ -103,9 +110,34 @@ for (const b of deSters.baze) {
   const f = join(ARHIVA, 'd1', `${b.name}.sql`)
   if (!existsSync(f)) lipsesc.push(f)
 }
+/**
+ * ⚠️ Poarta cere o COPIE, dar rostul ei e ca nimic sa nu se piarda — iar un depozit de staging nu
+ * are ce pierde daca geamanul lui de productie ramane in picioare cu aceleasi obiecte. De aceea al
+ * doilea drum: `xc-<app>-staging` trece daca `xc-<app>-production` NU se sterge si are cel putin
+ * tot atatea obiecte. Numaram, nu presupunem — si daca geamanul e mai sarac, poarta se inchide.
+ */
+const cateObiecte = async (galeata) => {
+  let cursor = null
+  let n = 0
+  do {
+    const d = await apiPlin(`/r2/buckets/${galeata}/objects?per_page=1000${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`)
+    n += (d.result.objects ?? d.result).length
+    cursor = d.result_info?.is_truncated ? d.result_info?.cursor : null
+  } while (cursor)
+  return n
+}
 for (const g of deSters.galeti) {
   const d = join(ARHIVA, 'r2', g)
-  if (!existsSync(d) || readdirSync(d).length === 0) lipsesc.push(`${d}/ (gol sau lipsa)`)
+  if (existsSync(d) && readdirSync(d).length > 0) continue
+  const geaman = g.replace(/-staging$/, '-production')
+  const areGeaman = geaman !== g && galeti.some((b) => b.name === geaman) && !deSters.galeti.includes(geaman)
+  if (!areGeaman) {
+    lipsesc.push(`${d}/ (gol sau lipsa)`)
+    continue
+  }
+  const [aici, acolo] = await Promise.all([cateObiecte(g), cateObiecte(geaman)])
+  if (acolo >= aici) console.log(`  ${g}: fara copie, dar ${geaman} are ${acolo} ≥ ${aici} obiecte ✓`)
+  else lipsesc.push(`${d}/ (gol sau lipsa) — iar ${geaman} are doar ${acolo} din ${aici} obiecte`)
 }
 if (lipsesc.length > 0) {
   console.log(`\n⚠️ POARTA INCHISA — lipsesc din arhiva ${ARHIVA}:`)
@@ -138,17 +170,36 @@ for (const d of deSters.domenii) {
   await incearca(d.hostname, () => api(`/workers/domains/${d.id}`, { method: 'DELETE' }))
 }
 
-console.log('2. workerii')
+/*
+ * ⚠️ Un worker care CONSUMA o coada nu se poate sterge (cod 10064), nici cu `force=true`. Se scoate
+ * intai de la coada, apoi pleaca. De aceea consumatorii se desfac inaintea workerilor, iar cozile
+ * goale se sterg la urma.
+ */
+console.log('2. consumatorii cozilor')
+for (const q of deSters.cozi) {
+  for (const c of await api(`/queues/${q.queue_id}/consumers`).catch(() => [])) {
+    await incearca(`${q.queue_name} ← ${c.script}`, () =>
+      api(`/queues/${q.queue_id}/consumers/${c.consumer_id}`, { method: 'DELETE' }),
+    )
+  }
+}
+
+console.log('3. workerii')
 for (const w of deSters.workeri) {
   await incearca(w, () => api(`/workers/scripts/${w}?force=true`, { method: 'DELETE' }))
 }
 
-console.log('3. bazele D1')
+console.log('4. cozile')
+for (const q of deSters.cozi) {
+  await incearca(q.queue_name, () => api(`/queues/${q.queue_id}`, { method: 'DELETE' }))
+}
+
+console.log('5. bazele D1')
 for (const b of deSters.baze) {
   await incearca(b.name, () => api(`/d1/database/${b.uuid}`, { method: 'DELETE' }))
 }
 
-console.log('4. depozitele R2 (intai obiectele)')
+console.log('6. depozitele R2 (intai obiectele)')
 for (const g of deSters.galeti) {
   process.stdout.write(`  ${g} … `)
   try {
@@ -175,12 +226,12 @@ for (const g of deSters.galeti) {
   }
 }
 
-console.log('5. spatiile KV')
+console.log('7. spatiile KV')
 for (const k of deSters.spatii) {
   await incearca(k.title, () => api(`/storage/kv/namespaces/${k.id}`, { method: 'DELETE' }))
 }
 
-console.log('6. AI Gateway')
+console.log('8. AI Gateway')
 for (const g of deSters.gateways) {
   await incearca(g, () => api(`/ai-gateway/gateways/${g}`, { method: 'DELETE' }))
 }

@@ -42,12 +42,32 @@ if (!CONT || !TOKEN) {
   process.exit(1)
 }
 
+/**
+ * ⚠️ R2 raspunde 429 la copierile mari — e regula, nu accidentul. Cand se intampla, raspunsul NU e
+ * JSON, deci fara rabdarea de aici unealta cade cu „Unexpected end of JSON input", care nu spune
+ * nimic despre pricina. Asteptarea pleaca din `Retry-After`, ca la `import/r2-din-v1.mjs`.
+ */
+const cuRabdare = async (url, init, incercari = 6) => {
+  for (let i = 0; ; i++) {
+    const r = await fetch(url, init)
+    if (r.status !== 429 || i >= incercari) return r
+    const asteapta = Number(r.headers.get('retry-after') ?? Math.min(60, 5 * 2 ** i))
+    await new Promise((gata) => setTimeout(gata, asteapta * 1000))
+  }
+}
+
 /** Raspunsul INTREG, cu tot cu `result_info` — acolo sta cursorul paginarii. */
 const apiPlin = async (cale) => {
-  const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${CONT}${cale}`, {
+  const r = await cuRabdare(`https://api.cloudflare.com/client/v4/accounts/${CONT}${cale}`, {
     headers: { authorization: `Bearer ${TOKEN}` },
   })
-  const d = await r.json()
+  const text = await r.text()
+  let d
+  try {
+    d = JSON.parse(text)
+  } catch {
+    throw new Error(`${cale}: HTTP ${r.status}, raspuns care nu e JSON (${text.slice(0, 80)})`)
+  }
   if (!d.success) throw new Error(`${cale}: ${JSON.stringify(d.errors).slice(0, 200)}`)
   return d
 }
@@ -206,7 +226,7 @@ if (FARA_R2) {
           const cale = join(UNDE, 'r2', galeata, o.key)
           if (existsSync(cale) && statSync(cale).size === o.size) { sarite++; continue }
           mkdirSync(dirname(cale), { recursive: true })
-          const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${CONT}/r2/buckets/${galeata}/objects/${encodeURIComponent(o.key)}`, {
+          const r = await cuRabdare(`https://api.cloudflare.com/client/v4/accounts/${CONT}/r2/buckets/${galeata}/objects/${encodeURIComponent(o.key)}`, {
             headers: { authorization: `Bearer ${TOKEN}` },
           })
           if (!r.ok) throw new Error(`${o.key}: HTTP ${r.status}`)
