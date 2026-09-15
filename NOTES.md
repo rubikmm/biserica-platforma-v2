@@ -1574,9 +1574,20 @@ forța antetul `Host`**.
   ⚠️ Două capcane de desen, plătite: **SVG-ul nu taie și nu rupe textul** (ce nu încape curge peste
   cutia vecină, fără nicio eroare — de aceea unealta își măsoară singură etichetele și se plânge la
   stderr); și **un cron scris într-un comentariu de bloc îl închide**, fiindcă începe cu stea-slash.
-- **⚠️ De lămurit: `URL_HOME` e `https://sfantul-ilie.ro` la toate cele 13** — „Platforma" din meniul
-  contului duce la pagina de pe cPanel, nu la `website.sfantul-ilie.ro` (`xc-home`). Poate e voit,
-  poate e rămășiță de la cutover. Întrebat, fără răspuns încă; dacă se schimbă, se schimbă peste tot.
+- **✅ Lămurit 15.09.2026: `URL_HOME` = `https://website.sfantul-ilie.ro` la toate cele 13** (era
+  apexul, adică WordPress-ul de pe cPanel). Hotărârea userului: platforma e deocamdată **sistem
+  închis**, „Platforma" din meniu duce la home-ul V2, ca să ajungă repede de pe telefon. **Apexul trece
+  pe V2 la următoarea schimbare majoră a site-ului** — atunci `URL_HOME` se întoarce pe apex, tot
+  peste tot deodată. Schimbat numai în blocurile `env.production` (blocul de bază n-are `URL_*`;
+  cele `env.staging` sunt moarte și au rămas cum erau), 13 versiuni urcate cu un patch, 13 deploy-uri,
+  schema din admin regenerată.
+- **Toate cele 12 aplicații se lucrează de acum de pe un singur canal, #proj-biserica-platforma-v2.**
+  Userul a întrebat dacă poate lucra mai departe pe canalele V1 ale aplicațiilor; răspunsul e nu —
+  V2 e un singur repo, un arbore git, pachete comune (`@xc/ui` → șase aplicații republicate). Canalele
+  V1 se arhivează, containerele lor se șterg (#agent-server), registrul de linkuri locale e curățat:
+  pentru platformă rămâne **un singur link local, `https://rubik:8474`**. Pe NAS rămân vii, pe lângă
+  V2: `biserica-site` (clona WordPress-ului de pe apex, se mai ține „până suntem gata"),
+  `biserica-transmisiuni` (aparatul), `biserica-whatsapp` + puller.
 - **V1 și staging-ul s-au închis de tot.** Contul Cloudflare are de acum **un singur mediu**: 21 de
   workeri, 15 adrese, 12 baze D1, 7 depozite, 1 KV, 2 cozi, 1 gateway — toate `xc-*-production`, cu
   singura excepție știută `biserica-transmisiuni`. Socoteala e în NEXT, 0c. Harta întregului cont, pe
