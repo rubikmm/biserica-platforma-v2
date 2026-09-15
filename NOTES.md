@@ -1785,12 +1785,20 @@ forța antetul `Host`**.
   - **STARE, la ora scrierii**: aducerea rulează în fundal (`/data/chinonic-adus.log`), ~80 din 438
     făcute, cam 40% cu text verificat, 30% „nesigure", 30% erori (linkuri moarte, 404 la PDF-uri care
     lipsesc din depozit). Reluabilă oricând: `--reia` ia și căzuturile, `--refa` ia tot.
-  - ⚠️ **DE FĂCUT ÎNAINTE SĂ SE DEA ADRESELE MAI DEPARTE**: **49 de articole n-au titlu**, iar
-    slugul lor e `text-<nr>-<k>` — inclusiv la numerele noi (571). Pricina: la numerele cu celule
-    încuibate, prima celulă de text prinsă e cea de AFARĂ, care începe cu `<table>`, nu cu
-    `<strong>`, deci titlul nu se vede. Se repară în `extrage.mjs` și se reface importul — **dar
-    numai cât timp nimeni n-a pus încă la semne de carte adresele**: slugul e adresa fișei și nu se
-    schimbă după ce a fost dat mai departe.
+  - ✅ **REPARAT ÎN ACEEAȘI NOAPTE (01:15): titlurile — 445 din 448** (erau 399). Două capcane în
+    `titluDin`: un `<strong></strong>` GOL în capul lui `<h1>` (regexul se oprea la el și lua drept
+    titlu nimicul), și etichetele de așezare dinaintea titlului la celulele încuibate. Importul cu
+    `--curata` a scos **114 sluguri vechi** (adresele nu fuseseră date nimănui). Au rămas 3 fără titlu.
+  - ✅ **FIȘA E TEXT CURAT, NU HTML DE EMAIL** (user, 01:09: „nu se afișează bine ca și cum copiezi
+    HTML-ul… să ai texte brute pe care le poți afișa atât pe tema dark, cât și pe tema light").
+    Fragmentul din MailPoet avea `color:#000000` și tabele inline — pe tema întunecată nu se vedea.
+    Acum `fragment` = paragrafe de text (`paragrafeCurate` în `extrage.mjs`), îmbrăcate de noi în
+    `<p>`, deci iau culorile temei. **Ordinea în fișă: titlu, autor sub el, apoi textul.**
+  - ✅ **NORMALIZARE** (user, 01:13: „referințele păstrează-le, dar imaginile șterge-le și adresele
+    și tot"): `normalizeaza()` scoate `http…`/`www.…` și parantezele rămase goale; pozele pleacă cu
+    etichetele. Referințele („(Psalmul 18)", cărțile) sunt cuvinte și rămân. Aceeași curățare și la
+    textul adus de la sursă. ⚠️ Cu fragmentul curat, proba „începe ca fragmentul" potrivește mult
+    mai bine (22 ✓ / 3 ? din primele 44, față de ~40 % înainte).
   - **Deschis, spus de user**: „e posibil ca, în final, să nu afișăm link-ul către alt site, ci doar
     să reținem denumirea site-ului". Azi legătura se scrie DOAR unde textul întreg lipsește; când
     va fi adus peste tot, rămâne numai numele. ⚠️ Tot el a hotărât, întrebat anume, preluarea

@@ -56,7 +56,9 @@ const randuri = articole.map((a) => ({
   titlu: a.titlu ?? '',
   autor: a.autor ?? '',
   citit_la: (a.trimis ?? '').slice(0, 10),
-  fragment: a.corpHtml ?? '',
+  // ⚠️ fragmentul CURAT (paragrafe de text), nu HTML-ul de email: acela are culori si tabele inline
+  // si nu se vede pe tema intunecata (user, 16.09.2026)
+  fragment: a.corpCurat ?? '',
   sursa_text: a.sursaText ?? '',
   sursa_nume: numeleSursei(a),
   sursa_url: a.sursaUrl ?? '',
@@ -97,6 +99,19 @@ let scrise = 0
 for (const r of randuri) {
   await sql(COMANDA, [r.slug, r.titlu, r.autor, r.citit_la, r.fragment, r.sursa_text, r.sursa_nume, r.sursa_url, r.sursa_fel, r.poza])
   if (++scrise % 50 === 0) console.log(`  … ${scrise}/${randuri.length}`)
+}
+/*
+ * ⚠️ RANDURILE ORFANE. Cand extragerea da alt slug aceluiasi articol (de pilda cand i s-a gasit
+ * titlul si nu se mai cheama „text-571-1"), randul vechi ramane in baza cu adresa veche. `--curata`
+ * le scoate pe cele care nu mai sunt in set. ⚠️ Se face NUMAI cat timp adresele n-au fost date mai
+ * departe — slugul e adresa fisei, si o adresa data nu se mai schimba.
+ */
+if (process.argv.includes('--curata')) {
+  const [{ results: inBaza }] = await sql('SELECT slug FROM texte_chinonic')
+  const acum = new Set(randuri.map((r) => r.slug))
+  const orfane = inBaza.map((r) => r.slug).filter((s) => !acum.has(s))
+  for (const s of orfane) await sql('DELETE FROM texte_chinonic WHERE slug = ?', [s])
+  console.log(`  orfane scoase: ${orfane.length}${orfane.length ? ' — ' + orfane.slice(0, 6).join(', ') + (orfane.length > 6 ? '…' : '') : ''}`)
 }
 const [{ results }] = await sql('SELECT COUNT(*) AS cate FROM texte_chinonic')
 console.log(`\ngata: ${scrise} scrise · in baza sunt ${results[0].cate} texte.`)

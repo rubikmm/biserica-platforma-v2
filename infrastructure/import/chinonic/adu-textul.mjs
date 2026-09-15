@@ -174,10 +174,15 @@ function paragrafe(md, titlu, semne) {
     if (OPRESTE.some((re) => re.test(linie))) break
     if (GUNOI.some((re) => re.test(linie))) continue
     // scoate marcajele markdown, pastrand scrisul
+    // ⚠️ user, 16.09.2026: „referințele păstrează-le, dar imaginile șterge-le și adresele și tot"
     let t = linie
       .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')          // poze
-      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')        // legaturi: ramane scrisul
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')        // legaturi: ramane scrisul, pleaca adresa
       .replace(/[*_`>#]+/g, ' ')
+      .replace(/https?:\/\/[^\s)\]»"]+/gi, '')        // adresele scrise in text
+      .replace(/\bwww\.[^\s)\]»"]+/gi, '')
+      .replace(/\(\s*\)|\[\s*\]/g, '')
+      .replace(/\s+([,.;:!?])/g, '$1')
       .replace(/\s+/g, ' ')
       .trim()
     if (t.length < 60) continue

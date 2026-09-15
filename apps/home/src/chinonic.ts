@@ -130,9 +130,14 @@ export function paginaText(t: Text, urlNewsletter: string): string {
   const corp = areTot
     ? `<div class="ch-text">${t.text_intreg}</div>`
     : `<div class="ch-text ch-fragment">${t.fragment}</div>`
+  /*
+   * Ordinea ceruta de user (16.09.2026): TITLUL, apoi AUTORUL sub el, apoi textul. Autorul e rand
+   * de sine statator, nu lipit de data: e parte din ce s-a citit, data e doar cand.
+   */
   return `<div class="cap">
   <h1 class="titlu-lista">${esc(t.titlu || '(fără titlu)')}</h1>
-  <p class="sursa">${t.autor ? `${esc(t.autor)} · ` : ''}citit la strană pe ${esc(ziua(t.citit_la))}</p>
+  ${t.autor ? `<p class="ch-autorul">${esc(t.autor)}</p>` : ''}
+  <p class="sursa">citit la strană pe ${esc(ziua(t.citit_la))}</p>
 </div>
 ${t.poza ? `<img class="ch-poza" src="${esc(poza(t, urlNewsletter))}" alt="">` : ''}
 ${corp}
@@ -161,7 +166,12 @@ export const STIL_CHINONIC = `
 .anul { margin:28px 0 2px; font-size:19px; color:var(--soft) }
 
 /* pagina unui text */
+/* autorul, sub titlu: scris mai mare decat data, fiindca e parte din ce s-a citit */
+.ch-autorul { margin:2px 0 4px; font-size:17px; color:var(--soft) }
 .ch-poza { display:block; width:100%; height:auto; border-radius:12px; margin:18px 0 0 }
+/* ⚠️ textul e al nostru, in <p>-uri curate, deci ia culorile temei — nu mai e HTML de email cu
+   scris negru scris inline, care pe tema intunecata nu se vedea (user, 16.09.2026) */
+.ch-text { color:var(--ink) }
 .ch-text { margin:18px 0 0; line-height:1.7 }
 .ch-text p { margin:0 0 12px }
 /* fragmentul se vede ca fragment: o dunga la stanga spune ca textul nu e intreg */

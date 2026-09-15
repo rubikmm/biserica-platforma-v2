@@ -131,18 +131,69 @@ const eHotar = (b) =>
  * acel sir ingrosat e de obicei AUTORUL („Până la moarte" / „Sfântul Ioan Gură de Aur").
  */
 function titluDin(brut) {
-  const re = /^\s*(?:<(?:strong|b|h[1-6])\b[^>]*>[\s\S]*?<\/(?:strong|b|h[1-6])>|<br\s*\/?>|&nbsp;|\s)+/i
-  const m = re.exec(brut)
-  if (!m || !m[0].trim()) return { titlu: '', autor: '', rest: brut }
+  /*
+   * ⚠️ DOUA CAPCANE, platite pe 16.09.2026 (49 de articole fara titlu, cu sluguri „text-571-1"):
+   *   - `<h1><strong></strong>Despre ascultare…</h1>`: un `<strong>` GOL in capul titlului — regexul
+   *     se oprea la primul `</strong>` si lua drept titlu nimicul dinauntru;
+   *   - `<table><tr><td class="mailpoet_paragraph"><strong>Viața…</strong>`: la celulele incuibate,
+   *     prima celula prinsa e cea de AFARA, iar continutul ei incepe cu etichete de asezare, nu cu
+   *     titlul. Se sar etichetele goale si cele de asezare, apoi se cauta sirul ingrosat.
+   */
+  const h = brut
+    .replace(/<(strong|b|em|i|span)\b[^>]*>\s*<\/\1>/gi, '')          // etichete goale
+    .replace(/^(?:\s|<(?:table|tbody|tr|td|div|p)\b[^>]*>)+/i, '')     // asezarea dinaintea titlului
+  const re = /^(?:<h([1-6])\b[^>]*>[\s\S]*?<\/h\1>|<(?:strong|b)\b[^>]*>[\s\S]*?<\/(?:strong|b)>|<br\s*\/?>|&nbsp;|\s)+/i
+  const m = re.exec(h)
+  if (!m || !platit(m[0])) return { titlu: '', autor: '', rest: brut }
   const cap = m[0]
-  const rest = brut.slice(cap.length)
-  // randurile capului: taiate la <br>, fiindca acolo se desparte titlul de autor
-  const randuri = cap.split(/<br\s*\/?>/i).map((x) => platit(x)).filter(Boolean)
+  const rest = h.slice(cap.length)
+  // randurile capului: un titlu <h*> e un rand; sirul ingrosat se taie la <br> — acolo se desparte
+  // titlul de autor („Până la moarte" / „Sfântul Ioan Gură de Aur")
+  const randuri = cap
+    .replace(/<\/h[1-6]>/gi, '$&\n')
+    .split(/<br\s*\/?>|\n/i)
+    .map((x) => platit(x))
+    .filter(Boolean)
   if (!randuri.length) return { titlu: '', autor: '', rest: brut }
   const titlu = randuri[0]
   if (titlu.length < 3 || titlu.length > 160) return { titlu: '', autor: '', rest: brut }
-  return { titlu, autor: randuri.slice(1).join(' · '), rest }
+  // autorul e scurt (un nume); un rand lung dupa titlu e deja text, nu autor
+  const autor = randuri.slice(1).filter((r) => r.length <= 90).join(' · ')
+  return { titlu, autor, rest }
 }
+
+/**
+ * PARAGRAFE DE TEXT CURAT din HTML-ul de email (user, 16.09.2026: „nu se afișează bine ca și cum
+ * copiezi HTML-ul… să ai texte brute pe care le poți afișa atât pe tema dark, cât și pe tema light").
+ * MailPoet scrie culori, fonturi si tabele inline — pe tema intunecata scrisul negru pe fond negru
+ * nu se vede. Aici se pastreaza doar CE SCRIE, in paragrafe: se taie la marginile blocurilor, se
+ * decodeaza entitatile, se scot etichetele. Ce iese e text, imbracat de noi in <p>, deci arata bine
+ * pe orice tema si nu poate strica pagina.
+ */
+function paragrafeCurate(html) {
+  return ent(html)
+    .replace(/<br\s*\/?>|<\/(p|div|td|li|tr|h[1-6]|blockquote)>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')            // pozele pleaca odata cu etichetele (user: „imaginile șterge-le")
+    .split('\n')
+    .map((x) => normalizeaza(x))
+    .filter((x) => x.length > 1)
+}
+/**
+ * ⚠️ NORMALIZAREA TEXTULUI (user, 16.09.2026: „referințele păstrează-le, dar imaginile șterge-le și
+ * adresele și tot"). Referintele — „(Psalmul 18)", numele unei carti — sunt cuvinte si raman.
+ * Adresele („http://…", „www.…") nu sunt text de citit si ies; la fel resturile de markdown.
+ */
+export function normalizeaza(x) {
+  return x
+    .replace(/https?:\/\/[^\s)\]»"]+/gi, '')
+    .replace(/\bwww\.[^\s)\]»"]+/gi, '')
+    .replace(/\(\s*\)|\[\s*\]/g, '')      // parantezele ramase goale dupa scoaterea adresei
+    .replace(/\s+([,.;:!?])/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+const escapa = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+const inParagrafe = (bucati) => bucati.map((p) => `<p>${escapa(p)}</p>`).join('\n')
 
 /** Gazda unui link, fara „www." — pentru fisa articolului si pentru socoteala. */
 function gazda(u) {
@@ -199,6 +250,8 @@ function articoleleDin(h, fisa) {
       : texte
     const corpHtml = corpBlocuri.map((b) => b.brut.trim()).join('\n')
     const corpText = corpBlocuri.map((b) => b.text).join('\n\n')
+    // fragmentul asa cum se ARATA: paragrafe de text curat, fara stilurile de email (vezi mai sus)
+    const corpCurat = inParagrafe(corpBlocuri.flatMap((b) => paragrafeCurate(b.brut)))
     /*
      * ⚠️ ZONA SURSEI TINE DOUA LUCRURI, SI TREBUIE SA COEXISTE (user, 16.09.2026: „sursa poate să fie
      * mențiunea dintr-o carte, dar de obicei este completată și de un link"):
@@ -223,6 +276,7 @@ function articoleleDin(h, fisa) {
       slug: slugul(titlu, fisa.nr, k),
       corpHtml,
       corpText,
+      corpCurat,
       poze,
       sursaText: ent(sursaBloc.text).replace(/^\s*surs[ăa]\s*:?\s*/i, '').trim(),
       sursaUrl,
