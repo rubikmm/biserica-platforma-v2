@@ -1809,6 +1809,11 @@ forța antetul `Host`**.
     deci fragmentul e un nume de om și nu probează nimic; atunci se cere ca **adresa sursei să poarte
     titlul** (≥ 60 % din cuvintele lungi ale titlului în cale). Rezultat pe primele 57 reluate:
     **30 ✓** (12 prin fragment, 18 prin adresă) față de **0 din 71** înainte.
+    **Starea după a doua aducere (02:50)**: **265 gata** (218 pagini + 47 PDF) · 107 nesigure (54 + 53)
+    · 50 fără text (23 + 27 PDF scanate) · 16 erori · 10 fără link. Din 162 gata → 265; din 200 nesigure
+    → 107. ⚠️ Cele 53 de PDF-uri „nesigure" sunt fișierele NOASTRE (nu poate fi altă pagină), dar
+    unele țin mai multe predici într-un fișier, deci fără potrivirea fragmentului nu se știe unde se
+    taie — de hotărât cu userul dacă se acceptă PDF-ul întreg acolo.
     ⚠️ Erorile rămase sunt reale: gazde dispărute (comuniune.ro, renasterea.net, tripod) și 404.
     ⚠️ `--reia` = tot ce nu e „gata" (netras, eroare, nesigur, fără text); `--refa` = tot.
   - ✅ **NORMALIZARE** (user, 01:13: „referințele păstrează-le, dar imaginile șterge-le și adresele
