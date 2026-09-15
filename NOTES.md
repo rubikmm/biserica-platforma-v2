@@ -1749,6 +1749,54 @@ forța antetul `Host`**.
 
 ### 2026-09-16
 
+- **TEXTE CITITE LA CHINONIC — secțiune nouă pe Website** (user, în noapte). Website **0.4.0**, publicat.
+  Un număr de buletin are trei părți: programul liturgic (din A2), buletinul parohiei (din A3) și
+  **textele citite la strană**. Primele două trăiesc în aplicațiile lor; al treilea nu era salvat
+  nicăieri. Acum e.
+  - **448 de texte, din 318 numere**, scoase din arhiva newsletterului. Pe număr: 215 cu unul, 81 cu
+    două, 17 cu trei, 5 cu patru — de aceea asocierea e pe listă, nu unu-la-unu.
+  - ⚠️ **CUM SE RECUNOAȘTE UN ARTICOL**: nu după un titlu de secțiune (nu există în HTML), ci după
+    rândul de la sfârșit, „**Sursă:**". Se merge ÎNAPOI de la el până la un hotar: „Sursă"-a
+    dinainte, poza buletinului, titlul „Programul Liturgic", un bloc cu semnul „⁞" (ora slujbei),
+    poza din subsol, ori o etichetă („S-a citit la strană:", „Descărcare PDF", „2% din impozit").
+    Mersul înainte, dintr-o „zonă", nu merge: la vreo sută de numere lipsește hotarul de sus.
+  - ⚠️ **SURSA ARE DOUĂ PĂRȚI CARE COEXISTĂ** (cerut anume): mențiunea scrisă („Fișier PDF", o carte
+    întreagă cu editură și pagini) ȘI legătura — care de multe ori **nu e în rândul „Sursă", ci pe
+    POZA articolului**, și e adesea un **PDF al parohiei**. Măsurat: **131 PDF · 307 pagină web · 10
+    fără link**. ⚠️ Prima socoteală dădea **zero PDF**, fiindcă regexul cerea `https://` iar
+    adresele lor sunt relative (`/media/…`) — se vedea în cifre, nu în cod.
+  - **ARHITECTURA, cum a cerut-o userul**: articolul e al **Website-ului** (baza nouă
+    `xc-home-production`, tabelul `texte_chinonic` — prima bază a lui `home`, care până azi n-avea
+    niciun depozit), iar **asocierea număr ↔ articol e a Newsletterului**
+    (`chinonic/asocieri.json` în R2). Fiecare ține ce e al lui.
+  - **Pe ușa Website-ului: cele mai noi 10 + „Vezi toate"**; pagina `/texte-citite-la-chinonic` le
+    dă pe toate, pe ani; fiecare text are fișa lui la `/texte-citite-la-chinonic/<slug>`.
+  - **ADUCEREA TEXTULUI ÎNTREG** (`adu-textul.mjs`): PDF și HTML trec amândouă prin unealta de
+    conversie a Cloudflare (`ai/tomarkdown`), apoi printr-o curățare de meniuri.
+    ⚠️⚠️ **NU SE INSEREAZĂ HTML STRĂIN ÎN PAGINILE NOASTRE**: tot ce vine de pe alt site se trece
+    prin TEXT CURAT și se reîmbracă de noi în paragrafe — așa nu poate intra niciun `<script>` și
+    nicio urmă de numărătoare.
+    ⚠️ **CRITERIUL DE VERIFICARE, dat de user**: textul adus trebuie să **înceapă la fel ca
+    fragmentul din buletin**. E și reper de tăiere, și probă: unde nu se potrivește, rândul rămâne
+    `nesigur` și pagina arată mai departe fragmentul — nu pretindem un text întreg pe care nu-l avem.
+    ⚠️ **Capcana care a ținut proba stricată**: fragmentul păstrat în bază e HTML de email, cu
+    `&icirc;` în el; normalizat de-a dreptul, „s-a născut în 1821" ajungea „s a nascut icirc n 1821".
+    Se potrivea 1 din 9. Cu entitățile decodate: **8 din 9**.
+  - **STARE, la ora scrierii**: aducerea rulează în fundal (`/data/chinonic-adus.log`), ~80 din 438
+    făcute, cam 40% cu text verificat, 30% „nesigure", 30% erori (linkuri moarte, 404 la PDF-uri care
+    lipsesc din depozit). Reluabilă oricând: `--reia` ia și căzuturile, `--refa` ia tot.
+  - ⚠️ **DE FĂCUT ÎNAINTE SĂ SE DEA ADRESELE MAI DEPARTE**: **49 de articole n-au titlu**, iar
+    slugul lor e `text-<nr>-<k>` — inclusiv la numerele noi (571). Pricina: la numerele cu celule
+    încuibate, prima celulă de text prinsă e cea de AFARĂ, care începe cu `<table>`, nu cu
+    `<strong>`, deci titlul nu se vede. Se repară în `extrage.mjs` și se reface importul — **dar
+    numai cât timp nimeni n-a pus încă la semne de carte adresele**: slugul e adresa fișei și nu se
+    schimbă după ce a fost dat mai departe.
+  - **Deschis, spus de user**: „e posibil ca, în final, să nu afișăm link-ul către alt site, ci doar
+    să reținem denumirea site-ului". Azi legătura se scrie DOAR unde textul întreg lipsește; când
+    va fi adus peste tot, rămâne numai numele. ⚠️ Tot el a hotărât, întrebat anume, preluarea
+    textelor întregi — i-am spus că republicarea integrală a articolelor altor site-uri e o
+    chestiune de drepturi de autor; a ales știind.
+
 - **NEWSLETTERUL, RUNDA A DOUA** (user, în noapte). Newsletter **0.6.0**, publicat pe producție în
   patru pași (0.4.0 → 0.6.0). ⚠️ **Din 16.09.2026 se publică DUPĂ FIECARE BUCATĂ**, cerut anume:
   „de fapt de fiecare dată urcă online ce lucrăm".

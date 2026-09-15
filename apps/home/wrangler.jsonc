@@ -1,6 +1,8 @@
 {
-  // Home-ul platformei: radacina domeniului (`staging.sfantul-ilie.ro`). Listeaza aplicatiile.
-  // Nu are baza si nu tine date; cere identitatii doar cine e, ca sa arate contul in antet.
+  // Home-ul platformei — WEBSITE-ul parohiei (`website.sfantul-ilie.ro`). Listeaza aplicatiile.
+  // ⚠️ DIN 16.09.2026 ARE SI BAZA, prima lui: „Texte citite la chinonic" — articolele citite la
+  // strana, scoase din arhiva newsletterului. Pana atunci n-avea niciun depozit, era un `index.ts`.
+  // Articolul e al Website-ului; asocierea „ce s-a citit la numarul N" ramane la Newsletter.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "xc-home",
   "main": "src/index.ts",
@@ -17,6 +19,16 @@
     "DOMENIU_COOKIE": "",
     "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
   },
+
+  // ⚠️ BAZA WEBSITE-ULUI, noua la 16.09.2026. Blocul de baza arata spre PRODUCTIE, ca la celelalte
+  // aplicatii (regula din 15.09.2026: local = date simulate, id-urile sunt doar etichete).
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "xc-home-production",
+      "database_id": "b970592e-85cd-4e07-b5dc-6abe9761098a"
+    }
+  ],
 
   // AUTORIZARE, COMUNICARE si AUDIT au venit pe 15.09.2026, odata cu pagina de Setari: ea cere
   // cheile omului (autorizare), abonarile lui (comunicare) si jurnalul (audit).
@@ -81,6 +93,13 @@
         "URL_RADIO": "https://radio.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.sfantul-ilie.ro"
       },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "xc-home-production",
+          "database_id": "b970592e-85cd-4e07-b5dc-6abe9761098a"
+        }
+      ],
       "services": [
         { "binding": "IDENTITATE", "service": "xc-identity-production" },
         { "binding": "AUTORIZARE", "service": "xc-authz-production" },

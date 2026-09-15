@@ -13,9 +13,23 @@ import { adresaPaginii, citesteConfig, navigatieDin, type Navigatie } from '@xc/
 import { correlationId, Logger } from '@xc/observability'
 import { dataVersiunii, esc, html, json, pagina } from '@xc/ui'
 import pkg from '../package.json'
+import {
+  CALE as CALE_CHINONIC,
+  STIL_CHINONIC,
+  bucataDeAcasa,
+  cate as cateTexte,
+  celeDeAcasa,
+  paginaText,
+  paginaToate,
+  toate as toateTextele,
+  unul as unText,
+} from './chinonic.js'
 
 export interface Env {
   IDENTITATE: Fetcher
+  /** Baza Website-ului, noua la 16.09.2026: „Texte citite la chinonic". Pana atunci `home` n-avea
+   *  niciun depozit. */
+  DB: D1Database
   /** Venite pe 15.09.2026, odata cu pagina de Setari: cheile, abonarile si jurnalul. */
   AUTORIZARE: Fetcher
   COMUNICARE: Fetcher
@@ -78,7 +92,7 @@ const LOCAL_APP = `
  * evalueaza inaintea pachetului, deci legatura importata inca nu exista. `tsc` trece curat peste
  * asta — s-a vazut abia in `wrangler dev`. Chemata la cerere, legatura e gata de mult.
  */
-const LOCAL = () => LOCAL_APP + STIL_SETARI
+const LOCAL = () => LOCAL_APP + STIL_SETARI + STIL_CHINONIC
 
 /**
  * TERMENII ȘI CONDIȚIILE — una singură, a PLATFORMEI, nu a fiecărei aplicații (hotărât cu userul,
@@ -235,6 +249,37 @@ export default {
       )
     }
 
+    /*
+     * TEXTE CITITE LA CHINONIC (16.09.2026) — secțiunea cerută de user. Adresele sunt PERMANENTE:
+     * slugul e adresa fișei și nu se schimbă cât timp rândul e același text.
+     *   /texte-citite-la-chinonic          toate, pe ani
+     *   /texte-citite-la-chinonic/<slug>   un text
+     */
+    if (url.pathname === CALE_CHINONIC || url.pathname === `${CALE_CHINONIC}/`) {
+      const texte = await toateTextele(env.DB)
+      return html(
+        pagina({ ...comune, titluPagina: 'Texte citite la chinonic', indexabil: true, corp: paginaToate(texte) }),
+        200,
+        { 'cache-control': utilizator || sesiune.veziCa ? 'private, no-store' : 'public, max-age=600' },
+      )
+    }
+    if (url.pathname.startsWith(`${CALE_CHINONIC}/`)) {
+      const slug = decodeURIComponent(url.pathname.slice(CALE_CHINONIC.length + 1).replace(/\/$/, ''))
+      const t = slug ? await unText(env.DB, slug) : null
+      if (!t) {
+        return html(
+          pagina({ ...comune, titluPagina: 'Textul nu există', corp: `<h2>Textul nu există</h2>
+<nav class="vecini"><a href="${CALE_CHINONIC}">← Toate textele citite la chinonic</a></nav>` }),
+          404,
+        )
+      }
+      return html(
+        pagina({ ...comune, titluPagina: t.titlu || 'Text citit la chinonic', indexabil: true, corp: paginaText(t, nav.newsletter || '') }),
+        200,
+        { 'cache-control': utilizator || sesiune.veziCa ? 'private, no-store' : 'public, max-age=600' },
+      )
+    }
+
     if (url.pathname !== '/' && url.pathname !== '') {
       return html(pagina({ ...comune, titluPagina: 'Pagina nu există', corp: `<h2>Pagina nu există</h2>${corp(nav)}` }), 404)
     }
@@ -244,6 +289,16 @@ export default {
     // „vezi ca": browserul servea pagina veche (cu banda) si dupa ce masca fusese scoasa, deci
     // butonul „Revino la super admin" parea ca nu face nimic (user, 11.09.2026).
     const cachePagina = utilizator || sesiune.veziCa ? 'private, no-store' : 'public, max-age=300'
-    return html(pagina({ ...comune, corp: corp(nav) }), 200, { 'cache-control': cachePagina })
+    // ⚠️ Cele mai noi ZECE texte citite la chinonic, sub butoanele aplicațiilor, cu „Vezi toate"
+    // (cerut anume: „afișate doar 10 + Vezi toate"). Dacă baza tace, ușa rămâne exact cum era.
+    const [ultimele, nTexte] = await Promise.all([
+      celeDeAcasa(env.DB).catch(() => []),
+      cateTexte(env.DB).catch(() => 0),
+    ])
+    return html(
+      pagina({ ...comune, corp: corp(nav) + bucataDeAcasa(ultimele, nTexte) }),
+      200,
+      { 'cache-control': cachePagina },
+    )
   },
 }

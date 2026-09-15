@@ -28,6 +28,9 @@ const BAZE = [
   { director: 'communication', config: 'services/communication-worker/wrangler.jsonc', binding: 'DB' },
   { director: 'automation', config: 'services/automation-worker/wrangler.jsonc', binding: 'DB' },
   { director: 'chat', config: 'services/chat-worker/wrangler.jsonc', binding: 'DB' },
+  // ⚠️ Website-ul are baza abia din 16.09.2026, odata cu „Texte citite la chinonic". Pana atunci
+  // `home` n-avea niciun depozit.
+  { director: 'home', config: 'apps/home/wrangler.jsonc', binding: 'DB' },
 ]
 
 const argumente = process.argv.slice(2)
