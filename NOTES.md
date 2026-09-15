@@ -1019,9 +1019,12 @@ copiată cu anii în locul lunilor — aceleași săgeți ‹ ›, scrise de JS 
   Probele: `tests/program-arhiva-ani.test.ts` (5) — păzesc o regulă de DRUM, nu o funcție: oricare
   dintre cele trei scăpări de mai sus lasă omul închis într-un an, fără nicio eroare vizibilă.
 
-**Pagina arhivei se cheamă doar „Arhiva"** (nu „Arhiva programelor"); sub titlu a rămas doar
-numărătoarea („654 săptămâni, din 2014 până azi") — propoziția despre importul din situl vechi a ieșit
-la cererea utilizatorului. Nu o readuce.
+**Pagina arhivei se cheamă doar „Arhiva"**, iar **sub titlu nu mai stă NIMIC**: numărătoarea
+(„655 săptămâni, din 2014 până azi") a ieșit la 15.09.2026, 19:22 („scoate textul acesta de la
+Arhiva"), după ce mai demult ieșise propoziția despre importul din situl vechi. **Nu le readuce.**
+⚠️ Odată cu numărătoarea au plecat și `total`/`deLa` din socoteala paginii **și interogarea
+`acoperire` din `index.ts`**, care doar pentru ea se făcea — o cerere la bază mai puțin la fiecare
+deschidere a arhivei. Cifrele întregi se văd oricând la `/health`.
 
 ### Pe telefon
 
@@ -1685,6 +1688,10 @@ forța antetul `Host`**.
 
 ### 2026-09-15
 
+- **NUMĂRĂTOAREA DE SUB TITLUL ARHIVEI, SCOASĂ** (user, 19:22: „scoate textul acesta de la Arhiva").
+  Program **0.7.5** pe producție. Sub „Arhiva" nu mai stă nimic, iar odată cu rândul a plecat și
+  **interogarea `acoperire`** care îl hrănea — era singurul ei cititor acolo. **Regula**: când scoți un
+  rând de afișare, urmărește de unde veneau cifrele; de multe ori pleacă și o cerere la bază.
 - **FÂȘIA ANILOR RĂMÂNE JOS ÎN ARHIVĂ, RÂNDUL DE ANI DIN PAGINĂ IESE** (user, 18:56, două cereri într-o
   propoziție). Program **0.7.4** pe producție. Amănuntele, în „Rândul de unelte din antet".
   - **Cele două cereri se țin una de alta**, iar asta a hotărât restul: scoțând `nav.capitole` din corpul

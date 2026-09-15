@@ -1563,7 +1563,7 @@ export function perioadaScurta(luni: string, duminica: string): string {
   return intervalLizibil(luni, duminica).replace(/\s\d{4}$/, '')
 }
 
-export function paginaArhiva(o: { ctx: Ctx; an: number; ani: number[]; saptamani: RezumatArhiva[]; total: number; deLa: string | null; meniu: Meniu }): string {
+export function paginaArhiva(o: { ctx: Ctx; an: number; ani: number[]; saptamani: RezumatArhiva[]; meniu: Meniu }): string {
   const p = esc(o.ctx.prefix)
   // ⚠️ RANDUL DE ANI DIN PAGINA (`nav.capitole`) A FOST SCOS la 15.09.2026, 18:56 (user: „scoate din
   // pagină anii atunci când ne aflăm în arhivă"): anii stau acum numai in fasia de sub antet, coborata
@@ -1598,8 +1598,12 @@ ${luni || '<p class="gol">Niciun program în anul acesta.</p>'}</section>`
     // anii merg SI in antet, in fasia care coboara din cheia Arhivei (15.09.2026, 18:28); `anDeschis`
     // marcheaza acolo anul de pe ecran, ca luna deschisa din bara Calendarului
     ...antetul(o.ctx, { ...o.meniu, arhiva: true, ani: o.ani, anDeschis: o.an }),
+    // ⚠️ SUB TITLU NU MAI STA NIMIC (user, 15.09.2026, 19:22: „scoate textul acesta de la Arhiva").
+    // A iesit numaratoarea „N saptamani, din AAAA pana azi", ultima ramasita a randului de sub titlu;
+    // propozitia despre importul din situl vechi fusese scoasa mai demult. Nu le readuce.
+    // Odata cu ea au plecat si `total`/`deLa` din socoteala paginii, si interogarea `acoperire` care le
+    // dadea (index.ts) — numaratoarea intreaga se vede oricand la /health.
     corp: `<h2>Arhiva</h2>
-<p class="marunt">${o.total} săptămâni, din ${o.deLa ? esc(o.deLa.slice(0, 4)) : '—'} până azi.</p>
 ${bloc}`,
   })
 }

@@ -250,9 +250,10 @@ export default {
         const cerut = Number(url.searchParams.get('an') ?? '')
         const an = ani.includes(cerut) ? cerut : (ani[0] ?? Number(azi.slice(0, 4)))
         const saptamani = await saptamanileAnului(env.DB, an)
-        const ac = await acoperire(env.DB)
+        // ⚠️ `acoperire` NU se mai cere aici (15.09.2026, 19:22): ea slujea numai randului „N saptamani,
+        // din AAAA pana azi", scos atunci din pagina. O interogare mai putin la fiecare deschidere.
         // PDF si JPG stinse: pe Arhiva nu e nicio saptamana in context (`meniuAzi` le lasa `foaie: null`)
-        return html(paginaArhiva({ ctx, an, ani, saptamani, total: ac.saptamani, deLa: ac.de_la, meniu: meniuAzi() }), 200, cachePagina)
+        return html(paginaArhiva({ ctx, an, ani, saptamani, meniu: meniuAzi() }), 200, cachePagina)
       }
 
       /*

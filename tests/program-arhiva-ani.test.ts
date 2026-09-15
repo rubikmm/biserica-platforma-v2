@@ -20,7 +20,7 @@ const MENIU: Meniu = { luni: null, foaie: null, azi: '2026-09-15' }
 const ANI = [2026, 2025, 2024]
 
 const arhiva = (eAdmin: boolean) =>
-  paginaArhiva({ ctx: ctxCu(eAdmin), an: 2025, ani: ANI, saptamani: [], total: 0, deLa: '2024-01-01', meniu: MENIU })
+  paginaArhiva({ ctx: ctxCu(eAdmin), an: 2025, ani: ANI, saptamani: [], meniu: MENIU })
 
 /** cheia Arhivei din pastilă, așa cum e scrisă în pagină (sau `''` dacă pagina n-o are deloc) */
 const cheia = (html: string) => /<button[^>]*id="ani-cheie"[^>]*>/.exec(html)?.[0] ?? ''
@@ -43,6 +43,11 @@ describe('fâșia anilor pe pagina Arhivei', () => {
 
   it('rândul de ani din CORPUL paginii a fost scos', () => {
     expect(arhiva(true)).not.toContain('class="capitole"')
+  })
+
+  // user, 19:22: „scoate textul acesta de la Arhiva" — numărătoarea de sub titlu. Nu o readuce.
+  it('sub titlu nu mai stă numărătoarea săptămânilor', () => {
+    expect(arhiva(true)).not.toContain('până azi')
   })
 
   it('omul fără drepturi de admin o primește și el: altfel rămâne închis într-un singur an', () => {
