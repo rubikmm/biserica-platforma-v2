@@ -540,16 +540,22 @@ propunerea automată, ca în V1.
    - ⚠️ `/utilizatori/lista` întoarce **toți** utilizatorii platformei, fără plafon. E bine la zeci de
      conturi; la mii, aici se pune `LIMIT` (locul e însemnat în `depozit.ts` al identității).
 4c. **SETĂRILE (`@xc/setari`) — ce a rămas deschis** (15.09.2026):
-   - ⚠️ **NEPUBLICAT ÎNCĂ**. La publicare se republică **`xc-authz`** (cheia nouă `audience.manage`
-     și scoaterea lui `audit.read` din rolul de admin trăiesc în `@xc/contracts`, iar un authz vechi
-     respinge cheia necunoscută și traduce orice răspuns prost în REFUZ), apoi **cele 11 aplicații
-     cu `/setari`** plus **`admin`** (poarta panoului), `xc-audit` (`prefixActiune`) și
-     `xc-communication` (`/preferinte/citeste`). Aplicațiile care au primit legături noi în
-     `wrangler.jsonc` **trebuie republicate ca să le capete** — o legătură scrisă în fișier nu
-     există la Cloudflare până la deploy;
-   - ⚠️ **`curatenie`, `live`, `radio` n-au putut fi probate local** (nu sunt în `pnpm dev`). De
-     privit cu ochii pe ele imediat după publicare — mai ales curățenia, unde e singura rubrică de
-     **apartenență** din platformă;
+   - ✅ **PUBLICAT PE PRODUCȚIE 15.09.2026, 15:45** — **16 workeri**, în ordinea care contează:
+     întâi `xc-authz` singur (cheia nouă `audience.manage` și scoaterea lui `audit.read` trăiesc în
+     `@xc/contracts`, iar un authz vechi respinge cheia necunoscută și traduce orice răspuns prost
+     în REFUZ), apoi `xc-audit` și `xc-communication`, apoi cele 13 aplicații. Toate cele 12
+     hostname-uri răspund, `/setari` dă 303 spre `cont` la cine nu e intrat.
+     ⚠️ Aplicațiile care au primit legături noi în `wrangler.jsonc` **trebuie republicate ca să le
+     capete** — o legătură scrisă în fișier nu există la Cloudflare până la deploy. De aceea au
+     intrat în publicare și cele care n-aveau cod nou, ci doar legături;
+   - ⚠️ **PROBAT LOGAT DOAR LOCAL.** Pe producție nu mă pot autentifica: codul de șase cifre pleacă
+     în cutia poștală a userului, iar `123456` merge numai în dev. Deci partea văzută de un om
+     intrat — pagina de Setări cu cele trei trepte ȘI **poarta panoului de Administrare** — e
+     verificată doar pe local. **De cerut userului să deschidă `admin.sfantul-ilie.ro` și
+     `<app>/setari`** la prima ocazie; panoul e cel cu miză, fiindcă acolo s-a mutat poarta;
+   - ⚠️ **`curatenie`, `live`, `radio` n-au putut fi probate local deloc** (nu sunt în `pnpm dev`).
+     Pe producție răspund, dar Setările lor n-au fost văzute cu ochii de nimeni — mai ales
+     curățenia, unde e singura rubrică de **apartenență** din platformă;
    - ⚠️ **părintele pierde `admin/schema`** odată cu `audit.read`. Userul a ales știind; dacă se
      răzgândește, drumul curat e o cheie proprie a schemei, nu `audit.read` înapoi la admin;
    - **abonații se văd pe e-mail și pe `user_id`**, nu pe nume: lista vine de la comunicare
