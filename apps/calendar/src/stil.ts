@@ -36,6 +36,11 @@ export const LOCAL = `
    masura carcasei: 130px in loc de 170px. Randul de unelte tine de la 12.09.2026 si sirul lunilor,
    dar randul era acolo si inainte — masura n-a trebuit sa se schimbe. */
 html { scroll-padding-top:130px }
+/* ⚠️ Carcasa are scroll-behavior:smooth pe html. La INTRAREA in pagina, saltul liniar al browserului
+   la ancora #azi se bate cap in cap cu centrarea noastra si o inghite — ziua ramanea lipita de antet
+   pana la a doua apasare (user, 15.09.2026, si pe telefon, si pe desktop). Clasa asta stinge linul
+   cat tinem noi carma; JS_NAV o pune si o scoate intr-un cadru. Vezi asazaAzi() in JS_NAV. */
+html.fara-lin { scroll-behavior:auto }
 
 .cap { padding:10px 0 4px }
 .cap .eyebrow { margin:0 0 14px }
@@ -45,16 +50,12 @@ html { scroll-padding-top:130px }
 .cod { color:var(--rosu) }
 .sursa { color:var(--soft); font-size:14.5px; margin:0 0 16px; max-width:58ch }
 
-/* RANDUL DE UNELTE din antet (refacut 12.09.2026): navigarea, abonarea si listele de sarbatori.
-   ⚠️ RANDUL TINE INTOTDEAUNA TOATA LATIMEA (user, 15.09.2026: „bara de sus din antet, meniul să fie
-   100% mereu"). Pastila sta la stanga, iar grupul din dreapta (abonarea si crucea) e IMPINS la
-   marginea din dreapta de o pana elastica — asa randul arata la fel si cand crucea lipseste
-   (la neautentificat), si cand e acolo: „dacă dispare crucea… Abonare vine la dreapta".
-   ⚠️ Pana e un element gol cu flex:1, nu justify-content:space-between pe rand: cu space-between,
-   un rand cu un singur copil si-ar fi lipit copilul la stanga, iar cand randul se rupe (telefoane
-   foarte inguste) bucatile ar fi sarit in laturi. */
+/* RANDUL DE UNELTE din antet. ⚠️ TINE INTOTDEAUNA TOATA LATIMEA (user, 15.09.2026: „bara de sus din
+   antet, meniul să fie 100% mereu"), si are DOUA bucati, atat: PASTILA, care ia tot ce ramane, si
+   ABONAREA, cu masura ei fixa (118 px, din @xc/abonare), lipita de marginea din dreapta.
+   ⚠️ Crucea nu mai sta aici: a intrat in pastila, dupa cheia calendarului. Nu mai e nevoie de pana
+   elastica de dinainte — pastila insasi umple randul. */
 .btns { width:100% }
-.btns .pana { flex:1 1 auto; min-width:0 }
 .btns .mic { flex:0 0 auto; display:flex; align-items:center; justify-content:center; gap:6px;
              padding-left:14px; padding-right:14px; font:600 12.5px/1 ui-sans-serif,system-ui;
              letter-spacing:.06em }
@@ -124,8 +125,21 @@ html { scroll-padding-top:130px }
    Se scoate TOATA aici, nu doar chenarul — cum face si carcasa pentru meniul contului (.cont-meniu).
    Daca vreodata mai intra un <details> in randul de unelte, are nevoie de aceleasi sase linii. */
 .btns .filtre { border:0; border-radius:0; padding:0; margin:0; background:none;
-                position:relative; flex:0 0 auto; display:flex; align-items:stretch }
+                position:relative; flex:0 0 46px; display:flex; align-items:stretch }
 .btns .filtre > summary { cursor:pointer; list-style:none; margin:0; color:inherit }
+
+/* ⚠️ CRUCEA E UN SEGMENT AL PASTILEI, NU UN BUTON DE SINE STATATOR (user, 15.09.2026: „mută butonul
+   cu cruce după calendar"). Marcajul ii lasa clasele .btn .mic, ca sa ramana aceleasi masuri de
+   scris si de iconita — dar chenarul, fundalul si rotunjirea LOR se sting aici: pastila le are pe
+   ale ei, iar doua chenaruri unul in altul au fost chiar reclamatia de acum o ora. Ce ramane e linia
+   din stanga, ca intre celelalte segmente. */
+.pastila .sarb-cheie { border:0; border-left:1px solid var(--rule); border-radius:0;
+                       background:transparent; display:flex; align-items:center;
+                       justify-content:center }
+.pastila .sarb-cheie:hover { background:var(--paper) }
+.pastila .sarb-cheie.activ { background:var(--rosu-palid) }
+/* crucea stinsa: se vede ca exista, dar nu se apasa (.gol din carcasa da opacitatea si pointer-events) */
+.pastila .sarb-cheie.gol:hover { background:transparent }
 .btns .filtre[open] > summary { margin-bottom:0 }
 .btns .filtre > summary::-webkit-details-marker { display:none }
 .btns .filtre > summary::marker { content:"" }
@@ -192,7 +206,7 @@ h2.luna .fel-filtru.f-evlavie { color:var(--mov) }
   .btns { gap:7px }
   .btns .mic { padding-left:11px; padding-right:11px }
   .pastila .acum { padding:11px 10px; font-size:13px }
-  .pastila .luni-cheie { padding:11px 10px }
+  .pastila .azi-buton, .pastila .luni-cheie, .pastila .sarb-cheie { flex:0 0 42px; width:42px }
   /* meniul nu e mai lat decat ecranul, oricat de ingust ar fi telefonul */
   .filtre-meniu { min-width:0; width:max-content; max-width:calc(100vw - 32px) }
 }
@@ -225,9 +239,21 @@ h2.luna .fel-filtru.f-evlavie { color:var(--mov) }
    ⚠️ De aceea masura de pornire nu mai e „1 1 0" (pastila nu mai are ce derula si n-are de ce sa
    inghita randul), ci „0 1 auto": ia cat ii trebuie si lasa restul butoanelor.
    ⚠️ FARA BACKTICK in comentariile de aici: fisierul intreg e un template literal. */
-.btns .pastila { display:flex; flex:0 1 auto; min-width:0; align-items:stretch;
-                 border:1px solid var(--rule); border-radius:10px; background:var(--tinta);
-                 overflow:hidden }
+/* ⚠️ PASTILA IA TOT CE RAMANE DIN RAND, iar inauntru cele TREI butoane au masura FIXA si numai DATA
+   creste (user, 15.09.2026: „toată pastila asta fă-o sută la sută cu butoanele de dimensiuni fixe,
+   adică butonul de azi, butonul de calendar și butonul cu crucea. Dar zona cu data curentă, luna și
+   anul să fie maximă, sută la sută cât tot spațiul").
+   Patru segmente, in ordinea ceruta: bulina · DATA · calendarul · crucea.
+   ⚠️ FARA overflow:hidden. Il avea cat timp pastila tinea sirul derulant al lunilor; acum, cu meniul
+   crucii atarnat de ultimul segment, overflow:hidden l-ar TAIA si meniul n-ar mai aparea deloc.
+   Rotunjirea colturilor o duc segmentele de la capete, fiecare al lui. */
+.btns .pastila { display:flex; flex:1 1 auto; min-width:0; align-items:stretch;
+                 border:1px solid var(--rule); border-radius:10px; background:var(--tinta) }
+/* cele trei butoane: aceeasi masura fixa, ca pastila sa arate la fel pe orice pagina */
+.pastila .azi-buton, .pastila .luni-cheie, .pastila .sarb-cheie { flex:0 0 46px; width:46px;
+                 padding-left:0; padding-right:0 }
+.pastila > :first-child { border-radius:9px 0 0 9px }
+.pastila > :last-child, .pastila > .filtre:last-child > summary { border-radius:0 9px 9px 0 }
 /* Scrisul locului. ⚠️ NU e scris cu majuscule si nici raschirat, ca lunile din sir: „15 SEPTEMBRIE
    2026" ar fi cerut vreo 150 px si ar fi rupt randul unic pe telefon. Pe ecrane mici trece de la
    sine pe forma scurta („15 sep. 2026"), scrisa alaturi si ascunsa pana atunci. */
@@ -241,9 +267,11 @@ h2.luna .fel-filtru.f-evlavie { color:var(--mov) }
    paginii: alb ziua, aproape negru noaptea), nu --tinta, care e umplutura butoanelor si a pastilei.
    Se vede ca o fereastra taiata in pastila — si tocmai asta o deosebeste de bulina si de cheie.
    Nu-i pune :hover si nu-i da cursor:pointer: nu se apasa. */
-.pastila .acum { display:flex; align-items:center; flex:0 0 auto; padding:11px 13px;
-                 white-space:nowrap; border-left:1px solid var(--rule);
-                 border-right:1px solid var(--rule); background:var(--paper);
+.pastila .acum { display:flex; align-items:center; justify-content:center;
+                 flex:1 1 auto; min-width:0; padding:11px 13px;
+                 white-space:nowrap; overflow:hidden;
+                 border-left:1px solid var(--rule); border-right:1px solid var(--rule);
+                 background:var(--paper);
                  font:600 14px/1 ui-sans-serif,system-ui; color:var(--rosu) }
 .pastila .acum .scurt { display:none }
 /* Cheia lunilor: cat timp bara e coborata, sta aprinsa — ca omul sa stie de unde a iesit sirul. */

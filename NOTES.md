@@ -1601,6 +1601,31 @@ forța antetul `Host`**.
 
 ### 2026-09-15
 
+- **⚠️ CURSA DERULĂRII LA ZIUA DE AZI — reparată.** La PRIMA venire în pagină ziua rămânea lipită de
+  antet, nu la mijloc; abia a doua apăsare pe „Astăzi" o centra (user, 15.09.2026, întâi pe telefon,
+  apoi confirmat și pe desktop — **nu era o boală a telefonului, era o cursă, iar cursele nu țin de
+  lățimea ecranului**). Trei lucruri se băteau, toate numai la prima venire:
+  1. cu ancora `#azi` în adresă, **browserul își face singur saltul la ea**, sub antet
+     (`scroll-padding-top:130px`), și saltul lui venea DUPĂ centrarea noastră;
+  2. carcasa are `scroll-behavior:smooth`, deci saltul acela e o **animație în curs**, care înghite
+     o centrare pornită în timpul ei;
+  3. `setTimeout(…, 0)` măsura pagina **înainte să se așeze** (fonturi, poze).
+  Leacul, în trei: așezarea de la intrare e **instantanee** (o săritură instantanee taie animația
+  browserului), se **repetă după `load`** (și direct, dacă pagina e deja `complete` — altfel `load`
+  nu mai vine niciodată), iar linul e **stins cât ținem noi cârma** (`html.fara-lin`). Apăsarea
+  butonului rămâne lină: acolo pagina e deja așezată.
+  ⚠️ Toate trei arată a cod de prisos la o citire grăbită; `tests/calendar-derulare.test.ts` le
+  păzește pe fiecare, cu pricina scrisă.
+- **Pastila, forma cerută de user** (15.09.2026): **crucea a intrat ÎN pastilă, după cheia
+  calendarului**; pastila ia tot rândul, cele trei butoane (azi · calendar · cruce) au **măsură
+  fixă** (46 px, 42 pe telefon) și **numai DATA crește**, cât tot spațiul rămas.
+  ⚠️ **Pastila NU mai are `overflow:hidden`** — îl avea cât ținea șirul derulant al lunilor; acum,
+  cu meniul crucii atârnat de ultimul segment, l-ar TĂIA și meniul n-ar mai apărea deloc. Rotunjirea
+  colțurilor o duc segmentele de la capete.
+  ⚠️ Crucea își păstrează clasele `.btn .mic` (pentru măsurile scrisului și ale iconiței), dar
+  chenarul, fundalul și rotunjirea LOR se sting: pastila le are pe ale ei, iar două chenaruri unul
+  în altul au fost chiar reclamația de acum o oră.
+
 - **⚠️ CARCASA ÎMBRACĂ ORICE `<details>` ÎNTR-O CUTIE — și asta îngroașă randul de unelte.** În
   `@xc/ui`, pe eticheta goală: `details { border:1px solid var(--rule); border-radius:10px;
   padding:10px 14px; margin:14px 0 }`. Făcută pentru cutiile pliante din corpul paginii, a prins și

@@ -107,22 +107,28 @@ function contDin(ctx: Ctx) {
  */
 function unelte(o: {
   ctx: Ctx
-  navigarea?: string
+  /** anul si luna paginii, pentru scrisul din pastila si pentru marcajul lunii deschise */
+  an: number
+  /** `0` = nicio luna nu e a paginii (listele de an) */
+  luna: number
+  azi: string
   /** filtrul de fel pus acum, daca e vreunul */
   felActiv?: FelFiltru
   /** luna peste care lucreaza filtrele, „<an>-<luna>"; lipseste cand lista tine anul intreg */
-  luna?: string
+  lunaFiltru?: string
 }): string {
   /*
    * ⚠️ RANDUL TINE INTOTDEAUNA TOATA LATIMEA (user, 15.09.2026: „bara de sus din antet, meniul să fie
-   * 100% mereu"). Pastila la stanga, apoi o PANA elastica, apoi grupul din dreapta — abonarea si
-   * crucea, lipite de margine. Asa randul arata la fel si cand crucea e stinsa, si cand are meniu.
+   * 100% mereu"). Doua bucati, si atat: PASTILA, care ia tot ce ramane, si ABONAREA, cu masura ei
+   * fixa, lipita de marginea din dreapta.
+   *
+   * ⚠️ CRUCEA A INTRAT ÎN PASTILĂ, după cheia calendarului (user, 15.09.2026: „mută butonul cu cruce
+   * după calendar… toată pastila asta fă-o sută la sută cu butoanele de dimensiuni fixe… dar zona cu
+   * data curentă, luna și anul să fie maximă"). Nu mai e un buton de sine stătător la capătul
+   * rândului: e al patrulea segment al pastilei, fără chenar propriu — altfel ar fi fost iar „buton
+   * în alt buton", reclamația de acum o oră.
    */
-  return `${o.navigarea ?? ''}
-    <span class="pana" aria-hidden="true"></span>
-    ${butonAbonare(ABONAMENT)}
-    <span class="desparte" aria-hidden="true"></span>
-    ${meniulFiltrelor(o)}`
+  return `${pastilaLocului(o.ctx, o.an, o.luna, o.azi, meniulFiltrelor(o))}${butonAbonare(ABONAMENT)}`
 }
 
 /**
@@ -147,13 +153,13 @@ function unelte(o: {
  *
  * Meniul nu se scrie deloc dacă omul n-are niciun rând de văzut.
  */
-function meniulFiltrelor(o: { ctx: Ctx; felActiv?: FelFiltru; luna?: string }): string {
+function meniulFiltrelor(o: { ctx: Ctx; felActiv?: FelFiltru; lunaFiltru?: string }): string {
   const p = esc(o.ctx.prefix)
   const an = o.ctx.anCurent
   // Cu o luna in brate, filtrul se pune pe ea; fara luna (lista anului) se trece la lista de an a
   // celuilalt fel. Stins, drumul inapoi e luna neatinsa — ori, daca nu suntem pe nicio luna, nimic.
-  const cuFel = (fel: FelFiltru) => (o.luna ? `${p}/${o.luna}?filtru=${fel}` : `${p}/sarbatori/${FILTRE[fel].slug}/${an}`)
-  const faraFel = o.luna ? `${p}/${o.luna}` : ''
+  const cuFel = (fel: FelFiltru) => (o.lunaFiltru ? `${p}/${o.lunaFiltru}?filtru=${fel}` : `${p}/sarbatori/${FILTRE[fel].slug}/${an}`)
+  const faraFel = o.lunaFiltru ? `${p}/${o.lunaFiltru}` : ''
 
   const feluri = (['rosie', 'neagra', 'evlavie'] as FelFiltru[]).filter((f) => poateVedeaFiltrul(o.ctx, f))
   const apasabile = feluri.filter((f) => poateFiltra(o.ctx, f))
@@ -322,23 +328,59 @@ const JS_NAV = `
     capete();
   }
 
-  // ——— ziua de azi se aseaza la mijlocul ecranului, nu sub antet
+  // ——— ziua de azi se aseaza la MIJLOCUL ecranului, nu sub antet
   var randAzi = document.getElementById('azi');
-  function laAzi() { if (randAzi) randAzi.scrollIntoView({ block: 'center' }); }
-  /* ⚠️ LA INTRAREA IN APLICATIE SE DERULEAZA SINGUR LA ZIUA DE AZI (user, 15.09.2026: „când se
-     intră pe prima pagină să se ducă direct la ziua de azi… ca și cum s-a apăsat AZI"). Semnul e
-     clasa \`la-azi\` de pe corpul paginii, scrisa de server NUMAI la adresa fara luna (\`/\`) — nu si
-     cand omul a ales el o luna anume din sir, unde o saritura nesolicitata ar fi o rapire. */
-  if (randAzi && (location.hash === '#azi' || document.body.classList.contains('la-azi'))) setTimeout(laAzi, 0);
+  function laAzi(lin) {
+    if (!randAzi) return;
+    randAzi.scrollIntoView({ block: 'center', behavior: lin ? 'smooth' : 'instant' });
+  }
+
+  /* ⚠️ LA INTRAREA IN PAGINA, AȘEZAREA SE FACE DE MAI MULTE ORI, ȘI FĂRĂ LIN — altfel ziua iese
+     LIPITĂ DE ANTET, nu la mijloc (user, 15.09.2026: „inițial se duce în pagina care trebuie și îmi
+     scrolează până la nivelul zilei - sunt top cu ea… dacă apăs a doua oară, mă poziționează pe
+     mijlocul paginii"). ⚠️ Nu e o boală a telefonului — userul a găsit-o pe mobil, dar a confirmat-o
+     îndată și pe desktop: e o CURSĂ, și cursele nu țin de lățimea ecranului.
+     Trei pricini se adunau, toate numai la PRIMA venire în pagină:
+
+       1. cu ancora #azi în adresă, BROWSERUL își face singur saltul la ea, iar el o duce sub antet
+          (scroll-padding-top:130px), nu la mijloc — și saltul lui venea DUPĂ centrarea noastră;
+       2. carcasa are scroll-behavior:smooth pe radacina, deci saltul acela e o animație în curs;
+          o centrare pornită în timpul ei e înghițită de ea;
+       3. setTimeout(…, 0) măsura pagina înainte să se așeze (fonturi, poze) — pe telefon, unde
+          rândurile se rup altfel, greșeala se vedea cel mai tare.
+
+     De aceea: se stinge linul cât ținem noi cârma, se așază pe loc, apoi încă o dată după ce
+     browserul a desenat un cadru, și încă o dată după load (poze și fonturi gata). O săritură
+     INSTANTANEE taie orice animație pornită de browser — de-aia nu e „smooth" aici.
+     Apăsarea butonului, în schimb, rămâne LINĂ: acolo pagina e deja așezată și omul vede mișcarea. */
+  function asazaAzi() {
+    if (!randAzi) return;
+    var radacina = document.documentElement;
+    radacina.classList.add('fara-lin');
+    laAzi();
+    requestAnimationFrame(function () {
+      laAzi();
+      radacina.classList.remove('fara-lin');
+    });
+  }
+  /* Semnul intrării: ancora #azi (venit de pe butonul „Astăzi" al altei luni) ori clasa la-azi,
+     scrisă de server NUMAI la adresa fără lună — nu și când omul a ales el o lună din șir, unde o
+     săritură nesolicitată ar fi o răpire. */
+  if (randAzi && (location.hash === '#azi' || document.body.classList.contains('la-azi'))) {
+    asazaAzi();
+    if (document.readyState === 'complete') requestAnimationFrame(asazaAzi);
+    else window.addEventListener('load', asazaAzi);
+  }
+
   var butonAzi = document.querySelector('.azi-buton');
   if (butonAzi && randAzi) {
     butonAzi.addEventListener('click', function (ev) {
       ev.preventDefault();
       if (location.hash !== '#azi') history.replaceState(history.state, '', '#azi');
-      laAzi();
+      laAzi(true);
     });
   }
-  window.addEventListener('hashchange', function () { if (location.hash === '#azi') laAzi(); });
+  window.addEventListener('hashchange', function () { if (location.hash === '#azi') laAzi(true); });
 })();
 `
 
@@ -655,7 +697,7 @@ function scrisulLocului(ctx: Ctx, an: number, luna: number, azi: string): string
  *
  * `luna: 0` inseamna „nicio luna nu e a paginii" — asa o cheama listele de sarbatori.
  */
-function pastilaLocului(ctx: Ctx, an: number, luna: number, azi: string): string {
+function pastilaLocului(ctx: Ctx, an: number, luna: number, azi: string, filtre: string): string {
   const p = esc(ctx.prefix)
   const [anAzi, lunaAzi] = azi.split('-').map(Number) as [number, number]
   // bulina se face rosie numai cand pagina arata chiar luna de azi — rosul spune locul, nu butonul
@@ -666,7 +708,8 @@ function pastilaLocului(ctx: Ctx, an: number, luna: number, azi: string): string
     + ` title="Astăzi" aria-label="Astăzi"></a>`
   const cheia = `<button type="button" class="luni-cheie" id="luni-cheie" aria-expanded="false"`
     + ` aria-controls="bara-luni" title="Alege altă lună" aria-label="Alege altă lună">${IC_CALENDAR}</button>`
-  return `<span class="pastila">${butonAzi}${scrisulLocului(ctx, an, luna, azi)}${cheia}</span>`
+  // Ordinea cerută (user, 15.09.2026): bulina · DATA, cât tot spațiul rămas · calendarul · crucea.
+  return `<span class="pastila">${butonAzi}${scrisulLocului(ctx, an, luna, azi)}${cheia}${filtre}</span>`
 }
 
 /**
@@ -784,9 +827,11 @@ export function paginaLuna(o: {
     metaExtra: `<meta name="description" content="Calendarul creștin ortodox — ${LUNI[o.luna - 1]} ${o.an}, zi de zi. Copie a calendarului oficial al Patriarhiei Române.">`,
     unelte: unelte({
       ctx: o.ctx,
-      navigarea: pastilaLocului(o.ctx, o.an, o.luna, o.azi),
+      an: o.an,
+      luna: o.luna,
+      azi: o.azi,
       ...(o.cruce ? { felActiv: o.cruce } : {}),
-      luna: lunaSir,
+      lunaFiltru: lunaSir,
     }),
     subantet: subantetul(o.ctx, o.an, o.luna, o.cruce),
     ...(o.laAzi ? { clasaCorp: 'la-azi' } : {}),
@@ -874,7 +919,7 @@ export function paginaZi(o: { ctx: Ctx; r: RandZi; d: RandDesfacut; zi: ZiLiturg
     // navigarea sta pe TOATE paginile, cu luna zilei marcata — in ea esti
     // filtrele lucreaza peste luna ZILEI deschise: de pe ziua de 13 septembrie, „cruce roșie" duce la
     // septembrie filtrat, nu la un an intreg
-    unelte: unelte({ ctx: o.ctx, navigarea: pastilaLocului(o.ctx, o.r.an, o.r.luna, o.azi), luna: `${o.r.an}-${String(o.r.luna).padStart(2, '0')}` }),
+    unelte: unelte({ ctx: o.ctx, an: o.r.an, luna: o.r.luna, azi: o.azi, lunaFiltru: `${o.r.an}-${String(o.r.luna).padStart(2, '0')}` }),
     subantet: subantetul(o.ctx, o.r.an, o.r.luna),
     scripturi: JS_NAV + JS_FILTRE + JS_ABONARE,
     clasaCorp: `pagina-zi ${o.r.zi_saptamana === 0 ? 'duminica' : ''} ${o.r.cruce ? `cruce-${o.r.cruce}` : ''}`,
@@ -1107,7 +1152,7 @@ ${grup.map((x) => randZi(o.ctx, x.r, x.d, x.zi, x.r.data === o.azi, o.fel)).join
     // cruce neagră roșie") — randul are aceeasi forma pe toate paginile, ca la Program. Fara luna
     // marcata (`0`) si fara `luna` in unelte: aici filtrul tine anul intreg, nicio luna nu e aleasa,
     // iar lunile din pastila duc la luna aceea CU filtrul pus.
-    unelte: unelte({ ctx: o.ctx, navigarea: pastilaLocului(o.ctx, o.an, 0, o.azi), felActiv: o.fel }),
+    unelte: unelte({ ctx: o.ctx, an: o.an, luna: 0, azi: o.azi, felActiv: o.fel }),
     subantet: subantetul(o.ctx, o.an, 0, o.fel),
     scripturi: JS_NAV + JS_FILTRE + JS_ABONARE,
     clasaCorp: 'sarbatori',
