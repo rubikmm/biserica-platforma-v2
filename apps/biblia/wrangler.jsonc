@@ -25,7 +25,7 @@
 
   // Depozitul propriu: cartile in JSON, una pe fisier, plus `index.json`.
   "r2_buckets": [
-    { "binding": "TEXTE", "bucket_name": "xc-biblia-staging" }
+    { "binding": "TEXTE", "bucket_name": "xc-biblia-production" }
   ],
 
   "services": [

@@ -1,4 +1,4 @@
-import type { StareDirect, StareEmisie, StarePanou } from '@xc/contracts'
+import type { StareEmisie, StarePanou } from '@xc/contracts'
 
 /**
  * DIRECTUL, văzut de aici — creierul stă în cealaltă aplicație.
@@ -17,9 +17,6 @@ export interface EnvLiveDeparte {
 
 const ANTET = { 'x-xc-intern': '1', 'content-type': 'application/json' }
 const BAZA = 'https://live.intern'
-
-/** Când `live` tace, spunem cinstit că nu știm — nu inventăm „nu se transmite". */
-const DIRECT_NECUNOSCUT: StareDirect = { direct: false, configurat: false }
 
 export async function cereLive(env: EnvLiveDeparte, cale: string, init?: RequestInit): Promise<Response | null> {
   if (!env.LIVE) return null
@@ -60,7 +57,7 @@ export function starePanouDeparte(
   )
 }
 
-/** Starea canalului microfonului în SFU. */
-export function stareMic(env: EnvLiveDeparte): Promise<StareDirect> {
-  return jsonDe<StareDirect>(env, '/_intern/mic/stare', undefined, DIRECT_NECUNOSCUT)
-}
+/*
+ * ⚠️ `stareMic` a ieșit odată cu pagina microfonului, mutată la `live` pe 15.09.2026. De aici nu se
+ * mai întreabă nimic despre canalul „mic": cine vrea să-l asculte merge pe `live.sfantul-ilie.ro/mic`.
+ */

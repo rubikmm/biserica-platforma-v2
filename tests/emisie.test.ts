@@ -4,7 +4,7 @@ import { ceSeAude, ordineNaturala, pieseDin, playlist, toateDirectoarele } from 
 import { corpPanou, jsPanou } from '../packages/comanda/src/panou.js'
 import { corpPlayer, jsPlayer } from '../packages/comanda/src/player.js'
 import { jsBiblioteca } from '../apps/radio/src/biblioteca-pagina.js'
-import { jsMic } from '../apps/radio/src/mic.js'
+import { jsMic } from '../apps/live/src/mic.js'
 import { caleCurata, eAudio } from '../apps/radio/src/cai.js'
 import { navigatieDin } from '../packages/config/src/index.js'
 import { pagina as paginaLive } from '../apps/live/src/pagina.js'

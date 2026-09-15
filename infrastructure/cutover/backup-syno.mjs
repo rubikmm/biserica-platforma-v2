@@ -25,6 +25,12 @@ const arg = (n, implicit = null) => {
   return i >= 0 ? process.argv[i + 1] : implicit
 }
 const FARA_R2 = process.argv.includes('--fara-r2')
+/**
+ * `--doar-r2 a,b,c` — numai depozitele astea. Se copiaza ce URMEAZA SA SE STEARGA; depozitul
+ * `biserica-transmisiuni` (11 GB) ramane in functiune, refolosit dinadins, deci n-are rost sa-l
+ * caram pe NAS, iar cele `xc-*` sunt chiar datele vii.
+ */
+const DOAR_R2 = (arg('doar-r2') ?? '').split(',').map((x) => x.trim()).filter(Boolean)
 const ZI = new Date().toISOString().slice(0, 10)
 const UNDE = join(arg('unde', '/backup/_arhiva-cloudflare'), ZI)
 
@@ -36,18 +42,58 @@ if (!CONT || !TOKEN) {
   process.exit(1)
 }
 
-const api = async (cale) => {
+/** Raspunsul INTREG, cu tot cu `result_info` — acolo sta cursorul paginarii. */
+const apiPlin = async (cale) => {
   const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${CONT}${cale}`, {
     headers: { authorization: `Bearer ${TOKEN}` },
   })
   const d = await r.json()
   if (!d.success) throw new Error(`${cale}: ${JSON.stringify(d.errors).slice(0, 200)}`)
-  return d.result
+  return d
 }
+const api = async (cale) => (await apiPlin(cale)).result
 
 const scrie = (cale, continut) => {
   mkdirSync(dirname(cale), { recursive: true })
   writeFileSync(cale, continut)
+}
+
+/** Cate lucruri n-au iesit. La final hotaraste codul de iesire: o arhiva pe jumatate nu e poarta. */
+let esecuri = 0
+const esuat = (ce, e) => {
+  esecuri++
+  console.log(`ESUAT ${ce}(${String(e.message ?? e).slice(0, 120)})`)
+}
+
+/**
+ * Exportul D1 e in DOI TIMPI: prima cerere doar porneste treaba si intoarce `at_bookmark`; abia
+ * intreband mai departe cu `current_bookmark` apare `signed_url`. Cine crede primul raspuns pleaca
+ * fara nimic — pe 15.09.2026 toate cele 32 de baze au iesit asa, „ESUAT ([])", cu errors gol.
+ */
+const INCEPE = { output_format: 'polling', dump_options: { no_schema: false } }
+const exportaD1 = async (id) => {
+  let corp = INCEPE
+  for (let pas = 0; pas < 150; pas++) {
+    const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${CONT}/d1/database/${id}/export`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
+      body: JSON.stringify(corp),
+    })
+    const d = await r.json()
+    if (!d.success) throw new Error(JSON.stringify(d.errors ?? d).slice(0, 160))
+    /*
+     * ⚠️ Legatura de descarcare sta la `result.RESULT.signed_url`, cu un nivel mai adanc decat pare.
+     * Aici a fost defectul: unealta se uita la `result.signed_url`, deci nu vedea niciodata nimic.
+     * ⚠️ Si `output_format` e cerut si la cererile de urmarire, nu doar la prima (altfel 7400).
+     */
+    const url = d.result?.result?.signed_url
+    if (url) return url
+    // „Not currently exporting anything" inseamna ca treaba s-a incheiat intre doua intrebari: o iau de la capat.
+    if (d.result?.success === false || !d.result?.at_bookmark) corp = INCEPE
+    else corp = { output_format: 'polling', current_bookmark: d.result.at_bookmark }
+    await new Promise((gata) => setTimeout(gata, 2000))
+  }
+  throw new Error('exportul nu s-a terminat in 5 minute')
 }
 
 console.log(`Arhiva Cloudflare → ${UNDE}`)
@@ -87,19 +133,11 @@ for (const b of inventar.baze_d1) {
   try {
     // `wrangler d1 export` cere un nume cunoscut de configuratie; pe API mergem direct, ca sa
     // prindem SI bazele V1, care nu sunt in niciun wrangler.jsonc de-al nostru.
-    const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${CONT}/d1/database/${b.id}/export`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ output_format: 'polling', dump_options: { no_schema: false } }),
-    })
-    const d = await r.json()
-    const url = d?.result?.signed_url
-    if (!url) throw new Error(JSON.stringify(d.errors ?? d).slice(0, 160))
-    const fisier = await fetch(url)
+    const fisier = await fetch(await exportaD1(b.id))
     await pipeline(Readable.fromWeb(fisier.body), createWriteStream(cale))
     console.log(`${(statSync(cale).size / 1024).toFixed(0)} KB`)
   } catch (e) {
-    console.log(`ESUAT (${String(e.message).slice(0, 120)})`)
+    esuat('', e)
   }
 }
 
@@ -120,7 +158,7 @@ for (const k of inventar.spatii_kv) {
     scrie(cale, JSON.stringify(perechi, null, 2))
     console.log(`${chei.length} chei`)
   } catch (e) {
-    console.log(`ESUAT (${String(e.message).slice(0, 120)})`)
+    esuat('', e)
   }
 }
 
@@ -130,11 +168,17 @@ for (const g of inventar.ai_gateway) {
   if (existsSync(cale)) { console.log(`  gateway ${g}: deja`); continue }
   process.stdout.write(`  gateway ${g} … `)
   try {
-    const loguri = await api(`/ai-gateway/gateways/${g}/logs?per_page=1000`)
+    // ⚠️ La loguri, `per_page` nu trece de 50 (altfel 7001) — deci pagina cu pagina.
+    const loguri = []
+    for (let pagina = 1; pagina <= 200; pagina++) {
+      const lot = await api(`/ai-gateway/gateways/${g}/logs?per_page=50&page=${pagina}`)
+      loguri.push(...lot)
+      if (lot.length < 50) break
+    }
     scrie(cale, JSON.stringify(loguri, null, 2))
     console.log(`${loguri.length} intrari`)
   } catch (e) {
-    console.log(`ESUAT (${String(e.message).slice(0, 120)})`)
+    esuat('', e)
   }
 }
 
@@ -143,14 +187,21 @@ if (FARA_R2) {
   console.log('  R2: sarit (--fara-r2)')
 } else {
   for (const galeata of inventar.depozite_r2) {
+    if (DOAR_R2.length > 0 && !DOAR_R2.includes(galeata)) continue
     process.stdout.write(`  r2 ${galeata} … `)
     let cursor = null
     let n = 0
     let sarite = 0
     try {
       do {
-        const lista = await api(`/r2/buckets/${galeata}/objects?per_page=1000${cursor ? `&cursor=${cursor}` : ''}`)
-        cursor = lista.cursor ?? null
+        /*
+         * ⚠️ Cursorul paginarii sta in `result_info`, NU in `result` — cine se uita in `result`
+         * primeste `undefined`, iese din bucla si pleaca cu primele 1000 de obiecte, multumit.
+         * Asa s-a oprit `biserica-biblioteca` la fix 1000 pe 15.09.2026.
+         */
+        const d = await apiPlin(`/r2/buckets/${galeata}/objects?per_page=1000${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`)
+        const lista = d.result
+        cursor = d.result_info?.is_truncated ? d.result_info?.cursor : null
         for (const o of lista.objects ?? lista) {
           const cale = join(UNDE, 'r2', galeata, o.key)
           if (existsSync(cale) && statSync(cale).size === o.size) { sarite++; continue }
@@ -165,10 +216,15 @@ if (FARA_R2) {
       } while (cursor)
       console.log(`${n} copiate, ${sarite} deja`)
     } catch (e) {
-      console.log(`ESUAT dupa ${n} (${String(e.message).slice(0, 120)})`)
+      esuat(`dupa ${n} `, e)
     }
   }
 }
 
+if (esecuri > 0) {
+  console.log(`\n⚠️ ${esecuri} lucruri N-AU iesit. Arhiva e pe jumatate: ${UNDE}`)
+  console.log('NU se sterge nimic de la Cloudflare. Reia rularea — ce e deja copiat se sare.')
+  process.exit(1)
+}
 console.log(`\nGata. Arhiva: ${UNDE}`)
 console.log('⚠️ Verific-o inainte de orice stergere: fara ea, curatenia nu se incepe.')

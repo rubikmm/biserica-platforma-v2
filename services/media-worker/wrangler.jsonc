@@ -11,7 +11,7 @@
 
   "vars": { "MEDIU": "dev" },
 
-  "r2_buckets": [{ "binding": "FISIERE", "bucket_name": "xc-media-staging" }],
+  "r2_buckets": [{ "binding": "FISIERE", "bucket_name": "xc-media-production" }],
 
   "env": {
     "staging": {

@@ -34,14 +34,14 @@
 
   // Comutatoarele modulelor: de aici afla chatul daca e pornit si cu ce creier raspunde.
   "kv_namespaces": [
-    { "binding": "CONFIG", "id": "4fb91926da484c4395160390d5348950" }
+    { "binding": "CONFIG", "id": "5d9c6f96328743858c40c577fbbdb947" }
   ],
 
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "xc-chat-staging",
-      "database_id": "a3d30428-fba0-46bf-9895-1ed0478a7039",
+      "database_name": "xc-chat-production",
+      "database_id": "fc262cfc-2879-4ce5-b5f0-45d3f754fe09",
       "migrations_dir": "../../infrastructure/migrations/chat"
     }
   ],

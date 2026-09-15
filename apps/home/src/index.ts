@@ -82,6 +82,19 @@ export default {
       return json({ ok: true, app: 'home', mediu: env.MEDIU, versiune: pkg.version, publicat: env.VERSIUNE?.timestamp ?? null, ora: new Date().toISOString() }, 200, { 'cache-control': 'no-store' })
     }
 
+    /*
+     * ADRESELE VECHI ALE EMISIEI. `transmisiuni.` si `audio.` sunt tiparite prin parohie si stiute
+     * de oameni, dar aplicatia lor V1 s-a stins la cutover. Le tinem in viata aici, ca redirectari,
+     * ca sa nu mai fie nevoie de un worker doar pentru atat: un hostname tine de un singur worker,
+     * iar astea doua stau acum pe `home`. Ce era `/radio` pleaca la radio, restul la direct.
+     */
+    const gazdaVeche = url.hostname.split('.')[0]
+    if (gazdaVeche === 'transmisiuni' || gazdaVeche === 'audio') {
+      const spreRadio = gazdaVeche === 'transmisiuni' && url.pathname.startsWith('/radio')
+      const tinta = spreRadio ? nav.radio : nav.live
+      return Response.redirect(`${tinta}${spreRadio ? url.pathname.slice('/radio'.length) : ''}${url.search}`, 301)
+    }
+
     const sesiune = await sesiuneCurenta(env.IDENTITATE, req).catch(() => SESIUNE_ANONIMA)
     const utilizator = sesiune.user?.displayName ?? sesiune.user?.email ?? null
     const eAdmin = sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin')

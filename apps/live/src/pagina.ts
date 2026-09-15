@@ -2,6 +2,7 @@ import { STIL_EMISIE } from '@xc/comanda'
 import { type Navigatie } from '@xc/config'
 import { type Cont, esc, pagina as carcasa } from '@xc/ui'
 import pkg from '../package.json' with { type: 'json' }
+import { STIL_MIC } from './mic.js'
 
 /**
  * Carcasa pusă pe LIVE: antetul cu numele aplicației și contul, adresa platformei, subsolul.
@@ -70,7 +71,7 @@ export function pagina(ctx: Ctx, o: OptiuniPaginaApp): string {
     titluPagina: o.titluPagina,
     acasa: `${ctx.prefix}/`,
     urlPlatforma: ctx.nav.home,
-    local: STIL_EMISIE + (o.local ?? ''),
+    local: STIL_EMISIE + STIL_MIC + (o.local ?? ''),
     cont: contDin(ctx),
     corp: o.corp,
     versiune: pkg.version,

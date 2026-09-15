@@ -26,8 +26,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "xc-tipic-staging",
-      "database_id": "8c5ab60e-d3d8-4e96-aa89-f52492fdd83e",
+      "database_name": "xc-tipic-production",
+      "database_id": "82283f8f-701a-47b6-b0da-05dbd3a9e024",
       "migrations_dir": "../../infrastructure/migrations/tipic"
     }
   ],
@@ -36,7 +36,7 @@
   // Cartile scanate (PDF): ROEA, Anuarul si Mineiul pe noiembrie — copiate din bucketul V1
   // `biserica-tipic` pe 13.09.2026, in depozit NOU.
   "r2_buckets": [
-    { "binding": "TEXTE", "bucket_name": "xc-tipic-staging" }
+    { "binding": "TEXTE", "bucket_name": "xc-tipic-production" }
   ],
 
   "services": [

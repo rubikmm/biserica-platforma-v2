@@ -23,14 +23,14 @@
   },
 
   // Depozitul propriu: catalogul, fisele imbogatite, copertile in trei marimi si PDF-urile.
-  "r2_buckets": [{ "binding": "CATALOG", "bucket_name": "xc-biblioteca-staging" }],
+  "r2_buckets": [{ "binding": "CATALOG", "bucket_name": "xc-biblioteca-production" }],
 
   // Cererile de carti si scrisorile compuse. Inauntru numai `user_id`.
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "xc-biblioteca-staging",
-      "database_id": "cbf83fce-8c2a-4548-a576-929f460d0bd3"
+      "database_name": "xc-biblioteca-production",
+      "database_id": "20a9b980-f065-46a3-904d-d42bc097f579"
     }
   ],
 

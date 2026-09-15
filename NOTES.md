@@ -388,6 +388,31 @@ propunerea automată, ca în V1.
    **AI Gateway**: rămâne **o singură poartă, `xc-chat`** (nu se face una de producție: staging-ul
    oricum dispare). Din `biserica` (poarta V1) se salvează logurile, apoi se șterge.
 
+   **⚠️ PORNITĂ 15.09.2026** (user: „nu mai trebuie să fie nimic staging și să închidem v1"; „să avem
+   și local curățenie și pe CF"). **FĂCUT**:
+   - **arhiva**: toate cele **32 de baze D1** (77 MB), KV-urile și logurile AI Gateway, în
+     `/backup/_arhiva-cloudflare/2026-09-15/`. Copierea celor 8 depozite R2 ale V1 rula la închidere
+     (se sare peste `biserica-transmisiuni`, care rămâne — unealta are acum `--doar-r2`);
+   - **adresele vechi ale emisiei**, salvate ca redirectări în `home`: `transmisiuni.` și `audio.` →
+     `live`, `transmisiuni/radio*` → `radio` (301). Alese de user dintre trei drumuri, ca să nu ținem
+     un worker doar pentru atât. `xc-home-production` v0.3.1, cele două hostname-uri reasignate;
+   - **localul pe producție**: `local-spre-productie.mjs` a mutat blocul de bază al celor 17
+     `wrangler.jsonc` pe resursele de producție (`services` NU se atinge — sunt workerii din aceeași
+     sesiune `wrangler dev`);
+   - **`modul:chat` salvat**: KV-ul de producție era GOL, iar modelul + „Îndrumările" scrise de user
+     existau doar pe staging. Copiate pe producție. **La cutover s-au mutat D1 și R2, dar nu KV.**
+   **UNEALTA**: `node infrastructure/cutover/curatenie-cloudflare.mjs --v1|--staging [--chiar]`.
+   Fără `--chiar` doar arată lista. **Poarta e în ea**: refuză să șteargă orice bază D1 sau depozit R2
+   care n-are pereche în arhiva zilei. Apărate pe feluri: depozitul R2 `biserica-transmisiuni` și
+   KV-ul `CONFIG-production` (⚠️ **configurația VIE a producției, rămasă fără prefixul `xc-`** — de
+   redenumit în `xc-config-production`; bindingurile merg pe id, deci nu se rupe nimic).
+   **RĂMAS**: terminarea copierii R2 → `--v1 --chiar` (16 workeri, 8 baze, 8 depozite, KV
+   `biserica-proba`, gateway `biserica`) → `--staging --chiar`. **Ștergerile cer cererea userului.**
+   **Containerele V1 de pe NAS** (16) se șterg de către **#agent-server**, după ce verifică întâi că
+   n-a rămas cod necommis în ele; datele lor sunt deja `.tgz` în `/backup/<proiect>/`.
+   ⚠️ **`biserica-site` NU intră în listă**: e pagina principală a parohiei (`sfantul-ilie.ro`, pe
+   cPanel/FTP), vie. `biserica-website` e altceva — workerul de pe `website.`.
+
 0b. **⚠️ CUTOVER-UL EMISIEI — urmează, cerut de utilizator** (14.09.2026: „urmează să facem
    cutoverul", „când cutover ștergem transmisiuni"). E primul cutover al platformei, deci pașii se
    scriu aici înainte, nu se improvizează. **Nimic din ce urmează nu se face fără cerere explicită.**
@@ -405,10 +430,20 @@ propunerea automată, ca în V1.
      **✓ FĂCUT 14.09.2026, 23:20** — `live.` și `radio.sfantul-ilie.ro` legate de `xc-live-production`
      și `xc-radio-production` cu `rute.mjs --muta live|radio` (gazde NOI, Custom Domain le-a făcut și
      DNS-ul; certificatele emise pe loc, DNS-ul a mai avut de propagat); (2) ~~secretele~~ ✓ (cele
-     patru, puse din 14.09 seara); (3) **abia apoi se întoarce aparatul** din biserică spre adresa
-     nouă — din clipa aia directul din V1 amuțește, deci e pas de sine stătător, nu o consecință.
-     **⚠️ ACUM: live-ul V2 e „fără semnal" până la (3)**, iar `transmisiuni.sfantul-ilie.ro/live` (V1,
-     public) încă arată directul. **De ce s-a grăbit (1)**: mutarea lui `cont` pe V2 a rupt intrarea
+     patru, puse din 14.09 seara); (3) ~~se întoarce aparatul din biserică~~ **✓ FĂCUT 15.09.2026,
+     08:10** — vezi mai jos.
+     **⚠️ APARATUL E PE PRODUCȚIE din 15.09.2026, 08:10.** În `~/aparat-nou/aparat.env` pe rpi4:
+     `WORKER_URL=https://live.sfantul-ilie.ro`, `PROGRAM_URL=https://program.sfantul-ilie.ro/v1/interval`
+     (copie de siguranță: `aparat.env.bak-20260915-0810`), apoi `sudo systemctl restart aparat`.
+     La pornire: „legătura cu Workerul: bună", microfonul emite pe gazda nouă, programul citit de pe
+     producție, radioul reluat din selecția de producție — **fără bâlbâială**, jurnalul tăcut de atunci.
+     **⚠️ Ce l-a scos la iveală**: userul n-a putut porni LIVE din panou. `xc-live-production` refuză
+     LIVE dacă n-a primit telemetrie de **75 s** (`APARAT_VIU_S`), iar aparatul bătea încă în
+     `live.staging` — unde fusese mutat pentru probe pe 14.09. **Deci panoul și boxele erau
+     deconectate**: comanda lui de la 07:47 s-a scris în producție (v1, „01. Octoih"), în gol.
+     **De probat înainte de orice mutare a aparatului**: că `APARAT_SECRET` e același în mediul-țintă
+     — de pe Pi, `GET /intern/aparat/comanda?versiune=-1` cu secretul lui (200 cu el, 401 cu altul).
+     **De ce s-a grăbit (1)**: mutarea lui `cont` pe V2 a rupt intrarea
      în `transmisiuni` V1 (`/radio` cerea `cont.sfantul-ilie.ro/intra?app=A5`, protocol V1), iar
      home-ul V2 trimitea spre `live.`/`radio.` care nu existau — „domeniile dau eroare", user 23:16;
    - ⚠️ **aparatul e singura piesă din afara Cloudflare**: schimbă `/intern/live/whip`,
@@ -635,6 +670,13 @@ publicul „ce se transmite acum" și **același panou**.
   semnalizarea WebRTC (două canale: slujba și microfonul), numărătoarea ascultătorilor.
   Obiecte durabile: `Direct`, `Aparat`, `Ascultatori`.
 - **`radio` ține muzica și CEASUL**: ce selecție curge și de când. Obiect durabil: `Radio`.
+- ⚠️ **PAGINA MICROFONULUI e la `live`, pe `/mic`** (mutată 15.09.2026, cerută anume: „aș vrea să fie
+  în live.sfantul-ilie.ro/mic — tot așa vizibil doar super-adminilor"). Stă acum acolo unde sunt și
+  canalele SFU, deci cheamă semnalizarea direct (`/mic/stare`, `/mic/asculta`, `/mic/asculta/<sid>`),
+  fără săritură prin alt worker; `/_intern/mic/*` a ieșit din `live`, n-o mai cere nimeni. Pe `radio`
+  a rămas **303 spre `live/mic`**, pentru legăturile vechi. Poarta rămâne **super-administrator**
+  (pricina e scrisă în `apps/live/src/mic.ts`: microfonul se aude și când publicul ascultă radio).
+  Nu se bate cu „panoul e unul singur, la radio": microfonul nu comandă nimic, doar ascultă.
 - ⚠️ **LIVE și radioul se exclud**, ca pe aparatul din V1 — dar acum trăiesc în workeri diferiți.
   Regula: **`live` hotărăște, `radio` ascultă.** Când pornește directul, `live` stinge ceasul
   radioului; la STOP îl pornește la loc. **Dacă `radio` ajunge vreodată să comande directul singur,
@@ -1501,6 +1543,20 @@ forța antetul `Host`**.
   copiere în fiecare aplicație** — de aici costul oricărei schimbări transversale (antetul în 12 locuri).
 
 ## Jurnal
+
+### 2026-09-15
+
+- **Aparatul din biserică a trecut pe producție** și cu el s-a închis cutover-ul emisiei. Pornirea de
+  la „nu pot porni LIVE": LIVE cere telemetrie de sub 75 s, iar aparatul bătea în `live.staging`.
+  Amănuntele și proba secretului: NEXT, punctul 0b.
+- **Curățenia a început** (arhiva D1/KV/gateway pe NAS, adresele vechi redirectate din `home`, localul
+  mutat pe resursele de producție, `modul:chat` salvat din staging). Unealta cu poartă:
+  `curatenie-cloudflare.mjs`. Ce a rămas: NEXT, punctul 0c.
+- ⚠️ **Trei capcane de API Cloudflare**, toate plătite azi în `backup-syno.mjs`: exportul D1 e în doi
+  timpi (și `signed_url` stă la `result.result`, iar `output_format` e cerut la fiecare cerere);
+  cursorul listei R2 e în `result_info`, nu în `result` — altfel pleci cu primele 1000 de obiecte și
+  unealta îți spune „Gata"; `per_page` la logurile AI Gateway nu trece de 50.
+- ⚠️ **`pkill -f <tipar>` își omoară propriul shell** când tiparul apare în linia lui de comandă.
 
 ### 2026-09-14
 

@@ -26,7 +26,7 @@
 
   // Comutatoarele modulelor. Panoul de administrare e singurul care SCRIE aici.
   "kv_namespaces": [
-    { "binding": "CONFIG", "id": "4fb91926da484c4395160390d5348950" }
+    { "binding": "CONFIG", "id": "5d9c6f96328743858c40c577fbbdb947" }
   ],
 
   "env": {

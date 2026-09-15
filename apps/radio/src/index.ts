@@ -46,8 +46,7 @@ import { bibliotecaRute } from './biblioteca.js'
 import { corpBiblioteca, jsBiblioteca } from './biblioteca-pagina.js'
 import { type EnvCeas, radioul } from './ceas.js'
 import { biblioteca, fisier } from './depozit.js'
-import { type EnvLiveDeparte, cereLive, emisia, starePanouDeparte, stareMic } from './live-departe.js'
-import { corpMic, jsMic } from './mic.js'
+import { type EnvLiveDeparte, cereLive, emisia, starePanouDeparte } from './live-departe.js'
 import { type Ctx, pagina, paginaMesaj, spreCont } from './pagina.js'
 
 export { Radio } from './ceas.js'
@@ -217,27 +216,18 @@ export default {
         return new Response('nu exista', { status: 404 })
       }
 
-      // ---------------------------------------------------- microfonul
+      /*
+       * ---------------------------------------------------- microfonul s-a mutat
+       *
+       * ⚠️ Pagina microfonului stă de la 15.09.2026 la `live`, pe `live.sfantul-ilie.ro/mic` (cerut
+       * anume). Aici a rămas doar drumul într-acolo, ca legăturile vechi și obiceiul degetelor să nu
+       * cadă în gol — la fel ca `live/admin`, care trimite încoace la panou. Poarta de
+       * super-administrator e dincolo: aici nu se hotărăște nimic despre cine aude biserica.
+       */
       if (cale === '/mic' || cale.startsWith('/mic/')) {
-        if (!eSuperAdmin) {
-          if (eDeTrimisLaCont(ctx)) return Response.redirect(spreCont(ctx, cfg.ORIGINE_PUBLICA, cale), 303)
-          const mesaj = 'Microfonul bisericii se aude doar cu rol de super-administrator.'
-          if (cale !== '/mic') return json({ motiv: mesaj }, 403)
-          return html(paginaMesaj(ctx, 'Fără acces', faraAcces(ctx, mesaj)), 403, antete)
-        }
-        if (cale === '/mic') {
-          return html(pagina(ctx, { titluPagina: 'Microfonul', corp: corpMic(), scripturi: jsMic(prefix) }), 200, antete)
-        }
-        if (cale === '/mic/stare' && req.method === 'GET') {
-          return Response.json(await stareMic(env), { headers: JSON_VIU })
-        }
-        // Semnalizarea microfonului stă la `live`; o trimitem mai departe neschimbată.
-        const r = await cereLive(env, `/_intern/mic${cale.slice('/mic'.length)}`, {
-          method: req.method,
-          body: req.method === 'PUT' ? await req.text() : undefined,
-        })
-        if (!r) return json({ motiv: 'aplicația directului nu răspunde' }, 502)
-        return new Response(r.body, { status: r.status, headers: JSON_VIU })
+        const acolo = `${nav.live}/mic`
+        if (cale === '/mic' || cale === '/mic/') return Response.redirect(acolo, 303)
+        return json({ motiv: 'microfonul stă la transmisiune', unde: acolo }, 404)
       }
 
       /*

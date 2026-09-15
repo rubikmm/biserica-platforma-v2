@@ -19,8 +19,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "xc-communication-staging",
-      "database_id": "2419c275-1134-472a-beba-5404eeabd2b4",
+      "database_name": "xc-communication-production",
+      "database_id": "107b0ae4-8b3b-4b04-b629-2aa53079672f",
       "migrations_dir": "../../infrastructure/migrations/communication"
     }
   ],

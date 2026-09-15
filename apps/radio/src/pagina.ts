@@ -3,7 +3,6 @@ import { type Navigatie } from '@xc/config'
 import { type Cont, esc, pagina as carcasa } from '@xc/ui'
 import pkg from '../package.json' with { type: 'json' }
 import { STIL_BIBLIOTECA } from './biblioteca-pagina.js'
-import { STIL_MIC } from './mic.js'
 
 /**
  * Carcasa pusă pe RADIO.
@@ -67,7 +66,7 @@ export function pagina(ctx: Ctx, o: OptiuniPaginaApp): string {
     titluPagina: o.titluPagina,
     acasa: `${ctx.prefix}/`,
     urlPlatforma: ctx.nav.home,
-    local: STIL_EMISIE + STIL_BIBLIOTECA + STIL_MIC + (o.local ?? ''),
+    local: STIL_EMISIE + STIL_BIBLIOTECA + (o.local ?? ''),
     cont: contDin(ctx),
     corp: o.corp,
     versiune: pkg.version,

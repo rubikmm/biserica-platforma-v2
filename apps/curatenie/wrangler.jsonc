@@ -32,8 +32,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "xc-curatenie-staging",
-      "database_id": "0c60549b-9f84-4f92-a788-835929a2f8c7"
+      "database_name": "xc-curatenie-production",
+      "database_id": "19733db9-6b13-4937-bdf3-70286b74d2a2"
     }
   ],
 

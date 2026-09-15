@@ -25,8 +25,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "xc-program-staging",
-      "database_id": "8a65cb26-a3c8-4b39-ba98-da0997509bbf",
+      "database_name": "xc-program-production",
+      "database_id": "75c595db-de40-4821-a0ed-7cd80cab22ca",
       "migrations_dir": "../../infrastructure/migrations/program"
     }
   ],
@@ -45,7 +45,7 @@
 
   // Comutatoarele modulelor (cheia `modul:chat`), scrise din `apps/admin`.
   "kv_namespaces": [
-    { "binding": "CONFIG", "id": "4fb91926da484c4395160390d5348950" }
+    { "binding": "CONFIG", "id": "5d9c6f96328743858c40c577fbbdb947" }
   ],
 
   // Browser Rendering (Chrome pe Cloudflare) — foaia A4 ca PDF/JPG si foaia sfintilor zilei.

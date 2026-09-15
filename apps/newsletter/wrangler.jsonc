@@ -23,7 +23,7 @@
   },
 
   // Depozitul propriu: lista.json, cauta.json, stiri/<id>.html si media/uploads/…
-  "r2_buckets": [{ "binding": "ARHIVA", "bucket_name": "xc-newsletter-staging" }],
+  "r2_buckets": [{ "binding": "ARHIVA", "bucket_name": "xc-newsletter-production" }],
 
   "services": [{ "binding": "IDENTITATE", "service": "xc-identity" }],
 

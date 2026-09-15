@@ -15,8 +15,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "xc-audit-staging",
-      "database_id": "215c1d5a-9d97-46bc-bc46-b4d190782203"
+      "database_name": "xc-audit-production",
+      "database_id": "2a5ad207-2493-449b-8cd9-feb0c3e88fed"
     }
   ],
 

@@ -22,14 +22,14 @@
   },
 
   // Depozitul propriu: PDF-urile si pozele paginii intai, `<an>/buletin-<nr>-<data>.<ext>`.
-  "r2_buckets": [{ "binding": "FISIERE", "bucket_name": "xc-buletin-staging" }],
+  "r2_buckets": [{ "binding": "FISIERE", "bucket_name": "xc-buletin-production" }],
 
   // Cifrele arhivei si textul dupa care se cauta. Fara abonati: aceia sunt ai comunicarii.
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "xc-buletin-staging",
-      "database_id": "63edbc94-001d-4097-8a40-9ddd98227e94"
+      "database_name": "xc-buletin-production",
+      "database_id": "264f3cc0-d762-4b0a-9bd0-7c1007b80090"
     }
   ],
 

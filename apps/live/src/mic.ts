@@ -11,8 +11,11 @@ import { butonPlayStop } from '@xc/comanda'
  * să spovedească, publicul aude muzică — dar aici se aude în continuare biserica. Dacă cineva
  * slăbește vreodată poarta asta la „admin", spovedania ajunge la mai multe urechi decât trebuie.
  *
- * Semnalizarea e a lui `live` (acolo stau canalele SFU); pagina o cere prin aplicația noastră, care
- * o trimite mai departe prin Service Binding.
+ * ⚠️ Pagina stă la `live`, pe `live.sfantul-ilie.ro/mic` (user, 15.09.2026) — adică chiar acolo unde
+ * sunt canalele SFU, deci fără săritură prin alt worker. Până atunci o servea `radio` și cerea
+ * semnalizarea înapoi prin Service Binding; pe `radio` a rămas doar o redirectare, pentru legăturile
+ * vechi. Nu e o abatere de la „panoul e unul singur, la radio": microfonul nu e panou — nu comandă
+ * nimic, doar ascultă.
  */
 
 export function corpMic(): string {

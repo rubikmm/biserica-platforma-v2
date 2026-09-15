@@ -23,8 +23,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "xc-identity-staging",
-      "database_id": "a8ef90fa-28a7-4574-9ee8-ff8d3dc6be45",
+      "database_name": "xc-identity-production",
+      "database_id": "4d8cd18f-6a5b-4555-b9f0-b3d46bec10ff",
       "migrations_dir": "../../infrastructure/migrations/identity"
     }
   ],

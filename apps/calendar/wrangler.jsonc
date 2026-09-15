@@ -29,8 +29,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "xc-calendar-staging",
-      "database_id": "a51b9790-4255-4d60-853d-d2a3ad6ba5e9",
+      "database_name": "xc-calendar-production",
+      "database_id": "03c9980e-406c-419f-ae4b-4da6eae956ec",
       "migrations_dir": "../../infrastructure/migrations/calendar"
     }
   ],

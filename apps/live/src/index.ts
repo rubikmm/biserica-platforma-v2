@@ -36,6 +36,7 @@ import pkg from '../package.json' with { type: 'json' }
 import { type EnvAparat, aparatul } from './aparat.js'
 import { type EnvAscultatori, bataiePagina } from './ascultatori.js'
 import { DIRECT, type EnvDirect, MIC, ascultaIntra, ascultaRaspuns, sidDin, stareCanal, whipIese, whipIntra } from './direct.js'
+import { corpMic, jsMic } from './mic.js'
 import { type Ctx, pagina, paginaMesaj, spreCont } from './pagina.js'
 import type { EnvProgram } from './program.js'
 import { type EnvRadioDeparte, indiceRadio } from './radio-departe.js'
@@ -154,6 +155,32 @@ export default {
         const panou = new URL(ctx.urlPanou, url).toString()
         if (cale === '/admin' || cale === '/admin/') return Response.redirect(panou, 303)
         return json({ motiv: 'panoul emisiei stă la radio', panou }, 404)
+      }
+
+      /*
+       * ---------------------------------------------------- microfonul bisericii
+       *
+       * ⚠️ Poarta e SUPER-ADMINISTRATOR, nu administrator — vezi pricina în `mic.ts`: aici se aude
+       * biserica și când publicul ascultă radio. Adresele de semnalizare sunt ale aplicației
+       * astea, deci pagina le cheamă direct; `/_intern/mic/…` nu mai are cine să le ceară.
+       */
+      if (cale === '/mic' || cale.startsWith('/mic/')) {
+        if (!eSuperAdmin) {
+          if (!ctx.userId && !ctx.veziCa) return Response.redirect(spreCont(ctx, cfg.ORIGINE_PUBLICA, cale), 303)
+          const mesaj = 'Microfonul bisericii se aude doar cu rol de super-administrator.'
+          if (cale !== '/mic') return json({ motiv: mesaj }, 403)
+          return html(paginaMesaj(ctx, 'Fără acces', mesaj), 403, antete)
+        }
+        if (cale === '/mic') {
+          return html(pagina(ctx, { titluPagina: 'Microfonul', corp: corpMic(), scripturi: jsMic(prefix) }), 200, antete)
+        }
+        if (cale === '/mic/stare' && req.method === 'GET') {
+          return Response.json(await stareCanal(env, MIC), { headers: JSON_VIU })
+        }
+        if (cale === '/mic/asculta' && req.method === 'POST') return ascultaIntra(env, MIC)
+        const sidMic = sidDin(cale, '/mic/asculta/')
+        if (sidMic && req.method === 'PUT') return ascultaRaspuns(req, sidMic, env)
+        return json({ motiv: 'adresa nu există la microfon' }, 404)
       }
 
       // ---------------------------------------------------- publicul
@@ -308,12 +335,11 @@ async function intern(req: Request, cale: string, env: Env): Promise<Response> {
   if (sid && req.method === 'PUT') return ascultaRaspuns(req, sid, env)
   if (cale === '/_intern/ascult' && req.method === 'POST') return bataiePagina(req, env)
 
-  if (cale === '/_intern/mic/asculta' && req.method === 'POST') return ascultaIntra(env, MIC)
-  const sidMic = sidDin(cale, '/_intern/mic/asculta/')
-  if (sidMic && req.method === 'PUT') return ascultaRaspuns(req, sidMic, env)
-  if (cale === '/_intern/mic/stare' && req.method === 'GET') {
-    return Response.json(await stareCanal(env, MIC), { headers: JSON_VIU })
-  }
+  /*
+   * ⚠️ `/_intern/mic/…` a IEȘIT (15.09.2026): pagina microfonului s-a mutat aici, pe `/mic`, deci
+   * nu mai are cine să ceară semnalizarea prin Service Binding. Dacă apare vreodată nevoia inversă,
+   * se pune la loc — dar până atunci ar fi o ușă ținută deschisă degeaba.
+   */
 
   return new Response('nu exista', { status: 404 })
 }

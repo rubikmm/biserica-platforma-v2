@@ -19,8 +19,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "xc-authz-staging",
-      "database_id": "82fae023-48cc-4ca4-aab6-b2fd03cfcb37",
+      "database_name": "xc-authz-production",
+      "database_id": "a4290844-79ce-494a-b791-e852dc6c1f40",
       "migrations_dir": "../../infrastructure/migrations/authz"
     }
   ],
