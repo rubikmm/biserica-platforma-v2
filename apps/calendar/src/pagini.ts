@@ -91,19 +91,18 @@ function contDin(ctx: Ctx) {
  * de ele prin bara verticala. Butonul deschide fereastra (user: „la click pe Abonare să apară un
  * pop-up la fel") — vezi `fereastraAbonare`.
  *
- * Butonul filtrului pus se scrie marcat (`.activ`, rosu); apasat inca o data, il stinge.
+ * Rândul filtrului pus se scrie marcat (`.activ`, rosu); apasat inca o data, il stinge.
  *
  * ⚠️ FILTRELE ATARNA DE ROL (user, 13.09.2026, 01:26: „sunt felul cum afectează rolul userului a ce
  * vede în app" — regula noua, ceruta anume): neautentificatul n-are niciun filtru, utilizatorul le
- * are pe primele doua (rosie, neagra), adminul pe toate trei. Vezi `poateFiltra`. Butoanele fara
+ * are pe primele doua (rosie, neagra), adminul pe toate trei. Vezi `poateFiltra`. Rândurile fara
  * drept se STING, nu se ascund (regula userului din 11–12.09.2026: „se ascund și strică interfața") —
- * raman la locul lor, palite, cu pricina in `title`, ca randul sa aiba aceeasi forma la toata lumea.
+ * raman la locul lor, palite, cu pricina scrisa sub nume.
  *
- * ⚠️ A TREIA CRUCE FACE EXCEPTIE DE LA REGULA ASTA, DIN 15.09.2026 (user, cele trei trepte scrise
- * anume: neautentificatul „să nu vadă ultima cruce deloc", utilizatorul „să nu vadă ultima cruce dar
- * să poată apăsa celelalte două", adminul „să vadă toate 3 crucile și să le poată apăsa"). Deci
- * „Sfinții cu evlavie" NU se mai scrie palit celor fara drept — nu se scrie deloc. Vezi
- * `poateVedeaFiltrul`. Primele doua raman cum erau: palite la neautentificat, apasabile la restul.
+ * ⚠️ „SFINȚI CU EVLAVIE" FACE EXCEPTIE DE LA REGULA ASTA, DIN 15.09.2026 (user, cele trei trepte
+ * scrise anume: neautentificatul „să nu vadă ultima cruce deloc", utilizatorul „să nu vadă ultima
+ * cruce dar să poată apăsa celelalte două", adminul „să vadă toate 3 crucile și să le poată apăsa").
+ * Deci rândul lui NU se scrie palit celor fara drept — nu se scrie deloc. Vezi `poateVedeaFiltrul`.
  * (Adminul si super-adminul sunt aceeasi treapta aici: `ctx.eAdmin` le tine pe amandoua.)
  */
 function unelte(o: {
@@ -114,47 +113,93 @@ function unelte(o: {
   /** luna peste care lucreaza filtrele, „<an>-<luna>"; lipseste cand lista tine anul intreg */
   luna?: string
 }): string {
+  return `${o.navigarea ?? ''}${butonAbonare(ABONAMENT)}
+    <span class="desparte" aria-hidden="true"></span>
+    ${meniulFiltrelor(o)}`
+}
+
+/**
+ * FILTRELE — O SINGURĂ CRUCE, LA DREAPTA, CU UN MENIU SUB EA (user, 15.09.2026: „fă o singură cruce
+ * la dreapta, pe care, atunci când apeși, să apară un mic meniu").
+ *
+ * ⚠️ PRICINA E SPAȚIUL, nu gustul: userul a cerut-o ca să încapă DATA din pastilă, mai ales pe
+ * telefon („neapărat să se vadă scrisul de după azi… cu data curentă sau cu luna selectată"). Trei
+ * cruci una lângă alta mâncau ~120 px din rând; una singură lasă ~80 px datei. Dacă vreodată se
+ * întorc cele trei butoane în rând, se întoarce și înghesuiala — și atunci data cade prima.
+ *
+ * ⚠️ ACUM FILTRELE AU CUVINTE, și asta răstoarnă regula din 12.09.2026 („pe desktop, iconițele cu
+ * cruci lasă-le fără text"). Atunci numele nu încăpeau în rând, deci rămânea culoarea crucii ca
+ * singur semn; într-un meniu încap, iar userul le-a scris el însuși, pe rânduri: „sfinți cu cruce
+ * roșie / sfinți cu cruce neagră / sfinți cu evlavie". Culoarea crucii a rămas lângă nume, nu în
+ * locul lui. De aceea `meniu` e alt câmp decât `nume`: numele lung („Sărbători cu cruce roșie")
+ * rămâne al PAGINILOR, unde lista chiar e de zile, nu de sfinți.
+ *
+ * ⚠️ E `<details>`, NU un panou deschis din JS: așa meniul se deschide și fără JavaScript, iar
+ * filtrele rămân niște legături adevărate pentru oricine. JS-ul adaugă doar bunele purtări —
+ * închiderea la Escape și la o apăsare în afara lui (`JS_FILTRE`).
+ *
+ * Meniul nu se scrie deloc dacă omul n-are niciun rând de văzut.
+ */
+function meniulFiltrelor(o: { ctx: Ctx; felActiv?: FelFiltru; luna?: string }): string {
   const p = esc(o.ctx.prefix)
   const an = o.ctx.anCurent
   // Cu o luna in brate, filtrul se pune pe ea; fara luna (lista anului) se trece la lista de an a
-  // celuilalt fel. Stins, drumul inapoi e luna neatinsa — ori, daca nu suntem pe nicio luna, luna de azi.
+  // celuilalt fel. Stins, drumul inapoi e luna neatinsa — ori, daca nu suntem pe nicio luna, nimic.
   const cuFel = (fel: FelFiltru) => (o.luna ? `${p}/${o.luna}?filtru=${fel}` : `${p}/sarbatori/${FILTRE[fel].slug}/${an}`)
   const faraFel = o.luna ? `${p}/${o.luna}` : ''
-  /**
-   * ⚠️ BUTOANELE FILTRELOR N-AU CUVINTE, NICI PE DESKTOP (user, 12.09.2026, 13:34: „pe desktop,
-   * iconițele cu cruci lasă-le fără text… să fie ca pe mobil"). Le deosebeste CULOAREA crucii, ca in
-   * calendarul tiparit, iar numele intreg sta in `title` si in `aria-label` — deci cine se uita cu
-   * degetul pe ecran ori cu cititorul de ecran il afla. Asa incap trei butoane si navigarii ii ramane
-   * spatiu adevarat: cu cuvinte, cele trei ar fi cerut ~470 px din 680 si pastila ar fi ramas cu 40.
-   */
-  const buton = (fel: FelFiltru) => {
-    const nume = FILTRE[fel].nume
-    const clasa = `btn mic sarb sarb-${fel}`
+
+  const feluri = (['rosie', 'neagra', 'evlavie'] as FelFiltru[]).filter((f) => poateVedeaFiltrul(o.ctx, f))
+  if (!feluri.length) return ''
+
+  const rand = (fel: FelFiltru) => {
+    const f = FILTRE[fel]
+    const nume = esc(f.meniu)
+    const clasa = `f-rand f-${fel}`
     const pus = o.felActiv === fel
-    const unde = pus ? faraFel : cuFel(fel)
-    const spune = pus ? `Scoate filtrul: ${nume.toLowerCase()}` : nume
-    // crucea pe care omul n-are voie nici s-o VADA nu lasa nici gol in rand (user, 15.09.2026)
-    if (!poateVedeaFiltrul(o.ctx, fel)) return ''
-    // fara dreptul lui, crucea se scrie palita (`.gol`): se vede ca exista, dar nu duce nicaieri.
-    // Pricina sta in `title` si in `aria-label`, ca omul sa stie ce-i lipseste, nu doar ca nu merge.
+    // fara dreptul lui, randul se scrie palit: se vede ca exista, iar pricina sta scrisa sub nume —
+    // ca omul sa stie ce-i lipseste, nu doar ca nu merge
     if (!poateFiltra(o.ctx, fel)) {
-      const pricina = FILTRE[fel].cere
-      return `<span class="${clasa} gol" aria-disabled="true" title="${esc(nume)} — ${esc(pricina)}"`
-        + ` aria-label="${esc(nume)} — ${esc(pricina)}">${IC_CRUCE}</span>`
+      return `<span class="${clasa} gol" role="menuitem" aria-disabled="true">${IC_CRUCE}`
+        + `<span class="f-text"><b>${nume}</b><small>${esc(f.cere)}</small></span></span>`
     }
-    // stins, dar fara drum inapoi (lista anului, fara luna): butonul ramane marcat si neapasabil
+    const unde = pus ? faraFel : cuFel(fel)
+    // pus, dar fara drum inapoi (lista anului, fara luna): randul ramane marcat si neapasabil
     if (pus && !unde) {
-      return `<span class="${clasa} activ" aria-current="page" title="${esc(nume)}" aria-label="${esc(nume)}">${IC_CRUCE}</span>`
+      return `<span class="${clasa} activ" role="menuitem" aria-current="page">${IC_CRUCE}`
+        + `<span class="f-text"><b>${nume}</b></span></span>`
     }
-    return `<a class="${clasa}${pus ? ' activ' : ''}" href="${unde}"${pus ? ' aria-current="page"' : ''}`
-      + ` title="${esc(spune)}" aria-label="${esc(nume)}">${IC_CRUCE}</a>`
+    const spune = pus ? '<small>apasă ca să scoți filtrul</small>' : ''
+    return `<a class="${clasa}${pus ? ' activ' : ''}" role="menuitem" href="${unde}"${pus ? ' aria-current="page"' : ''}>`
+      + `${IC_CRUCE}<span class="f-text"><b>${nume}</b>${spune}</span></a>`
   }
-  return `${o.navigarea ?? ''}${butonAbonare(ABONAMENT)}
-    <span class="desparte" aria-hidden="true"></span>
-    ${buton('rosie')}
-    ${buton('neagra')}
-    ${buton('evlavie')}`
+
+  // Crucea din rand imprumuta CULOAREA filtrului pus, ca sa se vada dintr-o privire ca lista e taiata
+  // — altfel meniul inchis n-ar spune nimic despre starea paginii.
+  const activ = o.felActiv && poateFiltra(o.ctx, o.felActiv) ? o.felActiv : null
+  const numeButon = activ ? `Sărbătorile — ${FILTRE[activ].meniu.toLowerCase()}` : 'Sărbătorile'
+  return `<details class="filtre" id="filtre">
+      <summary class="btn mic sarb sarb-cheie${activ ? ` activ sarb-${activ}` : ''}" role="button"
+        title="${esc(numeButon)}" aria-label="${esc(numeButon)}">${IC_CRUCE}</summary>
+      <div class="filtre-meniu" role="menu" aria-label="Sărbătorile">${feluri.map(rand).join('')}</div>
+    </details>`
 }
+
+/**
+ * Bunele purtări ale meniului de filtre: se închide la Escape și la o apăsare în afara lui.
+ * Deschiderea nu e aici — o face `<details>` singur, deci merge și fără JavaScript.
+ */
+const JS_FILTRE = `
+(function () {
+  var d = document.getElementById('filtre');
+  if (!d) return;
+  document.addEventListener('click', function (ev) {
+    if (d.open && !d.contains(ev.target)) d.open = false;
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape' && d.open) { d.open = false; d.querySelector('summary').focus(); }
+  });
+})();
+`
 
 /**
  * ABONAREA — butonul, fereastra si tot drumul de dupa ea stau acum in `@xc/abonare`, pachetul comun
@@ -269,9 +314,9 @@ const JS_NAV = `
 })();
 `
 
-/** Scriptul paginii de lună: navigarea, abonarea și fereastra cu textele zilei (din V1). */
+/** Scriptul paginii de lună: navigarea, meniul filtrelor, abonarea și fereastra cu textele zilei. */
 function script(prefix: string): string {
-  return JS_NAV + `
+  return JS_NAV + JS_FILTRE + `
 (function () {
   var PREFIX = ${JSON.stringify(prefix)};
 
@@ -803,7 +848,7 @@ export function paginaZi(o: { ctx: Ctx; r: RandZi; d: RandDesfacut; zi: ZiLiturg
     // septembrie filtrat, nu la un an intreg
     unelte: unelte({ ctx: o.ctx, navigarea: pastilaLocului(o.ctx, o.r.an, o.r.luna, o.azi), luna: `${o.r.an}-${String(o.r.luna).padStart(2, '0')}` }),
     subantet: subantetul(o.ctx, o.r.an, o.r.luna),
-    scripturi: JS_NAV + JS_ABONARE,
+    scripturi: JS_NAV + JS_FILTRE + JS_ABONARE,
     clasaCorp: `pagina-zi ${o.r.zi_saptamana === 0 ? 'duminica' : ''} ${o.r.cruce ? `cruce-${o.r.cruce}` : ''}`,
     corp: `<div class="cap">
   <p class="eyebrow"><a href="${luna}">${esc(LUNI[o.r.luna - 1] ?? '')} ${o.r.an}</a>${numeParte ? ` · ${esc(numeParte)}` : ''}</p>
@@ -850,9 +895,10 @@ export type FelFiltru = 'rosie' | 'neagra' | 'evlavie'
  * acolo să scrie «cruce roșie», nu «Roșie»"); `slug` e bucata din adresa listei de an;
  * plin; `slug` e bucata din adresa listei de an; `pustiu` incheie propozitia „Septembrie 2026 n-are…".
  */
-export const FILTRE: Record<FelFiltru, { nume: string; scurt: string; eticheta: string; slug: string; lamurire: string; pustiu: string; cere: string }> = {
+export const FILTRE: Record<FelFiltru, { nume: string; meniu: string; scurt: string; eticheta: string; slug: string; lamurire: string; pustiu: string; cere: string }> = {
   rosie: {
     nume: 'Sărbători cu cruce roșie',
+    meniu: 'Sfinți cu cruce roșie',
     scurt: 'roșie',
     eticheta: 'cruce roșie',
     slug: 'cruce-rosie',
@@ -862,6 +908,7 @@ export const FILTRE: Record<FelFiltru, { nume: string; scurt: string; eticheta: 
   },
   neagra: {
     nume: 'Sărbători cu cruce neagră',
+    meniu: 'Sfinți cu cruce neagră',
     scurt: 'neagră',
     eticheta: 'cruce neagră',
     slug: 'cruce-neagra',
@@ -871,6 +918,7 @@ export const FILTRE: Record<FelFiltru, { nume: string; scurt: string; eticheta: 
   },
   evlavie: {
     nume: 'Sfinți cu evlavie',
+    meniu: 'Sfinți cu evlavie',
     scurt: 'evlavie',
     eticheta: 'sfinți cu evlavie',
     slug: 'evlavie',
@@ -1033,7 +1081,7 @@ ${grup.map((x) => randZi(o.ctx, x.r, x.d, x.zi, x.r.data === o.azi, o.fel)).join
     // iar lunile din pastila duc la luna aceea CU filtrul pus.
     unelte: unelte({ ctx: o.ctx, navigarea: pastilaLocului(o.ctx, o.an, 0, o.azi), felActiv: o.fel }),
     subantet: subantetul(o.ctx, o.an, 0, o.fel),
-    scripturi: JS_NAV + JS_ABONARE,
+    scripturi: JS_NAV + JS_FILTRE + JS_ABONARE,
     clasaCorp: 'sarbatori',
     corp: `<div class="cap">
   <p class="inainte-de-titlu"><a class="btn inapoi" href="${p}/${o.an}">← Înapoi</a></p>

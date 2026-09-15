@@ -4,7 +4,7 @@ import { asiguraCsrf, principalDin, sesiuneCurenta, verificaCsrf, verificaTokenC
 import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
 import { configChat, MODELE, normalizeaza, scrieConfigChat, type ConfigChat, type ModelDeAles } from '@xc/chat'
 import { Logger, correlationId } from '@xc/observability'
-import { alerta, dataVersiunii, esc, html, pagina } from '@xc/ui'
+import { alerta, dataVersiunii, esc, faraDiacritice, html, pagina } from '@xc/ui'
 import { SCHEMA_CITITA_LA, SCHEMA_CORP, SCHEMA_STIL } from './schema-generata.js'
 import pkg from '../package.json'
 
@@ -182,64 +182,99 @@ program.adauga_slujba">${esc(o.c.unelte.join('\n'))}</textarea>
 }
 
 /**
- * Ecranul de NUMIRI (user, 14.09.2026: „eu pot să fac pe cineva super-admin… adică doar eu (alt
- * super-admin)"). Pana acum rolurile se scriau numai de mana in D1: un cont nou nastea `user` si
- * atat, iar un al doilea super-admin nu se putea face din platforma.
+ * Ecranul OAMENILOR platformei.
  *
- * Poarta e `roles.manage` — cheie care, dupa `PERMISIUNI_IMPLICITE`, vine NUMAI cu `super-admin`.
- * Deci un administrator obisnuit nu ajunge aici, si asta e cerut anume.
+ * ⚠️ DIN 15.09.2026 E DOAR O LISTĂ (user: „elimină coloana cu «acum», adică ce rol are fiecare, și
+ * la fel și coloana cu «de transformare a unui utilizator în administrator»… să fie doar o listă și
+ * editarea o vedem mai târziu"). Au ieșit AMÂNDOUĂ coloanele: rolurile de acum și formularul de
+ * numire. Rămâne numele, adresa și — dacă e cazul — semnul că un cont e închis; ăla nu e rol, e
+ * starea contului, și fără el lista ar arăta un om viu acolo unde nu mai e nimeni.
  *
- * ⚠️ Adresa din `EMAIL_SUPERADMIN` nu se poate cobori de nicaieri: e super-admin permanent, iar
- * identitatea ii pune rolul la loc la prima citire de sesiune. Randul ei se deseneaza fara buton,
- * ca sa nu para ca gestul ar fi fost de folos.
+ * ⚠️ CE A RĂMAS ÎNTREG DEDESUBT: ruta `POST /oameni`, poarta ei `roles.manage` și auditul. Nu se
+ * mai apasă de nicăieri, dar nu s-a șters nimic — „editarea o vedem mai târziu", deci întoarcerea
+ * e o coloană de scris la loc, nu o rescriere. Pricina de la 14.09.2026 stă în picioare: „eu pot
+ * să fac pe cineva super-admin… adică doar eu (alt super-admin)".
+ *
+ * ⚠️ Adresa din `EMAIL_SUPERADMIN` rămâne super-admin permanent, oricât s-ar umbla în altă parte:
+ * identitatea îi pune rolul la loc la prima citire de sesiune.
  */
+type Om = { userId: string; email: string; displayName: string | null; disabledAt: string | null }
+
+/**
+ * ORDINEA LISTEI (user, 15.09.2026: „pune mai întâi super adminii, apoi trage o linie. Pune apoi
+ * administratorii și, în final, restul în ordine alfabetică").
+ *
+ * Trei cete, în ordinea puterii, fiecare alfabetică înăuntru. ⚠️ Alfabetul e ROMÂNESC
+ * (`localeCompare(…, 'ro')`), nu cel al octeților: altfel „Ștefan" ar fi căzut după „Zoe", iar
+ * lista ar fi părut amestecată taman la numele noastre. Cine n-are nume se așază după adresă.
+ *
+ * ⚠️ Rolurile nu se mai SCRIU în listă (coloana „Acum" a ieșit azi), dar se CITESC mai departe —
+ * de aici. Dacă cineva scoate vreodată `roluriPentru` fiindcă „nu se mai vede nicăieri", cade
+ * gruparea asta, nu doar o coloană.
+ */
+const CETE = ['super-admin', 'admin', 'restul'] as const
+type Ceata = (typeof CETE)[number]
+
+function ceataOmului(roluri: { role: string; scope: string }[] | undefined): Ceata {
+  const ale = roluri ?? []
+  if (ale.some((r) => r.role === 'super-admin')) return 'super-admin'
+  if (ale.some((r) => r.role === 'admin')) return 'admin'
+  return 'restul'
+}
+
 function paginaOameni(o: {
   comune: ReturnType<typeof comune>
-  oameni: { userId: string; email: string; displayName: string | null; disabledAt: string | null }[]
+  oameni: Om[]
   roluri: Record<string, { role: string; scope: string }[]>
-  emailPermanent: string
-  csrf: string
   prefix: string
+  /** ce s-a scris în căutare; lista de mai sus vine deja cernută prin el */
+  q?: string
   mesaj?: string
 }): string {
-  const randuri = o.oameni
-    .map((u) => {
-      const aleLui = o.roluri[u.userId] ?? []
-      const acum = aleLui.find((r) => r.scope === SCOPE_GLOBAL)?.role ?? 'user'
-      const permanent = o.emailPermanent !== '' && u.email === o.emailPermanent
-      const etichete = aleLui.length
-        ? aleLui.map((r) => `<span class="eticheta">${esc(r.role)}</span>`).join(' ')
-        : '<span class="eticheta">user</span>'
-      const alege = (v: string, scris: string) =>
-        `<option value="${v}"${acum === v ? ' selected' : ''}>${scris}</option>`
-      return `<tr>
-        <td>${esc(u.displayName ?? '—')}<div class="ajutor">${esc(u.email)}</div></td>
-        <td>${etichete}${u.disabledAt ? ' <span class="eticheta">închis</span>' : ''}</td>
-        <td>${
-          permanent
-            ? '<span class="ajutor">super-admin permanent — nu se poate coborî</span>'
-            : `<form method="post" action="${o.prefix}/oameni" class="numire">
-                 <input type="hidden" name="csrf" value="${esc(o.csrf)}">
-                 <input type="hidden" name="userId" value="${esc(u.userId)}">
-                 <select name="rol">${alege('user', 'Utilizator')}${alege('admin', 'Administrator')}${alege('super-admin', 'Super-administrator')}</select>
-                 <button type="submit">Salvează</button>
-               </form>`
-        }</td>
+  const numeleDe = (u: Om) => (u.displayName ?? '').trim() || u.email
+  const cete = new Map<Ceata, Om[]>(CETE.map((c) => [c, []]))
+  for (const u of o.oameni) cete.get(ceataOmului(o.roluri[u.userId]))!.push(u)
+  for (const lista of cete.values()) lista.sort((a, b) => numeleDe(a).localeCompare(numeleDe(b), 'ro'))
+
+  const randOm = (u: Om) => `<tr>
+        <td>${esc(u.displayName ?? '—')}${u.disabledAt ? ' <span class="eticheta">închis</span>' : ''}<div class="ajutor">${esc(u.email)}</div></td>
       </tr>`
-    })
-    .join('')
+
+  // ⚠️ Linia dintre cete e un RÂND al tabelului, nu un chenar pe primul om al cetei următoare: cu
+  // chenarul, o ceată goală (niciun admin, de pildă) ar fi lăsat două linii lipite una de alta.
+  const randuri = CETE.map((c) => cete.get(c)!)
+    .filter((lista) => lista.length)
+    .map((lista) => lista.map(randOm).join(''))
+    .join('<tr class="rupe"><td></td></tr>')
 
   return pagina({
     ...o.comune,
     titluPagina: 'Oameni',
     corp: `<h2>Oameni</h2>
 ${o.mesaj ? alerta('buna', esc(o.mesaj)) : ''}
-<p class="ajutor">Rolul hotărăște ce poate fiecare pe toată platforma. <strong>Administratorul</strong>
-ține calendarul, programul, buletinul, curățenia și biblioteca; <strong>super-administratorul</strong>
-poate în plus să numească roluri și să pornească module. Apartenența la o echipă (curățenia, de
-pildă) e altceva și se dă din panoul aplicației ei.</p>
-<table><thead><tr><th>Cine</th><th>Acum</th><th>Numire</th></tr></thead><tbody>${randuri}</tbody></table>`,
+${cautarea(o.prefix, o.q)}
+<p class="ajutor">${
+      o.q
+        ? `${o.oameni.length} ${o.oameni.length === 1 ? 'om găsit' : 'oameni găsiți'} pentru „${esc(o.q)}".`
+        : `Cine are cont pe platformă — ${o.oameni.length} ${o.oameni.length === 1 ? 'om' : 'oameni'}. Întâi super-administratorii, apoi administratorii, apoi restul.`
+    }</p>
+${o.oameni.length ? `<table class="oameni"><tbody>${randuri}</tbody></table>` : '<p class="ajutor">Nimeni.</p>'}`,
   })
+}
+
+/**
+ * CĂUTAREA, sus (user, 15.09.2026: „să existe și o căutare în zona de sus").
+ *
+ * ⚠️ E un formular GET, cernut la SERVER, nu o ascundere de rânduri din JS: așa adresa căutării se
+ * poate trimite mai departe, merge fără JavaScript, iar lista rămâne grupată pe cete (o cernere din
+ * JS ar fi lăsat în urmă liniile dintre cete golite de oameni).
+ */
+function cautarea(prefix: string, q?: string): string {
+  return `<form class="cauta-oameni" method="get" action="${prefix}/oameni" role="search">
+  <input type="search" name="q" value="${esc(q ?? '')}" placeholder="caută după nume sau adresă" aria-label="Caută un om">
+  <button type="submit">Caută</button>
+  ${q ? `<a class="ajutor" href="${prefix}/oameni">arată-i pe toți</a>` : ''}
+</form>`
 }
 
 interface AudientaRand {
@@ -501,10 +536,16 @@ ${SCHEMA_CORP}`,
         )
       }
 
-      const permanent = (env.EMAIL_SUPERADMIN ?? '').trim().toLowerCase()
+      // Cookie-ul CSRF se dă mai departe, deși pagina n-are acum niciun formular care scrie: ruta
+      // de numire e întreagă dedesubt, iar fără cookie ea ar fi nu doar nelegată, ci moartă.
       const csrf = asiguraCsrf(req, cfg.DOMENIU_COOKIE)
       let mesaj: string | undefined
 
+      /*
+       * ⚠️ NUMIREA N-ARE FORMULAR ÎN PAGINĂ din 15.09.2026 (user: „să fie doar o listă și editarea
+       * o vedem mai târziu"), dar ruta a rămas ÎNTREAGĂ, cu poarta și auditul ei. Nu se cheamă de
+       * nicăieri; când editarea se întoarce, se scrie coloana la loc și atât.
+       */
       if (req.method === 'POST') {
         const problemaOrigine = verificaCsrf(req, [cfg.ORIGINE_PUBLICA], cfg.MEDIU === 'dev')
         const formular = await req.formData()
@@ -531,10 +572,18 @@ ${SCHEMA_CORP}`,
         mesaj = 'Rolul a fost schimbat. Se vede la următoarea pagină pe care o deschide omul.'
       }
 
-      const oameni = await listaOamenilor(env, cid)
-      const roluri = await roluriPentru(env, oameni.map((u) => u.userId), cid)
+      const toti = await listaOamenilor(env, cid)
+      // ⚠️ Rolurile se cer pentru TOȚI, nu doar pentru cei găsiți: gruparea pe cete e a listei
+      // întregi, iar o căutare nu schimbă cui i se cuvine ce loc.
+      const roluri = await roluriPentru(env, toti.map((u) => u.userId), cid)
+      const q = (url.searchParams.get('q') ?? '').trim()
+      // Căutarea se face fără diacritice și fără majuscule: „stefan" îl găsește pe „Ștefan".
+      const cheie = faraDiacritice(q)
+      const oameni = cheie
+        ? toti.filter((u) => faraDiacritice(`${u.displayName ?? ''} ${u.email}`).includes(cheie))
+        : toti
       return html(
-        paginaOameni({ comune: comuneAici, oameni, roluri, emailPermanent: permanent, csrf: csrf.jeton, prefix, ...(mesaj ? { mesaj } : {}) }),
+        paginaOameni({ comune: comuneAici, oameni, roluri, prefix, ...(q ? { q } : {}), ...(mesaj ? { mesaj } : {}) }),
         200,
         csrf.setCookie ? { 'set-cookie': csrf.setCookie } : {},
       )
@@ -807,11 +856,28 @@ form.module { display:block }
 .module input.subiect { width:100%; padding:9px 11px; border:1px solid var(--rule); border-radius:8px;
                         background:var(--paper); color:var(--ink); font:15px/1.45 ui-sans-serif,system-ui }
 .module h4 small { text-transform:none; letter-spacing:normal; color:var(--faint); font-weight:400 }
-/* Numirea: selectorul si butonul pe acelasi rand, ca tabelul sa nu se inalte la fiecare om. */
+/* Numirea: selectorul si butonul pe acelasi rand, ca tabelul sa nu se inalte la fiecare om.
+   ⚠️ Formularul nu se mai scrie in pagina din 15.09.2026 („editarea o vedem mai tarziu"), dar ruta
+   si stilul lui raman — intoarcerea e o coloana de scris la loc. */
 form.numire { display:flex; gap:8px; align-items:center; margin:0 }
 form.numire select { padding:6px 8px; border:1px solid var(--rule); border-radius:8px;
                      background:var(--paper); color:var(--ink); font:14px/1.3 ui-sans-serif,system-ui }
 form.numire button { padding:6px 12px; border-radius:8px; border:1px solid var(--rosu);
                      background:var(--rosu); color:#fff; font:600 13px ui-sans-serif,system-ui; cursor:pointer }
 @media (max-width:560px) { form.numire { flex-direction:column; align-items:stretch } }
+
+/* OAMENII: cautarea sus, apoi lista pe cete (super-admini · admini · restul), despartite de o linie
+   (user, 15.09.2026). Tabelul n-are cap: e o singura coloana, iar un „Cine" deasupra n-ar spune
+   nimic in plus. */
+form.cauta-oameni { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:14px 0 6px }
+form.cauta-oameni input { flex:1 1 240px; min-width:0; padding:9px 11px; border:1px solid var(--rule);
+                          border-radius:8px; background:var(--paper); color:var(--ink);
+                          font:15px/1.3 ui-sans-serif,system-ui }
+form.cauta-oameni button { flex:0 0 auto; padding:9px 16px; border-radius:8px;
+                           border:1px solid var(--rosu); background:var(--rosu); color:#fff;
+                           font:600 14px ui-sans-serif,system-ui; cursor:pointer }
+form.cauta-oameni a { flex:0 0 auto }
+/* ⚠️ Linia dintre cete e un RAND al tabelului, gol, cu chenar sus — nu un chenar pus pe primul om
+   al cetei urmatoare: asa o ceata goala nu lasa doua linii lipite. Randul n-are inaltime proprie. */
+table.oameni tr.rupe td { padding:0; height:0; border-top:2px solid var(--rule) }
 `

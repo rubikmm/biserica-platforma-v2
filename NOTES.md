@@ -1601,6 +1601,34 @@ forța antetul `Host`**.
 
 ### 2026-09-15
 
+- **Calendar: filtrele au intrat sub O SINGURĂ CRUCE, la dreapta, cu meniu** (user: „fă o singură
+  cruce la dreapta, pe care, atunci când apeși, să apară un mic meniu"). Rândurile scriu ce a dictat
+  el: *Sfinți cu cruce roșie · Sfinți cu cruce neagră · Sfinți cu evlavie*.
+  ⚠️ **Pricina e SPAȚIUL, nu gustul**: trei cruci în rând mâncau ~120 px și data din pastilă nu mai
+  încăpea pe telefon („pe mobil, neapărat să se vadă scrisul… cu ziua curentă sau cu luna
+  selectată"). Dacă cineva le întoarce în rând, se întoarce și înghesuiala — data cade prima. Proba
+  `filtre-calendar.test.ts` păzește că în rând e **o singură** cruce.
+  ⚠️ Asta **răstoarnă regula din 12.09.2026** („pe desktop, iconițele cu cruci lasă-le fără text"):
+  atunci numele nu încăpeau în rând, într-un meniu încap. De aceea `FILTRE` are acum **două** nume:
+  `nume` (al PAGINILOR — „Sărbători cu cruce roșie", că acolo lista e de zile) și `meniu` (cel scris
+  de user). Nu le confunda.
+  ⚠️ E un **`<details>`**, nu un panou din JS: meniul se deschide și fără JavaScript, iar rândurile
+  rămân legături adevărate. JS-ul face doar închiderea la Escape / apăsare în afară.
+  Treptele n-au fost atinse: neautentificatul le vede palite, utilizatorul le poate apăsa pe primele
+  două, evlavia numai adminul. Crucea din rând **se aprinde în culoarea filtrului pus** — altfel
+  meniul închis n-ar spune nimic despre lista de sub el.
+- **Admin · Oameni: doar o listă** (user: „elimină coloana cu «acum»… și la fel și coloana cu «de
+  transformare a unui utilizator în administrator»… editarea o vedem mai târziu"). Au ieșit ambele
+  coloane. **Ordinea**, cerută tot azi: super-administratorii, o linie, administratorii, o linie,
+  restul — fiecare ceată alfabetic, cu `localeCompare(…, 'ro')` (altfel „Ștefan" cădea după „Zoe").
+  Sus, o **căutare** după nume sau adresă, GET cernut la server (merge fără JS, adresa se poate
+  trimite mai departe), fără diacritice și fără majuscule.
+  ⚠️ **Ruta `POST /oameni` a rămas ÎNTREAGĂ**, cu poarta `roles.manage`, auditul și cookie-ul CSRF —
+  doar nu se mai apasă de nicăieri. Întoarcerea editării e o coloană de scris la loc.
+  ⚠️ **Rolurile nu se mai VĂD, dar se CITESC** (`roluriPentru`): pe ele stă gruparea. Cine le scoate
+  fiindcă „nu se mai afișează nicăieri" dărâmă ordinea, nu o coloană.
+  Semnul „închis" a rămas, mutat lângă nume: nu e rol, e starea contului.
+
 - **⚠️ SETĂRILE APLICAȚIEI: un singur pachet, `@xc/setari`, și un rând nou în meniul contului.**
   Cerute de user: „pe toate paginile celorlalte aplicații… să afișăm un alt buton, în afară de
   Administrare, numit Setări… Fiecare nivel va vedea mai multe lucruri." **Trei trepte**, așa cum

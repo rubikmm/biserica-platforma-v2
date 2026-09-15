@@ -81,22 +81,53 @@ html { scroll-padding-top:130px }
             color:var(--paper); background:var(--rosu); border:1px solid var(--rosu); border-radius:10px;
             cursor:pointer }
 
-/* LISTELE DE SARBATORI, doua butoane in locul meniului „Informații utile" (user, 12.09.2026).
-   Deosebirea dintre ele o face CULOAREA CRUCII, ca in calendarul tiparit — cuvantul de langa ea
-   cade pe telefon, culoarea nu. Butonul intreg ramane in cerneala obisnuita: rosul aprins e al
-   locului in care te afli (clasa .activ), nu al unei simple destinatii.
-   ⚠️ Al treilea buton („Sfinții cu evlavie") isi are locul aici, langa ele, cand lista lui exista. */
+/* FILTRELE SARBATORILOR — O SINGURA CRUCE, LA DREAPTA, CU MENIU SUB EA (user, 15.09.2026).
+   ⚠️ Pana azi erau TREI butoane in rand, deosebite doar prin culoarea crucii. Userul le-a strans
+   intr-unul ca sa incapa DATA din pastila, mai ales pe telefon. Culorile de mai jos n-au murit: s-au
+   mutat pe randurile meniului, langa numele scris. Butonul intreg ramane in cerneala obisnuita;
+   rosul aprins (.activ) spune ca lista de sub el e taiata de un filtru. */
 .btns .sarb { text-decoration:none }
 .btns .sarb-rosie svg { color:var(--rosu) }
 .btns .sarb-neagra svg { color:var(--negru) }
-/* al treilea filtru, „Sfinți cu evlavie" (user, 12.09.2026, 13:31: „mai pune un buton cu o cruce.
-   Culoare diferită"). Movul nu se ciocneste cu niciunul din semnele de pana acum: rosul e al
-   sarbatorii, albastrul al sfintilor romani, verdele al zilei de azi. */
+/* „Sfinți cu evlavie" (user, 12.09.2026, 13:31: „mai pune un buton cu o cruce. Culoare diferită").
+   Movul nu se ciocneste cu niciunul din semnele de pana acum: rosul e al sarbatorii, albastrul al
+   sfintilor romani, verdele al zilei de azi. */
 .btns .sarb-evlavie svg { color:var(--mov) }
 .c-evlavie { color:var(--mov) }
 .btns .sarb:hover { border-color:var(--rosu); color:var(--rosu) }
 .btns .sarb.activ { border-color:var(--rosu); color:var(--rosu); font-weight:700;
-                    background:var(--rosu-palid); cursor:default }
+                    background:var(--rosu-palid) }
+
+/* ⚠️ E un <details>, nu un panou deschis din JS: meniul merge si fara JavaScript. De aceea sagetica
+   lui trebuie stinsa de mana, si in Firefox (list-style), si in WebKit (::-webkit-details-marker). */
+.btns .filtre { position:relative; flex:0 0 auto; display:flex }
+.btns .filtre > summary { cursor:pointer; list-style:none }
+.btns .filtre > summary::-webkit-details-marker { display:none }
+.btns .filtre > summary::marker { content:"" }
+/* meniul atarna SUB buton si e agatat de dreapta lui: la capatul randului, aliniat la stanga ar iesi
+   din ecran pe telefon. position:absolute cere stramosul asezat de mai sus (.filtre). */
+.filtre-meniu { position:absolute; top:calc(100% + 7px); right:0; z-index:40;
+                min-width:244px; padding:5px; text-align:left;
+                background:var(--paper); border:1px solid var(--rule); border-radius:12px;
+                box-shadow:0 16px 38px rgba(0,0,0,.17) }
+.filtre-meniu .f-rand { display:flex; align-items:flex-start; gap:10px; padding:9px 10px;
+                        border-radius:9px; color:var(--ink); text-decoration:none; font-style:normal;
+                        font:400 14.5px/1.3 ui-sans-serif,system-ui }
+.filtre-meniu .f-rand svg { flex:0 0 auto; margin-top:1px }
+.filtre-meniu .f-rand b { display:block; font-weight:400 }
+.filtre-meniu .f-rand small { display:block; margin-top:2px; color:var(--faint);
+                              font-size:11.5px; line-height:1.35 }
+.filtre-meniu a.f-rand:hover { background:var(--tinta) }
+.filtre-meniu .f-rand.activ { color:var(--rosu); background:var(--rosu-palid) }
+.filtre-meniu .f-rand.activ small { color:var(--rosu); opacity:.8 }
+/* randul fara drept: se vede ca exista, dar nu duce nicaieri — pricina sta scrisa sub nume */
+.filtre-meniu .f-rand.gol { color:var(--faint); cursor:default }
+.filtre-meniu .f-rand.gol svg { opacity:.45 }
+/* culoarea crucii, sfant cu sfant, ca in calendarul tiparit */
+.filtre-meniu .f-rosie svg { color:var(--rosu) }
+.filtre-meniu .f-neagra svg { color:var(--negru) }
+.filtre-meniu .f-evlavie svg { color:var(--mov) }
+.filtre-meniu .f-rand.gol.f-rosie svg, .filtre-meniu .f-rand.gol.f-neagra svg { color:var(--faint) }
 
 .inainte-de-titlu { margin:0 0 14px }
 .btn.inapoi { display:inline-flex; align-items:center; flex:none; padding:9px 16px }
@@ -126,18 +157,27 @@ h2.luna .fel-filtru.f-rosie { color:var(--rosu) }
 h2.luna .fel-filtru.f-neagra { color:var(--ink) }
 h2.luna .fel-filtru.f-evlavie { color:var(--mov) }
 
-/* Pe telefon butoanele de sub pastila isi lasa cuvintele si raman numai iconitele: cu ele, abonarea
-   si cele doua liste cer ~446 px, iar un telefon de 390 are 335 de folosit. Numele intreg sta in
-   title si aria-label, deci nu se pierde. */
+/* PE TELEFON, DATA NU CADE NICIODATA (user, 15.09.2026: „pe mobil, neapărat să se vadă scrisul de
+   după azi, scrisul cu data, cu ziua curentă sau cu luna selectată").
+   ⚠️ Ce cade sunt CUVINTELE BUTOANELOR, nu data: „Abonare" ramane numai plic, iar numele intreg sta
+   in title si aria-label, deci nu se pierde. Cu o singura cruce in loc de trei, randul cere acum
+   ~262 px din 335 la un telefon de 390 — deci data incape scrisa intreaga.
+   ⚠️ Daca vreodata mai intra un buton in rand, masoara INAINTE: data e prima care s-ar strange. */
 @media (max-width:600px) {
   .btns { gap:7px }
   .btns .mic { padding-left:11px; padding-right:11px }
   .btns .abon .cuv { display:none }
-  /* data trece pe forma scurta („15 sep. 2026"), ca randul sa ramana pe o singura linie */
-  .pastila .acum { padding:11px 9px; font-size:12.5px }
+  .pastila .acum { padding:11px 10px; font-size:13px }
+  .pastila .luni-cheie { padding:11px 10px }
+  /* meniul nu e mai lat decat ecranul, oricat de ingust ar fi telefonul */
+  .filtre-meniu { min-width:0; width:max-content; max-width:calc(100vw - 32px) }
+}
+/* Sub 400 px („15 septembrie 2026" nu mai incape langa restul) data trece pe forma scurta —
+   ⚠️ SCURTATA, NU ASCUNSA: ziua si luna raman scrise, cum s-a cerut. */
+@media (max-width:400px) {
+  .pastila .acum { padding:11px 8px; font-size:12.5px }
   .pastila .acum .lung { display:none }
   .pastila .acum .scurt { display:inline }
-  .pastila .luni-cheie { padding:11px 10px }
 }
 
 /* PASTILA NAVIGARII (user, 12.09.2026: „să fie o pastilă ca la Program și lunile să fie text în
@@ -167,9 +207,9 @@ h2.luna .fel-filtru.f-evlavie { color:var(--mov) }
 /* Scrisul locului. ⚠️ NU e scris cu majuscule si nici raschirat, ca lunile din sir: „15 SEPTEMBRIE
    2026" ar fi cerut vreo 150 px si ar fi rupt randul unic pe telefon. Pe ecrane mici trece de la
    sine pe forma scurta („15 sep. 2026"), scrisa alaturi si ascunsa pana atunci. */
-.pastila .acum { display:flex; align-items:center; padding:11px 12px; white-space:nowrap;
-                 border-left:1px solid var(--rule);
-                 font:600 13px/1 ui-sans-serif,system-ui; color:var(--ink) }
+.pastila .acum { display:flex; align-items:center; flex:0 0 auto; padding:11px 13px;
+                 white-space:nowrap; border-left:1px solid var(--rule);
+                 font:600 14px/1 ui-sans-serif,system-ui; color:var(--ink) }
 .pastila .acum .scurt { display:none }
 /* Cheia lunilor: cat timp bara e coborata, sta aprinsa — ca omul sa stie de unde a iesit sirul. */
 .pastila .luni-cheie { flex:none; display:flex; align-items:center; justify-content:center;

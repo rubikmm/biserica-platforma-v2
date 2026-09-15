@@ -26,13 +26,25 @@ const ANONIM = ctx(null, false)
 const UTILIZATOR = ctx('enoriaș@exemplu.ro', false)
 const ADMIN = ctx('rubikmm@gmail.com', true)
 
-/** Câte cruci sunt apăsabile (`<a>`) și câte palite, în bara paginii de lună. */
+/**
+ * Ce scrie în MENIUL crucii, pe pagina unei luni: rândurile apăsabile (`<a>`) și cele palite.
+ *
+ * ⚠️ Din 15.09.2026 filtrele nu mai sunt trei butoane în rând, ci **o singură cruce la dreapta cu un
+ * meniu sub ea** (user: „fă o singură cruce la dreapta, pe care, atunci când apeși, să apară un mic
+ * meniu"), ca să încapă data din pastilă — vezi `meniulFiltrelor`. Treptele n-au fost atinse.
+ */
 function bara(c: Ctx) {
   const html = paginaLuna({ ctx: c, an: 2026, luna: 9, randuri: [], calculat: false, azi: '2026-09-13' })
   return {
-    apasabile: [...html.matchAll(/<a class="btn mic sarb sarb-(\w+)"/g)].map((m) => m[1]),
-    palite: [...html.matchAll(/<span class="btn mic sarb sarb-(\w+) gol"/g)].map((m) => m[1]),
+    apasabile: [...html.matchAll(/<a class="f-rand f-(\w+)"/g)].map((m) => m[1]),
+    palite: [...html.matchAll(/<span class="f-rand f-(\w+) gol"/g)].map((m) => m[1]),
   }
+}
+
+/** Numele scrise în meniu, în ordinea lor. Userul le-a dictat cuvânt cu cuvânt (15.09.2026). */
+function numeleDinMeniu(c: Ctx): string[] {
+  const html = paginaLuna({ ctx: c, an: 2026, luna: 9, randuri: [], calculat: false, azi: '2026-09-13' })
+  return [...html.matchAll(/<span class="f-text"><b>([^<]+)<\/b>/g)].map((m) => m[1]!)
 }
 
 describe('filtrele calendarului — treptele rolului', () => {
@@ -55,6 +67,37 @@ describe('filtrele calendarului — treptele rolului', () => {
   it('primele două cruci se sting, nu se ascund', () => {
     expect(bara(ANONIM).palite).toEqual(['rosie', 'neagra'])
     expect(bara(UTILIZATOR).apasabile).toEqual(['rosie', 'neagra'])
+  })
+
+  /**
+   * ⚠️ O SINGURĂ CRUCE ÎN RÂND, cu meniu (user, 15.09.2026). Pricina e spațiul: cele trei butoane
+   * mâncau rândul și data din pastilă nu mai încăpea pe telefon. Dacă proba asta pică fiindcă au
+   * reapărut trei butoane, s-a întors și înghesuiala — măsoară rândul înainte s-o ștergi.
+   */
+  it('în rând e o singură cruce, iar meniul e un <details> (merge și fără JS)', () => {
+    const html = paginaLuna({ ctx: ADMIN, an: 2026, luna: 9, randuri: [], calculat: false, azi: '2026-09-13' })
+    expect([...html.matchAll(/class="btn mic sarb sarb-cheie/g)]).toHaveLength(1)
+    expect(html).toContain('<details class="filtre" id="filtre">')
+    // rândurile sunt legături adevărate, nu butoane care cer JavaScript
+    expect(html).toContain('<a class="f-rand f-rosie" role="menuitem" href="/calendar/2026-09?filtru=rosie">')
+  })
+
+  it('meniul scrie exact ce a dictat userul', () => {
+    expect(numeleDinMeniu(ADMIN)).toEqual([
+      'Sfinți cu cruce roșie',
+      'Sfinți cu cruce neagră',
+      'Sfinți cu evlavie',
+    ])
+    // la cine n-are evlavia, rândul ei lipsește cu totul — celelalte două rămân scrise
+    expect(numeleDinMeniu(UTILIZATOR)).toEqual(['Sfinți cu cruce roșie', 'Sfinți cu cruce neagră'])
+  })
+
+  /** Crucea închisă trebuie să spună că lista de sub ea e tăiată — altfel filtrul pus e nevăzut. */
+  it('crucia din rând se aprinde când un filtru e pus', () => {
+    const cu = paginaLuna({ ctx: ADMIN, an: 2026, luna: 9, randuri: [], calculat: false, azi: '2026-09-13', cruce: 'evlavie' })
+    expect(cu).toContain('sarb-cheie activ sarb-evlavie')
+    const fara = paginaLuna({ ctx: ADMIN, an: 2026, luna: 9, randuri: [], calculat: false, azi: '2026-09-13' })
+    expect(fara).not.toContain('sarb-cheie activ')
   })
 
   it('a treia cruce NU se vede decât la admin — nici palită (user, 15.09.2026)', () => {
