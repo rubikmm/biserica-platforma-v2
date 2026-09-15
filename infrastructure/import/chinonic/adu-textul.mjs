@@ -125,13 +125,56 @@ function deUndeIncepe(randuri, titlu) {
  * „s a nascut icirc n 1821" — litere lipite în mijlocul cuvintelor, deci nicio potrivire cu textul
  * de pe site. Din 9 încercări se potrivea UNA, și aceea din întâmplare.
  */
+/*
+ * ⚠️ DUBLA CODARE (masurat 16.09.2026, 02:10): 45 de fragmente vechi au `&amp;atilde;`, `&amp;shy;` —
+ * adica entitatea a fost codata de doua ori la trimitere. O singura trecere lasa „&atilde;" in
+ * text, iar normalizarea o face „c amp atilde", deci nicio potrivire. Se decodeaza de DOUA ori.
+ * `atilde` (ã) e felul in care site-urile vechi scriau ă; `shy` e cratima moale, care nu se vede.
+ */
 const ENT = {
-  acirc: 'â', Acirc: 'Â', icirc: 'î', Icirc: 'Î', abreve: 'ă', Abreve: 'Ă', scedil: 'ș', Scedil: 'Ș',
-  tcedil: 'ț', Tcedil: 'Ț', amp: '&', nbsp: ' ', quot: '"', apos: "'", lt: '<', gt: '>',
-  rsquo: '’', lsquo: '‘', ldquo: '„', rdquo: '”', ndash: '–', mdash: '—', hellip: '…', bdquo: '„',
+  acirc: 'â', Acirc: 'Â', icirc: 'î', Icirc: 'Î', abreve: 'ă', Abreve: 'Ă', atilde: 'ă', Atilde: 'Ă',
+  scedil: 'ș', Scedil: 'Ș', tcedil: 'ț', Tcedil: 'Ț', amp: '&', nbsp: ' ', shy: '', quot: '"',
+  apos: "'", lt: '<', gt: '>', rsquo: '’', lsquo: '‘', ldquo: '„', rdquo: '”', ndash: '–', mdash: '—',
+  hellip: '…', bdquo: '„',
 }
-const fara = (s) => s.replace(/&([a-zA-Z]+);/g, (m, n) => ENT[n] ?? ' ')
+const faraOData = (s) => s.replace(/&([a-zA-Z]+);/g, (m, n) => ENT[n] ?? ' ')
   .replace(/&#(\d+);/g, (m, n) => String.fromCodePoint(+n))
+const fara = (s) => faraOData(faraOData(s))
+/** Marcajele markdown scoase INAINTE de comparatie: intr-o legatura `[cuvant](adresa)` adresa intra
+ *  in text si strica fereastra de 45 de semne. (56 din 130 de pagini „nesigure" aveau fragmentul in
+ *  text, ascuns tocmai asa.) */
+const faraMarcaje = (l) => l.replace(/!\[[^\]]*\]\([^)]*\)/g, ' ').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+/**
+ * CURATAREA UNUI RAND — o singura functie, folosita si la ce se STOCHEAZA, si la ce se COMPARA.
+ * ⚠️ user, 16.09.2026: „referințele păstrează-le, dar imaginile șterge-le și adresele și tot".
+ * Etichetele HTML ramase in markdown (tomarkdown le lasa uneori) ies si ele: altfel „a href https…"
+ * intra in text.
+ */
+const curataLinia = (linie) => faraMarcaje(linie)
+  .replace(/<[^>]+>/g, ' ')                       // etichete HTML ramase
+  .replace(/[*_`>#]+/g, ' ')
+  .replace(/https?:\/\/[^\s)\]»"]+/gi, '')        // adresele scrise in text
+  .replace(/\bwww\.[^\s)\]»"]+/gi, '')
+  .replace(/\(\s*\)|\[\s*\]/g, '')
+  .replace(/\s+([,.;:!?])/g, '$1')
+  .replace(/\s+/g, ' ')
+  .trim()
+
+/**
+ * CRITERIUL DE REZERVA (16.09.2026, 02:30): cand fragmentul din buletin nu e de folos — la vreo 25 de
+ * texte buletinul avea doar poza, linkul si NUMELE AUTORULUI, deci „fragmentul" e un nume de om —
+ * se cauta TITLUL in ADRESA sursei: `…/ce-este-pacatul-in-intelesul-crestin-al-cuvantului` poarta
+ * chiar titlul. Cand cel putin trei cinci din cuvintele lungi ale titlului stau in cale, pagina e a
+ * articolului. E o proba cinstita: adresa a fost pusa de site odata cu articolul, nu ghicita de noi.
+ */
+function adresaPoartaTitlul(u, titlu) {
+  const cuvinte = [...new Set(plat(fara(titlu ?? '')).split(' ').filter((w) => w.length >= 4))]
+  if (cuvinte.length < 3) return false
+  let cale = ''
+  try { cale = plat(decodeURIComponent(new URL(u).pathname)) } catch { return false }
+  const nimerite = cuvinte.filter((w) => cale.includes(w)).length
+  return nimerite / cuvinte.length >= 0.6
+}
 
 function semneleInceputului(fragment) {
   const t = plat(fara(fragment ?? '').replace(/<[^>]+>/g, ' '))
@@ -143,13 +186,25 @@ function semneleInceputului(fragment) {
 }
 
 function paragrafe(md, titlu, semne) {
-  const toate = md.split(/\r?\n/)
+  /*
+   * ⚠️ BLOCUL DE METADATE AL PDF-ULUI SE TAIE AICI, nu doar in scriptul de proba (uitat la prima
+   * scriere — 69 din 70 de PDF-uri ieseau „nesigure" fiindca textul lor incepea cu
+   * „xmpmm documentid uuid…"). Unealta il scrie ca `## Metadata` cu randuri `- cheie=valoare`.
+   */
+  md = md.replace(/^#{1,3}\s*Metadata\b[\s\S]*?(?=\n#{1,3}\s|\n\n(?![-\s])|$)/m, '')
+  const toate = md.split(/\r?\n/).filter((l) => !/^\s*-\s*[\w:.]+=\S/.test(l))
   /*
    * ⚠️ CĂUTAREA SE FACE ÎN TEXTUL LIPIT, nu rând cu rând: în markdown un paragraf se poate rupe pe
    * mai multe rânduri, iar atunci nicio linie nu cuprinde semnul întreg. Prima încercare, rând cu
    * rând, a potrivit 1 din 9 — lipite, se potrivesc aproape toate.
    */
-  const platLinii = toate.map(plat)
+  /*
+   * ⚠️ SE COMPARA CU ACEEASI CURATARE CARE SE STOCHEAZA (16.09.2026, 02:30): pana acum fereastra de
+   * 45 de semne se cauta in randurile brute din markdown, unde raman etichete HTML („a href https…")
+   * si adrese intregi — iar in textul stocat ele nu mai sunt. Diagnosticul: 35 din 60 „nesigure"
+   * aveau fragmentul CHIAR in textul stocat. Deci ce se cauta = ce se pastreaza.
+   */
+  const platLinii = toate.map((l) => plat(fara(curataLinia(l))))
   const capete = []
   let lipit = ''
   for (let i = 0; i < platLinii.length; i++) {
@@ -174,17 +229,7 @@ function paragrafe(md, titlu, semne) {
     if (OPRESTE.some((re) => re.test(linie))) break
     if (GUNOI.some((re) => re.test(linie))) continue
     // scoate marcajele markdown, pastrand scrisul
-    // ⚠️ user, 16.09.2026: „referințele păstrează-le, dar imaginile șterge-le și adresele și tot"
-    let t = linie
-      .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')          // poze
-      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')        // legaturi: ramane scrisul, pleaca adresa
-      .replace(/[*_`>#]+/g, ' ')
-      .replace(/https?:\/\/[^\s)\]»"]+/gi, '')        // adresele scrise in text
-      .replace(/\bwww\.[^\s)\]»"]+/gi, '')
-      .replace(/\(\s*\)|\[\s*\]/g, '')
-      .replace(/\s+([,.;:!?])/g, '$1')
-      .replace(/\s+/g, ' ')
-      .trim()
+    let t = fara(curataLinia(linie))
     if (t.length < 60) continue
     // un rand care era aproape numai legaturi nu e proza
     const capLegaturi = (linie.match(/\]\(/g) ?? []).length
@@ -198,13 +243,31 @@ function paragrafe(md, titlu, semne) {
 const escapa = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 const inHtml = (par) => par.map((p) => `<p>${escapa(p)}</p>`).join('\n')
 
-async function adu(rand) {
-  const u = rand.sursa_url
-  const r = await fetch(u, {
+/**
+ * ⚠️ CERTIFICATE STRICATE (masurat 16.09.2026, 02:20): `cuvantul-ortodox.ro` — cea mai mare sursa,
+ * 103 articole — are lantul de certificat incomplet, deci `fetch` cade cu „unable to get local issuer
+ * certificate". NU se opreste verificarea certificatelor (ar fi pentru toate site-urile); in schimb,
+ * la o cadere de TLS se reincearca pe `http://`: textul e public si nu trece niciun secret pe fir.
+ */
+async function iaPagina(u) {
+  const optiuni = {
     headers: { 'user-agent': 'Mozilla/5.0 (compatible; arhiva-parohie/1.0; +https://sfantul-ilie.ro)' },
     signal: AbortSignal.timeout(45000),
     redirect: 'follow',
-  })
+  }
+  try {
+    return await fetch(u, optiuni)
+  } catch (e) {
+    const pricina = String(e?.cause?.message ?? e?.cause?.code ?? e?.message ?? '')
+    const eTls = /certificate|CERT_|SSL|TLS|issuer/i.test(pricina)
+    if (eTls && u.startsWith('https://')) return await fetch(u.replace(/^https:\/\//, 'http://'), optiuni)
+    throw e
+  }
+}
+
+async function adu(rand) {
+  const u = rand.sursa_url
+  const r = await iaPagina(u)
   if (!r.ok) return { stare: 'eroare', text: '', de_ce: `HTTP ${r.status}` }
   const octeti = Buffer.from(await r.arrayBuffer())
   if (!octeti.length) return { stare: 'eroare', text: '', de_ce: 'fișier gol' }
@@ -218,14 +281,19 @@ async function adu(rand) {
   if (semne < 400) return { stare: 'fara-text', text: '', de_ce: `numai ${semne} semne` }
   // ⚠️ PROBA USERULUI: textul adus trebuie sa inceapa ca fragmentul din buletin. Daca nu se
   // potriveste, se pastreaza — dar ca „nesigur", iar pagina arata tot fragmentul.
-  if (!par.potrivit) return { stare: 'nesigur', text, de_ce: `${semne} semne, DAR nu incepe ca fragmentul` }
+  if (!par.potrivit) {
+    if (adresaPoartaTitlul(u, rand.titlu)) return { stare: 'gata', text, de_ce: `${semne} semne, ${par.length} paragrafe (adresa poartă titlul)` }
+    return { stare: 'nesigur', text, de_ce: `${semne} semne, DAR nu incepe ca fragmentul` }
+  }
   return { stare: 'gata', text, de_ce: `${semne} semne, ${par.length} paragrafe` }
 }
 
 // ---------------------------------------------------------------------------
 
 const REFA = process.argv.includes('--refa')
-const unde = REFA ? `('netras','eroare','gata','fara-text','nesigur')` : RELUA ? `('netras','eroare')` : `('netras')`
+// `--reia` = tot ce nu e verificat („gata"): netrase, erori, nesigure, fara text — dupa o curatare
+// mai buna merita reincercate toate; `--refa` le ia si pe cele bune
+const unde = REFA ? `('netras','eroare','gata','fara-text','nesigur')` : RELUA ? `('netras','eroare','nesigur','fara-text')` : `('netras')`
 const [{ results: randuri }] = await sql(
   `SELECT slug, titlu, fragment, sursa_url, sursa_fel FROM texte_chinonic
    WHERE stare_text IN ${unde} AND sursa_url <> '' ORDER BY citit_la DESC`,

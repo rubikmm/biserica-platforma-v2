@@ -1794,6 +1794,23 @@ forța antetul `Host`**.
     Fragmentul din MailPoet avea `color:#000000` și tabele inline — pe tema întunecată nu se vedea.
     Acum `fragment` = paragrafe de text (`paragrafeCurate` în `extrage.mjs`), îmbrăcate de noi în
     `<p>`, deci iau culorile temei. **Ordinea în fișă: titlu, autor sub el, apoi textul.**
+  - ✅ **PRIMA ADUCERE COMPLETĂ (02:04)**: 162 gata · 200 nesigure · 46 fără text · 30 erori · 10 fără
+    link. Prea multe „nesigure" — diagnosticat pe date, nu pe presupuneri, și găsite **patru cauze,
+    toate ale mele**, reparate în `adu-textul.mjs` (02:10–02:35):
+    (1) **blocul de metadate al PDF-ului** nu era tăiat decât în scriptul de probă — 69 din 70 de
+    PDF-uri „nesigure" începeau cu „xmpmm documentid uuid…"; (2) **fereastra de potrivire se căuta
+    în rândurile brute din markdown** (cu etichete HTML și adrese), nu în textul curățat care se
+    stochează — 35 din 60 „nesigure" aveau fragmentul CHIAR în text; acum ce se caută = ce se
+    păstrează (`curataLinia`, o singură funcție); (3) **entități dublu-codate** (`&amp;atilde;`,
+    `&amp;shy;`) în 45 de fragmente — se decodează de două ori, și în `extrage.mjs`; (4)
+    **cuvantul-ortodox.ro** (cea mai mare sursă, 103 texte) are lanțul de certificat incomplet —
+    la cădere de TLS se reîncearcă pe `http://`, fără a opri verificarea certificatelor.
+    **Criteriu de rezervă, nou**: la ~25 de texte buletinul avea doar poză + link + NUMELE AUTORULUI,
+    deci fragmentul e un nume de om și nu probează nimic; atunci se cere ca **adresa sursei să poarte
+    titlul** (≥ 60 % din cuvintele lungi ale titlului în cale). Rezultat pe primele 57 reluate:
+    **30 ✓** (12 prin fragment, 18 prin adresă) față de **0 din 71** înainte.
+    ⚠️ Erorile rămase sunt reale: gazde dispărute (comuniune.ro, renasterea.net, tripod) și 404.
+    ⚠️ `--reia` = tot ce nu e „gata" (netras, eroare, nesigur, fără text); `--refa` = tot.
   - ✅ **NORMALIZARE** (user, 01:13: „referințele păstrează-le, dar imaginile șterge-le și adresele
     și tot"): `normalizeaza()` scoate `http…`/`www.…` și parantezele rămase goale; pozele pleacă cu
     etichetele. Referințele („(Psalmul 18)", cărțile) sunt cuvinte și rămân. Aceeași curățare și la
