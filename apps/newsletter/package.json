@@ -1,6 +1,6 @@
 {
   "name": "@xc/app-newsletter",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,6 +10,7 @@
     "deploy:staging": "wrangler deploy --env staging"
   },
   "dependencies": {
+    "@xc/abonare": "workspace:*",
     "@xc/auth": "workspace:*",
     "@xc/config": "workspace:*",
     "@xc/contracts": "workspace:*",

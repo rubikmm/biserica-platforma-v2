@@ -10,12 +10,17 @@
  *   /                         ultimul numar, randat intreg — atat
  *   /arhiva[/<an>]            patratelele anilor, numerele pe luni
  *   /n/<id>                   un numar anume
+ *   /nou                      buletin nou — adaugarea manuala (numai adminii; nu scrie inca nimic)
  *   /cauta?q=                 cautare in subiect si in text
+ *   /abonare · /dezabonare    abonarea, din `@xc/abonare` (15.09.2026)
  *   /media/*                  pozele si PDF-urile la care trimit newsletterele
  *
  * ⚠️ TRIMITEREA nu se face de aici si nu se facea nici in V1 — arhiva e tot ce exista. Cand va
  * exista, scrisoarea pleaca prin `communication-worker`, iar abonatii sunt o AUDIENTA a comunicarii:
  * newsletterul nu tine liste de adrese si nu trimite email singur (structura mare, user 10.09.2026).
+ * ⚠️ DE LA 15.09.2026 ARE TOTUSI BUTON DE ABONARE, cerut anume: oamenii se inscriu de pe acum in
+ * audienta `newsletter-abonati` si asteapta acolo pana se face trimiterea. Abaterea e stiuta si
+ * scrisa si in registrul din `@xc/abonare`.
  *
  * Ce s-a schimbat fata de V1, si de ce:
  *  - **dus-intorsul tacut prin A13 a iesit**. In V1, A8 n-avea poarta si nici cookie comun cu
@@ -25,15 +30,16 @@
  *    ocolul, cookie-ul si `cache-control: private, no-store` de pe toate paginile nu mai au rost;
  *  - carcasa (antet, subsol, tema) vine din `@xc/ui`, nu din `src/comun/` copiat in aplicatie.
  */
-import { SESIUNE_ANONIMA } from '@xc/contracts'
+import { SESIUNE_ANONIMA, SCOPE_GLOBAL } from '@xc/contracts'
 import { principalDin, sesiuneCurenta, verificaCsrf } from '@xc/auth'
 import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
 import { Logger, correlationId } from '@xc/observability'
 import { dataVersiunii, html, json } from '@xc/ui'
 import pkg from '../package.json'
 import { type Fisa, citesteLista, citesteNumarul, citesteTextele } from './depozit.js'
+import { abonamentul, ruteazaAbonare } from '@xc/abonare'
 import { ruteazaSetari } from '@xc/setari'
-import { type Ctx, paginaArhiva, paginaCarcasa, paginaCautare, paginaGoala, paginaMesaj, paginaNumar } from './pagini.js'
+import { type Ctx, paginaArhiva, paginaCarcasa, paginaCautare, paginaGoala, paginaMesaj, paginaNou, paginaNumar } from './pagini.js'
 
 export interface Env {
   ARHIVA: R2Bucket
@@ -52,6 +58,40 @@ export interface Env {
 
 const SERVICIU = 'app-newsletter'
 const CACHE_PAGINI = 'public, max-age=300'
+
+/**
+ * Audienta abonatilor — numele ei sta in registrul `ABONAMENTE` din `@xc/abonare`, nu aici.
+ *
+ * ⚠️ Randul newsletterului a intrat in registru la 15.09.2026, cerut anume de user („și aici avem
+ * Abonare"), si e singurul care se abate de la regula „un rand = un serviciu de trimis": butonul
+ * inscrie oameni de-adevaratelea in `newsletter-abonati`, dar A8 nu trimite inca nimic (vezi
+ * lamurirea de sus). Cand va trimite, scrisoarea pleaca prin `communication-worker`, ca tot restul.
+ */
+const ABONAMENT = abonamentul('newsletter')
+
+/** Jurnalul aplicatiei — abonarea si dezabonarea se scriu in el, ca la Calendar si la Buletin. */
+async function scrieAudit(
+  env: Env,
+  i: { action: string; target: string; outcome: 'success' | 'failure'; correlationId: string; actorId?: string },
+): Promise<void> {
+  try {
+    await env.AUDIT.fetch('https://audit.intern/scrie', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: i.action,
+        target: i.target,
+        scope: SCOPE_GLOBAL,
+        actor: i.actorId ? { type: 'user', id: i.actorId } : { type: 'system' },
+        outcome: i.outcome,
+        correlationId: i.correlationId,
+        summary: {},
+      }),
+    })
+  } catch {
+    // auditul indisponibil nu blocheaza operatia
+  }
+}
 
 /** Pozele si PDF-urile nu se schimba niciodata — de-aia se pot tine mult in cache. */
 const TIPURI: Record<string, string> = {
@@ -172,6 +212,9 @@ export default {
       prefix,
       nav,
       utilizator: sesiune.user?.displayName ?? sesiune.user?.email ?? null,
+      // adresa contului, pentru fereastra de abonare: acolo se scrie in camp si se incuie, fiindca
+      // abonarea platformei sta pe adresa contului, nu pe una scrisa de mana
+      emailulContului: sesiune.user?.email ?? null,
       eAdmin: sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin'),
       versiune: pkg.version,
       modificata: dataVersiunii(env.VERSIUNE),
@@ -190,6 +233,21 @@ export default {
       if (problema) return html(paginaCarcasa(ctx, { titluPagina: 'Verificare de securitate', corp: `<div class="cap"><h1 class="titlu-lista">Verificare de securitate</h1><p class="sursa">${problema}</p></div>` }), 403)
     }
 
+    /*
+     * ABONAREA — drumul intreg sta in `@xc/abonare`, acelasi pentru toata platforma (user,
+     * 15.09.2026). Newsletterul da doar ce e al lui: randul din registru (audienta) si carcasa.
+     */
+    const raspunsAbonare = await ruteazaAbonare(req, cale, env, {
+      abonament: ABONAMENT,
+      prefix,
+      cfg,
+      cid,
+      principal,
+      carcasa: (p) => paginaCarcasa(ctx, p),
+      audit: (i) => scrieAudit(env, { ...i, correlationId: cid }),
+    })
+    if (raspunsAbonare) return raspunsAbonare
+
     // SETARILE — un singur loc, `@xc/setari` (user, 15.09.2026).
     const raspunsSetari = await ruteazaSetari(req, cale, env, {
       cod: 'newsletter',
@@ -206,6 +264,28 @@ export default {
 
     try {
       const lista = await citesteLista(env.ARHIVA)
+
+      /*
+       * BULETIN NOU — ecranul adaugarii manuale, tinta sagetii din pastila (user, 15.09.2026:
+       * „săgeată pentru buletin nou (adăugare manuală - actualizare program sau altceva)").
+       *
+       * ⚠️ NUMAI ADMINII, si poarta e ROLUL, nu o cheie noua de permisiune: una noua ar fi cerut si
+       * republicarea lui `xc-authz` (vezi repere). Cand ecranul va scrie chiar in depozit, aici se
+       * pune cheia potrivita — atunci poarta rolului nu mai e destula.
+       * ⚠️ Pagina e personala (se vede altfel dupa rol si dupa masca „vezi ca"), deci NU se tine in
+       * cache-ul de muchie, oricat ar fi mediul.
+       */
+      if (cale === '/nou') {
+        const alLui = { 'cache-control': 'private, no-store' }
+        if (!ctx.eAdmin) {
+          return html(
+            paginaMesaj(ctx, lista, 'Nu ai voie', '<p>Adăugarea unui buletin e a administratorilor.</p>'),
+            403,
+            alLui,
+          )
+        }
+        return html(paginaNou(ctx, lista), 200, alLui)
+      }
 
       if (cale === '/cauta') {
         const intrebare = (url.searchParams.get('q') ?? '').trim()

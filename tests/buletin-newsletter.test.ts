@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { prefixSiCale } from '../packages/config/src/index.js'
 import { plat } from '../apps/buletin/src/depozit.js'
-import { anul, luna, scurtat } from '../apps/newsletter/src/pagini.js'
+import {
+  type Ctx,
+  anul,
+  luna,
+  paginaCautare,
+  paginaGoala,
+  paginaNou,
+  paginaNumar,
+  scurtat,
+} from '../apps/newsletter/src/pagini.js'
 
 /**
  * BULETINUL (A3) si NEWSLETTERUL (A8), portate din V1 pe 13.09.2026.
@@ -83,5 +92,105 @@ describe('newsletter · fisa unui numar', () => {
 
   it('daca din subiect n-ar mai ramane nimic, se tine cel intreg', () => {
     expect(scurtat('Buletinul Parohiei')).toBe('Buletinul Parohiei')
+  })
+})
+
+/*
+ * MENIUL NEWSLETTERULUI, refacut la 15.09.2026 dupa chipul Calendarului si al Programului. Probele
+ * de aici pazesc tocmai ce s-a cerut in cuvinte, fiindca nimic din toate astea nu se vede din `tsc`:
+ * ordinea segmentelor din pastila, scrisul „Nr. curent", sageata care e o FAPTA (nu o navigare) si
+ * numai a adminilor, si abonarea, care de azi e a newsletterului.
+ */
+describe('newsletter · meniul din antet', () => {
+  const fisa = (id: number, trimis: string, subiect = `Buletinul Parohiei nr. ${id}`) =>
+    ({ id, nr: id, subiect, trimis, rezumat: '' })
+  // cel mai vechi primul, cel mai nou ultimul — ordinea din `lista.json`
+  const lista = [fisa(1, '2026-09-01 10:00:00'), fisa(2, '2026-09-08 10:00:00'), fisa(3, '2026-09-13 10:00:00')]
+  const ctx = (eAdmin: boolean): Ctx => ({
+    prefix: '/newsletter',
+    nav: { home: 'https://website.sfantul-ilie.ro', cont: '/cont', admin: '/admin' } as Ctx['nav'],
+    utilizator: eAdmin ? 'Părintele' : null,
+    eAdmin,
+    versiune: '0.2.0',
+    modificata: '15.09.2026',
+  })
+  /** Ordinea in care apar clasele segmentelor in HTML — pastila se citeste de la stanga la dreapta. */
+  const ordinea = (h: string) =>
+    ['punct', 'acum', 'viit', 'arh', 'cheie'].filter((c) => h.includes(`class="btn ${c}`) || h.includes(`class="${c}"`))
+
+  it('pastila tine cele cinci segmente, in ordinea ceruta', () => {
+    const h = paginaNumar(ctx(true), lista, 2, '<p>x</p>')
+    const pastila = h.slice(h.indexOf('<span class="pastila">'), h.indexOf('</span></span>'))
+    const locuri = ['punct', 'acum', 'viit', 'arh', 'cheie'].map((c) => pastila.indexOf(c))
+    expect(locuri.every((i) => i >= 0)).toBe(true)
+    expect([...locuri].sort((a, b) => a - b)).toEqual(locuri)
+    expect(ordinea(pastila).length).toBeGreaterThan(0)
+  })
+
+  it('pe cel mai nou numar scrie „Nr. curent", iar bulina ramane apasata', () => {
+    const h = paginaNumar(ctx(false), lista, 2, '<p>x</p>')
+    expect(h).toContain('Nr. curent')
+    expect(h).toContain('class="btn punct activ"')
+    // bulina apasata nu mai e link: e inerta, ca la Program
+    expect(h).not.toContain('href="/newsletter/n/3" title="Treci la numărul curent"')
+  })
+
+  it('pe un numar mai vechi scrie data lui, iar bulina duce la cel curent', () => {
+    const h = paginaNumar(ctx(false), lista, 0, '<p>x</p>')
+    expect(h).toContain('1 septembrie 2026')
+    expect(h).toContain('1 sept. 2026')
+    expect(h).toContain('href="/newsletter/n/3"')
+  })
+
+  it('sageata e o FAPTA, nu o navigare: duce la adaugarea manuala', () => {
+    const h = paginaNumar(ctx(true), lista, 0, '<p>x</p>')
+    expect(h).toContain('href="/newsletter/nou"')
+    expect(h).toContain('Buletin nou — adăugare manuală')
+    // ⚠️ pasul inainte prin sirul numerelor A IESIT odata cu ea
+    expect(h).not.toContain('href="/newsletter/n/2"')
+  })
+
+  it('sageata e numai a adminilor; restul pastilei e a tuturor', () => {
+    const alOmului = paginaNumar(ctx(false), lista, 0, '<p>x</p>')
+    expect(alOmului).not.toContain('/newsletter/nou')
+    expect(alOmului).toContain('href="/newsletter/arhiva"')
+    expect(alOmului).toContain('id="cautare-cheie"')
+  })
+
+  it('sageata „◀ numărul dinainte" a iesit din rand — inapoi se merge prin Arhiva', () => {
+    const h = paginaNumar(ctx(true), lista, 1, '<p>x</p>')
+    expect(h).not.toContain('numărul dinainte')
+    expect(h).toContain('href="/newsletter/arhiva"')
+  })
+
+  it('abonarea e in rand si o vad TOTI, si adminii', () => {
+    for (const eAdmin of [false, true]) {
+      const h = paginaNumar(ctx(eAdmin), lista, 2, '<p>x</p>')
+      expect(h).toContain('id="b-abonare"')
+      expect(h).toContain('Primește newsletterul pe email')
+      expect(h).toContain('id="d-abonare"')
+    }
+  })
+
+  it('pe ecranul buletinului nou, sageata ramane aprinsa si scrisul spune unde esti', () => {
+    const h = paginaNou(ctx(true), lista)
+    expect(h).toContain('class="btn viit activ"')
+    expect(h).toContain('Buletin nou')
+    // ⚠️ nu scrie inca nimic in depozit, si o spune omului
+    expect(h).toContain('nu scrie în depozit și nu trimite nimic')
+  })
+
+  it('bara cautarii sta ascunsa pana se apasa lupa, si coborata pe pagina rezultatelor', () => {
+    expect(paginaNumar(ctx(false), lista, 2, '<p>x</p>')).toContain('id="bara-cautare" hidden')
+    const rezultate = paginaCautare(ctx(false), lista, 'cr', lista.slice(0, 1), null)
+    expect(rezultate).toContain('id="bara-cautare"')
+    expect(rezultate).not.toContain('id="bara-cautare" hidden')
+    expect(rezultate).toContain('aria-expanded="true"')
+  })
+
+  it('arhiva goala nu strica randul: bulina se stinge, nu dispare', () => {
+    const h = paginaGoala(ctx(false))
+    expect(h).toContain('class="btn punct gol"')
+    expect(h).toContain('id="b-abonare"')
   })
 })

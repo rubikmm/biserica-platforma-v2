@@ -69,16 +69,21 @@ export interface Abonament {
  * unde scrie. La adăugarea unui rând nou: rândul aici, legătura acolo, și atât.
  *
  * NU sunt în listă, și de ce:
- *   - `newsletter` — e ARHIVĂ, nu trimite nimic încă (vezi `apps/newsletter/src/index.ts`);
- *     când va trimite, e primul care intră aici;
  *   - `biblia`, `biblioteca`, `live`, `radio`, `curatenie` — n-au un serviciu periodic de trimis;
  *     curățenia își are scrisorile ei, dar pe echipa aplicației, nu pe o audiență deschisă oricui.
+ *
+ * ⚠️ `newsletter` A INTRAT AICI PE 15.09.2026, cerut anume de user („și aici avem Abonare"), și e
+ * SINGURUL rând care se abate de la regula de sus: newsletterul e încă numai ARHIVĂ, nu trimite
+ * nimic (vezi `apps/newsletter/src/index.ts`). Butonul înscrie oameni de-adevăratelea în audiență;
+ * ei nu primesc nimic până nu se face trimiterea — prin `communication-worker`, ca tot restul.
+ * Nu-l scoate fără o cerere pe nume; nu-l lua nici drept precedent pentru alte aplicații.
  */
 export const ABONAMENTE: readonly Abonament[] = [
   { cod: 'calendar', audienta: 'calendar-abonati', numeAudienta: 'Abonații calendarului', ce: 'calendarul', la: 'Calendar', prefixAudit: 'calendar' },
   { cod: 'program', audienta: 'program-abonati', numeAudienta: 'Abonații programului', ce: 'programul', la: 'Program', prefixAudit: 'program' },
   { cod: 'buletin', audienta: 'buletin-abonati', numeAudienta: 'Abonații buletinului', ce: 'buletinul', la: 'Buletin', prefixAudit: 'buletin' },
   { cod: 'tipic', audienta: 'tipic-abonati', numeAudienta: 'Abonații tipicului', ce: 'tipicul', la: 'Tipic', prefixAudit: 'tipic' },
+  { cod: 'newsletter', audienta: 'newsletter-abonati', numeAudienta: 'Abonații newsletterului', ce: 'newsletterul', la: 'Newsletter', prefixAudit: 'newsletter' },
 ]
 
 export function abonamentul(cod: string): Abonament {

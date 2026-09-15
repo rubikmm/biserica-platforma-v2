@@ -382,6 +382,9 @@ importers:
 
   apps/newsletter:
     dependencies:
+      '@xc/abonare':
+        specifier: workspace:*
+        version: link:../../packages/abonare
       '@xc/auth':
         specifier: workspace:*
         version: link:../../packages/auth

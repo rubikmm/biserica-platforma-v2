@@ -78,8 +78,14 @@ describe('fereastra de abonare — ce a cerut userul, literă cu literă', () =>
 })
 
 describe('registrul: cine are buton de abonare', () => {
-  it('numai aplicațiile cu un serviciu de trimis', () => {
-    expect(ABONAMENTE.map((a) => a.cod)).toEqual(['calendar', 'program', 'buletin', 'tipic'])
+  /**
+   * ⚠️ `newsletter` a intrat al cincilea pe 15.09.2026, cerut anume de user („și aici avem
+   * Abonare"), și e singurul rând care se abate de la regula „un rând = un serviciu de trimis": A8
+   * e încă numai arhivă. Nu-l scoate de aici fără o cerere pe nume, și nu lua abaterea drept
+   * precedent pentru alte aplicații — de aceea proba de mai jos păzește lista ÎNTREAGĂ, pe ordine.
+   */
+  it('numai aplicațiile cu un serviciu de trimis (plus newsletterul, abatere cerută)', () => {
+    expect(ABONAMENTE.map((a) => a.cod)).toEqual(['calendar', 'program', 'buletin', 'tipic', 'newsletter'])
   })
 
   it('o aplicație din afara listei nu capătă buton din greșeală', () => {
