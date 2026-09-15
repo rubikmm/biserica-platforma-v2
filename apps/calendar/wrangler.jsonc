@@ -44,7 +44,7 @@
   ],
 
   "queues": {
-    "producers": [{ "binding": "EVENIMENTE", "queue": "xc-events-staging" }]
+    "producers": [{ "binding": "EVENIMENTE", "queue": "xc-events-production" }]
   },
 
   "triggers": {

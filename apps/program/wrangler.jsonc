@@ -56,7 +56,7 @@
   "rules": [{ "type": "Data", "globs": ["**/*.png", "**/*.otf", "**/*.ttf"], "fallthrough": true }],
 
   "queues": {
-    "producers": [{ "binding": "EVENIMENTE", "queue": "xc-events-staging" }]
+    "producers": [{ "binding": "EVENIMENTE", "queue": "xc-events-production" }]
   },
 
   "triggers": {
