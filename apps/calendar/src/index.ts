@@ -39,7 +39,7 @@ import { canonizeazaReferinta } from './titluri.js'
 import { type RandZi, desfaRandul, ziLiturgica } from './traducere.js'
 import { abonamentul, ruteazaAbonare } from '@xc/abonare'
 import { ruteazaSetari } from '@xc/setari'
-import { type Ctx, type FelFiltru, type Parte, type TexteZilei, paginaAdmin, paginaCarcasa, paginaLuna, paginaMesaj, paginaSarbatori, paginaZi, poateFiltra, pozaSaptamaniiHtml, texteFereastra, trecePrinFiltru } from './pagini.js'
+import { type Ctx, type FelFiltru, type Parte, type TexteZilei, paginaAdmin, paginaCarcasa, paginaCautare, paginaLuna, paginaMesaj, paginaSarbatori, paginaZi, poateFiltra, pozaSaptamaniiHtml, texteFereastra, trecePrinFiltru } from './pagini.js'
 
 export interface Env {
   DB: D1Database
@@ -333,6 +333,32 @@ export default {
           .map((r) => ({ r, d: desfaRandul(r), zi: ziLiturgica(r, versiune) }))
           .filter(({ r, zi }) => trecePrinFiltru(r, zi, fel))
         return html(paginaSarbatori({ ctx, fel, an, randuri: lista, calculat, azi }), 200, cachePagina)
+      }
+
+      /*
+       * CĂUTAREA — ce iese din lupa pastilei (user, 15.09.2026). Adresa e a ei, cu întrebarea în ea,
+       * deci rezultatul se poate da mai departe și se poate pune la semne de carte.
+       *
+       * ⚠️ Se caută în ANUL cerut, iar anul se coboară la unul PRELUAT: pe un an calculat (2027, 2028)
+       * `cauta` ar cotrobăi în tabelul `zile`, unde acel an nu s-a scris niciodată, și ar întoarce
+       * tăcut o listă goală — omul ar crede că sfântul nu e în calendar, nu că anul nu e încă adus.
+       *
+       * ⚠️ Cititul e la liber (regula userului), deci pagina asta n-are poartă: căutarea nu e un
+       * filtru, e tot lista calendarului, ajunsă la ea printr-un nume.
+       */
+      if (cale === '/cauta' && req.method === 'GET') {
+        const q = (url.searchParams.get('q') ?? '').trim()
+        const cerut = url.searchParams.get('an')
+        const anCerut = cerut && /^\d{4}$/.test(cerut) ? Number(cerut) : undefined
+        const anBun = (a: number | undefined) => (a !== undefined && ani.includes(a) ? a : undefined)
+        const an = anBun(anCerut) ?? anBun(ctx.anCurent) ?? (ani.length ? Math.max(...ani) : ctx.anCurent)
+        if (!ani.length) return html(paginaMesaj(ctx, 'Nu e ce căuta', 'Încă nu s-a preluat niciun an.'), 404)
+        // ⚠️ Pragul de trei litere e al cautarii intregi (e si la `/v1/cauta`): sub el, orice intrebare
+        // ar intoarce jumatate de an. Aici nu e eroare, e o pagina cu campul deschis si cu vestea sub el.
+        const preScurt = q.length < 3
+        const randuri = preScurt ? [] : await cauta(env.DB, q, an)
+        const lista = randuri.map((r) => ({ r, d: desfaRandul(r), zi: ziLiturgica(r, versiune) }))
+        return html(paginaCautare({ ctx, q, an, randuri: lista, azi, preScurt }), 200, cachePagina)
       }
 
       /*

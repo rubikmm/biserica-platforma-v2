@@ -48,6 +48,9 @@ const IC_CRUCE = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" st
 /** Cheia care coboara sirul lunilor: o fila de calendar (user, 15.09.2026: „un buton - ico calendar"). */
 const IC_CALENDAR = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>`
 
+/** Cheia cautarii: lupa (user, 15.09.2026: „o iconiță lupă de căutare înainte de cruce"). */
+const IC_LUPA = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.4 15.4 21 21"/></svg>`
+
 // ---------------------------------------------------------------------------
 // Bucatile antetului
 // ---------------------------------------------------------------------------
@@ -296,12 +299,43 @@ const JS_NAV = `
      aș vrea să se mute într-o bară secundară, inițial ascunsă sub zona de antet"). Cheia din pastila
      o coboara si o ridica. NU trebuie inchisa la alegerea unei luni: alegerea e o NAVIGARE, iar
      pagina urmatoare se scrie oricum cu bara ascunsa. */
+  /* ⚠️ BARELE CARE COBOARĂ DIN PASTILĂ SUNT DOUĂ, ȘI SE EXCLUD: lunile și căutarea. Două bare
+     deschise una peste alta ar împinge lista cu vreo 100 px în jos și n-ar spune nimic în plus —
+     fiecare cheie o coboară pe a ei și o ridică pe cealaltă. */
+  var baraCauta = document.getElementById('bara-cautare');
+  var cheieCauta = document.getElementById('cautare-cheie');
+
+  function ridica(b, c) {
+    if (!b || b.hidden) return;
+    b.hidden = true;
+    if (c) c.setAttribute('aria-expanded', 'false');
+  }
+
+  // pe pagina rezultatelor bara căutării vine coborâtă de la server, deci cheia e deja „deschisă"
+  if (baraCauta && cheieCauta && !baraCauta.hidden) cheieCauta.setAttribute('aria-expanded', 'true');
+
   if (bara && cheie) {
     cheie.addEventListener('click', function () {
       var deschisa = !bara.hidden;
       bara.hidden = deschisa;
       cheie.setAttribute('aria-expanded', deschisa ? 'false' : 'true');
-      if (!deschisa) { aseaza(); if (typeof capete === 'function') capete(); }
+      if (!deschisa) { ridica(baraCauta, cheieCauta); aseaza(); if (typeof capete === 'function') capete(); }
+    });
+  }
+
+  /* Căutarea: aceeași purtare ca la lunile de mai sus, plus cursorul dus în câmp — cine apasă lupa
+     vrea să scrie, nu să mai apese o dată. Pe pagina rezultatelor bara vine deschisă de la server,
+     iar textul se selectează, ca a doua căutare să se scrie peste prima. */
+  if (baraCauta && cheieCauta) {
+    cheieCauta.addEventListener('click', function () {
+      var deschisa = !baraCauta.hidden;
+      baraCauta.hidden = deschisa;
+      cheieCauta.setAttribute('aria-expanded', deschisa ? 'false' : 'true');
+      if (!deschisa) {
+        ridica(bara, cheie);
+        var camp = baraCauta.querySelector('.cauta-camp');
+        if (camp) { camp.focus(); camp.select(); }
+      }
     });
   }
 
@@ -711,8 +745,18 @@ function pastilaLocului(ctx: Ctx, an: number, luna: number, azi: string, filtre:
     + ` title="Astăzi" aria-label="Astăzi"></a>`
   const cheia = `<button type="button" class="luni-cheie" id="luni-cheie" aria-expanded="false"`
     + ` aria-controls="bara-luni" title="Alege altă lună" aria-label="Alege altă lună">${IC_CALENDAR}</button>`
-  // Ordinea cerută (user, 15.09.2026): bulina · DATA, cât tot spațiul rămas · calendarul · crucea.
-  return `<span class="pastila">${butonAzi}${scrisulLocului(ctx, an, luna, azi)}${cheia}${filtre}</span>`
+  /*
+   * ⚠️ LUPA STĂ ÎNAINTEA CRUCII (user, 15.09.2026: „să avem o iconiță lupă de căutare înainte de
+   * cruce"), deci al patrulea segment din cinci. E o CHEIE, ca aceea a lunilor: coboară o bară de sub
+   * antet, nu duce nicăieri singură — căutarea se scrie acolo și pleacă spre `/cauta`.
+   *
+   * ⚠️ Nu atârnă de rol. Filtrele atârnă (13.09.2026), fiindcă taie lista după însemnul zilei;
+   * căutarea nu taie nimic, e tot citit, iar cititul e la liber (regula userului).
+   */
+  const lupa = `<button type="button" class="cauta-cheie" id="cautare-cheie" aria-expanded="false"`
+    + ` aria-controls="bara-cautare" title="Caută în calendar" aria-label="Caută în calendar">${IC_LUPA}</button>`
+  // Ordinea cerută (user, 15.09.2026): bulina · DATA, cât tot spațiul rămas · calendarul · lupa · crucea.
+  return `<span class="pastila">${butonAzi}${scrisulLocului(ctx, an, luna, azi)}${cheia}${lupa}${filtre}</span>`
 }
 
 /**
@@ -744,9 +788,34 @@ function baraLunilor(ctx: Ctx, an: number, luna: number, fel?: FelFiltru): strin
   return `<div class="bara-luni" id="bara-luni" hidden><div class="fasie"><nav class="luni" aria-label="Lunile anului">${butoane.join('')}</nav></div></div>`
 }
 
-/** Ce se scrie sub rândul de unelte: bara lunilor și fereastra de abonare (închisă, deci nevăzută). */
-function subantetul(ctx: Ctx, an: number, luna: number, fel?: FelFiltru): string {
-  return `${baraLunilor(ctx, an, luna, fel)}\n    ${fereastraCalendarului(ctx)}`
+/**
+ * BARA CĂUTĂRII — sora barei lunilor, sub același rând, ascunsă până se apasă lupa.
+ *
+ * ⚠️ E un FORMULAR adevărat, `method="get"`, nu un câmp legat de JS: căutarea merge și fără
+ * JavaScript, iar rezultatul are adresă (`/cauta?q=…&an=…`), deci se poate da mai departe și se poate
+ * pune la semne de carte — ca listele de sărbători. JS-ul adaugă doar coborârea barei și focusul.
+ *
+ * ⚠️ ANUL CĂLĂTOREȘTE CU CĂUTAREA, ascuns în formular: se caută în anul paginii de pe care pleci, nu
+ * într-un an ales pe la spate. Ruta îl coboară singură pe cel mai apropiat an preluat, dacă acela nu e.
+ *
+ * ⚠️ Pe pagina rezultatelor bara se naște DESCHISĂ, cu întrebarea scrisă în câmp — altfel omul n-ar
+ * mai vedea ce a căutat și ar trebui să deschidă lupa ca să afle.
+ */
+function baraCautarii(ctx: Ctx, an: number, o?: { q: string; deschisa: boolean }): string {
+  const p = esc(ctx.prefix)
+  return `<div class="bara-cautare" id="bara-cautare"${o?.deschisa ? '' : ' hidden'}>
+      <form class="cauta" role="search" method="get" action="${p}/cauta">
+        <input type="hidden" name="an" value="${an}">
+        <input class="cauta-camp" type="search" name="q" value="${esc(o?.q ?? '')}" minlength="3"
+          placeholder="Caută un sfânt sau o sărbătoare" aria-label="Caută în calendar" autocomplete="off">
+        <button class="cauta-du" type="submit" title="Caută" aria-label="Caută">${IC_LUPA}</button>
+      </form>
+    </div>`
+}
+
+/** Ce se scrie sub rândul de unelte: barele care coboară din pastilă și fereastra de abonare (închisă, deci nevăzută). */
+function subantetul(ctx: Ctx, an: number, luna: number, fel?: FelFiltru, cautare?: { q: string; deschisa: boolean }): string {
+  return `${baraLunilor(ctx, an, luna, fel)}\n    ${baraCautarii(ctx, an, cautare)}\n    ${fereastraCalendarului(ctx)}`
 }
 
 function comune(ctx: Ctx) {
@@ -1172,6 +1241,78 @@ ${peLuni || `<p class="gol">Anul ${o.an} n-are ${esc(FILTRE[o.fel].pustiu)}.</p>
 <nav class="vecini">
   <a href="${p}/${o.an}">← Înapoi</a>
   ${celelalte.map((f) => `<a href="${p}/sarbatori/${FILTRE[f].slug}/${o.an}">${esc(FILTRE[f].nume)} →</a>`).join('\n  ')}
+</nav>`,
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Cautarea
+// ---------------------------------------------------------------------------
+
+/**
+ * PAGINA CĂUTĂRII — ce a găsit lupa din pastilă (user, 15.09.2026: „să avem o iconiță lupă de căutare
+ * înainte de cruce").
+ *
+ * ⚠️ Se caută în TITLURILE zilelor, fără diacritice și fără majuscule (`cauta` din depozit, aceeași
+ * funcție pe care o folosesc și `/v1/cauta`, și Asistentul) — nu în sinaxar și nu în pericope. Deci
+ * „Nicolae" găsește ziua lui, dar un cuvânt din viața sfântului nu.
+ *
+ * ⚠️ SE CAUTĂ ÎNTR-UN SINGUR AN, cel scris în adresă. Peste toți anii preluați, același sfânt ar ieși
+ * de câte ori se repetă în ani, iar lista ar fi o înșiruire de duplicate mutate cu o zi. Anul se vede
+ * scris pe pagină, ca omul să știe unde a căutat.
+ *
+ * Zilele se scriu ca peste tot (`randZi`), grupate pe luni, ca la lista de sărbători.
+ */
+export function paginaCautare(o: {
+  ctx: Ctx
+  /** ce s-a cerut, curățat de spații */
+  q: string
+  an: number
+  randuri: Array<{ r: RandZi; d: RandDesfacut; zi: ZiLiturgica }>
+  azi: string
+  /** `true` cand intrebarea are sub trei litere — atunci nu s-a cautat deloc */
+  preScurt: boolean
+}): string {
+  const p = esc(o.ctx.prefix)
+  const peLuni = LUNI.map((numeLunii, i) => {
+    const grup = o.randuri.filter((x) => x.r.luna === i + 1)
+    if (!grup.length) return ''
+    return `<h2 class="luna">${esc(numeLunii)}</h2>
+<div class="zile">
+${grup.map((x) => randZi(o.ctx, x.r, x.d, x.zi, x.r.data === o.azi)).join('')}</div>`
+  })
+    .filter(Boolean)
+    .join('\n')
+
+  // ⚠️ `cauta` taie la 100 de randuri; cand lista vine plina, spunem ca e taiata, nu pretindem ca atat
+  // s-a gasit
+  const cate = o.randuri.length >= 100
+    ? 'primele 100 de zile'
+    : `${o.randuri.length} ${o.randuri.length === 1 ? 'zi' : 'zile'}`
+  const vestea = o.preScurt
+    ? '<p class="gol">Scrie cel puțin trei litere.</p>'
+    : peLuni || `<p class="gol">Nimic în ${o.an} pentru „${esc(o.q)}”. Se caută în titlul zilei — numele sfântului sau al sărbătorii.</p>`
+
+  return pagina({
+    ...comune(o.ctx),
+    titluPagina: o.q ? `Căutare: ${o.q}` : 'Căutare',
+    // o listă de rezultate n-are ce căuta la indexat: e conținutul calendarului, tăiat după o întrebare
+    indexabil: false,
+    unelte: unelte({ ctx: o.ctx, an: o.an, luna: 0, azi: o.azi }),
+    // bara vine COBORÂTĂ, cu întrebarea în câmp: aici e locul unde omul o schimbă și caută din nou
+    subantet: subantetul(o.ctx, o.an, 0, undefined, { q: o.q, deschisa: true }),
+    scripturi: JS_NAV + JS_FILTRE + JS_ABONARE,
+    clasaCorp: 'sarbatori',
+    corp: `<div class="cap">
+  <p class="inainte-de-titlu"><a class="btn inapoi" href="${p}/${o.an}">← Înapoi</a></p>
+  <h1 class="titlu-lista">Căutare${o.q ? ` · ${esc(o.q)}` : ''}</h1>
+  ${o.randuri.length ? `<p class="cate">${esc(cate)} în ${o.an}</p>` : ''}
+  <p class="sursa">Se caută în titlul zilelor din ${o.an}, fără diacritice și fără majuscule.</p>
+</div>
+${vestea}
+
+<nav class="vecini">
+  <a href="${p}/${o.an}">← Înapoi</a>
 </nav>`,
   })
 }

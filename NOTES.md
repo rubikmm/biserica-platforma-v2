@@ -1381,6 +1381,58 @@ evlavie") nu mai încape cu cuvânt cu tot** — când vine, ori se scurtează n
 doar iconițe (și atunci navigarea câștigă mult). Pe telefon (sub 600 px) cuvintele cad deja și rămân
 iconițele: cu ele, cele trei ar cere ~446 px, iar un telefon de 390 are 335 de folosit.
 
+### Calendarul · lupa de căutare și pastila pe telefon (15.09.2026, seara)
+
+Cerere scurtă a userului: „să avem o iconiță lupă de căutare înainte de cruce". Calendar **0.8.0**.
+
+**Ce s-a făcut.** Pastila are acum **cinci segmente**: bulina „azi" · DATA · calendarul · **lupa** ·
+crucea. Lupa e o **cheie**, ca aceea a lunilor: coboară o bară a ei sub antet, cu un câmp și un buton.
+
+- **Formular GET adevărat** (`/cauta?q=…&an=…`), nu un câmp legat de JS: merge fără JavaScript, iar
+  rezultatul are adresă — se poate da mai departe și pune la semne de carte, ca listele de sărbători.
+- **Cele două bare de sub antet se exclud** (lunile și căutarea): două deschise deodată ar fi împins
+  lista cu ~100 px, fără să spună nimic în plus. JS-ul o ridică pe cealaltă, `JS_NAV`.
+- **Pagina rezultatelor** (`paginaCautare`): zilele scrise cu `randZi`, grupate pe luni, bara
+  **deschisă** și întrebarea în câmp. Se caută în **titlul** zilei, cu `cauta` din `depozit.ts` —
+  aceeași funcție ca la `/v1/cauta` și la unealta Asistentului —, fără diacritice, cel mult 100 de
+  rânduri (când vine lista plină, pagina spune „primele 100 de zile", nu pretinde că atât s-a găsit).
+- ⚠️ **SE CAUTĂ ÎNTR-UN SINGUR AN**, cel din adresă. Peste toți anii preluați, același sfânt ar ieși
+  de câte ori se repetă, iar lista ar fi un șir de duplicate mutate cu o zi. Anul călătorește ascuns
+  în formular, iar ruta îl **coboară la unul PRELUAT**: pe un an calculat (2027, 2028) `cauta` ar fi
+  cotrobăit în tabelul `zile`, unde anul acela nu s-a scris niciodată, și ar fi întors **tăcut** o
+  listă goală — omul ar fi crezut că sfântul nu e în calendar.
+- ⚠️ **Lupa NU atârnă de rol**, spre deosebire de cruce (regula din 13.09.2026): crucea TAIE lista
+  după însemnul zilei, căutarea doar o caută, iar cititul e la liber. Probe: `tests/cautare-calendar.test.ts`.
+- Pragul de **3 litere** e al căutării întregi (e și la `/v1/cauta`). Sub el nu se caută și se scrie
+  de ce, în pagină — nu e eroare.
+
+**⚠️ POZA A GĂSIT DOUĂ REGULI MOARTE ÎN `stil.ts`, amândouă de dinainte de lupă** — vechi exact cât
+regula „la orice schimbare de așezare în rândul de unelte, fă o poză". Amândouă din **aceeași
+pricină**: un bloc `@media` scris în capul fișierului răstoarnă o regulă care vine **mai jos**, iar la
+specificitate egală câștigă cea de jos. Deci `@media`-ul nu făcea nimic:
+
+1. **Zona datei era GOALĂ pe telefon** (sub 400 px): media stingea forma lungă, iar regula de jos
+   ținea forma scurtă stinsă. Adică tocmai lucrul cerut anume în dimineața aceea („pe mobil,
+   neapărat să se vadă scrisul cu data") lipsea cu totul. Se vede în poza de la 390 px.
+2. **Strâmtarea segmentelor la 42 px** nu se aplica: pe un telefon de 390 ieșeau tot de 46.
+
+Amândouă au fost **mutate sub regulile pe care le răstoarnă**, cu avertisment scris lângă ele.
+
+**Măsurat cu Browser Rendering** (`/content` + script injectat care scrie lățimile pe `body`), de la
+320 la 1100 px:
+
+- rândul **se rupea în două între 401 și 430 px** și **înainte** de lupă; al cincilea segment ar fi
+  lățit banda la ~450. Leacul e vechea regulă a rândului: **`flex:1 1 0` pe pastilă, nu `1 1 auto`** —
+  ruperea se hotărăște după măsura *ipotetică* a copiilor, înainte de orice strângere. Acum rândul e
+  **pe o singură linie de la 320 la 1100 px**;
+- pragul formei scurte a datei a urcat de la **400 la 460 px**: între 401 și 460 data lungă nu mai
+  încape lângă cele patru chei și era tăiată de `overflow:hidden` (la 410: text de 176 px într-o
+  cutie de 169). Telefoanele din bandă nu sunt rare — 412, 414, 430;
+- sub 400 px se ia din toate câte puțin (chei 36 px, `gap` 6, marginile plicului 9, scrisul 12) ca
+  „15 sep. 2026" să încapă **întreg de la 360 px în sus**. Sub 360 se taie data, nu se rupe rândul.
+- ⚠️ **Crucea are DOUĂ măsuri de strâns**: lățimea o ține învelișul `<details>` (`.btns .filtre`), nu
+  butonul dinăuntru. Fără el, crucea rămânea de 46 px când celelalte se strângeau.
+
 ### Propunerea săptămânii — și privegherile din anii trecuți (12.09.2026)
 
 Propunerea are acum **patru izvoare**: obiceiul ultimelor 52 de săptămâni, aceeași dată în anii
@@ -1696,6 +1748,22 @@ forța antetul `Host`**.
 ## Jurnal
 
 ### 2026-09-15
+
+- **LUPA DE CĂUTARE ÎN PASTILA CALENDARULUI** (user, 20:14: „să avem o iconiță lupă de căutare înainte
+  de cruce"). Calendar **0.8.0**, publicat pe producție.
+  - Al patrulea buton al pastilei, între cheia lunilor și cruce. Apăsat, coboară o **bară a lui** sub
+    antet (soră cu bara lunilor; cele două se exclud), cu un câmp și un buton. Formular **GET**
+    adevărat spre `/cauta?q=…&an=…`: merge fără JavaScript, iar rezultatul are adresă.
+  - Pagina rezultatelor: zilele scrise ca peste tot (`randZi`), grupate pe luni, cu bara **deschisă**
+    și întrebarea în câmp. Se caută în **titlurile** zilelor (`cauta` din depozit, aceeași funcție ca
+    la `/v1/cauta` și la Asistent), fără diacritice, **într-un singur an** — peste toți anii preluați
+    același sfânt ar ieși de câte ori se repetă. Anul cerut se coboară la unul **preluat**: pe 2027
+    (calculat) căutarea ar fi întors tăcut o listă goală. Sub 3 litere nu se caută, și scrie de ce.
+  - ⚠️ **Lupa NU atârnă de rol**, spre deosebire de cruce: căutarea e tot citit, iar cititul e la
+    liber. Probe: `tests/cautare-calendar.test.ts` (10), care păzesc și locul ei în rând.
+  - ⚠️⚠️ **Poza a găsit DOUĂ reguli moarte în `stil.ts`, vechi de dinainte de lupă** — vezi
+    „Calendarul · pastila pe telefon". Cea mai urâtă: **pe telefon zona datei era GOALĂ**, adică exact
+    lucrul cerut anume pe 15.09.2026 („neapărat să se vadă scrisul cu data").
 
 - **VALIDAREA APĂSATĂ DIN GREȘEALĂ, RETRASĂ — ȘI CHATUL POATE DE ACUM SĂ O RETRAGĂ SINGUR** (user,
   20:00: „vreau să mut starea pe propus și să dau drepturi Asistentului să facă și el la cerere

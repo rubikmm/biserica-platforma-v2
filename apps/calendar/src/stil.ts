@@ -220,17 +220,15 @@ h2.luna .fel-filtru.f-evlavie { color:var(--mov) }
   .btns { gap:7px }
   .btns .mic { padding-left:11px; padding-right:11px }
   .pastila .acum { padding:11px 10px; font-size:13px }
-  .pastila .azi-buton, .pastila .luni-cheie, .pastila .sarb-cheie { flex:0 0 42px; width:42px }
+  /* ⚠️ Stramtarea segmentelor la 42 px NU se scrie aici, ci sub regula lor de 46 px (cauta
+     „SEGMENTELE PASTILEI PE TELEFON"): scrisa in locul asta are aceeasi specificitate ca aceea, dar
+     vine INAINTEA ei in fisier, deci pierde. Statea moarta de cand a fost scrisa — masurat
+     15.09.2026: pe un ecran de 390 px segmentele ieseau tot de 46. */
   /* meniul nu e mai lat decat ecranul, oricat de ingust ar fi telefonul */
   .filtre-meniu { min-width:0; width:max-content; max-width:calc(100vw - 32px) }
 }
-/* Sub 400 px („15 septembrie 2026" nu mai incape langa restul) data trece pe forma scurta —
-   ⚠️ SCURTATA, NU ASCUNSA: ziua si luna raman scrise, cum s-a cerut. */
-@media (max-width:400px) {
-  .pastila .acum { padding:11px 8px; font-size:12.5px }
-  .pastila .acum .lung { display:none }
-  .pastila .acum .scurt { display:inline }
-}
+/* ⚠️ FORMA SCURTA A DATEI S-A MUTAT MAI JOS, sub regula ei de baza (cauta „DATA PE ECRANE MICI").
+   Scrisa aici era moarta, din aceeasi pricina ca stramtarea segmentelor. */
 
 /* PASTILA NAVIGARII (user, 12.09.2026: „să fie o pastilă ca la Program și lunile să fie text în
    capsulă"). Un singur corp: chenarul si rotunjirea stau pe PASTILA, nu pe segmente; inauntru,
@@ -257,15 +255,45 @@ h2.luna .fel-filtru.f-evlavie { color:var(--mov) }
    creste (user, 15.09.2026: „toată pastila asta fă-o sută la sută cu butoanele de dimensiuni fixe,
    adică butonul de azi, butonul de calendar și butonul cu crucea. Dar zona cu data curentă, luna și
    anul să fie maximă, sută la sută cât tot spațiul").
-   Patru segmente, in ordinea ceruta: bulina · DATA · calendarul · crucea.
+   Cinci segmente, in ordinea ceruta: bulina · DATA · calendarul · LUPA · crucea.
    ⚠️ FARA overflow:hidden. Il avea cat timp pastila tinea sirul derulant al lunilor; acum, cu meniul
    crucii atarnat de ultimul segment, overflow:hidden l-ar TAIA si meniul n-ar mai aparea deloc.
-   Rotunjirea colturilor o duc segmentele de la capete, fiecare al lui. */
-.btns .pastila { display:flex; flex:1 1 auto; min-width:0; align-items:stretch;
+   Rotunjirea colturilor o duc segmentele de la capete, fiecare al lui.
+   ⚠️ MASURA DE PORNIRE E 0 (flex:1 1 0), NU auto — regula veche a randului, reinvatata pe 15.09.2026
+   cu lupa: randul are flex-wrap, iar ruperea lui se hotaraste dupa marimea IPOTETICA a copiilor,
+   inainte de orice strangere. Cu „auto", marimea ipotetica a pastilei e cat data scrisa intreaga plus
+   cele patru butoane; pe ecranele de 400–460 px asta trecea de rand si COBORA abonarea pe al doilea
+   rand (masurat: btns h=85 in loc de 41). Cu 0, pastila nu forteaza niciodata ruperea si tot ia ce
+   ramane, fiindca are grow 1. ⚠️ Banda era stricata si INAINTE de lupa (401–430); nu o repara inapoi. */
+.btns .pastila { display:flex; flex:1 1 0; min-width:0; align-items:stretch;
                  border:1px solid var(--rule); border-radius:10px; background:var(--tinta) }
-/* cele trei butoane: aceeasi masura fixa, ca pastila sa arate la fel pe orice pagina */
-.pastila .azi-buton, .pastila .luni-cheie, .pastila .sarb-cheie { flex:0 0 46px; width:46px;
-                 padding-left:0; padding-right:0 }
+/* cele PATRU butoane: aceeasi masura fixa, ca pastila sa arate la fel pe orice pagina */
+.pastila .azi-buton, .pastila .luni-cheie, .pastila .cauta-cheie, .pastila .sarb-cheie {
+                 flex:0 0 46px; width:46px; padding-left:0; padding-right:0 }
+/* SEGMENTELE PASTILEI PE TELEFON — patru butoane a 46 px ar lua 184 px din cele ~335 ale unui telefon
+   de 390, si atunci data n-ar mai avea unde incapea. Cele 4 px luate fiecaruia se duc toti in ea.
+   ⚠️ STA AICI, NU IN BLOCUL @media DE MAI SUS: acolo are aceeasi specificitate ca regula de 46 px,
+   dar vine inaintea ei in fisier si pierde — asa a stat moarta pana la masuratoarea din 15.09.2026. */
+@media (max-width:600px) {
+  .pastila .azi-buton, .pastila .luni-cheie, .pastila .cauta-cheie, .pastila .sarb-cheie {
+                 flex:0 0 42px; width:42px }
+  /* ⚠️ Crucea are DOUA masuri de strans: latimea o tine invelisul <details>, nu butonul dinauntru.
+     Fara randul asta, crucea ramanea de 46 px cand celelalte se strangeau la 42 (masurat 15.09.2026). */
+  .btns .filtre { flex:0 0 42px }
+}
+/* SUB 400 PX — telefoanele mici (360 Galaxy, 375 iPhone). Aici cele patru chei ale pastilei si
+   abonarea nu mai lasa datei nici cat scrisul ei scurt: masurat 15.09.2026, „15 sep. 2026" cere 91 px
+   si primea 88 la un telefon de 390 — se taia tocmai lucrul care nu are voie sa cada. Se ia din toate
+   celelalte, cate putin: cheile 36 px, spatiile dintre butoane 6, marginile plicului 9, scrisul datei
+   12. Asa data incape intreaga de la 360 px in sus.
+   ⚠️ Mai jos de 360 px se taie iar — si atunci se taie ea, nu se rupe randul. */
+@media (max-width:400px) {
+  .btns { gap:6px }
+  .btns .mic { padding-left:9px; padding-right:9px }
+  .pastila .azi-buton, .pastila .luni-cheie, .pastila .cauta-cheie, .pastila .sarb-cheie {
+                 flex:0 0 36px; width:36px }
+  .btns .filtre { flex:0 0 36px }
+}
 .pastila > :first-child { border-radius:9px 0 0 9px }
 .pastila > :last-child, .pastila > .filtre:last-child > summary { border-radius:0 9px 9px 0 }
 /* Scrisul locului. ⚠️ NU e scris cu majuscule si nici raschirat, ca lunile din sir: „15 SEPTEMBRIE
@@ -288,12 +316,36 @@ h2.luna .fel-filtru.f-evlavie { color:var(--mov) }
                  background:var(--paper);
                  font:600 14px/1 ui-sans-serif,system-ui; color:var(--rosu) }
 .pastila .acum .scurt { display:none }
-/* Cheia lunilor: cat timp bara e coborata, sta aprinsa — ca omul sa stie de unde a iesit sirul. */
-.pastila .luni-cheie { flex:none; display:flex; align-items:center; justify-content:center;
+/* DATA PE ECRANE MICI — „15 septembrie 2026" trece pe „15 sep. 2026".
+   ⚠️ SCURTATA, NU ASCUNSA: ziua si luna raman scrise, cum s-a cerut anume (15.09.2026, „pe mobil,
+   neapărat să se vadă scrisul cu data").
+   ⚠️⚠️ BLOCUL ASTA STATEA MAI SUS IN FISIER, INAINTEA REGULII DE DEASUPRA, si de aceea nu facea ce
+   scria: are aceeasi specificitate, deci pierdea, iar forma scurta ramanea stinsa in timp ce cea
+   lunga era stinsa de el. Pe un telefon de 390 px zona datei era GOALA — se vede in poza facuta pe
+   15.09.2026, inainte de mutare. A doua regula moarta din acelasi motiv, in acelasi fisier (cealalta:
+   stramtarea segmentelor la 42 px). La orice @media scris in capul fisierului, verifica daca regula
+   pe care o rastoarna nu vine cumva mai jos.
+   ⚠️ PRAGUL E 460, nu 400: intre 401 si 460 px data lunga nu incape langa cele patru butoane si era
+   taiata de overflow:hidden (masurat la 410: text de 176 px intr-o cutie de 169). Telefoanele din
+   banda nu sunt rare — 412 (Pixel), 414 (iPhone Plus), 430 (iPhone Pro Max). */
+@media (max-width:460px) {
+  .pastila .acum { padding:11px 8px; font-size:12.5px }
+  .pastila .acum .lung { display:none }
+  .pastila .acum .scurt { display:inline }
+}
+@media (max-width:400px) {
+  .pastila .acum { padding:11px 6px; font-size:12px }
+}
+/* Cheile care coboara barele de sub rand — lunile si lupa cautarii. Cat timp bara lor e coborata, stau
+   aprinse, ca omul sa stie de unde a iesit ce vede sub antet. Aceleasi masuri pentru amandoua: sunt
+   acelasi fel de buton, si ar fi batut la ochi daca una era mai lata. */
+.pastila .luni-cheie, .pastila .cauta-cheie {
+                       flex:none; display:flex; align-items:center; justify-content:center;
                        padding:11px 12px; border:0; border-left:1px solid var(--rule);
                        border-radius:0; background:transparent; color:var(--soft); cursor:pointer }
-.pastila .luni-cheie:hover { color:var(--rosu); background:var(--paper) }
-.pastila .luni-cheie[aria-expanded="true"] { color:var(--rosu);
+.pastila .luni-cheie:hover, .pastila .cauta-cheie:hover { color:var(--rosu); background:var(--paper) }
+.pastila .luni-cheie[aria-expanded="true"], .pastila .cauta-cheie[aria-expanded="true"] {
+                       color:var(--rosu);
                        background:color-mix(in srgb, var(--rosu) 11%, transparent) }
 
 /* BARA A DOUA — sirul lunilor, sub randul de unelte, ascunsa pana se apasa cheia. Are chenarul si
@@ -313,6 +365,29 @@ h2.luna .fel-filtru.f-evlavie { color:var(--mov) }
                   -webkit-overflow-scrolling:touch; scrollbar-width:none }
 .bara-luni .fasie::-webkit-scrollbar { display:none }
 .bara-luni .luni { display:flex; align-items:stretch; gap:0; width:max-content; padding:0 }
+
+/* BARA CAUTARII — sora barei lunilor, cu acelasi chenar si aceeasi rotunjire: sunt doua bare care ies
+   din aceeasi pastila, deci trebuie sa se poarte la fel. Nu se vad niciodata amandoua deodata (JS-ul
+   o ridica pe cealalta), asa ca randul de sub antet ramane de o singura inaltime.
+   ⚠️ appearance:none e pentru iOS, care altfel deseneaza campul de cautare cu chenarul si rotunjirea
+   lui, inauntrul chenarului nostru — chiar „buton in buton", reclamatia veche a userului. */
+.bara-cautare { display:flex; align-items:stretch; margin:0 0 6px;
+                border:1px solid var(--rule); border-radius:10px; background:var(--tinta);
+                overflow:hidden }
+.bara-cautare[hidden] { display:none }
+.bara-cautare .cauta { display:flex; align-items:stretch; flex:1 1 auto; min-width:0; margin:0 }
+.cauta-camp { flex:1 1 auto; min-width:0; appearance:none; -webkit-appearance:none;
+              border:0; border-radius:0; background:transparent; color:var(--ink);
+              padding:11px 14px; outline:none;
+              font:400 14px/1.2 ui-sans-serif,system-ui }
+.cauta-camp::placeholder { color:var(--faint) }
+.cauta-camp::-webkit-search-cancel-button { -webkit-appearance:none }
+/* butonul de trimis: un segment la capat, ca sagetile lunilor. Lupa lui e aceeasi cu a cheii de sus,
+   ca sa se vada ca bara asta e a ei. */
+.cauta-du { flex:0 0 46px; display:flex; align-items:center; justify-content:center;
+            border:0; border-left:1px solid var(--rule); border-radius:0;
+            background:transparent; color:var(--soft); cursor:pointer }
+.cauta-du:hover { color:var(--rosu); background:var(--paper) }
 
 /* LUNILE: text simplu in capsula — fara chenar, fara fundal, fara rotunjire a lor. Despartitura e o
    linie de 1 px, ca intre segmentele Programului. */
