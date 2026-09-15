@@ -69,11 +69,43 @@ const GUNOI = [
   /^\*\s*\[/, /^\|/, /^\s*<[a-z!/]/i,
 ]
 /** De aici in jos nu mai e articolul, ci subsolul site-ului. */
+/*
+ * ⚠️ Completate pe 16.09.2026, 02:55, dupa proba de calitate (user: „terminarea lui trebuie să fie
+ * înainte să înceapă alt articol sau altă secțiune"): ramaneau in coada „Pentru a adauga un
+ * comentariu…", listele de etichete si firimiturile. O LISTA DE ETICHETE se recunoaste dupa forma,
+ * nu dupa cuvinte: multe virgule si bucati scurte, fara punct la sfarsit.
+ */
 const OPRESTE = [
-  /^#{1,3}\s*(comentarii|articole (recomandate|similare)|cite[sș]te [sș]i|mai multe|recomand[aă]ri)/i,
-  /^\s*(vizualiz[aă]ri|distribuie|share|abonea?z[aă]-te|urm[aă]re[sș]te-ne)\b/i,
+  /^#{1,3}\s*(comentarii|articole (recomandate|similare|asem[aă]n[aă]toare)|cite[sș]te [sș]i|mai multe|recomand[aă]ri|etichete|tags?)\b/i,
+  /^\s*(vizualiz[aă]ri|distribuie|share|abonea?z[aă]-te|urm[aă]re[sș]te-ne|etichete\s*:|tags?\s*:|categorii\s*:)/i,
+  /^\s*pentru a (ad[aă]uga|posta|scrie) un comentariu/i,
+  /^\s*(las[aă] un (comentariu|r[aă]spuns)|adaug[aă] (un )?comentariu|comentarii\s*\(?\d*\)?\s*$)/i,
+  /^\s*(articole? (din aceea[sș]i categorie|recomandate?|similare?)|v[aă] mai recomand[aă]m|te-ar putea interesa)/i,
   /^\s*copyright\b/i, /^\s*©/,
 ]
+/** O lista de etichete: cel putin 6 bucati despartite prin virgula, in medie scurte, fara punct. */
+const eListaDeEtichete = (t) => {
+  const bucati = t.split(',').map((x) => x.trim()).filter(Boolean)
+  if (bucati.length < 6) return false
+  const medie = bucati.reduce((s, x) => s + x.length, 0) / bucati.length
+  return medie <= 22 && !/[.!?]\s*$/.test(t)
+}
+
+/**
+ * ⚠️ PROBA DE LIZIBILITATE (16.09.2026, 02:55): un PDF scanat prost trece prin OCR si iese
+ * „cotesc di nu au tinut vrajba… n~ se rii re so-..". Semnele: multe bucati care nu sunt cuvinte
+ * (amestec de litere, cifre si semne) si multe semne straine de scris. Sub prag, textul nu e text —
+ * se scrie „fara-text", nu „gata", oricat de bine ar fi purtat numele fisierului titlul.
+ */
+function eLizibil(par) {
+  const t = par.join(' ')
+  if (t.length < 400) return false
+  const bucati = t.split(/\s+/).filter(Boolean)
+  // cuvinte: litere, ori numere (ani, versete, pagini) — cu semnele de punctuatie din jur
+  const cuvinte = bucati.filter((b) => /^[(„“«"']*(?:[\p{L}][\p{L}'’\-]*|\d+[.,:\-\d]*)[.,;:!?)»”"']*$/u.test(b)).length
+  const straine = (t.match(/[~|^#*_\\<>{}=+]/g) ?? []).length
+  return cuvinte / bucati.length >= 0.8 && straine / t.length < 0.004
+}
 
 /**
  * Din markdown → paragrafe de text curat. Se pastreaza randurile care sunt PROZA, nu navigare:
@@ -226,8 +258,12 @@ function paragrafe(md, titlu, semne) {
   randuri.potrivit = gasit
   const bune = []
   for (let linie of randuri) {
-    if (OPRESTE.some((re) => re.test(linie))) break
+    // ⚠️ hotarele de SFARSIT lucreaza numai dupa ce s-a strans macar un rand de text: unele site-uri
+    // scriu „Comentarii (0)" ori „Distribuie" DEASUPRA articolului, si taiau totul (0 semne)
+    if (bune.length && OPRESTE.some((re) => re.test(linie))) break
     if (GUNOI.some((re) => re.test(linie))) continue
+    // o lista de etichete e semnul ca articolul s-a terminat: de aici in jos e podoaba site-ului
+    if (bune.length && eListaDeEtichete(fara(curataLinia(linie)))) break
     // scoate marcajele markdown, pastrand scrisul
     let t = fara(curataLinia(linie))
     if (t.length < 60) continue
@@ -279,6 +315,9 @@ async function adu(rand) {
   // ⚠️ Sub 400 de semne nu e un articol: e un PDF scanat (fara text) ori o pagina care n-a dat nimic.
   // Se scrie „fara-text", nu „gata": altfel fisa ar arata un text intreg care nu e intreg.
   if (semne < 400) return { stare: 'fara-text', text: '', de_ce: `numai ${semne} semne` }
+  // ⚠️ proba de lizibilitate e NUMAI pentru PDF: scanarile proaste vin doar de acolo, iar pe pagini
+  // web ea dadea fals „ilizibil" la textele cu multe date si citate (masurat 16.09.2026, 03:10)
+  if (ePdf && !eLizibil(par)) return { stare: 'fara-text', text: '', de_ce: `${semne} semne, dar ILIZIBIL (scanare proastă)` }
   // ⚠️ PROBA USERULUI: textul adus trebuie sa inceapa ca fragmentul din buletin. Daca nu se
   // potriveste, se pastreaza — dar ca „nesigur", iar pagina arata tot fragmentul.
   if (!par.potrivit) {

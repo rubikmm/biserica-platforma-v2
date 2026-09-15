@@ -1809,11 +1809,26 @@ forța antetul `Host`**.
     deci fragmentul e un nume de om și nu probează nimic; atunci se cere ca **adresa sursei să poarte
     titlul** (≥ 60 % din cuvintele lungi ale titlului în cale). Rezultat pe primele 57 reluate:
     **30 ✓** (12 prin fragment, 18 prin adresă) față de **0 din 71** înainte.
-    **Starea după a doua aducere (02:50)**: **265 gata** (218 pagini + 47 PDF) · 107 nesigure (54 + 53)
-    · 50 fără text (23 + 27 PDF scanate) · 16 erori · 10 fără link. Din 162 gata → 265; din 200 nesigure
-    → 107. ⚠️ Cele 53 de PDF-uri „nesigure" sunt fișierele NOASTRE (nu poate fi altă pagină), dar
-    unele țin mai multe predici într-un fișier, deci fără potrivirea fragmentului nu se știe unde se
-    taie — de hotărât cu userul dacă se acceptă PDF-ul întreg acolo.
+    **STAREA FINALĂ (03:25, după șase treceri)**: **258 gata** (220 pagini + 38 PDF) · **86 nesigure**
+    (53 + 33) · **77 fără text** (21 pagini goale + 56 PDF scanate/ilizibile) · 17 erori (gazde moarte,
+    404) · 10 fără link. Pornise de la 162 gata / 200 nesigure.
+    Ce s-a mai adăugat la treceriile 4–6: **hotare de sfârșit** noi („Pentru a adăuga un comentariu",
+    liste de etichete după formă — ≥ 6 virgule, bucăți scurte, fără punct; firimituri), care lucrează
+    NUMAI după ce s-a strâns un rând de text (unele site-uri scriu „Comentarii (0)" deasupra
+    articolului și tăiau totul); **proba de lizibilitate** — un PDF scanat prost trecea ca „gata"
+    fiindcă numele fișierului purta titlul; se măsoară câte bucăți sunt cuvinte (cifrele se numără
+    cuvinte) și câte semne străine sunt. ⚠️ **Numai pentru PDF**: pe pagini web dădea fals „ilizibil"
+    la textele cu multe date și citate (19 pagini, măsurat).
+    ⚠️ **Reziduul e greu, nu ieftin**: ultima trecere a mai câștigat 2. Cele 33 de PDF-uri „nesigure"
+    sunt fișierele NOASTRE (nu poate fi altă pagină), dar unele țin mai multe predici într-un
+    fișier, deci fără potrivirea fragmentului nu se știe unde se taie; iar glifele stricate din
+    extracție (ț → „ i") fac potrivirea imposibilă. **De hotărât cu userul**: se acceptă PDF-ul
+    întreg acolo unde e o singură predică? Cele 53 de pagini „nesigure" sunt, la verificare pe
+    eșantion, texte diferite de ce s-a citit (alt articol despre același sfânt, sinaxar) — corect
+    lăsate ca fragment.
+    ⚠️ **3 perechi din același număr au același titlu** (13.07.2020 Sofronie/Paisie, 07.04.2020,
+    02.04.2025): buletinul avea un titlu de secțiune peste două texte, iar al doilea l-a moștenit.
+    Textul adus e cel bun (proba a ținut), titlul nu — de îndreptat de mână, 3 rânduri.
     ⚠️ Erorile rămase sunt reale: gazde dispărute (comuniune.ro, renasterea.net, tripod) și 404.
     ⚠️ `--reia` = tot ce nu e „gata" (netras, eroare, nesigur, fără text); `--refa` = tot.
   - ✅ **NORMALIZARE** (user, 01:13: „referințele păstrează-le, dar imaginile șterge-le și adresele
