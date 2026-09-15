@@ -414,7 +414,7 @@ export default {
     // un modul pornit costa bani la fiecare apasare.
     if (cale === '/module') {
       const potModule = await authz.can(principal, 'modules.manage', SCOPE_GLOBAL)
-      const comuneAici = comune(env, nav, principal.email, eAdmin, sesiune, adresaPaginii(cfg, url))
+      const comuneAici = comune(env, nav, eAdmin, sesiune, adresaPaginii(cfg, url))
       if (!potModule.allowed) {
         return html(
           pagina({ ...comuneAici, corp: `<h2>Module</h2>${alerta('rea', 'Îți trebuie permisiunea <code>modules.manage</code>.')}` }),
@@ -459,7 +459,7 @@ export default {
 
     // ------------------------------------------------------------- oameni
     if (cale === '/oameni') {
-      const comuneAici = comune(env, nav, principal.email, eAdmin, sesiune, adresaPaginii(cfg, url))
+      const comuneAici = comune(env, nav, eAdmin, sesiune, adresaPaginii(cfg, url))
       const potNumi = await authz.can(principal, 'roles.manage', SCOPE_GLOBAL)
       if (!potNumi.allowed) {
         return html(
@@ -517,7 +517,7 @@ export default {
      * `communication-worker`, ca pana acum.
      */
     if (cale === '/dispecerat') {
-      const comuneAici = comune(env, nav, principal.email, eAdmin, sesiune, adresaPaginii(cfg, url))
+      const comuneAici = comune(env, nav, eAdmin, sesiune, adresaPaginii(cfg, url))
       const potVedea = await authz.can(principal, 'communication.create', SCOPE_GLOBAL)
       if (!potVedea.allowed) {
         return html(
@@ -602,7 +602,7 @@ export default {
     if (!decizie.allowed) {
       return html(
         pagina({
-          ...comune(env, nav, principal.email, eAdmin, sesiune, adresaPaginii(cfg, url)),
+          ...comune(env, nav, eAdmin, sesiune, adresaPaginii(cfg, url)),
           corp: `<h2>Administrare</h2>
             ${alerta('rea', 'Nu ai permisiunea <code>audit.read</code>.')}
             <p class="ajutor">Ești autentificat ca ${esc(principal.email)}, dar fără drepturile necesare.
@@ -643,7 +643,7 @@ export default {
 
       return html(
         pagina({
-          ...comune(env, nav, principal.email, eAdmin, sesiune, adresaPaginii(cfg, url)),
+          ...comune(env, nav, eAdmin, sesiune, adresaPaginii(cfg, url)),
           corp: `
 <h2>Administrare</h2>
   <p>Ești autentificat ca <strong>${esc(principal.email)}</strong> — fără să te fi
@@ -667,7 +667,7 @@ export default {
       log.error('eroare la citirea panoului', { eroare: e instanceof Error ? e.message : String(e) })
       return html(
         pagina({
-          ...comune(env, nav, principal.email, eAdmin, sesiune, adresaPaginii(cfg, url)),
+          ...comune(env, nav, eAdmin, sesiune, adresaPaginii(cfg, url)),
           corp: `${alerta("rea", "Nu am putut citi datele panoului.")}`,
         }),
         500,
@@ -680,13 +680,14 @@ export default {
 function comune(
   env: Env,
   nav: ReturnType<typeof navigatieDin>,
-  email: string,
   eAdmin: boolean,
   sesiune: SesiuneCurenta,
   spre: string,
 ) {
   return {
-    nume: 'ADMINISTRARE',
+    // ⚠️ In antet scrie ADMIN, nu ADMINISTRARE (user, 15.09.2026: „e prea lung acum") — numele
+    // intreg a ramas doar in `titlu`, adica in <title>.
+    nume: 'ADMIN',
     titlu: 'Administrarea platformei',
     acasa: `${nav.admin}/`,
     urlPlatforma: nav.home || '/',
@@ -695,7 +696,9 @@ function comune(
     modificata: dataVersiunii(env.VERSIUNE),
     cont: {
       intrat: true,
-      nume: email,
+      // Numele din meniul contului se scrie la fel ca in restul aplicatiilor: numele omului, si
+      // abia daca lipseste adresa lui (user, 15.09.2026). Pana acum aici era doar e-mailul.
+      nume: sesiune.user?.displayName ?? sesiune.user?.email ?? 'Cont',
       admin: eAdmin,
       urlCont: nav.cont,
       urlAdmin: nav.admin,
