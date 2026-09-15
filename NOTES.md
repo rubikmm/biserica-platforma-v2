@@ -931,8 +931,14 @@ download care adună butoanele").
    fără `:hover`, fără `cursor:pointer`. Forma scurtă („Săpt. curentă") se scrie alături și o alege
    CSS-ul sub 600 px; datele stau în `title`;
 3. **săgeata-dreapta** = săptămâna viitoare, **numai iconița, la orice lățime** (cuvintele ei s-au
-   mutat în zona de scris — scrise în amândouă, ar fi spus de două ori același lucru);
-4. **Arhiva** (iconița cutiei, numai la admini);
+   mutat în zona de scris — scrise în amândouă, ar fi spus de două ori același lucru).
+   ⚠️ **Desenul stă SINGUR în buton, fără niciun înveliș** (18:28: „săgeata … nu e centrată vertical").
+   Avea un `<span class="sgt">` moștenit de la Tipic, unde segmentul poartă și cuvântul „Mâine"; aici
+   cuvântul a ieșit și învelișul rămas era chiar pricina abaterii: un copil flexibil care ține un desen
+   **în linie** e o LINIE DE SCRIS, deci sub săgeată rămâne locul cozilor literelor. Măsurat: **9 sus /
+   13 jos** cu înveliș, **10,5 / 10,5** fără el — aceleași cifre ca la cutia Arhivei, care n-a avut
+   niciodată înveliș. **Regula**: un segment cu o singură iconiță nu primește `<span>` în jurul ei;
+4. **Arhiva** — **CHEIA care coboară fâșia anilor** (numai la admini), vezi mai jos;
 5. **întrerupătorul „Calendar"**, intrat în pastilă;
 6. **butonul de DESCĂRCARE**, ultimul (numai la admini), cu meniul celor trei hârtii sub el.
 
@@ -970,6 +976,32 @@ atunci când dau înapoi, să se vadă unde am apăsat… doar pe moment". `:vis
 „înapoi": pagina vine din **bfcache** și browserul nu repictează starea vizitat. Acum clasa se pune
 **la apăsare**, deci la întoarcerea din bfcache e deja în DOM; dacă pagina chiar se reîncarcă, se
 reface din `sessionStorage`, **o singură dată** (cheia se șterge la folosire).
+
+**⚠️ CHEIA ARHIVEI ȘI FÂȘIA ANILOR** (15.09.2026, 18:28: „iconița de arhivă să afișeze anii cum sunt
+lunile în Calendar"; ales din trei variante — „bară de ani sub antet"). Iconița cutiei **nu mai duce
+dintr-o apăsare la `/arhiva`**: e o cheie (`#ani-cheie`, `aria-expanded`) care coboară **bara a doua**
+de sub rândul de unelte (`.bara-ani`, `baraAnilor`), fâșie derulabilă stânga-dreapta cu anii
+descrescător; un an duce la `/arhiva?an=<an>`. E aceeași unealtă ca `baraLunilor` din Calendar,
+copiată cu anii în locul lunilor — aceleași săgeți ‹ ›, scrise de JS **numai dacă anii chiar nu încap**
+(pe desktop încap toți; pe un telefon de 390 se văd vreo patru și jumătate).
+
+- **`hidden` îl scrie SERVERUL**, la fiecare pagină: fâșia se strânge singură după alegerea unui an,
+  fără nicio linie de JS — alegerea e o navigare, iar pagina următoare se naște cu bara sus.
+- ⚠️ **Așezarea anului deschis la mijloc se face DUPĂ coborâre** (cât timp bara e `hidden`, `offsetLeft`
+  și `clientWidth` sunt 0), iar `.fasie` are `position:relative` — fără el `offsetParent` ajunge pagina
+  și fâșia se deschide derulată la capăt. Amândouă sunt capcane plătite la Calendar.
+- **Anii vin din baza de date** (`aniiArhivei`), deci un an nou apare singur. ⚠️ Fâșia stă în antetul
+  **oricărei** pagini, nu doar pe `/arhiva`, așa că lista se cere **o dată cu săptămâna**, în același
+  `Promise.all`, și **numai pentru admini** — pagina nu așteaptă nicio interogare în plus.
+- ⚠️ **Fără ani (paginile care nu întreabă baza — mesajele de eroare), segmentul rămâne LINKUL** de
+  până acum spre `/arhiva`: o cheie care ar coborî o fâșie goală nu face nimic la apăsare, iar butonul
+  nu se ascunde niciodată (regula rândului de unelte).
+- **Aprins de la fâșie** (`aria-expanded="true"`) și **marcat de loc** (`.activ`, pe pagina Arhivei și
+  pe săptămânile deschise din ea) sunt două lucruri: al doilea rămâne și cu fâșia strânsă.
+- **Drumul înapoi n-a slăbit**: săptămânile deschise din arhivă își păstrează butonul „← Înapoi la
+  arhivă" de deasupra titlului, care le duce chiar unde rămăsese omul.
+- **Rândul de ani din pagina arhivei** (`nav.capitole`) **a rămas** — pe `/arhiva` el e selectorul la
+  vedere, fâșia din antet e scurtătura de pe orice pagină.
 
 **Pagina arhivei se cheamă doar „Arhiva"** (nu „Arhiva programelor"); sub titlu a rămas doar
 numărătoarea („654 săptămâni, din 2014 până azi") — propoziția despre importul din situl vechi a ieșit
@@ -1637,6 +1669,19 @@ forța antetul `Host`**.
 
 ### 2026-09-15
 
+- **SĂGEATA CENTRATĂ ȘI CHEIA ARHIVEI** (user, 18:28, două puncte). Program **0.7.3** pe producție.
+  - **Săgeata „săptămâna viitoare" nu era centrată vertical**: vina o purta un `<span class="sgt">`
+    moștenit de la Tipic, rămas în jurul desenului după ce cuvintele au ieșit de pe buton. Un înveliș
+    flexibil cu un desen **în linie** e o linie de scris, deci sub săgeată stătea locul cozilor
+    literelor. Măsurat cu Browser Rendering (`/content` + script injectat): **9 sus / 13 jos** înainte,
+    **10,5 / 10,5** după — la fel ca la cutia Arhivei de lângă, care n-a avut niciodată înveliș.
+  - **Iconița Arhivei a devenit CHEIE**: coboară o **bară a doua cu anii**, sub rândul de unelte, exact
+    cum coboară cheia Calendarului șirul lunilor („să afișeze anii cum sunt lunile în Calendar").
+    L-am întrebat între trei variante și a ales-o pe asta. Amănuntele, în „Rândul de unelte din antet".
+    Anii vin din bază, se cer **în același `Promise.all`** cu săptămâna și **numai pentru admini**, deci
+    pagina nu așteaptă nimic în plus; fără ani, segmentul rămâne linkul de până acum.
+  - ⚠️ **A treia oară backtick-ul din comentariul CSS** (`tsc` l-a prins pe loc, două erori TS1005 pe o
+    linie care n-avea nicio legătură). În `stil`/template literals: fără accente grave, oriunde.
 - **ANTETUL PROGRAMULUI, REFĂCUT DUPĂ CHIPUL CALENDARULUI** (user, 17:52, în șase puncte; la 18:08 a
   mutat și descărcarea în pastilă). Program **0.7.1** pe producție. Ordinea de acum: **bulina · zona de
   scris · săgeata-dreapta · Arhiva · întrerupătorul · descărcarea**, toate în pastilă, iar afară numai

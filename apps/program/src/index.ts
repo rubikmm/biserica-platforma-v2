@@ -213,7 +213,14 @@ export default {
         const cerut = mSapt ? dataCeruta(mSapt[1]!, azi) : azi
         if (!cerut) return html(paginaMesaj(ctx, 'Dată greșită', 'Adresa e /saptamana/AAAA-LL-ZZ.', 'rea', meniuAzi()), 404)
         const luni = luneaSaptamanii(cerut)
-        const s = await saptamanaOriPropunere(env, luni, harta)
+        // ⚠️ Anii arhivei se cer O DATA CU saptamana, nu dupa ea: fasia care coboara din cheia
+        // Arhivei (15.09.2026, 18:28) sta in antetul ORICAREI pagini, nu doar pe /arhiva. E o
+        // intrebare numai a adminilor — cheia e a lor — si merge in paralel cu saptamana, ca pagina
+        // sa nu astepte cu o interogare mai mult decat pana acum.
+        const [s, ani] = await Promise.all([
+          saptamanaOriPropunere(env, luni, harta),
+          ctx.eAdmin ? aniiArhivei(env.DB) : Promise.resolve([] as number[]),
+        ])
         // foaia A4 de pe usa exista doar pentru saptamanile validate; din propunere iese ciorna ei
         const foaie = s.rand ? (s.rand.stare === 'validat' ? `/v1/foaie/${luni}` : null) : `/v1/propunere/${luni}`
         return html(
@@ -229,7 +236,7 @@ export default {
             azi,
             // `?din=arhiva` — pus de linkurile din pagina arhivei; de el atarna butonul „Înapoi la
             // arhivă" si marcajul ramas pe segmentul Arhivei (user, 11.09.2026, 16:24)
-            meniu: { luni, foaie, azi, dinArhiva: url.searchParams.get('din') === 'arhiva' },
+            meniu: { luni, foaie, azi, ani, dinArhiva: url.searchParams.get('din') === 'arhiva' },
             nelamuriri: s.propunere?.nelamuriri,
           }),
           200,

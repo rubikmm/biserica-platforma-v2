@@ -88,6 +88,17 @@ export interface Meniu {
    * descarcare da mereu varianta pe O COLOANA, fiindca alta nu se poate vedea.
    */
   calendar?: boolean
+  /**
+   * ANII ARHIVEI, descrescator — sirul care coboara din cheia Arhivei (user, 15.09.2026, 18:28:
+   * „iconița de arhivă să afișeze anii cum sunt lunile în Calendar"). Vezi `baraAnilor`.
+   *
+   * ⚠️ GOL INSEAMNA „fara bara": atunci segmentul Arhivei ramane LINKUL de pana acum, catre /arhiva.
+   * Asa raman intregi paginile care nu intreaba baza de date (mesajele de eroare) si cele ale unui
+   * enorias — o cheie care ar cobora o fasie goala e mai rea decat un link cinstit.
+   */
+  ani?: number[]
+  /** anul deschis in arhiva, marcat rosu in fasie (ca luna deschisa din bara Calendarului) */
+  anDeschis?: number
 }
 
 const STARE: Record<string, string> = {
@@ -328,6 +339,53 @@ export const STIL = `
 .desc-meniu .poza-2 { display:none }
 body.cu-calendar .desc-meniu .poza-1 { display:none }
 body.cu-calendar .desc-meniu .poza-2 { display:flex }
+/* CHEIA ARHIVEI (15.09.2026, 18:28): cat timp fasia anilor e coborata, segmentul sta aprins — ca omul
+   sa stie de unde a iesit sirul. E aceeasi purtare ca la cheia lunilor din Calendar.
+   ⚠️ Aprinderea de la fasie (aria-expanded) si marcajul locului (.activ, pe pagina Arhivei si pe
+   saptamanile deschise din ea) sunt DOUA lucruri: al doilea ramane si cu fasia stransa. */
+.btns .pastila button.arh { cursor:pointer }
+.btns .pastila button.arh:hover { color:var(--rosu); background:var(--paper) }
+.btns .pastila .arh[aria-expanded="true"] { color:var(--rosu);
+                 background:color-mix(in srgb, var(--rosu) 11%, transparent) }
+
+/* BARA A DOUA — ANII ARHIVEI, sub randul de unelte, ascunsa pana se apasa cheia (user, 15.09.2026,
+   18:28: „iconița de arhivă să afișeze anii cum sunt lunile în Calendar"). Chenarul si rotunjirea sunt
+   ale pastilei de deasupra, ca sirul sa se citeasca drept o prelungire a ei, nu un obiect strain.
+   ⚠️ Aici overflow:hidden E BUN (spre deosebire de pastila, unde ar taia meniul descarcarii): din bara
+   nu atarna nimic, iar taierea e tocmai ce tine colturile rotunde peste fasia derulata. */
+.bara-ani { display:flex; align-items:stretch; margin:0 0 6px;
+            border:1px solid var(--rule); border-radius:10px; background:var(--tinta);
+            overflow:hidden }
+.bara-ani[hidden] { display:none }
+/* ⚠️ position:relative NU e de podoaba: JS-ul aduce anul deschis la mijloc cu offsetLeft, iar acela se
+   masoara fata de cel mai apropiat stramos asezat. Fara el, offsetParent ajunge pagina si fasia se
+   deschide derulata la capat (capcana platita la Calendar). */
+.bara-ani .fasie { flex:1 1 auto; min-width:0; position:relative;
+                   overflow-x:auto; overscroll-behavior-x:contain;
+                   -webkit-overflow-scrolling:touch; scrollbar-width:none }
+.bara-ani .fasie::-webkit-scrollbar { display:none }
+.bara-ani .ani { display:flex; align-items:stretch; gap:0; width:max-content; padding:0 }
+/* ANII: text simplu in capsula — fara chenar, fara fundal, fara rotunjire a lor; despartitura e o
+   linie de 1 px, ca intre segmentele pastilei. Cifrele nu se stramteaza cat lunile (patru semne, nu
+   trei prescurtate), dar nici nu sunt treisprezece: arhiva tine de obicei sub zece ani. */
+.an-buton { flex:none; display:flex; align-items:center; justify-content:center;
+            color:var(--soft); text-decoration:none; background:transparent;
+            border:0; border-radius:0; padding:11px 13px;
+            font:600 12.5px/1 ui-sans-serif,system-ui; letter-spacing:.03em; white-space:nowrap }
+.an-buton + .an-buton { border-left:1px solid var(--rule) }
+.an-buton:hover { color:var(--rosu); background:var(--paper) }
+/* anul deschis: rosu si plin, ca segmentul pe care esti din pastila */
+.an-buton.activ { color:var(--rosu); font-weight:700;
+                  background:color-mix(in srgb, var(--rosu) 11%, transparent) }
+/* Sagetile — segmentele de la capetele barei, pentru cine n-are deget. JS-ul le ascunde cu totul cand
+   anii incap (pe desktop incap), ca sa nu stea doua segmente moarte in bara. */
+.bara-ani .sageata { flex:none; border:0; background:transparent; color:var(--faint); cursor:pointer;
+                     font:300 19px/1 ui-sans-serif,system-ui; padding:0 6px; border-radius:0 }
+.bara-ani .sageata + .fasie, .bara-ani .fasie + .sageata { border-left:1px solid var(--rule) }
+.bara-ani .sageata:hover:not([disabled]) { color:var(--rosu); background:var(--paper) }
+.bara-ani .sageata[disabled] { opacity:.25; cursor:default }
+.bara-ani .sageata[hidden] { display:none }
+
 /* ⚠️ PE TELEFON, TOT RANDUL STA PE O SINGURA LINIE, SI LA ADMIN (user, 15.09.2026, 18:20: „nu trebuie
    să fie pe mai multe rânduri meniul mai ales la admini"). Ce cade e scrisul BUTOANELOR, niciodata
    zona de scris (regula Calendarului: „pe mobil, neapărat să se vadă scrisul"): abonarea ramane numai
@@ -637,6 +695,55 @@ export const SCRIPT = `
     if (ev.key === "Escape" && d.open) { d.open = false; d.querySelector("summary").focus(); }
   });
 })();
+(function(){
+  // FASIA ANILOR, coborata din cheia Arhivei (user, 15.09.2026, 18:28) — aceeasi purtare ca bara
+  // lunilor din Calendar, de unde e luata:
+  //   - cheia o coboara si o ridica (bara porneste ascunsa, scrisa asa de server);
+  //   - anul deschis se aduce la MIJLOCUL fasiei, dar numai DUPA ce bara e la vedere: cat timp e
+  //     ascunsa, offsetLeft si clientWidth sunt 0 si fasia s-ar deschide derulata la cap;
+  //   - sagetile se scriu doar daca anii chiar nu incap (pe desktop incap toti, iar doua sageti
+  //     moarte ar fi doua segmente in plus).
+  // Nu se inchide la alegerea unui an: alegerea e o navigare, iar pagina urmatoare vine cu bara sus.
+  var bara = document.getElementById("bara-ani");
+  var cheie = document.getElementById("ani-cheie");
+  var fasie = bara ? bara.querySelector(".fasie") : null;
+  if (!bara || !cheie || !fasie) return;
+  function aseaza(){
+    var deschis = fasie.querySelector(".an-buton.activ");
+    if (deschis) fasie.scrollLeft = deschis.offsetLeft - (fasie.clientWidth - deschis.offsetWidth) / 2;
+  }
+  var sageti = ["‹", "›"].map(function(semn, i){
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "sageata";
+    b.textContent = semn;
+    b.setAttribute("aria-label", i ? "anii următori" : "anii dinainte");
+    b.addEventListener("click", function(){
+      fasie.scrollBy({ left: (i ? 1 : -1) * Math.max(120, fasie.clientWidth * 0.6), behavior: "smooth" });
+    });
+    return b;
+  });
+  function capete(){
+    var incap = fasie.scrollWidth <= fasie.clientWidth + 2;
+    sageti[0].hidden = incap;
+    sageti[1].hidden = incap;
+    sageti[0].disabled = fasie.scrollLeft < 2;
+    sageti[1].disabled = fasie.scrollLeft > fasie.scrollWidth - fasie.clientWidth - 2;
+  }
+  bara.insertBefore(sageti[0], fasie);
+  bara.appendChild(sageti[1]);
+  fasie.addEventListener("scroll", capete, { passive: true });
+  window.addEventListener("resize", capete);
+  // ⚠️ O data si la incarcare: cat timp bara e ascunsa latimile sunt 0, deci socoteala iese „incap"
+  // si sagetile pornesc ascunse. Fara ea, ele s-ar vedea o clipa la prima coborare a fasiei.
+  capete();
+  cheie.addEventListener("click", function(){
+    var deschisa = !bara.hidden;
+    bara.hidden = deschisa;
+    cheie.setAttribute("aria-expanded", deschisa ? "false" : "true");
+    if (!deschisa) { aseaza(); capete(); }
+  });
+})();
 `
   // ABONAREA — butonul care deschide fereastra si paza bifei termenilor stau in `@xc/abonare`,
   // o data pentru toata platforma (user, 15.09.2026).
@@ -727,7 +834,14 @@ function navigarea(ctx: Ctx, m: Meniu): string {
   // săgeata dreapta — însemna săptămâna viitoare"). Cuvintele lui s-au mutat in zona de scris de
   // langa, care spune oricum pe ce saptamana esti; scrise in amandoua locurile, ar fi spus de doua
   // ori acelasi lucru si ar fi umflat randul. Numele intreg ramane in `title` si `aria-label`.
-  const scris = `<span class="sgt">${IC_INAINTE}</span>`
+  // ⚠️ SAGEATA STA SINGURA IN BUTON, FARA NICIUN INVELIS (user, 15.09.2026, 18:28: „săgeata … nu e
+  // centrată vertical"). Avusese un `<span class="sgt">` mostenit de la Tipic, unde segmentul poarta
+  // si cuvantul „Mâine"; aici cuvantul nu mai e, iar spanul ramas era pricina abaterii: invelisul e
+  // copil flexibil, deci cutia lui e o LINIE de scris, iar sageata, desen in linie, sta pe linia de
+  // baza si lasa sub ea locul cozilor literelor (~4 px). Centrat, invelisul ducea sageata cu ~2 px
+  // mai sus. Desenul pus de-a dreptul in buton se blochifica singur si se centreaza la milimetru —
+  // exact cum sta cutia Arhivei de langa el, care n-a avut niciodata invelis.
+  const scris = IC_INAINTE
   const viitoare = m.luni === urmatoarea
     ? `<button type="button" class="btn viit activ" aria-disabled="true" aria-current="page"`
       + ` title="Ești pe săptămâna viitoare, ${zile}" aria-label="săptămâna viitoare, ${zile}">${scris}</button>`
@@ -738,14 +852,23 @@ function navigarea(ctx: Ctx, m: Meniu): string {
       + ` title="Ești pe săptămâna de azi" aria-label="săptămâna de azi"></button>`
     : `<a class="btn punct" href="${p}/saptamana/${aAzi}" title="Treci la săptămâna de azi"`
       + ` aria-label="săptămâna de azi"></a>`
-  // ⚠️ Pe o saptamana deschisa DIN arhiva, segmentul ramane MARCAT (user, 11.09.2026, 16:24: „să se
-  // vadă rămas încercuit butonul pe care am apăsat"), dar ramane si APASABIL — altfel omul ar avea
-  // marcajul si n-ar avea drumul. Rosu plin, ca pe pagina arhivei; neapasabil e numai acolo.
+  // ⚠️ CHEIA ARHIVEI, din 15.09.2026, 18:28 (user: „iconița de arhivă să afișeze anii cum sunt lunile
+  // în Calendar"): iconita nu mai duce dintr-o apasare la /arhiva, ci COBOARA FASIA ANILOR de sub
+  // rand (`baraAnilor`), exact cum cheia Calendarului coboara sirul lunilor. Drumul la arhiva a ramas
+  // intreg — trece printr-un an —, iar saptamanile deschise din arhiva isi pastreaza butonul „Înapoi
+  // la arhivă" de deasupra titlului, care le duce chiar unde ramasesera.
+  // ⚠️ Marcat rosu pe pagina Arhivei si pe saptamanile deschise din ea (user, 11.09.2026, 16:24: „să
+  // se vadă rămas încercuit butonul pe care am apăsat"). Marcajul locului si aprinderea de la fasia
+  // coborata sunt doua lucruri deosebite: al doilea sta pe `aria-expanded`, vezi STIL.
+  // ⚠️ Fara ani (pagini care nu intreaba baza) ramane LINKUL de pana acum: o cheie fara fasie n-ar
+  // face nimic la apasare, iar butonul nu se ascunde niciodata (regula randului de unelte).
+  const marcat = m.arhiva || m.dinArhiva ? ' activ' : ''
   const arhiva = !ctx.eAdmin ? ''
-    : m.arhiva
-      ? `<button type="button" class="btn arh activ" aria-disabled="true" aria-current="page"`
-        + ` title="Ești în arhiva programelor" aria-label="Arhiva programelor">${IC_ARHIVA}</button>`
-      : `<a class="btn arh${m.dinArhiva ? ' activ' : ''}" href="${p}/arhiva"`
+    : m.ani?.length
+      ? `<button type="button" class="btn arh${marcat}" id="ani-cheie" aria-expanded="false" aria-controls="bara-ani"`
+        + ` title="${m.arhiva ? 'Ești în arhiva programelor — alege anul' : 'Arhiva programelor — alege anul'}"`
+        + ` aria-label="Arhiva programelor — alege anul">${IC_ARHIVA}</button>`
+      : `<a class="btn arh${marcat}" href="${p}/arhiva"`
         + ` title="${m.dinArhiva ? 'Săptămâna asta e deschisă din arhivă — întoarce-te la ea' : 'Arhiva programelor — alege săptămâna'}"`
         + ` aria-label="Arhiva programelor">${IC_ARHIVA}</a>`
   // ORDINEA CERUTA (user, 15.09.2026): bulina · zona de scris · sageata-dreapta · Arhiva ·
@@ -821,6 +944,37 @@ function intrerupatorCalendar(m: Meniu): string {
   return `<button type="button" class="btn mic com-cal" id="b-calendar" aria-pressed="true"`
     + ` title="Ascunde calendarul zilei" aria-label="Calendarul zilei, lângă program">`
     + `${IC_DOUA_COLOANE}<span class="bec" aria-hidden="true"></span></button>`
+}
+
+/**
+ * BARA A DOUA — ANII ARHIVEI, sub randul de unelte, ascunsa pana se apasa cheia Arhivei (user,
+ * 15.09.2026, 18:28: „iconița de arhivă să afișeze anii cum sunt lunile în Calendar").
+ *
+ * E aceeasi unealta ca `baraLunilor` din Calendar, cu anii in locul lunilor: aceeasi fasie derulabila
+ * stanga-dreapta, aceleasi sageti ‹ › scrise de JS numai daca e ceva de derulat, acelasi chenar de
+ * pastila, ca cele doua aplicatii sa se recunoasca. Ce se schimba e numai ce scrie pe segmente.
+ *
+ * ⚠️ ANII VIN DIN BAZA (`aniiArhivei`), descrescator — cel de care e nevoie mereu, primul. Nu se
+ * scrie niciun an in cod: cand parohia mai adauga un an, el apare singur in fasie.
+ *
+ * ⚠️ `hidden` il scrie SERVERUL, la fiecare pagina: asa fasia se strange singura dupa ce omul alege un
+ * an, fara nicio linie de JS — alegerea e o navigare, iar pagina urmatoare se naste cu bara sus.
+ * (Aceeasi socoteala ca la Calendar.)
+ *
+ * ⚠️ Numai pentru admini, ca si cheia care o coboara: arhiva a ramas a lor de la 11.09.2026.
+ */
+function baraAnilor(ctx: Ctx, m: Meniu): string {
+  if (!ctx.eAdmin || !m.ani?.length) return ''
+  const p = esc(ctx.prefix)
+  const butoane = m.ani
+    .map((a) => {
+      const activ = m.arhiva && m.anDeschis === a ? ' activ' : ''
+      return `<a class="an-buton${activ}" href="${p}/arhiva?an=${a}" data-an="${a}"`
+        + `${activ ? ' aria-current="page"' : ''}>${a}</a>`
+    })
+    .join('')
+  return `<div class="bara-ani" id="bara-ani" hidden><div class="fasie">`
+    + `<nav class="ani" aria-label="Anii arhivei">${butoane}</nav></div></div>`
 }
 
 /**
@@ -959,12 +1113,17 @@ const ABONAMENT = abonamentul('program')
 
 /**
  * Antetul intreg al paginilor de om: randul de unelte (cu amandoua grupurile) si JS-ul intrerupatorului.
- * In `subantet` sta fereastra de abonare — inchisa, deci nevazuta; `<dialog>`-ul se deschide peste
- * pagina, asa ca locul lui in pagina nu conteaza, numai sa fie scris o data. (Slotul statea gol de la
- * 11.09.2026, de cand hartiile au urcat in rand si casuta de sub antet a disparut.)
+ * In `subantet` stau doua lucruri: BARA ANILOR, ascunsa pana se apasa cheia Arhivei (15.09.2026), si
+ * fereastra de abonare — inchisa, deci nevazuta; `<dialog>`-ul se deschide peste pagina, asa ca locul
+ * lui in pagina nu conteaza, numai sa fie scris o data. Bara, insa, trebuie sa stea CHIAR ACOLO: sub
+ * randul de unelte, in antetul lipit de marginea de sus, ca la Calendar.
  */
 function antetul(ctx: Ctx, m: Meniu) {
-  return { unelte: unelte(ctx, m), subantet: fereastraProgramului(ctx), scripturi: SCRIPT }
+  return {
+    unelte: unelte(ctx, m),
+    subantet: `${baraAnilor(ctx, m)}\n    ${fereastraProgramului(ctx)}`,
+    scripturi: SCRIPT,
+  }
 }
 
 /** Fereastra, cu adresa contului completata cand omul e intrat, si cu termenii platformei. */
@@ -1403,7 +1562,9 @@ ${luni || '<p class="gol">Niciun program în anul acesta.</p>'}</section>`
   return pagina({
     ...comune(o.ctx),
     titluPagina: 'Arhiva',
-    ...antetul(o.ctx, { ...o.meniu, arhiva: true }),
+    // anii merg SI in antet, in fasia care coboara din cheia Arhivei (15.09.2026, 18:28); `anDeschis`
+    // marcheaza acolo anul de pe ecran, ca luna deschisa din bara Calendarului
+    ...antetul(o.ctx, { ...o.meniu, arhiva: true, ani: o.ani, anDeschis: o.an }),
     corp: `<h2>Arhiva</h2>
 <p class="marunt">${o.total} săptămâni, din ${o.deLa ? esc(o.deLa.slice(0, 4)) : '—'} până azi.</p>
 ${butoane}
