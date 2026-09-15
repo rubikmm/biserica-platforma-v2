@@ -1601,6 +1601,21 @@ forța antetul `Host`**.
 
 ### 2026-09-15
 
+- **⚠️ Dungă roșie în mijlocul pastilei** (user: „pare o linie roșie border left pe cruce"). Pricina:
+  două reguli scrise pe vremea când crucea era buton de sine stătător, cu chenar de jur împrejur —
+  `.btns .sarb:hover` și `.btns .sarb.activ`, amândouă cu `border-color:var(--rosu)`. Puneau roșul pe
+  TOATE laturile; de când crucea e **segment al pastilei** și singura ei latură e linia despărțitoare
+  din stânga, roșul acela nu mai spunea „butonul e aprins", ci desena o dungă roșie pe mijloc.
+  **Regula generală, de ținut minte**: când un buton devine segment într-un grup, `border-color`-ul
+  lui de stare trebuie recitit — ce era chenar devine despărțitură, și despărțitura e a grupului, nu
+  a butonului. Roșul a rămas unde spune ceva: pe iconiță și pe fundalul palid.
+  ⚠️ Se atinge NUMAI culoarea chenarului. Dacă se scrie și `border-radius` în selectorul de `:hover`,
+  colțul din dreapta al pastilei se îndreaptă la trecerea cu mausul (`.pastila > :last-child` are
+  specificitate mai mică și e acoperită).
+- **`<summary>` fără `role="button"`**: browserul îi dă singur rolul de deschizător **și** starea
+  deschis/închis; scris de mână, rolul o stinge, iar cititorul de ecran nu mai spune dacă meniul e
+  deschis. Semantica nativă e mai bogată decât una pusă peste ea.
+
 - **⚠️ CURSA DERULĂRII LA ZIUA DE AZI — reparată.** La PRIMA venire în pagină ziua rămânea lipită de
   antet, nu la mijloc; abia a doua apăsare pe „Astăzi" o centra (user, 15.09.2026, întâi pe telefon,
   apoi confirmat și pe desktop — **nu era o boală a telefonului, era o cursă, iar cursele nu țin de
