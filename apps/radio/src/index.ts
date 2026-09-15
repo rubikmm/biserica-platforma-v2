@@ -48,12 +48,16 @@ import { type EnvCeas, radioul } from './ceas.js'
 import { biblioteca, fisier } from './depozit.js'
 import { type EnvLiveDeparte, cereLive, emisia, starePanouDeparte } from './live-departe.js'
 import { type Ctx, pagina, paginaMesaj, spreCont } from './pagina.js'
+import { ruteazaSetari } from '@xc/setari'
 
 export { Radio } from './ceas.js'
 
 export interface Env extends EnvCeas, EnvLiveDeparte {
   IDENTITATE: Fetcher
   AUTORIZARE: Fetcher
+  /** Venite pe 15.09.2026, odata cu pagina de Setari: abonarile si jurnalul. */
+  COMUNICARE: Fetcher
+  AUDIT: Fetcher
   MEDIU: string
   ORIGINE_PUBLICA: string
   DOMENIU_COOKIE: string
@@ -155,6 +159,31 @@ export default {
         veziCa: sesiune.veziCa,
         poateVedeaCa: sesiune.poateVedeaCa,
         spre: adresaPaginii(cfg, url),
+      }
+
+      /*
+       * SETARILE — un singur loc, `@xc/setari` (user, 15.09.2026). Se cheama INAINTEA panoului:
+       * `/setari` n-are nicio treaba cu `broadcast.manage`, e pagina oricui are cont.
+       * ⚠️ Bariera de origine pentru POST-urile ei: restul aplicatiei o pune pe fiecare ruta in
+       * parte (`/admin/comanda`), fiindca n-avea alt POST de om.
+       */
+      if (cale === '/setari' || cale.startsWith('/setari/')) {
+        if (req.method === 'POST') {
+          const problema = verificaCsrf(req, [cfg.ORIGINE_PUBLICA], cfg.MEDIU === 'dev')
+          if (problema) return html(paginaMesaj(ctx, 'Verificare de securitate', problema), 403, antete)
+        }
+        const raspunsSetari = await ruteazaSetari(req, cale, env, {
+          cod: 'radio',
+          nume: 'Radioul',
+          prefix,
+          cfg,
+          cid,
+          principal,
+          urlCont: nav.cont,
+          urlTermeni: `${nav.home || ''}/termeni`,
+          carcasa: (p) => pagina(ctx, { titluPagina: p.titluPagina, corp: p.corp, ...(p.scripturi ? { scripturi: p.scripturi } : {}) }),
+        })
+        if (raspunsSetari) return raspunsSetari
       }
 
       // ---------------------------------------------------- panoul

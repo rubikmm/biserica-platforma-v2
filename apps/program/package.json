@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@cloudflare/puppeteer": "^1.4.0",
+    "@xc/abonare": "workspace:*",
     "@xc/actiuni": "workspace:*",
     "@xc/auth": "workspace:*",
     "@xc/authorization": "workspace:*",
@@ -20,6 +21,7 @@
     "@xc/db": "workspace:*",
     "@xc/events": "workspace:*",
     "@xc/observability": "workspace:*",
+    "@xc/setari": "workspace:*",
     "@xc/ui": "workspace:*",
     "zod": "^4.1.5"
   }

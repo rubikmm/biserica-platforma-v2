@@ -18,7 +18,14 @@
     "EMAIL_SUPERADMIN": "rubikmm@gmail.com"
   },
 
-  "services": [{ "binding": "IDENTITATE", "service": "xc-identity" }],
+  // AUTORIZARE, COMUNICARE si AUDIT au venit pe 15.09.2026, odata cu pagina de Setari: ea cere
+  // cheile omului (autorizare), abonarile lui (comunicare) si jurnalul (audit).
+  "services": [
+    { "binding": "IDENTITATE", "service": "xc-identity" },
+    { "binding": "AUTORIZARE", "service": "xc-authz" },
+    { "binding": "COMUNICARE", "service": "xc-communication" },
+    { "binding": "AUDIT", "service": "xc-audit" }
+  ],
 
   "env": {
     "staging": {
@@ -43,7 +50,12 @@
         "URL_RADIO": "https://radio.staging.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.staging.sfantul-ilie.ro"
       },
-      "services": [{ "binding": "IDENTITATE", "service": "xc-identity-staging" }],
+      "services": [
+        { "binding": "IDENTITATE", "service": "xc-identity-staging" },
+        { "binding": "AUTORIZARE", "service": "xc-authz-staging" },
+        { "binding": "COMUNICARE", "service": "xc-communication-staging" },
+        { "binding": "AUDIT", "service": "xc-audit-staging" }
+      ],
       // Subdomeniul `staging.` — nou, nu atinge nicio inregistrare DNS a V1.
       "routes": [{ "pattern": "staging.sfantul-ilie.ro", "custom_domain": true }]
     },
@@ -69,7 +81,12 @@
         "URL_RADIO": "https://radio.sfantul-ilie.ro",
         "URL_ADMIN": "https://admin.sfantul-ilie.ro"
       },
-      "services": [{ "binding": "IDENTITATE", "service": "xc-identity-production" }]
+      "services": [
+        { "binding": "IDENTITATE", "service": "xc-identity-production" },
+        { "binding": "AUTORIZARE", "service": "xc-authz-production" },
+        { "binding": "COMUNICARE", "service": "xc-communication-production" },
+        { "binding": "AUDIT", "service": "xc-audit-production" }
+      ]
       // Apexul productiei e al WordPress-ului V1 pana la o decizie explicita.
     }
   }

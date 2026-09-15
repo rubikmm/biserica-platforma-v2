@@ -630,14 +630,35 @@ ${SCHEMA_CORP}`,
       )
     }
 
-    const decizie = await authz.can(principal, 'audit.read', SCOPE_GLOBAL)
+    /*
+     * ⚠️ POARTA PANOULUI NU MAI E `audit.read` (15.09.2026). Cheia aceea a ieșit din rolul de
+     * administrator, odată cu zona de loguri din Setări (user: „scot audit.read de la
+     * administrator") — iar pagina asta se sprijinea tocmai pe ea, deci părintele ar fi luat 403 pe
+     * TOT panoul: fără Oameni, fără Dispecerat, fără Module. Nu asta a cerut.
+     *
+     * De aceea poarta s-a mutat pe cheile FIECĂREI secțiuni: intri dacă ai măcar una, și vezi
+     * exact secțiunile pe care le poți folosi. Regula platformei: drepturile hotărăsc folosirea,
+     * nu se verifică niciodată `rol === 'admin'`.
+     */
+    const [potJurnal, potOameni, potComunica, potModule] = await Promise.all([
+      authz.can(principal, 'audit.read', SCOPE_GLOBAL),
+      authz.can(principal, 'roles.manage', SCOPE_GLOBAL),
+      authz.can(principal, 'communication.create', SCOPE_GLOBAL),
+      authz.can(principal, 'modules.manage', SCOPE_GLOBAL),
+    ])
+    const chei = {
+      jurnal: potJurnal.allowed,
+      oameni: potOameni.allowed,
+      comunica: potComunica.allowed,
+      module: potModule.allowed,
+    }
 
-    if (!decizie.allowed) {
+    if (!chei.jurnal && !chei.oameni && !chei.comunica && !chei.module) {
       return html(
         pagina({
           ...comune(env, nav, eAdmin, sesiune, adresaPaginii(cfg, url)),
           corp: `<h2>Administrare</h2>
-            ${alerta('rea', 'Nu ai permisiunea <code>audit.read</code>.')}
+            ${alerta('rea', 'Nu ai nicio permisiune de administrare.')}
             <p class="ajutor">Ești autentificat ca ${esc(principal.email)}, dar fără drepturile necesare.
             Asta confirmă totuși că sesiunea funcționează și pe această aplicație.</p>`,
         }),
@@ -646,17 +667,22 @@ ${SCHEMA_CORP}`,
     }
 
     try {
+      // ⚠️ Nu se cere ce n-are omul voie să vadă: fără cheie nu se face nici drumul la serviciu.
       const [raspunsAudit, raspunsLivrari, raspunsActiuni] = await Promise.all([
-        env.AUDIT.fetch('https://audit.intern/citeste', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ limita: 25 }),
-        }),
-        env.COMUNICARE.fetch('https://comunicare.intern/livrari', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ limita: 25 }),
-        }),
+        chei.jurnal
+          ? env.AUDIT.fetch('https://audit.intern/citeste', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ limita: 25 }),
+            })
+          : Promise.resolve(null),
+        chei.comunica
+          ? env.COMUNICARE.fetch('https://comunicare.intern/livrari', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ limita: 25 }),
+            })
+          : Promise.resolve(null),
         env.AUTOMATIZARE.fetch('https://automation.intern/actiuni', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -664,10 +690,10 @@ ${SCHEMA_CORP}`,
         }),
       ])
 
-      const audit = raspunsAudit.ok
+      const audit = raspunsAudit?.ok
         ? ((await raspunsAudit.json()) as { intrari: IntrareAuditRand[] }).intrari
         : []
-      const livrari = raspunsLivrari.ok
+      const livrari = raspunsLivrari?.ok
         ? ((await raspunsLivrari.json()) as { livrari: LivrareRand[] }).livrari
         : []
       const actiuni = raspunsActiuni.ok
@@ -685,16 +711,20 @@ ${SCHEMA_CORP}`,
     .join(' ')}</p>
   ${alerta('info', `Automatizarea a produs <strong>${actiuni.length}</strong> acțiuni până acum. Nicio comunicare reală nu a plecat: toate adaptoarele sunt în sandbox.`)}
 
-<p><a href="${prefix}/oameni">Oameni — rolurile pe platformă</a><br>
-<a href="${prefix}/dispecerat">Dispecerat — e-mailul și WhatsApp-ul parohiei</a><br>
-<a href="${prefix}/module">Module — pornirea și oprirea chatului</a><br>
-<a href="${prefix}/schema">Schema platformei — cum sunt legate toate pe Cloudflare</a></p>
+<p>${[
+    chei.oameni ? `<a href="${prefix}/oameni">Oameni — rolurile pe platformă</a>` : '',
+    chei.comunica ? `<a href="${prefix}/dispecerat">Dispecerat — e-mailul și WhatsApp-ul parohiei</a>` : '',
+    chei.module ? `<a href="${prefix}/module">Module — pornirea și oprirea chatului</a>` : '',
+    chei.jurnal ? `<a href="${prefix}/schema">Schema platformei — cum sunt legate toate pe Cloudflare</a>` : '',
+  ]
+    .filter(Boolean)
+    .join('<br>')}</p>
 
-<h3>Audit — ultimele acțiuni</h3>
-  ${tabelAudit(audit)}
+${chei.jurnal ? `<h3>Audit — ultimele acțiuni</h3>
+  ${tabelAudit(audit)}` : ''}
 
-<h3>Comunicare — livrări înregistrate</h3>
-  ${tabelLivrari(livrari)}`,
+${chei.comunica ? `<h3>Comunicare — livrări înregistrate</h3>
+  ${tabelLivrari(livrari)}` : ''}`,
         }),
       )
     } catch (e) {

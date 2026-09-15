@@ -35,6 +35,7 @@
 
   "services": [
     { "binding": "IDENTITATE", "service": "xc-identity" },
+    { "binding": "AUTORIZARE", "service": "xc-authz" },
     { "binding": "AUDIT", "service": "xc-audit" },
     { "binding": "COMUNICARE", "service": "xc-communication" }
   ],
@@ -72,6 +73,7 @@
       ],
       "services": [
         { "binding": "IDENTITATE", "service": "xc-identity-staging" },
+        { "binding": "AUTORIZARE", "service": "xc-authz-staging" },
         { "binding": "AUDIT", "service": "xc-audit-staging" },
         { "binding": "COMUNICARE", "service": "xc-communication-staging" }
       ],
@@ -109,6 +111,7 @@
       ],
       "services": [
         { "binding": "IDENTITATE", "service": "xc-identity-production" },
+        { "binding": "AUTORIZARE", "service": "xc-authz-production" },
         { "binding": "AUDIT", "service": "xc-audit-production" },
         { "binding": "COMUNICARE", "service": "xc-communication-production" }
       ]

@@ -1,3 +1,4 @@
+import { STIL_SETARI } from "@xc/setari"
 /**
  * A10-biblia · stilul LOCAL al aplicatiei.
  *
@@ -14,4 +15,4 @@ export const LOCAL = `
 /* panoul de cautare, deschis din lupa din antet */
 #panou-cauta { padding:10px 2px 6px }
 #panou-cauta form { margin:0 }
-`
+` + STIL_SETARI

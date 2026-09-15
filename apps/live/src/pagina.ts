@@ -1,3 +1,4 @@
+import { STIL_SETARI } from '@xc/setari'
 import { STIL_EMISIE } from '@xc/comanda'
 import { type Navigatie } from '@xc/config'
 import { type Cont, esc, pagina as carcasa } from '@xc/ui'
@@ -50,6 +51,12 @@ function contDin(ctx: Ctx): Cont {
     admin: ctx.eAdmin,
     urlCont: ctx.nav.cont,
     urlAdmin: ctx.urlPanou,
+    /*
+     * Setarile APLICATIEI (user, 15.09.2026). ⚠️ Spre deosebire de „Administrare", care pleaca
+     * dinadins la `radio`, randul asta ramane ACASA: setarile sunt ale OMULUI in aplicatia in care
+     * se afla, nu o a doua administrare a emisiei.
+     */
+    urlSetari: `${ctx.prefix}/setari`,
     poateVedeaCa: ctx.poateVedeaCa,
     veziCa: ctx.veziCa,
     spre: ctx.spre,
@@ -71,7 +78,7 @@ export function pagina(ctx: Ctx, o: OptiuniPaginaApp): string {
     titluPagina: o.titluPagina,
     acasa: `${ctx.prefix}/`,
     urlPlatforma: ctx.nav.home,
-    local: STIL_EMISIE + STIL_MIC + (o.local ?? ''),
+    local: STIL_EMISIE + STIL_MIC + STIL_SETARI + (o.local ?? ''),
     cont: contDin(ctx),
     corp: o.corp,
     versiune: pkg.version,

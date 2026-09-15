@@ -43,7 +43,8 @@
     { "binding": "IDENTITATE", "service": "xc-identity" },
     { "binding": "AUTORIZARE", "service": "xc-authz" },
     { "binding": "AUDIT", "service": "xc-audit" },
-    { "binding": "CALENDAR", "service": "xc-calendar" }
+    { "binding": "CALENDAR", "service": "xc-calendar" },
+    { "binding": "COMUNICARE", "service": "xc-communication" }
   ],
 
   "env": {
@@ -84,7 +85,8 @@
         { "binding": "IDENTITATE", "service": "xc-identity-staging" },
         { "binding": "AUTORIZARE", "service": "xc-authz-staging" },
         { "binding": "AUDIT", "service": "xc-audit-staging" },
-        { "binding": "CALENDAR", "service": "xc-calendar-staging" }
+        { "binding": "CALENDAR", "service": "xc-calendar-staging" },
+        { "binding": "COMUNICARE", "service": "xc-communication-staging" }
       ],
       "routes": [{ "pattern": "tipic.staging.sfantul-ilie.ro", "custom_domain": true }]
     },
@@ -125,7 +127,8 @@
         { "binding": "IDENTITATE", "service": "xc-identity-production" },
         { "binding": "AUTORIZARE", "service": "xc-authz-production" },
         { "binding": "AUDIT", "service": "xc-audit-production" },
-        { "binding": "CALENDAR", "service": "xc-calendar-production" }
+        { "binding": "CALENDAR", "service": "xc-calendar-production" },
+        { "binding": "COMUNICARE", "service": "xc-communication-production" }
       ]
       // Ruta de productie (`tipic.sfantul-ilie.ro`) ramane a lui A9 pana la cutover-ul explicit.
     }

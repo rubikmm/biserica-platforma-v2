@@ -45,6 +45,8 @@
   // PROGRAM: urmatoarea slujba, pentru pagina publica („Următoarea slujbă transmisă: …").
   "services": [
     { "binding": "IDENTITATE", "service": "xc-identity" },
+    { "binding": "AUDIT", "service": "xc-audit" },
+    { "binding": "COMUNICARE", "service": "xc-communication" },
     { "binding": "AUTORIZARE", "service": "xc-authz" },
     { "binding": "RADIO", "service": "xc-radio" },
     { "binding": "PROGRAM", "service": "xc-program" }
@@ -82,6 +84,8 @@
       },
       "services": [
         { "binding": "IDENTITATE", "service": "xc-identity-staging" },
+        { "binding": "AUDIT", "service": "xc-audit-staging" },
+        { "binding": "COMUNICARE", "service": "xc-communication-staging" },
         { "binding": "AUTORIZARE", "service": "xc-authz-staging" },
         { "binding": "RADIO", "service": "xc-radio-staging" },
         { "binding": "PROGRAM", "service": "xc-program-staging" }
@@ -119,6 +123,8 @@
       },
       "services": [
         { "binding": "IDENTITATE", "service": "xc-identity-production" },
+        { "binding": "AUDIT", "service": "xc-audit-production" },
+        { "binding": "COMUNICARE", "service": "xc-communication-production" },
         { "binding": "AUTORIZARE", "service": "xc-authz-production" },
         { "binding": "RADIO", "service": "xc-radio-production" },
         { "binding": "PROGRAM", "service": "xc-program-production" }

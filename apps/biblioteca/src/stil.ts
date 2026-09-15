@@ -1,3 +1,4 @@
+import { STIL_SETARI } from "@xc/setari"
 /**
  * A12-biblioteca · stilul LOCAL al aplicatiei.
  *
@@ -174,4 +175,4 @@ a.btn.cere { border-color:var(--rosu); color:var(--rosu); font-size:16px }
    „Autori" (48 px la 15 px) se lipeste de margini sau se rupe. Iconita isi ia doar cat ii
    trebuie si lasa restul randului cuvintelor. */
 .btns .btn.icon { flex:none; padding:9px 13px }
-`;
+` + STIL_SETARI;

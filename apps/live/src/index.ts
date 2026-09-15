@@ -25,7 +25,7 @@
  *  3. **`/_intern` NU se servește de pe internet**: fără antetul `x-xc-intern` răspunde 404 (nu
  *     403 — o adresă internă n-are de ce să-și recunoască existența), ca `/_actiuni` din chat.
  */
-import { asiguraCsrf, principalDin, sesiuneCurenta } from '@xc/auth'
+import { asiguraCsrf, principalDin, sesiuneCurenta, verificaCsrf } from '@xc/auth'
 import { ClientAutorizare } from '@xc/authorization'
 import { corpPlayer, jsPlayer } from '@xc/comanda'
 import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
@@ -38,6 +38,7 @@ import { type EnvAscultatori, bataiePagina } from './ascultatori.js'
 import { DIRECT, type EnvDirect, MIC, ascultaIntra, ascultaRaspuns, sidDin, stareCanal, whipIese, whipIntra } from './direct.js'
 import { corpMic, jsMic } from './mic.js'
 import { type Ctx, pagina, paginaMesaj, spreCont } from './pagina.js'
+import { ruteazaSetari } from '@xc/setari'
 import type { EnvProgram } from './program.js'
 import { type EnvRadioDeparte, indiceRadio } from './radio-departe.js'
 import { type EnvCreier, executaComanda, preiaDecizia, stareEmisie, starePanou } from './stare.js'
@@ -49,6 +50,9 @@ export { Ascultatori } from './ascultatori.js'
 export interface Env extends EnvDirect, EnvAparat, EnvAscultatori, EnvRadioDeparte, EnvProgram {
   IDENTITATE: Fetcher
   AUTORIZARE: Fetcher
+  /** Venite pe 15.09.2026, odata cu pagina de Setari: abonarile si jurnalul. */
+  COMUNICARE: Fetcher
+  AUDIT: Fetcher
   MEDIU: string
   ORIGINE_PUBLICA: string
   DOMENIU_COOKIE: string
@@ -155,6 +159,30 @@ export default {
         const panou = new URL(ctx.urlPanou, url).toString()
         if (cale === '/admin' || cale === '/admin/') return Response.redirect(panou, 303)
         return json({ motiv: 'panoul emisiei stă la radio', panou }, 404)
+      }
+
+      /*
+       * SETARILE — un singur loc, `@xc/setari` (user, 15.09.2026). ⚠️ Ele NU pleaca la `radio`, ca
+       * panoul de mai sus: nu sunt o administrare, ci pagina omului din aplicatia asta, deci
+       * dublarea de care se ferea regula de mai sus nu-l priveste.
+       */
+      if (cale === '/setari' || cale.startsWith('/setari/')) {
+        if (req.method === 'POST') {
+          const problema = verificaCsrf(req, [cfg.ORIGINE_PUBLICA], cfg.MEDIU === 'dev')
+          if (problema) return html(paginaMesaj(ctx, 'Verificare de securitate', problema), 403, FARA_STOC)
+        }
+        const raspunsSetari = await ruteazaSetari(req, cale, env, {
+          cod: 'live',
+          nume: 'Transmisiunea',
+          prefix,
+          cfg,
+          cid,
+          principal,
+          urlCont: nav.cont,
+          urlTermeni: `${nav.home || ''}/termeni`,
+          carcasa: (p) => pagina(ctx, { titluPagina: p.titluPagina, corp: p.corp, ...(p.scripturi ? { scripturi: p.scripturi } : {}) }),
+        })
+        if (raspunsSetari) return raspunsSetari
       }
 
       /*

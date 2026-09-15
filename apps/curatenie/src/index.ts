@@ -49,6 +49,7 @@ import { voluntarulCurent } from "./identitate.js"
 import { cuOameni, incarcaOamenii } from "./oameni.js"
 import type { MediuRaport } from "./newsletter.js"
 import { type Ctx, pagina, paginaMesaj } from "./pagina.js"
+import { ruteazaSetari } from "@xc/setari"
 import { paginaFaq } from "./pagini/faq.js"
 import { paginaIndex } from "./pagini/index.js"
 import { acum, ymdDin, zileInLuna } from "./timp.js"
@@ -59,6 +60,8 @@ export interface Env {
   IDENTITATE: Fetcher
   AUTORIZARE: Fetcher
   COMUNICARE: Fetcher
+  /** Venit pe 15.09.2026, odata cu zona de loguri din Setari. */
+  AUDIT: Fetcher
   CALENDAR: Fetcher
   MEDIU: string
   ORIGINE_PUBLICA: string
@@ -156,6 +159,24 @@ export default {
        * Ieșirea adevărată se face acum din meniul contului, ca în orice aplicație V2.
        */
       if (cale === "/alege" || cale === "/iesi") return duTe(`${prefix}/`)
+
+      /*
+       * SETARILE — un singur loc, `@xc/setari` (user, 15.09.2026). Curatenia e singura aplicatie
+       * unde apare si rubrica APARTENENTEI: ea e singurul rand din `APLICATII_CU_MEMBRI`, deci omul
+       * isi vede aici cererea de intrare in echipa si poate iesi din ea fara sa ceara voie.
+       */
+      const raspunsSetari = await ruteazaSetari(req, cale, env, {
+        cod: "curatenie",
+        nume: "Curățenia",
+        prefix,
+        cfg,
+        cid,
+        principal,
+        urlCont: nav.cont,
+        urlTermeni: `${nav.home || ""}/termeni`,
+        carcasa: (p) => pagina(ctx, { titluPagina: p.titluPagina, corp: p.corp, ...(p.scripturi ? { scripturi: p.scripturi } : {}) }),
+      })
+      if (raspunsSetari) return raspunsSetari
 
       if (cale === "/faq") return html(paginaFaq(ctx), 200, antete)
 

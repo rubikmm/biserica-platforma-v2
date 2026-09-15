@@ -29,7 +29,19 @@ export const CHEI_PERMISIUNI = [
   'broadcast.manage',
   'communication.create',
   'communication.send',
+  // Abonatii unei aplicatii: cine ii VEDE si cine poate scoate pe cineva din lista. Adaugarea NU
+  // trece pe aici — ea ramane gestul omului, cu bifa termenilor si cu contul lui (user, 15.09.2026:
+  // adminul „vede si scoate din lista"). Cheia e a administratorului aplicatiei, nu a oricui.
+  'audience.manage',
   'automation.manage',
+  /*
+   * ⚠️ `audit.read` NU mai vine cu rolul de administrator din 15.09.2026 (user: „scot audit.read de
+   * la administrator"). Jurnalul — cine ce a facut — ramane al super-adminului: asta a fost cererea
+   * pentru zona de loguri din Setari, iar o cheie care se da si adminului n-ar mai fi inchis nimic.
+   * ⚠️ Consecinta platita odata cu ea: pagina de pornire a Administrarii se sprijinea pe cheia asta,
+   * deci un administrator ar fi luat 403 pe TOT panoul. De aceea poarta panoului s-a mutat pe
+   * cheile fiecarei sectiuni (`apps/admin/src/index.ts`) — nu o lega la loc de `audit.read`.
+   */
   'audit.read',
   // Aprinderea si stingerea modulelor (chatul, deocamdata). NU e a adminului: un modul pornit
   // costa bani la fiecare apasare, deci ramane la super-admin (11.09.2026).
@@ -76,8 +88,11 @@ export const PERMISIUNI_IMPLICITE: Record<Rol, readonly Permisiune[]> = {
     // Parintele comanda emisia din panou — in V1 `/control` cerea chiar rolul `admin`.
     'broadcast.manage',
     'communication.create',
+    // Adminul vede abonatii aplicatiei lui si poate scoate pe cineva din lista (user, 15.09.2026).
+    'audience.manage',
     'automation.manage',
-    'audit.read',
+    // ⚠️ `audit.read` A IESIT de aici pe 15.09.2026 — vezi lamurirea de la cheia ei. Jurnalul e al
+    // super-adminului; nu o pune inapoi fara sa-l intrebi pe user.
   ],
   'super-admin': [...CHEI_PERMISIUNI],
 }

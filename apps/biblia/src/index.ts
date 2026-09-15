@@ -22,7 +22,7 @@
  * textul de la noi (`/v1/pasaj`). Aplicatia e numai de citit: cartile intra prin copierea din V1
  * in depozitul propriu (`xc-biblia-staging`).
  */
-import { principalDin, sesiuneCurenta } from "@xc/auth"
+import { principalDin, sesiuneCurenta, verificaCsrf } from "@xc/auth"
 import { SESIUNE_ANONIMA } from "@xc/contracts"
 import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from "@xc/config"
 import { Logger, correlationId } from "@xc/observability"
@@ -30,10 +30,15 @@ import { dataVersiunii, eroareApi, html, json, jsonCuEtag } from "@xc/ui"
 import pkg from "../package.json"
 import { type Carte, type Index, carte, index } from "./depozit.js"
 import { citesteRef, extrage, plat } from "./referinte.js"
-import { type Ctx, type Gasit, acasa, paginaCarte, paginaCautare, paginaMesaj } from "./pagini.js"
+import { ruteazaSetari } from "@xc/setari"
+import { type Ctx, type Gasit, acasa, paginaCarcasa, paginaCarte, paginaCautare, paginaMesaj } from "./pagini.js"
 
 export interface Env {
   TEXTE: R2Bucket
+  /** Venite pe 15.09.2026, odata cu pagina de Setari: cheile, abonarile si jurnalul. */
+  AUTORIZARE: Fetcher
+  COMUNICARE: Fetcher
+  AUDIT: Fetcher
   IDENTITATE: Fetcher
   MEDIU: string
   ORIGINE_PUBLICA: string
@@ -296,13 +301,17 @@ export default {
       }
     }
 
-    if (req.method !== "GET" && req.method !== "HEAD") {
+    /*
+     * ⚠️ POST-ul e primit DIN 15.09.2026, si numai pentru Setari: pana atunci Biblia raspundea 405
+     * la orice in afara de GET/HEAD. Cititul ramane neatins, si tot la liber.
+     */
+    if (req.method !== "GET" && req.method !== "HEAD" && req.method !== "POST") {
       return new Response("Metoda nu e permisă.", { status: 405 })
     }
 
     // Pagina e DESCHISA: „totul la liber, deocamdată" (user, 10.09.2026). V1 cerea cont aici.
     const sesiune = await sesiuneCurenta(env.IDENTITATE, req).catch(() => SESIUNE_ANONIMA)
-    principalDin(sesiune)
+    const principal = principalDin(sesiune)
     const ctx: Ctx = {
       prefix,
       nav,
@@ -319,6 +328,26 @@ export default {
     const cachePagina = {
       "cache-control": ctx.utilizator || ctx.veziCa ? "private, no-store" : env.MEDIU === "dev" ? "no-store" : CACHE_PAGINI,
     }
+
+    // Bariera de origine a platformei, pentru singura metoda care scrie ceva.
+    if (req.method === "POST") {
+      const problema = verificaCsrf(req, [cfg.ORIGINE_PUBLICA], cfg.MEDIU === "dev")
+      if (problema) return html(paginaMesaj(ctx, "Verificare de securitate", `<p>${problema}</p>`), 403)
+    }
+
+    // SETARILE — un singur loc, `@xc/setari` (user, 15.09.2026).
+    const raspunsSetari = await ruteazaSetari(req, cale, env, {
+      cod: "biblia",
+      nume: "Biblia",
+      prefix,
+      cfg,
+      cid,
+      principal,
+      urlCont: nav.cont,
+      urlTermeni: `${nav.home || ""}/termeni`,
+      carcasa: (p) => paginaCarcasa(ctx, p),
+    })
+    if (raspunsSetari) return raspunsSetari
 
     try {
       const ix = await index(env.TEXTE)

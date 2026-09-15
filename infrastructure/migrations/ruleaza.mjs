@@ -66,6 +66,24 @@ function numeBazaDin(director) {
   return `xc-${director}-${mediu ?? 'staging'}`
 }
 
+/**
+ * Pe ce bază se scrie.
+ *
+ * ⚠️ LOCAL SE CHEAMĂ PRIN BINDING (`DB`), nu prin NUMELE bazei. Numele e al mediului, iar `--local`
+ * n-are mediu: până acum cădea pe `xc-<x>-staging`, ceea ce a mers cât timp blocul fără `env` al
+ * configurațiilor purta numele de staging. De când acela e `xc-<x>-production` (scris de
+ * `infrastructure/cutover/scrie-productie.mjs`, 14.09.2026), `pnpm migreaza` cădea la primul fișier
+ * cu „Couldn't find a D1 DB with the name or binding 'xc-identity-staging'" — deci baza locală
+ * rămânea GOALĂ, iar `pnpm dev` răspundea 500 („no such table") la orice pagină cu date.
+ * Găsit pe 15.09.2026, când localul a rămas singurul loc de probă.
+ *
+ * Binding-ul nu se schimbă de la un mediu la altul, deci local merge oricând. Pe remote rămâne
+ * NUMELE: acolo alegerea bazei e tocmai lucrul care trebuie scris pe față.
+ */
+function tintaDin(baza) {
+  return local ? baza.binding : numeBazaDin(baza.director)
+}
+
 let totalFisiere = 0
 
 for (const baza of BAZE) {
@@ -84,7 +102,7 @@ for (const baza of BAZE) {
       'wrangler@4',
       'd1',
       'execute',
-      numeBazaDin(baza.director),
+      tintaDin(baza),
       local ? '--local' : '--remote',
       '--yes',
       '--config',

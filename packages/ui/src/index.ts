@@ -351,6 +351,13 @@ export interface Cont {
   /** Adresa profilului si a iesirii — aplicatia de cont. */
   urlCont?: string
   urlAdmin?: string
+  /**
+   * Setarile APLICATIEI CURENTE (`<prefix>/setari`), nu ale platformei — de aceea le da fiecare
+   * aplicatie, nu se socotesc aici (user, 15.09.2026: „setările specifice ale fiecărei aplicații").
+   * Randul se scrie numai pentru cine e intrat: pagina e a unui om anume si oricum cere cont.
+   * Aplicatia care nu da nimic aici (Contul insusi, unde Profilul E pagina) nu capata randul.
+   */
+  urlSetari?: string
   /** `true` pentru super-admin (si pentru cine poarta deja o masca): apare grupul „Vezi ca". */
   poateVedeaCa?: boolean
   /** Masca purtata acum, daca exista: `user`, `admin` sau `anonim`. */
@@ -435,10 +442,18 @@ function contul(c: Cont): string {
     const spre = c.spre ? `?spre=${encodeURIComponent(c.spre)}` : ''
     return `<a class="cont" href="${esc(c.href ?? `${urlCont}/auth/login${spre}`)}">${ICOANE.om}<span>${esc(nume)}</span></a>`
   }
+  /*
+   * ⚠️ Ordinea randurilor merge de la om spre platforma: Profil (cine esti, peste tot) → Setari (ce
+   * tine de tine AICI, in aplicatia asta) → Administrare (platforma intreaga, numai cine are cheia).
+   * „Setari" il vede ORICINE e intrat, si enoriasul: treptele se vad in PAGINA, nu in meniu — un
+   * utilizator simplu isi gaseste acolo abonarea, adminul si lista, super-adminul si jurnalul
+   * (user, 15.09.2026: „fiecare nivel va vedea mai multe lucruri").
+   */
   return `<details class="cont-meniu">
         ${capul}
         <nav class="cont-lista">
-          <a href="${esc(urlCont)}/">Profil</a>${c.admin ? `
+          <a href="${esc(urlCont)}/">Profil</a>${c.urlSetari ? `
+          <a href="${esc(c.urlSetari)}">Setări</a>` : ''}${c.admin ? `
           <a href="${esc(c.urlAdmin ?? '')}/">Administrare</a>` : ''}${veziCa(c)}
           <a href="${esc(urlCont)}/auth/logout">Ieșire</a>
         </nav>

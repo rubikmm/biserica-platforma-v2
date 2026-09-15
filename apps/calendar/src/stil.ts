@@ -3,7 +3,14 @@
  * „să respecți mesajele și grafica din V1 — este multă muncă acolo pe care nu vreau s-o refac").
  *
  * Se lipeste DUPA stilul global al carcasei (`@xc/ui`) si il suprascrie.
+ *
+ * ⚠️ La coada lui se lipeste `STIL_ABONARE` din `@xc/abonare`: bucatile NOI ale ferestrei de abonare
+ * (randul rosu al validarii, linkul din bifa, cele sase casute ale codului) stau o singura data,
+ * langa HTML-ul lor. Restul ferestrei (`.modal`, `.camp`, `.bifa`, `.btn-plin`) e mai jos, neatins.
  */
+import { STIL_ABONARE } from '@xc/abonare'
+import { STIL_SETARI } from '@xc/setari'
+
 export const LOCAL = `
 /* Paleta e a carcasei. Aici stau numai variabilele pe care le foloseste doar calendarul: negrul
    titlurilor din lista, rosul palid al bulinei AZI si movul sfintilor cu evlavie. Movul e ales ca
@@ -126,6 +133,11 @@ h2.luna .fel-filtru.f-evlavie { color:var(--mov) }
   .btns { gap:7px }
   .btns .mic { padding-left:11px; padding-right:11px }
   .btns .abon .cuv { display:none }
+  /* data trece pe forma scurta („15 sep. 2026"), ca randul sa ramana pe o singura linie */
+  .pastila .acum { padding:11px 9px; font-size:12.5px }
+  .pastila .acum .lung { display:none }
+  .pastila .acum .scurt { display:inline }
+  .pastila .luni-cheie { padding:11px 10px }
 }
 
 /* PASTILA NAVIGARII (user, 12.09.2026: „să fie o pastilă ca la Program și lunile să fie text în
@@ -141,21 +153,49 @@ h2.luna .fel-filtru.f-evlavie { color:var(--mov) }
    dupa masura IPOTETICA a fiecarui copil, inainte de orice strangere. Cu auto, pastila porneste de la
    latimea celor treisprezece luni, umple singura randul, si tocmai butoanele coboara — chiar asta
    s-a si intamplat o data. */
-.btns .pastila { display:flex; flex:1 1 0; min-width:0; align-items:stretch;
+/* ⚠️ DIN 15.09.2026 PASTILA NU MAI TINE LUNILE (user: „bara scrolată cu lunile care apare după
+   butonul de AZI din meniul principal aș vrea să se mute într-o bară secundară, inițial ascunsă sub
+   zona de antet. În locul ei, să se scrie mai întâi data curentă… iar după ea să fie un buton - ico
+   calendar"). In pastila au ramas trei segmente: bulina lui „azi", SCRISUL locului (data de azi, ori
+   luna deschisa) si cheia care coboara sirul lunilor. Sirul s-a mutat in .bara-luni, de sub rand.
+   ⚠️ De aceea masura de pornire nu mai e „1 1 0" (pastila nu mai are ce derula si n-are de ce sa
+   inghita randul), ci „0 1 auto": ia cat ii trebuie si lasa restul butoanelor.
+   ⚠️ FARA BACKTICK in comentariile de aici: fisierul intreg e un template literal. */
+.btns .pastila { display:flex; flex:0 1 auto; min-width:0; align-items:stretch;
                  border:1px solid var(--rule); border-radius:10px; background:var(--tinta);
                  overflow:hidden }
-/* ⚠️ Fasia se deruleaza (si pe telefon, si oriunde lunile nu incap), bulina nu: ea sta in afara ei,
-   la capul pastilei, ca sa fie mereu la indemana. Linia dintre ele e chenarul din stanga al fasiei. */
+/* Scrisul locului. ⚠️ NU e scris cu majuscule si nici raschirat, ca lunile din sir: „15 SEPTEMBRIE
+   2026" ar fi cerut vreo 150 px si ar fi rupt randul unic pe telefon. Pe ecrane mici trece de la
+   sine pe forma scurta („15 sep. 2026"), scrisa alaturi si ascunsa pana atunci. */
+.pastila .acum { display:flex; align-items:center; padding:11px 12px; white-space:nowrap;
+                 border-left:1px solid var(--rule);
+                 font:600 13px/1 ui-sans-serif,system-ui; color:var(--ink) }
+.pastila .acum .scurt { display:none }
+/* Cheia lunilor: cat timp bara e coborata, sta aprinsa — ca omul sa stie de unde a iesit sirul. */
+.pastila .luni-cheie { flex:none; display:flex; align-items:center; justify-content:center;
+                       padding:11px 12px; border:0; border-left:1px solid var(--rule);
+                       border-radius:0; background:transparent; color:var(--soft); cursor:pointer }
+.pastila .luni-cheie:hover { color:var(--rosu); background:var(--paper) }
+.pastila .luni-cheie[aria-expanded="true"] { color:var(--rosu);
+                       background:color-mix(in srgb, var(--rosu) 11%, transparent) }
+
+/* BARA A DOUA — sirul lunilor, sub randul de unelte, ascunsa pana se apasa cheia. Are chenarul si
+   rotunjirea pastilei de dinainte, ca sa se recunoasca: e acelasi lucru, mutat cu un rand mai jos.
+   ⚠️ Se inchide singura la alegerea unei luni, fiindca alegerea e o NAVIGARE: pagina urmatoare se
+   scrie cu bara ascunsa (user: „la selecție bara cu lunile dispare"). */
+.bara-luni { display:flex; align-items:stretch; margin:0 0 6px;
+             border:1px solid var(--rule); border-radius:10px; background:var(--tinta);
+             overflow:hidden }
+.bara-luni[hidden] { display:none }
 /* ⚠️ position:relative NU e de podoaba: JS-ul aduce luna deschisa la mijloc cu offsetLeft, iar acela
    se masoara fata de cel mai apropiat stramos asezat. Fara el, offsetParent ajunge sa fie pagina,
    numarul iese cu vreo doua sute de pixeli mai mare si fasia se deschide derulata la capat — se vedea
    „NOI DEC IAN 2027" in loc de luna curenta. */
-.pastila .fasie { flex:1 1 auto; min-width:0; position:relative;
+.bara-luni .fasie { flex:1 1 auto; min-width:0; position:relative;
                   overflow-x:auto; overscroll-behavior-x:contain;
-                  -webkit-overflow-scrolling:touch; scrollbar-width:none;
-                  border-left:1px solid var(--rule) }
-.pastila .fasie::-webkit-scrollbar { display:none }
-.pastila .luni { display:flex; align-items:stretch; gap:0; width:max-content; padding:0 }
+                  -webkit-overflow-scrolling:touch; scrollbar-width:none }
+.bara-luni .fasie::-webkit-scrollbar { display:none }
+.bara-luni .luni { display:flex; align-items:stretch; gap:0; width:max-content; padding:0 }
 
 /* LUNILE: text simplu in capsula — fara chenar, fara fundal, fara rotunjire a lor. Despartitura e o
    linie de 1 px, ca intre segmentele Programului. */
@@ -355,4 +395,4 @@ dialog.fereastra::backdrop { background:rgba(8,10,14,.55) }
   .cuprins-fereastra { padding:8px 22px 34px }
   dialog.fereastra { width:96vw; max-height:90vh; max-height:90dvh }
 }
-`
+` + STIL_ABONARE + STIL_SETARI

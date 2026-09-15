@@ -1,3 +1,4 @@
+import { STIL_SETARI } from "@xc/setari"
 /**
  * A6-curatenie · stilul LOCAL al aplicatiei.
  *
@@ -877,4 +878,4 @@ body:not(.cu-platforma) .cont-lista a[href^="https://cont."] { display: none }
 .info-jos { margin: 26px 0 0; text-align: center; color: var(--faint);
             font: 13px/1.6 ui-sans-serif, system-ui }
 .info-jos a { color: var(--soft) }
-`;
+` + STIL_SETARI;

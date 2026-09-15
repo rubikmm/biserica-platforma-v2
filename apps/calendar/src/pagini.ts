@@ -7,6 +7,7 @@
 import type { ZiLiturgica } from '@xc/contracts'
 import type { Navigatie } from '@xc/config'
 import { LUNI, STIL_COMUN, ZILE_SAPTAMANA, esc, momentLizibil, pagina } from '@xc/ui'
+import { JS_ABONARE, STIL_ABONARE, abonamentul, butonAbonare, fereastraAbonare } from '@xc/abonare'
 import type { PericopaCuText } from './biblia.js'
 import type { Import, Versiune } from './depozit.js'
 import { LOCAL } from './stil.js'
@@ -16,6 +17,8 @@ export interface Ctx {
   prefix: string
   nav: Navigatie
   utilizator: string | null
+  /** Adresa contului — fereastra de abonare o scrie in camp si o incuie; `null` la neautentificat. */
+  emailulContului?: string | null
   eAdmin: boolean
   versiune: string
   modificata: string
@@ -42,8 +45,8 @@ const ZILE_SCURT = ['Du', 'Lu', 'Ma', 'Mi', 'Jo', 'Vi', 'Sâ']
  */
 const IC_CRUCE = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3.5v17"/><path d="M6.5 9h11"/></svg>`
 
-/** Plicul abonarii — acelasi desen ca la Program, ca butonul sa se recunoasca de la o aplicatie la alta. */
-const IC_PLIC = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="m3.5 7 8.5 6 8.5-6"/></svg>`
+/** Cheia care coboara sirul lunilor: o fila de calendar (user, 15.09.2026: „un buton - ico calendar"). */
+const IC_CALENDAR = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>`
 
 // ---------------------------------------------------------------------------
 // Bucatile antetului
@@ -56,6 +59,8 @@ function contDin(ctx: Ctx) {
     admin: ctx.eAdmin,
     urlCont: ctx.nav.cont,
     urlAdmin: ctx.nav.admin,
+    // Setarile APLICATIEI, nu ale platformei (user, 15.09.2026) — de aceea adresa e a noastra.
+    urlSetari: `${ctx.prefix}/setari`,
     poateVedeaCa: ctx.poateVedeaCa ?? false,
     veziCa: ctx.veziCa ?? null,
     spre: ctx.spre ?? '',
@@ -93,6 +98,13 @@ function contDin(ctx: Ctx) {
  * are pe primele doua (rosie, neagra), adminul pe toate trei. Vezi `poateFiltra`. Butoanele fara
  * drept se STING, nu se ascund (regula userului din 11–12.09.2026: „se ascund și strică interfața") —
  * raman la locul lor, palite, cu pricina in `title`, ca randul sa aiba aceeasi forma la toata lumea.
+ *
+ * ⚠️ A TREIA CRUCE FACE EXCEPTIE DE LA REGULA ASTA, DIN 15.09.2026 (user, cele trei trepte scrise
+ * anume: neautentificatul „să nu vadă ultima cruce deloc", utilizatorul „să nu vadă ultima cruce dar
+ * să poată apăsa celelalte două", adminul „să vadă toate 3 crucile și să le poată apăsa"). Deci
+ * „Sfinții cu evlavie" NU se mai scrie palit celor fara drept — nu se scrie deloc. Vezi
+ * `poateVedeaFiltrul`. Primele doua raman cum erau: palite la neautentificat, apasabile la restul.
+ * (Adminul si super-adminul sunt aceeasi treapta aici: `ctx.eAdmin` le tine pe amandoua.)
  */
 function unelte(o: {
   ctx: Ctx
@@ -121,6 +133,8 @@ function unelte(o: {
     const pus = o.felActiv === fel
     const unde = pus ? faraFel : cuFel(fel)
     const spune = pus ? `Scoate filtrul: ${nume.toLowerCase()}` : nume
+    // crucea pe care omul n-are voie nici s-o VADA nu lasa nici gol in rand (user, 15.09.2026)
+    if (!poateVedeaFiltrul(o.ctx, fel)) return ''
     // fara dreptul lui, crucea se scrie palita (`.gol`): se vede ca exista, dar nu duce nicaieri.
     // Pricina sta in `title` si in `aria-label`, ca omul sa stie ce-i lipseste, nu doar ca nu merge.
     if (!poateFiltra(o.ctx, fel)) {
@@ -135,7 +149,7 @@ function unelte(o: {
     return `<a class="${clasa}${pus ? ' activ' : ''}" href="${unde}"${pus ? ' aria-current="page"' : ''}`
       + ` title="${esc(spune)}" aria-label="${esc(nume)}">${IC_CRUCE}</a>`
   }
-  return `${o.navigarea ?? ''}${butonAbonare(o.ctx)}
+  return `${o.navigarea ?? ''}${butonAbonare(ABONAMENT)}
     <span class="desparte" aria-hidden="true"></span>
     ${buton('rosie')}
     ${buton('neagra')}
@@ -143,63 +157,29 @@ function unelte(o: {
 }
 
 /**
- * ABONAREA, in doua bucati: butonul din rand si fereastra care se deschide din el.
+ * ABONAREA — butonul, fereastra si tot drumul de dupa ea stau acum in `@xc/abonare`, pachetul comun
+ * (user, 15.09.2026: „ar trebui să fie la fel peste tot. Nu ar trebui să copiez logica în mai multe
+ * locuri"). Pana atunci fereastra era copiata aici, la Program, la Buletin si la Tipic, identica
+ * litera cu litera, si nu trimitea nimic nicaieri.
  *
- * ⚠️ Amandoua sunt luate de la Program (user, 12.09.2026: „la click pe Abonare să apară un pop-up la
- * fel"), cu tot cu campul de adresa si cele doua bife — utilizatorul a ales anume varianta aceasta,
- * stiind ce aduce cu ea: pana cand fereastra se leaga de rute, abonarea calendarului NU MAI MERGE din
- * pagina. Ca la Program, unde fereastra e si acum doar infatisare.
- *
- * ⚠️ Ce ramane intreg dedesubt: rutele `POST /abonare` · `/dezabonare` si audienta
- * `calendar-abonati` a comunicarii. Cand fereastra se leaga, formularul capata `method="post"` si
- * `action` catre ele, iar adresa scrisa aici slujeste doar la facerea contului (identitatea o tine,
- * nu calendarul) — abonarea ramane pe adresa contului, cum cere structura platformei.
+ * ⚠️ Ce a ramas al calendarului: **rândul din registru**, atat. Adica audienta in care se scrie
+ * omul — singurul lucru deosebit de la o aplicatie la alta.
  *
  * ⚠️ BUTONUL E AL TUTUROR, SI AL ADMINILOR (user, 12.09.2026, 13:39: „să lăsăm totuși iconița de
  * abonare și la admini. Că și ei se comportă ca un utilizator care poate vor să fie anunțați. Aici nu
- * e vorba doar despre mine, care sunt super admin"). Dimineata ceruse invers, si asa fusese facut, ca
- * la Program; acum regula e limpede si e a amandurora: dreptul de a administra nu-l scoate pe om din
- * randul celor care vor sa primeasca vestea. Nu-l ascunde iar. (`ctx` ramane in semnatura: butonul
- * atarna oricum de om, iar de aici se va lega si starea „esti abonat" cand fereastra prinde rute.)
+ * e vorba doar despre mine, care sunt super admin"). Regula sta acum in pachet, langa buton.
  */
-function butonAbonare(_ctx: Ctx): string {
-  return `<button type="button" class="btn mic abon" id="b-abonare"`
-    + ` title="Primește calendarul pe email">${IC_PLIC}<span class="cuv">Abonare</span></button>`
-}
+const ABONAMENT = abonamentul('calendar')
 
-function fereastraAbonare(_ctx: Ctx): string {
-  return `<dialog class="modal" id="d-abonare" aria-labelledby="t-abonare">
-  <form method="dialog" class="modal-cutie">
-    <div class="modal-cap">
-      <h2 id="t-abonare">Abonare</h2>
-      <button value="inchide" class="modal-x" aria-label="Închide fereastra">&times;</button>
-    </div>
-    <p class="modal-spune">Pentru a vă abona, completați câmpul cu adresa de mail.</p>
-    <label class="camp"><span>Adresa de e-mail</span>
-      <input type="email" name="email" autocomplete="email" placeholder="nume@exemplu.ro"></label>
-    <label class="bifa"><input type="checkbox" name="cont"> Vreau să fac cont.</label>
-    <label class="bifa"><input type="checkbox" name="termeni"> Sunt de acord cu termenii și condițiile.</label>
-    <div class="modal-jos"><button value="abonare" class="btn-plin">Abonare</button></div>
-  </form>
-</dialog>`
+/** Fereastra, cu adresa contului completata cand omul e intrat, si cu termenii platformei. */
+function fereastraCalendarului(ctx: Ctx): string {
+  return fereastraAbonare({
+    prefix: ctx.prefix,
+    spre: ctx.spre ?? `${ctx.prefix}/`,
+    urlTermeni: `${ctx.nav.home || ''}/termeni`,
+    emailulContului: ctx.emailulContului ?? null,
+  })
 }
-
-/**
- * Butonul deschide fereastra. Inchiderea n-are nevoie de JS: formularul dinauntru e `method="dialog"`,
- * deci si „Abonare", si X-ul o inchid singure (si Escape, de la browser). Acelasi script ca la Program.
- */
-const JS_ABONARE = `
-(function(){
-  var b = document.getElementById("b-abonare");
-  var d = document.getElementById("d-abonare");
-  if (!b || !d || !d.showModal) return;
-  // ⚠️ Cat timp fereastra e deschisa, pagina din spate NU se deruleaza (user, 12.09.2026, 13:42), iar
-  // la inchidere isi capata derularea inapoi. <dialog> face pagina inertă, dar rotita mouse-ului tot
-  // misca fundalul, si atunci omul se trezeste in alta parte a lunii cand inchide. Oprirea NU se mai
-  // scrie aici: o face carcasa, la orice showModal() (user, 13.09.2026: regula e generala).
-  b.addEventListener("click", function(){ d.showModal(); });
-})();
-`
 
 /**
  * Scriptul NAVIGARII — merge pe TOATE paginile care au pastila in antet (luna, ziua, sarbatorile),
@@ -214,12 +194,36 @@ const JS_ABONARE = `
  */
 const JS_NAV = `
 (function () {
+  var bara = document.getElementById('bara-luni');
+  var cheie = document.getElementById('luni-cheie');
   var fasie = document.querySelector('.fasie');
-  if (fasie) {
+
+  // ——— luna deschisa la mijlocul fasiei
+  // ⚠️ Se masoara DUPA ce bara e la vedere: cat timp e \`hidden\`, offsetLeft si clientWidth sunt 0,
+  // iar sirul s-ar deschide derulat la cap (se vedea IAN in loc de luna curenta). De aceea asezarea
+  // se cheama la fiecare coborare a barei, nu o data la incarcare.
+  function aseaza() {
+    if (!fasie) return;
     var lunaDeschisa = fasie.querySelector('.luna-buton.activa');
     if (lunaDeschisa) {
       fasie.scrollLeft = lunaDeschisa.offsetLeft - (fasie.clientWidth - lunaDeschisa.offsetWidth) / 2;
     }
+  }
+
+  /* ⚠️ BARA LUNILOR E A DOUA, SI PORNESTE ASCUNSA (user, 15.09.2026: „bara scrolată cu lunile…
+     aș vrea să se mute într-o bară secundară, inițial ascunsă sub zona de antet"). Cheia din pastila
+     o coboara si o ridica. NU trebuie inchisa la alegerea unei luni: alegerea e o NAVIGARE, iar
+     pagina urmatoare se scrie oricum cu bara ascunsa. */
+  if (bara && cheie) {
+    cheie.addEventListener('click', function () {
+      var deschisa = !bara.hidden;
+      bara.hidden = deschisa;
+      cheie.setAttribute('aria-expanded', deschisa ? 'false' : 'true');
+      if (!deschisa) { aseaza(); if (typeof capete === 'function') capete(); }
+    });
+  }
+
+  if (fasie) {
     var sageti = ['‹', '›'].map(function (semn, i) {
       var b = document.createElement('button');
       b.type = 'button';
@@ -248,7 +252,11 @@ const JS_NAV = `
   // ——— ziua de azi se aseaza la mijlocul ecranului, nu sub antet
   var randAzi = document.getElementById('azi');
   function laAzi() { if (randAzi) randAzi.scrollIntoView({ block: 'center' }); }
-  if (randAzi && location.hash === '#azi') setTimeout(laAzi, 0);
+  /* ⚠️ LA INTRAREA IN APLICATIE SE DERULEAZA SINGUR LA ZIUA DE AZI (user, 15.09.2026: „când se
+     intră pe prima pagină să se ducă direct la ziua de azi… ca și cum s-a apăsat AZI"). Semnul e
+     clasa \`la-azi\` de pe corpul paginii, scrisa de server NUMAI la adresa fara luna (\`/\`) — nu si
+     cand omul a ales el o luna anume din sir, unde o saritura nesolicitata ar fi o rapire. */
+  if (randAzi && (location.hash === '#azi' || document.body.classList.contains('la-azi'))) setTimeout(laAzi, 0);
   var butonAzi = document.querySelector('.azi-buton');
   if (butonAzi && randAzi) {
     butonAzi.addEventListener('click', function (ev) {
@@ -528,35 +536,82 @@ function adresaLunii(prefix: string, an: number, luna: number): string {
 }
 
 /**
- * NAVIGAREA — o PASTILA, ca la Program (user, 12.09.2026: „să fie o pastilă ca la Program și lunile
- * să fie text în capsulă"). Un singur corp cu chenar si colturi rotunjite, in care segmentele stau
- * lipite si despartite de o linie de 1 px: bulina lui „azi" la cap, apoi lunile, text simplu, fara
- * chenar al lor. Luna deschisa e segmentul rosu. Pana atunci fiecare luna era o pastiluta de sine
- * statatoare, cu chenar si spatiu intre ele.
+ * SCRISUL DIN PASTILA — unde ești, în cuvinte (user, 15.09.2026: „să se scrie mai întâi data curentă,
+ * adică atunci când intru pe site, să scrie 15 septembrie 2026… la selecție… să scrie luna selectată,
+ * de exemplu, octombrie 2026, fără zi").
+ *
+ * Trei feluri, după ce arată pagina:
+ *   - luna de AZI          → data întreagă, cu zi: „15 septembrie 2026";
+ *   - altă lună            → numai luna: „octombrie 2026";
+ *   - lista unui an întreg → anul: „2026" (acolo nicio lună nu e a paginii, `luna: 0`).
+ *
+ * ⚠️ Forma scurtă („15 sep. 2026") se scrie ALĂTURI, nu în locul celei lungi, și se schimbă din CSS
+ * la ecrane mici: rândul de unelte trebuie să rămână pe O SINGURĂ LINIE (regula userului,
+ * 12.09.2026), iar data scrisă întreg n-ar mai fi încăput pe un telefon de 390 px.
+ */
+function scrisulLocului(ctx: Ctx, an: number, luna: number, azi: string): string {
+  const [anAzi, lunaAzi, ziAzi] = azi.split('-').map(Number) as [number, number, number]
+  if (!luna) return `<span class="acum">${an}</span>`
+  const numeLunii = LUNI[luna - 1] ?? ''
+  if (an === anAzi && luna === lunaAzi) {
+    return `<span class="acum"><b class="lung">${ziAzi} ${esc(numeLunii)} ${an}</b>`
+      + `<b class="scurt">${ziAzi} ${esc(numeLunii.slice(0, 3))}. ${an}</b></span>`
+  }
+  return `<span class="acum"><b class="lung">${esc(numeLunii)} ${an}</b>`
+    + `<b class="scurt">${esc(numeLunii.slice(0, 3))}. ${an}</b></span>`
+}
+
+/**
+ * PASTILA, din 15.09.2026: bulina lui „azi", scrisul locului și cheia care coboară șirul lunilor.
+ *
+ * ⚠️ ȘIRUL LUNILOR NU MAI E AICI. Până acum pastila ținea și cele treisprezece luni, derulate
+ * stânga-dreapta pe același rând cu butoanele; userul l-a mutat într-o bară a lui, sub antet,
+ * ascunsă până se cere („aș vrea să se mute într-o bară secundară, inițial ascunsă sub zona de
+ * antet"). Vezi `baraLunilor`. Câștigul: rândul de sus nu mai e înghesuit, iar data de azi —
+ * lucrul după care se uită omul întâi — stă scrisă, nu ghicită dintr-un segment roșu.
+ *
+ * ⚠️ „AZI" E O BULINA, nu un cuvant (user, 12.09.2026: „AZI să fie o bulină ca la Program"). Punctul
+ * se deseneaza din CSS (`.azi-buton::before`), deci butonul ramane gol de text: numele lui se citeste
+ * din `title` si `aria-label`, ca la bulina saptamanii din Program.
+ *
+ * ⚠️ Bulina NU duce filtrul crucii cu ea: ea inseamna „arata-mi ziua de azi", iar ziua de azi poate
+ * sa nu fie in lista filtrata. Ancora `#azi` o face sa deruleze la ziua curenta chiar si cand esti
+ * deja pe luna ei.
+ *
+ * Clasa `azi-buton` e si manerul de care se leaga JS-ul; daca o schimbi, schimb-o si in `JS_NAV`.
+ *
+ * `luna: 0` inseamna „nicio luna nu e a paginii" — asa o cheama listele de sarbatori.
+ */
+function pastilaLocului(ctx: Ctx, an: number, luna: number, azi: string): string {
+  const p = esc(ctx.prefix)
+  const [anAzi, lunaAzi] = azi.split('-').map(Number) as [number, number]
+  // bulina se face rosie numai cand pagina arata chiar luna de azi — rosul spune locul, nu butonul
+  const peLunaAzi = an === anAzi && luna === lunaAzi
+  const butonAzi = `<a class="azi-buton${peLunaAzi ? ' activ' : ''}" href="${adresaLunii(p, anAzi, lunaAzi)}#azi"`
+    // ⚠️ Butonul se cheama „Astăzi", si atat (user, 12.09.2026, 14:17: „textul buton Azi să fie chiar
+    // «Astăzi» - nu mergi la luna…"). Un nume, nu o poruncă: bulina spune CE e, nu ce face cu tine.
+    + ` title="Astăzi" aria-label="Astăzi"></a>`
+  const cheia = `<button type="button" class="luni-cheie" id="luni-cheie" aria-expanded="false"`
+    + ` aria-controls="bara-luni" title="Alege altă lună" aria-label="Alege altă lună">${IC_CALENDAR}</button>`
+  return `<span class="pastila">${butonAzi}${scrisulLocului(ctx, an, luna, azi)}${cheia}</span>`
+}
+
+/**
+ * BARA A DOUA — șirul lunilor, sub rândul de unelte, ascuns până se apasă cheia din pastilă.
  *
  * NUMAI anul curent, plus ianuarie anul viitor (cerere user, 10.09.2026: „nu mai afișa alți ani în
  * afară de anul curent și luna ianuarie anul viitor").
  *
- * ⚠️ Pastila se DERULEAZA stanga-dreapta (`.fasie` inauntru), si pe telefon, si oriunde lunile nu
- * incap („pe mobil tot așa să se poată muta stânga dreapta"). Sagetile ‹ › le scrie JS-ul, si numai
- * daca e ceva de derulat. Bulina sta in afara fasiei: ea nu se deruleaza niciodata.
+ * ⚠️ Se derulează stânga-dreapta (`.fasie`), și pe telefon, și oriunde lunile nu încap („pe mobil tot
+ * așa să se poată muta stânga dreapta"). Săgețile ‹ › le scrie JS-ul, și numai dacă e ceva de derulat.
  *
  * ⚠️ LUNILE SUNT UN FILTRU si PASTREAZA filtrul crucii (user, 12.09.2026): daca te uiti la zilele cu
- * cruce rosie si alegi alta luna, ramai pe rosu. Bulina lui „azi", in schimb, NU duce filtrul cu ea —
- * ea inseamna „arata-mi ziua de azi", iar ziua de azi poate sa nu fie in lista filtrata.
+ * cruce rosie si alegi alta luna, ramai pe rosu.
  *
- * ⚠️ „AZI" E O BULINA, nu un cuvant (user, 12.09.2026: „AZI să fie o bulină ca la Program"). Punctul
- * se deseneaza din CSS (`.azi-buton::before`), deci butonul ramane gol de text: numele lui se citeste
- * din `title` si `aria-label`, ca la bulina saptamanii din Program. Rosul i-a ramas — el spune ca
- * tinta e ziua de azi, iar un punct fara culoare n-ar zice nimic.
- *
- * Clasa `azi-buton` e si manerul de care se leaga JS-ul (derularea la ziua de azi); daca o schimbi,
- * schimb-o si in `JS_NAV`.
- *
- * `luna: 0` inseamna „nicio luna nu e a paginii" — asa o cheama listele de sarbatori, unde marcajul
- * rosu ar minti: acolo nu esti intr-o luna a calendarului, ci intr-o lista peste tot anul.
+ * ⚠️ `hidden` e scris de SERVER, la fiecare pagină: așa „la selecție bara cu lunile dispare" fără
+ * nicio linie de JS — alegerea unei luni e o navigare, iar pagina următoare se naște cu bara sus.
  */
-function sirulLunilor(ctx: Ctx, an: number, luna: number, azi: string, fel?: FelFiltru): string {
+function baraLunilor(ctx: Ctx, an: number, luna: number, fel?: FelFiltru): string {
   const p = esc(ctx.prefix)
   const anCurent = ctx.anCurent
   const cuFiltru = (adresa: string) => (fel ? `${adresa}?filtru=${fel}` : adresa)
@@ -567,14 +622,12 @@ function sirulLunilor(ctx: Ctx, an: number, luna: number, azi: string, fel?: Fel
   })
   const ianuarieViitor = an === anCurent + 1 && luna === 1 ? ' activa' : ''
   butoane.push(`<a class="luna-buton${ianuarieViitor}" href="${cuFiltru(adresaLunii(p, anCurent + 1, 1))}" title="ianuarie ${anCurent + 1}"${ianuarieViitor ? ' aria-current="page"' : ''}>Ian ${anCurent + 1}</a>`)
-  const [anAzi, lunaAzi] = azi.split('-').map(Number) as [number, number]
-  // bulina se face rosie numai cand pagina arata chiar luna de azi — rosul spune locul, nu butonul
-  const peLunaAzi = an === anAzi && luna === lunaAzi
-  const butonAzi = `<a class="azi-buton${peLunaAzi ? ' activ' : ''}" href="${adresaLunii(p, anAzi, lunaAzi)}#azi"`
-    // ⚠️ Butonul se cheama „Astăzi", si atat (user, 12.09.2026, 14:17: „textul buton Azi să fie chiar
-    // «Astăzi» - nu mergi la luna…"). Un nume, nu o poruncă: bulina spune CE e, nu ce face cu tine.
-    + ` title="Astăzi" aria-label="Astăzi"></a>`
-  return `<span class="pastila">${butonAzi}<div class="fasie"><nav class="luni">${butoane.join('')}</nav></div></span>`
+  return `<div class="bara-luni" id="bara-luni" hidden><div class="fasie"><nav class="luni" aria-label="Lunile anului">${butoane.join('')}</nav></div></div>`
+}
+
+/** Ce se scrie sub rândul de unelte: bara lunilor și fereastra de abonare (închisă, deci nevăzută). */
+function subantetul(ctx: Ctx, an: number, luna: number, fel?: FelFiltru): string {
+  return `${baraLunilor(ctx, an, luna, fel)}\n    ${fereastraCalendarului(ctx)}`
 }
 
 function comune(ctx: Ctx) {
@@ -639,6 +692,11 @@ export function paginaLuna(o: {
   /** filtrul de fel pus acum; lipseste cand se vede luna intreaga */
   cruce?: FelFiltru
   mesajAbonare?: string
+  /**
+   * ⚠️ „Intrarea in aplicatie" — adresa FARA luna (`/`). Numai atunci pagina se deruleaza singura la
+   * ziua de azi (user, 15.09.2026); cand omul a ales el o luna din sir, saritura n-ar fi ceruta.
+   */
+  laAzi?: boolean
 }): string {
   const alese = o.cruce ? o.randuri.filter(({ r, zi }) => trecePrinFiltru(r, zi, o.cruce as FelFiltru)) : o.randuri
   const corp = alese.map(({ r, d, zi }) => randZi(o.ctx, r, d, zi, r.data === o.azi, o.cruce)).join('')
@@ -653,11 +711,12 @@ export function paginaLuna(o: {
     metaExtra: `<meta name="description" content="Calendarul creștin ortodox — ${LUNI[o.luna - 1]} ${o.an}, zi de zi. Copie a calendarului oficial al Patriarhiei Române.">`,
     unelte: unelte({
       ctx: o.ctx,
-      navigarea: sirulLunilor(o.ctx, o.an, o.luna, o.azi, o.cruce),
+      navigarea: pastilaLocului(o.ctx, o.an, o.luna, o.azi),
       ...(o.cruce ? { felActiv: o.cruce } : {}),
       luna: lunaSir,
     }),
-    subantet: fereastraAbonare(o.ctx),
+    subantet: subantetul(o.ctx, o.an, o.luna, o.cruce),
+    ...(o.laAzi ? { clasaCorp: 'la-azi' } : {}),
     scripturi: script(o.ctx.prefix),
     corp: `${o.mesajAbonare ? `<p class="an-calculat">${esc(o.mesajAbonare)}</p>` : ''}
 ${o.calculat ? `<p class="an-calculat">${esc(NOTA_GENERAT)}</p>` : ''}
@@ -742,8 +801,8 @@ export function paginaZi(o: { ctx: Ctx; r: RandZi; d: RandDesfacut; zi: ZiLiturg
     // navigarea sta pe TOATE paginile, cu luna zilei marcata — in ea esti
     // filtrele lucreaza peste luna ZILEI deschise: de pe ziua de 13 septembrie, „cruce roșie" duce la
     // septembrie filtrat, nu la un an intreg
-    unelte: unelte({ ctx: o.ctx, navigarea: sirulLunilor(o.ctx, o.r.an, o.r.luna, o.azi), luna: `${o.r.an}-${String(o.r.luna).padStart(2, '0')}` }),
-    subantet: fereastraAbonare(o.ctx),
+    unelte: unelte({ ctx: o.ctx, navigarea: pastilaLocului(o.ctx, o.r.an, o.r.luna, o.azi), luna: `${o.r.an}-${String(o.r.luna).padStart(2, '0')}` }),
+    subantet: subantetul(o.ctx, o.r.an, o.r.luna),
     scripturi: JS_NAV + JS_ABONARE,
     clasaCorp: `pagina-zi ${o.r.zi_saptamana === 0 ? 'duminica' : ''} ${o.r.cruce ? `cruce-${o.r.cruce}` : ''}`,
     corp: `<div class="cap">
@@ -836,6 +895,22 @@ export const FILTRE: Record<FelFiltru, { nume: string; scurt: string; eticheta: 
  */
 export function poateFiltra(ctx: Ctx, fel: FelFiltru): boolean {
   return fel === 'evlavie' ? ctx.eAdmin : !!ctx.utilizator
+}
+
+/**
+ * CINE VEDE BUTONUL — altceva decat cine-l poate APASA, din 15.09.2026.
+ *
+ * Regula casei a fost si ramane „butoanele fara drept se sting, nu se ascund": randul are aceeasi
+ * forma la toata lumea, iar cine n-are dreptul il vede palit si afla din `title` ce-i lipseste.
+ * ⚠️ „Sfinții cu evlavie" e SINGURA abatere, ceruta anume de user (15.09.2026): lista e a parohiei
+ * si tine de treaba celui care pregateste slujbele, deci pentru ceilalti nu e o usa incuiata, e o
+ * usa care nu-i priveste. Nu o pune la loc printre cele palite fara sa intrebi.
+ *
+ * ⚠️ Ascunderea butonului NU e o poarta: poarta adevarata ramane `poateFiltra`, care taie si
+ * `?filtru=evlavie` scris de mana, si `/sarbatori/evlavie/<an>`. Aici se hotaraste doar ce se vede.
+ */
+export function poateVedeaFiltrul(ctx: Ctx, fel: FelFiltru): boolean {
+  return fel === 'evlavie' ? ctx.eAdmin : true
 }
 
 /**
@@ -956,8 +1031,8 @@ ${grup.map((x) => randZi(o.ctx, x.r, x.d, x.zi, x.r.data === o.azi, o.fel)).join
     // cruce neagră roșie") — randul are aceeasi forma pe toate paginile, ca la Program. Fara luna
     // marcata (`0`) si fara `luna` in unelte: aici filtrul tine anul intreg, nicio luna nu e aleasa,
     // iar lunile din pastila duc la luna aceea CU filtrul pus.
-    unelte: unelte({ ctx: o.ctx, navigarea: sirulLunilor(o.ctx, o.an, 0, o.azi, o.fel), felActiv: o.fel }),
-    subantet: fereastraAbonare(o.ctx),
+    unelte: unelte({ ctx: o.ctx, navigarea: pastilaLocului(o.ctx, o.an, 0, o.azi), felActiv: o.fel }),
+    subantet: subantetul(o.ctx, o.an, 0, o.fel),
     scripturi: JS_NAV + JS_ABONARE,
     clasaCorp: 'sarbatori',
     corp: `<div class="cap">
@@ -980,6 +1055,21 @@ ${peLuni || `<p class="gol">Anul ${o.an} n-are ${esc(FILTRE[o.fel].pustiu)}.</p>
 // ---------------------------------------------------------------------------
 // Mesaje si administrare
 // ---------------------------------------------------------------------------
+
+/**
+ * Carcasa goală a calendarului — antet, subsol, stil — cu un corp dat de altcineva. O cere
+ * `@xc/abonare`, ca ecranul celor șase cifre să fie ÎN calendar (user, 15.09.2026: „în pagină să
+ * fie dus în zona de autentificare"), nu într-o pagină străină a contului. Rândul de unelte lipsește
+ * dinadins: cât scrii codul n-ai ce filtra și n-ai de ce să te abonezi a doua oară.
+ */
+export function paginaCarcasa(ctx: Ctx, o: { titluPagina: string; corp: string; scripturi?: string }): string {
+  return pagina({
+    ...comune(ctx),
+    titluPagina: o.titluPagina,
+    ...(o.scripturi ? { scripturi: o.scripturi } : {}),
+    corp: o.corp,
+  })
+}
 
 export function paginaMesaj(ctx: Ctx, titlu: string, mesaj: string): string {
   const p = esc(ctx.prefix)

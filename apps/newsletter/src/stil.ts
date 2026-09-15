@@ -1,3 +1,4 @@
+import { STIL_SETARI } from "@xc/setari"
 /**
  * Stilul LOCAL al newsletterului. Se lipeste DUPA stilul comun din `@xc/ui` si il suprascrie — la
  * specificitate egala castiga ce e mai jos.
@@ -102,4 +103,4 @@ export const LOCAL = `
 }
 mark { background:var(--azi-fund); color:inherit; padding:0 2px; border-radius:3px }
 .gol { color:var(--soft) }
-`
+` + STIL_SETARI

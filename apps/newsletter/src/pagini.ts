@@ -59,10 +59,32 @@ function contDin(ctx: Ctx) {
     admin: ctx.eAdmin,
     urlCont: ctx.nav.cont,
     urlAdmin: ctx.nav.admin,
+    // Setarile APLICATIEI, nu ale platformei (user, 15.09.2026) — de aceea adresa e a noastra.
+    urlSetari: `${ctx.prefix}/setari`,
     poateVedeaCa: ctx.poateVedeaCa ?? false,
     veziCa: ctx.veziCa ?? null,
     spre: ctx.spre ?? '',
   }
+}
+
+/**
+ * Carcasa goala a newsletterului — antet, subsol, stil — cu un corp dat de altcineva. O cere
+ * `@xc/setari` (15.09.2026). Fara randul de unelte: pe pagina de Setari n-ai ce rasfoi.
+ */
+export function paginaCarcasa(ctx: Ctx, o: { titluPagina: string; corp: string; scripturi?: string }): string {
+  return pagina({
+    nume: 'NEWSLETTER',
+    titlu: 'Newsletter',
+    titluPagina: o.titluPagina,
+    acasa: `${ctx.prefix}/`,
+    urlPlatforma: ctx.nav.home || '/',
+    local: LOCAL,
+    cont: contDin(ctx),
+    versiune: ctx.versiune,
+    modificata: ctx.modificata,
+    ...(o.scripturi ? { scripturi: o.scripturi } : {}),
+    corp: o.corp,
+  })
 }
 
 /**

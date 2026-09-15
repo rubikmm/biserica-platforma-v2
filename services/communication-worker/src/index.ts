@@ -307,6 +307,19 @@ export default {
         })
       }
 
+      /*
+       * Ce si-a ales omul, ca sa-i putem ARATA starea inainte s-o schimbe (15.09.2026, pentru
+       * pagina de Setari). Pana acum preferinta se putea numai scrie — deci nicaieri in platforma
+       * nu se vedea daca omul si-a oprit scrisorile sau nu.
+       * Lipsa randului inseamna „primeste": asa scrie si `/trimite-audienta`, care suprima doar pe
+       * `opted_out = 1`. Nu intoarce `null` — ar fi pus pagina sa ghiceasca.
+       */
+      if (cale === '/preferinte/citeste') {
+        const date = z.object({ userId: z.string().min(1), channel: z.enum(['email', 'whatsapp']).default('email') }).parse(await req.json())
+        const rand = await unul<{ opted_out: number }>(env.DB, `SELECT opted_out FROM preferences WHERE user_id = ? AND channel = ?`, [date.userId, date.channel])
+        return json({ optedOut: rand ? rand.opted_out === 1 : false })
+      }
+
       if (cale === '/preferinte') {
         const date = z.object({ userId: z.string().min(1), channel: z.enum(['email', 'whatsapp']), optedOut: z.boolean() }).parse(await req.json())
         await ruleaza(

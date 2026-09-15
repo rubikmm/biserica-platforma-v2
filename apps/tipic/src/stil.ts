@@ -5,7 +5,16 @@
  * Se lipeste DUPA `STIL_COMUN` din `@xc/ui` si il suprascrie — la specificitate egala castiga ce
  * e mai jos. Aici stau numai lucrurile care sunt ale Tipicului. Variabilele (--rosu, --soft,
  * --rule, --faint, --paper, --ink, --tinta, --azi) vin din carcasa comuna, nu se redefinesc.
+ *
+ * ⚠️ La coada lui se lipeste `STIL_ABONARE` din `@xc/abonare`: bucatile NOI ale ferestrei (randul
+ * rosu al validarii, linkul din bifa, cele sase casute ale codului) stau o singura data, langa
+ * HTML-ul lor. Restul ferestrei (`.modal`, `.camp`, `.bifa`, `.btn-plin`) e mai jos, neatins.
+ *
+ * ⚠️ Fara backtick in comentariile de dedesubt: stilul intreg e un template literal.
  */
+import { STIL_ABONARE } from '@xc/abonare'
+import { STIL_SETARI } from '@xc/setari'
+
 export const LOCAL = `
 /* Capitolele paginii: mai mari decat textul, in gri si intr-un chenar, ca sa se vada
    ca sunt titluri si unde incepe fiecare sectiune (user, 1 sept — inainte erau rosii
@@ -258,4 +267,4 @@ h3 { font-size:20px; font-weight:600; color:var(--capitol);
 #cal { padding:10px 2px 6px }
 #cal nav { display:flex; justify-content:space-between; align-items:center; margin:0 0 6px }
 #cal nav button { padding:5px 12px }
-`;
+` + STIL_ABONARE + STIL_SETARI;

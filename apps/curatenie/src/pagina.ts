@@ -57,6 +57,9 @@ function contDin(ctx: Ctx): Cont {
     admin: ctx.eAdmin,
     urlCont: ctx.nav.cont,
     urlAdmin: ctx.nav.admin,
+    // Setarile APLICATIEI, nu ale platformei (user, 15.09.2026) — de aceea adresa e a noastra.
+    // Randul apare numai la cine e intrat cu CONTUL: cine si-a ales doar numele n-are meniu deloc.
+    urlSetari: `${ctx.prefix}/setari`,
     poateVedeaCa: ctx.poateVedeaCa,
     veziCa: ctx.veziCa,
     spre: ctx.spre,

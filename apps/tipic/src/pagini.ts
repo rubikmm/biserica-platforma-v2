@@ -17,16 +17,19 @@ import type { CarteTipic, RanduialaZi, TipiconalZi, ZiLiturgica, ZiMinei } from 
 import { ICOANE, LUNI, ZILE_SAPTAMANA, dataLunga, esc, pagina, ziuaSaptamanii } from '@xc/ui'
 import type { Pericopa } from './calendar.js'
 import { CARTI_PDF } from './carti-pdf.js'
+import { JS_ABONARE, abonamentul, butonAbonare, fereastraAbonare } from '@xc/abonare'
 import { LOCAL } from './stil.js'
 
-/** Plicul abonarii si sageata inainte — aceleasi desene ca la Program si la Calendar. */
-const IC_PLIC = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="m3.5 7 8.5 6 8.5-6"/></svg>`
+/* Plicul abonarii a plecat in `@xc/abonare`, odata cu butonul lui: acolo e acelasi desen pentru
+   toate aplicatiile, deci nu se mai poate schimba intr-un loc si in celelalte nu. */
 const IC_INAINTE = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12h14"/><path d="m12.5 6 6 6-6 6"/></svg>`
 
 export interface Ctx {
   prefix: string
   nav: Navigatie
   utilizator: string | null
+  /** Adresa contului — fereastra de abonare o scrie in camp si o incuie; `null` la neautentificat. */
+  emailulContului?: string | null
   eAdmin: boolean
   versiune: string
   modificata: string
@@ -42,6 +45,8 @@ function contDin(ctx: Ctx) {
     admin: ctx.eAdmin,
     urlCont: ctx.nav.cont,
     urlAdmin: ctx.nav.admin,
+    // Setarile APLICATIEI, nu ale platformei (user, 15.09.2026) — de aceea adresa e a noastra.
+    urlSetari: `${ctx.prefix}/setari`,
     poateVedeaCa: ctx.poateVedeaCa ?? false,
     veziCa: ctx.veziCa ?? null,
     spre: ctx.spre ?? '',
@@ -316,53 +321,46 @@ function navigarea(ctx: Ctx, o: { data: string; azi: string; maine: string }): s
 }
 
 /**
- * ABONAREA, in doua bucati: butonul din rand si fereastra care se deschide din el.
+ * ABONAREA — butonul, fereastra si tot drumul de dupa ea stau in `@xc/abonare`, pachetul comun
+ * (user, 15.09.2026: „ar trebui să fie la fel peste tot. Nu ar trebui să copiez logica în mai multe
+ * locuri"). Al tipicului a ramas numai randul din registru: audienta `tipic-abonati`.
  *
- * ⚠️ Amandoua sunt luate de la Program, prin Calendar, CUVANT CU CUVANT (user, 13.09.2026: „vom
- * avea abonare pe aceleași principii"), cu tot cu campul de adresa si cele doua bife. Ca acolo,
- * fereastra e deocamdata numai infatisare: pana nu se leaga de rute, din pagina nu se aboneaza
- * nimeni. Cand se va lega, adresa scrisa slujeste doar la facerea contului — abonarea ramane pe
- * adresa contului, cum cere structura platformei.
+ * ⚠️ PANA LA 15.09.2026 BUTONUL ERA GOL PE DINAUNTRU: fereastra fusese adusa de la Program cuvant
+ * cu cuvant (user, 13.09.2026: „vom avea abonare pe aceleași principii"), dar tipicul n-avea nici
+ * ruta `POST /abonare`, nici legatura `COMUNICARE` — deci, spre deosebire de Calendar, Program si
+ * Buletin, aici nu era nici macar o ruta intreaga dedesubt. Acum are si una, si alta.
  *
  * ⚠️ BUTONUL E AL TUTUROR, SI AL ADMINILOR (regula Calendarului si a Programului, user 12.09.2026:
- * „și ei se comportă ca un utilizator care poate vor să fie anunțați"). Daca se schimba intr-un
- * loc, se schimba in toate trei.
+ * „și ei se comportă ca un utilizator care poate vor să fie anunțați"). Regula sta acum in pachet.
+ *
+ * ⚠️ A doua bifa a ferestrei vechi spunea aici „Vreau să primesc anunțuri", nu „Sunt de acord cu
+ * termenii și condițiile" ca la celelalte trei — o scapare din copiere. Odata cu fereastra comuna,
+ * s-a indreptat: bifa termenilor e aceeasi peste tot, si fara ea abonarea nu pleaca.
  */
-function butonAbonare(_ctx: Ctx): string {
-  return `<button type="button" class="btn mic abon" id="b-abonare" title="Primește tipicul pe email">${IC_PLIC}<span class="cuv">Abonare</span></button>`
-}
+const ABONAMENT = abonamentul('tipic')
 
-function fereastraAbonare(_ctx: Ctx): string {
-  return `<dialog class="modal" id="d-abonare" aria-labelledby="t-abonare">
-  <form method="dialog" class="modal-cutie">
-    <div class="modal-cap">
-      <h2 id="t-abonare">Abonare</h2>
-      <button value="inchide" class="modal-x" aria-label="Închide fereastra">&times;</button>
-    </div>
-    <p class="modal-spune">Pentru a vă abona, completați câmpul cu adresa de mail.</p>
-    <label class="camp"><span>Adresa de e-mail</span>
-      <input type="email" name="email" autocomplete="email" placeholder="nume@exemplu.ro"></label>
-    <label class="bifa"><input type="checkbox" name="cont"> Vreau să fac cont.</label>
-    <label class="bifa"><input type="checkbox" name="anunturi"> Vreau să primesc anunțuri.</label>
-    <div class="modal-jos"><button value="abonare" class="btn-plin">Abonare</button></div>
-  </form>
-</dialog>`
+/** Fereastra, cu adresa contului completata cand omul e intrat, si cu termenii platformei. */
+function fereastraTipicului(ctx: Ctx): string {
+  return fereastraAbonare({
+    prefix: ctx.prefix,
+    spre: ctx.spre ?? `${ctx.prefix}/`,
+    urlTermeni: `${ctx.nav.home || ''}/termeni`,
+    emailulContului: ctx.emailulContului ?? null,
+  })
 }
 
 /**
- * Butonul deschide fereastra. Inchiderea n-are nevoie de JS: formularul dinauntru e
- * `method="dialog"`, deci si „Abonare", si X-ul o inchid singure (si Escape, de la browser).
- * ⚠️ Derularea paginii de sub fereastra o opreste CARCASA, la orice `showModal()` (@xc/ui) — aici
- * nu se mai scrie nimic pentru asta (regula generala a ferestrelor, user 13.09.2026).
+ * Carcasa goala a tipicului — antet, subsol, stil — cu un corp dat de altcineva. O cere
+ * `@xc/abonare`, ca ecranul celor sase cifre sa fie IN tipic, nu intr-o pagina straina a contului.
  */
-const JS_ABONARE = `
-(function(){
-  var b = document.getElementById("b-abonare");
-  var d = document.getElementById("d-abonare");
-  if (!b || !d || !d.showModal) return;
-  b.addEventListener("click", function(){ d.showModal(); });
-})();
-`
+export function paginaCarcasa(ctx: Ctx, o: { titluPagina: string; corp: string; scripturi?: string }): string {
+  return pagina({
+    ...comune(ctx),
+    titluPagina: o.titluPagina,
+    ...(o.scripturi ? { scripturi: o.scripturi } : {}),
+    corp: o.corp,
+  })
+}
 
 /**
  * Randul din antet, in doua grupuri, ca la Program si la Calendar (user, 13.09.2026: „meniul
@@ -374,7 +372,7 @@ const JS_ABONARE = `
  * pe 13.09.2026 randul era „Astăzi · Mâine · calendar", trei butoane deopotriva de late.
  */
 function unelte(ctx: Ctx, o: { data: string; azi: string; maine: string }): string {
-  return `${navigarea(ctx, o)}${butonAbonare(ctx)}
+  return `${navigarea(ctx, o)}${butonAbonare(ABONAMENT)}
       <span class="unelte-dr"><span class="desparte" aria-hidden="true"></span>
       <button class="btn mic cal-buton" id="btn-cal" type="button" aria-expanded="false" aria-controls="cal"
               aria-label="Calendar" title="Alege ziua din calendar">${ICOANE.calendar}</button></span>`
@@ -455,7 +453,7 @@ export function paginaZilei(ctx: Ctx, o: ContinutZi): string {
     titluPagina: `Tipicul — ${o.data}`,
     indexabil: true,
     unelte: unelte(ctx, { data: o.data, azi: o.azi, maine: o.maine }),
-    subantet: `${fereastraAbonare(ctx)}<div id="cal" hidden></div>`,
+    subantet: `${fereastraTipicului(ctx)}<div id="cal" hidden></div>`,
     corp,
     scripturi: `${scriptulPaginii(o.zileCuRanduiala, o.data, ctx.prefix)}${JS_ABONARE}`,
   })

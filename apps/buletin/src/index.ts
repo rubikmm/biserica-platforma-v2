@@ -44,7 +44,9 @@ import {
   unul,
   vecini,
 } from './depozit.js'
-import { type Ctx, type Meniu, paginaAcasa, paginaArhiva, paginaBuletin, paginaCautare, paginaMesaj } from './pagini.js'
+import { abonamentul, ruteazaAbonare } from '@xc/abonare'
+import { ruteazaSetari } from '@xc/setari'
+import { type Ctx, type Meniu, paginaAcasa, paginaArhiva, paginaBuletin, paginaCarcasa, paginaCautare, paginaMesaj } from './pagini.js'
 
 export interface Env {
   DB: D1Database
@@ -61,7 +63,8 @@ export interface Env {
 }
 
 const SERVICIU = 'app-buletin'
-const AUDIENTA = 'buletin-abonati'
+/** Audienta abonatilor — numele ei sta in registrul `ABONAMENTE` din `@xc/abonare`, nu aici. */
+const ABONAMENT = abonamentul('buletin')
 const CACHE_PAGINI = 'public, max-age=300'
 
 const eAdresaDeMasina = (cale: string) => /^\/(v1|intern|\.well-known|health)(\/|$)/.test(cale)
@@ -334,6 +337,9 @@ export default {
       prefix,
       nav,
       utilizator: sesiune.user?.displayName ?? sesiune.user?.email ?? null,
+      // adresa contului, pentru fereastra de abonare: acolo se scrie in camp si se incuie, fiindca
+      // abonarea platformei sta pe adresa contului, nu pe una scrisa de mana
+      emailulContului: sesiune.user?.email ?? null,
       eAdmin: sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin'),
       versiune: pkg.version,
       modificata: dataVersiunii(env.VERSIUNE),
@@ -354,36 +360,35 @@ export default {
     })
 
     try {
-      // ------------------------------------------------------------ abonare
-      if (cale === '/abonare' || cale === '/dezabonare') {
-        if (req.method !== 'POST') return redirect(`${prefix}/`)
-        if (!principal) return redirect(`${nav.cont}/auth/login`)
-        const formular = await req.formData()
-        const spre = String(formular.get('spre') ?? `${prefix}/`)
-        const spreSigur = spre.startsWith('/') && !spre.startsWith('//') ? spre : `${prefix}/`
-        const inscrie = cale === '/abonare'
-        const r = inscrie
-          ? await comunicare(env, '/audiente/inscrie', {
-              audienceId: AUDIENTA,
-              nume: 'Abonații buletinului',
-              userId: principal.userId,
-              channel: 'email',
-              adresa: principal.email,
-            })
-          : await comunicare(env, '/audiente/scoate', {
-              audienceId: AUDIENTA,
-              userId: principal.userId,
-              channel: 'email',
-            })
-        await scrieAudit(env, {
-          action: inscrie ? 'buletin.subscribe' : 'buletin.unsubscribe',
-          target: AUDIENTA,
-          outcome: r ? 'success' : 'failure',
-          correlationId: cid,
-          actorId: principal.userId,
-        })
-        return redirect(`${spreSigur}?abonat=${!r ? 0 : inscrie ? 1 : 2}`)
-      }
+      /*
+       * ABONAREA — drumul intreg sta in `@xc/abonare`, acelasi pentru toata platforma (user,
+       * 15.09.2026). Buletinul da doar ce e al lui: randul din registru (audienta), carcasa in care
+       * se scriu paginile si jurnalul. Intoarce `null` cand adresa nu e a abonarii.
+       */
+      const raspunsAbonare = await ruteazaAbonare(req, cale, env, {
+        abonament: ABONAMENT,
+        prefix,
+        cfg,
+        cid,
+        principal,
+        carcasa: (p) => paginaCarcasa(ctx, p),
+        audit: (i) => scrieAudit(env, { ...i, correlationId: cid }),
+      })
+      if (raspunsAbonare) return raspunsAbonare
+
+      // SETARILE — tot un singur loc, `@xc/setari` (user, 15.09.2026).
+      const raspunsSetari = await ruteazaSetari(req, cale, env, {
+        cod: 'buletin',
+        nume: 'Buletinul',
+        prefix,
+        cfg,
+        cid,
+        principal,
+        urlCont: nav.cont,
+        urlTermeni: `${nav.home || ''}/termeni`,
+        carcasa: (p) => paginaCarcasa(ctx, p),
+      })
+      if (raspunsSetari) return raspunsSetari
 
       // ------------------------------------------------------- numarul curent
       if (cale === '/') {

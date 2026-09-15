@@ -47,6 +47,7 @@ import {
   type Ctx, type RandScrisoare, NUMAI_PANGAR, acasa, despreImbogatire, fisaCarte, listaCarti,
   listaPeLitere, pagina, paginaEu, paginaMesaj, paginaPangar, paginaScrisori,
 } from "./pagini.js"
+import { ruteazaSetari } from "@xc/setari"
 import { corpPropuneri, raspundePropuneri } from "./propuneri.js"
 import { type Posta } from "./scrisori.js"
 
@@ -56,6 +57,8 @@ export interface Env {
   IDENTITATE: Fetcher
   AUTORIZARE: Fetcher
   COMUNICARE: Fetcher
+  /** Venit pe 15.09.2026, odata cu zona de loguri din Setari. */
+  AUDIT: Fetcher
   MEDIU: string
   ORIGINE_PUBLICA: string
   DOMENIU_COOKIE: string
@@ -149,6 +152,20 @@ export default {
     const alMeu = cuCookie({ "cache-control": "private, no-store" })
     const spreCont = (unde: string) =>
       duTe(`${nav.cont}/intra?spre=${encodeURIComponent(`${cfg.ORIGINE_PUBLICA}${prefix}${unde}`)}`)
+
+    // SETARILE — un singur loc, `@xc/setari` (user, 15.09.2026).
+    const raspunsSetari = await ruteazaSetari(req, cale, env, {
+      cod: "biblioteca",
+      nume: "Biblioteca",
+      prefix,
+      cfg,
+      cid,
+      principal,
+      urlCont: nav.cont,
+      urlTermeni: `${nav.home || ""}/termeni`,
+      carcasa: (p) => pagina(ctx, p.titluPagina, p.corp),
+    })
+    if (raspunsSetari) return raspunsSetari
 
     try {
       const c = await catalog(env.CATALOG)

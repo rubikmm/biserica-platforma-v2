@@ -15,7 +15,7 @@
  *
  * Aplicația e numai de citit: cărțile intră prin `infrastructure/import/tipic-din-v1.mjs`.
  */
-import { principalDin, sesiuneCurenta } from '@xc/auth'
+import { principalDin, sesiuneCurenta, verificaCsrf } from '@xc/auth'
 import { SESIUNE_ANONIMA } from '@xc/contracts'
 import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
 import { Logger, correlationId } from '@xc/observability'
@@ -27,7 +27,9 @@ import { sfintiiPeSurse, ziuaIntreaga } from './zi.js'
 import { type Pericopa, textulPericopei, textulVoscresnei, ziuaCalendarului } from './calendar.js'
 import { acoperire, cartile, mineiZilei, randuialaZilei, tipiconalZilei, zileleCuRanduiala } from './depozit.js'
 import { pomeniriDinAnuar, pomeniriDinMinei } from './sinaxar.js'
-import { type Ctx, paginaMesaj, paginaZilei } from './pagini.js'
+import { abonamentul, ruteazaAbonare } from '@xc/abonare'
+import { ruteazaSetari } from '@xc/setari'
+import { type Ctx, paginaCarcasa, paginaMesaj, paginaZilei } from './pagini.js'
 import { eAdresaDeCarte, pdfDinR2 } from './carti-pdf.js'
 
 export interface Env {
@@ -36,6 +38,8 @@ export interface Env {
   AUTORIZARE: Fetcher
   AUDIT: Fetcher
   CALENDAR: Fetcher
+  /** Serviciul de comunicare — acolo se scriu abonații tipicului (audiența `tipic-abonati`). */
+  COMUNICARE: Fetcher
   MEDIU: string
   ORIGINE_PUBLICA: string
   DOMENIU_COOKIE: string
@@ -49,6 +53,8 @@ export interface Env {
 }
 
 const SERVICIU = 'app-tipic'
+/** Audiența abonaților — numele ei stă în registrul `ABONAMENTE` din `@xc/abonare`, nu aici. */
+const ABONAMENT = abonamentul('tipic')
 const CACHE_API = 'public, max-age=3600'
 const CACHE_PAGINI = 'public, max-age=300'
 
@@ -186,17 +192,25 @@ export default {
       }
     }
 
-    if (req.method !== 'GET' && req.method !== 'HEAD') {
+    /*
+     * ⚠️ POST-ul e primit DIN 15.09.2026, si numai pentru abonare: până atunci tipicul răspundea
+     * 405 la orice metodă în afară de GET/HEAD, fiindcă n-avea ce scrie nimeni. Bariera de origine
+     * e cea a platformei, aceeași ca la Calendar, Program și Buletin.
+     */
+    if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'POST') {
       return new Response('Metoda nu e permisă.', { status: 405 })
     }
 
     // Pagina e DESCHISA: „totul la liber, deocamdată" (user, 10.09.2026). V1 cerea cont aici.
     const sesiune = await sesiuneCurenta(env.IDENTITATE, req).catch(() => SESIUNE_ANONIMA)
-    principalDin(sesiune)
+    const principal = principalDin(sesiune)
     const ctx: Ctx = {
       prefix,
       nav,
       utilizator: sesiune.user?.displayName ?? sesiune.user?.email ?? null,
+      // adresa contului, pentru fereastra de abonare: acolo se scrie in camp si se incuie, fiindca
+      // abonarea platformei sta pe adresa contului, nu pe una scrisa de mana
+      emailulContului: sesiune.user?.email ?? null,
       eAdmin: sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin'),
       versiune: pkg.version,
       modificata: dataVersiunii(env.VERSIUNE),
@@ -210,7 +224,47 @@ export default {
       // ce masca fusese scoasa, deci butonul benzii de jos parea ca nu face nimic (user, 11.09.2026).
     const cachePagina = { 'cache-control': ctx.utilizator || ctx.veziCa ? 'private, no-store' : env.MEDIU === 'dev' ? 'no-store' : CACHE_PAGINI }
 
+    // Bariera CSRF a platformei, pentru singura metodă care scrie ceva.
+    if (req.method === 'POST') {
+      const problema = verificaCsrf(req, [cfg.ORIGINE_PUBLICA], cfg.MEDIU === 'dev')
+      if (problema) return html(paginaMesaj(ctx, 'Verificare de securitate', problema), 403)
+    }
+
     try {
+      /*
+       * ABONAREA — drumul intreg sta in `@xc/abonare`, acelasi pentru toata platforma (user,
+       * 15.09.2026). Tipicul da doar ce e al lui: randul din registru (audienta) si carcasa.
+       * ⚠️ Se cheama INAINTEA rutei zilei: acolo orice cale care nu e `/` e citita ca o DATA, deci
+       * `/abonare` ar fi cazut pe „Nu există".
+       */
+      const raspunsAbonare = await ruteazaAbonare(req, cale, env, {
+        abonament: ABONAMENT,
+        prefix,
+        cfg,
+        cid,
+        principal,
+        carcasa: (p) => paginaCarcasa(ctx, p),
+      })
+      if (raspunsAbonare) return raspunsAbonare
+
+      /*
+       * SETARILE — tot un singur loc, `@xc/setari` (user, 15.09.2026). Aceeasi capcana ca la
+       * abonare, si de aceea stau tot aici, INAINTEA rutei zilei: mai jos orice cale care nu e `/`
+       * e citita ca o DATA, deci `/setari` ar fi cazut pe „Nu există".
+       */
+      const raspunsSetari = await ruteazaSetari(req, cale, env, {
+        cod: 'tipic',
+        nume: 'Tipicul',
+        prefix,
+        cfg,
+        cid,
+        principal,
+        urlCont: nav.cont,
+        urlTermeni: `${nav.home || ''}/termeni`,
+        carcasa: (p) => paginaCarcasa(ctx, p),
+      })
+      if (raspunsSetari) return raspunsSetari
+
       // Adresa unei zile e chiar data ei: /2026-09-13 (decizie user, 30 aug. 2026, adusa din V1).
       let data = azi
       // Forma veche a adresei, din V1: `/zi/2026-09-13`. Redirectionam permanent, ca legaturile

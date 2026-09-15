@@ -467,6 +467,19 @@ propunerea automată, ca în V1.
    - **`transmisiuni` se șterge** (cerut anume): worker, rută, DNS, container, volume — DAR
      **bucketul R2 `biserica-transmisiuni` NU**, e chiar depozitul folosit de `radio`;
    - de dus și restul aplicațiilor pe producție odată cu ele, altfel `URL_*` din antet duc în gol.
+0d. **⚠️ ABONAREA — scrisă, probată local, NEPUBLICATĂ** (15.09.2026). Cinci workeri așteaptă:
+   `calendar`, `program`, `buletin`, `tipic` (are și legătură nouă, `COMUNICARE`) și `home`
+   (pagina de termeni, la care trimit toate ferestrele). **Se urcă `version` în `package.json`
+   înainte de fiecare.** ⚠️ Fără `home`, linkul „termenii și condițiile" duce la 404 — deci `home`
+   se publică **primul**, nu ultimul.
+   ⚠️ **ÎNTREBAREA CARE RĂMÂNE DESCHISĂ: cine trimite?** Audiențele există și se umplu, dar
+   **nimic nu trimite periodic** spre `calendar-abonati`, `program-abonati`, `tipic-abonati` —
+   doar Dispeceratul, de mână. Adică omul se abonează și nu primește nimic până nu punem ceasurile.
+   De întrebat userul ce și când pleacă la fiecare (zilnic? sâmbăta? la validarea săptămânii?).
+   ⚠️ `newsletter` nu e în registru fiindcă e ARHIVĂ, nu trimite încă; când va trimite, e primul
+   care intră. `biblia`, `biblioteca`, `live`, `radio`, `curatenie` n-au serviciu periodic deschis.
+   ⚠️ Rămas neprobat: **fereastra apăsată de un om în browser** (roșul validării, deschiderea barei
+   lunilor, derularea la ziua de azi). Probat cap-coadă e DRUMUL, prin cereri.
 1. **Modulul de Chat, ce a rămas** (11.09.2026):
    - ⚠️ **credite AI Gateway** — fără ele nici Claude, nici Workers AI nu răspund (402). Dashboard:
      AI Gateway → Credits Available → Manage → Top-up. Apoi un token dedicat cu „AI Gateway – Run"
@@ -526,6 +539,26 @@ propunerea automată, ca în V1.
    - **adminul nu e înștiințat** când apare o cerere: o vede la următoarea deschidere a panoului;
    - ⚠️ `/utilizatori/lista` întoarce **toți** utilizatorii platformei, fără plafon. E bine la zeci de
      conturi; la mii, aici se pune `LIMIT` (locul e însemnat în `depozit.ts` al identității).
+4c. **SETĂRILE (`@xc/setari`) — ce a rămas deschis** (15.09.2026):
+   - ⚠️ **NEPUBLICAT ÎNCĂ**. La publicare se republică **`xc-authz`** (cheia nouă `audience.manage`
+     și scoaterea lui `audit.read` din rolul de admin trăiesc în `@xc/contracts`, iar un authz vechi
+     respinge cheia necunoscută și traduce orice răspuns prost în REFUZ), apoi **cele 11 aplicații
+     cu `/setari`** plus **`admin`** (poarta panoului), `xc-audit` (`prefixActiune`) și
+     `xc-communication` (`/preferinte/citeste`). Aplicațiile care au primit legături noi în
+     `wrangler.jsonc` **trebuie republicate ca să le capete** — o legătură scrisă în fișier nu
+     există la Cloudflare până la deploy;
+   - ⚠️ **`curatenie`, `live`, `radio` n-au putut fi probate local** (nu sunt în `pnpm dev`). De
+     privit cu ochii pe ele imediat după publicare — mai ales curățenia, unde e singura rubrică de
+     **apartenență** din platformă;
+   - ⚠️ **părintele pierde `admin/schema`** odată cu `audit.read`. Userul a ales știind; dacă se
+     răzgândește, drumul curat e o cheie proprie a schemei, nu `audit.read` înapoi la admin;
+   - **abonații se văd pe e-mail și pe `user_id`**, nu pe nume: lista vine de la comunicare
+     (`audience_members`), care nu ține numele. Dacă userul vrea nume, se cer de la identitate la
+     afișare — nu se copiază în aplicație;
+   - **jurnalul aplicației e gol acolo unde aplicația nu scrie nimic**. Din runda asta scriu faptele
+     Setărilor peste tot; restul acțiunilor rămân nescrise în aplicațiile care n-au avut niciodată
+     audit (biblioteca, curățenia, biblia, newsletter, live, radio, home). De întrebat ce merită
+     scris în fiecare — altfel zona arată mai goală decât e viața aplicației.
 5. **Testul real de email**, de către utilizator: `https://cont.staging.sfantul-ilie.ro` → cont nou
    cu `rubikmm@gmail.com` → codul vine pe email → super-admin automat.
 6. **Pornire automată în container** — `pnpm dev` se lansează manual; de pus în `app-init.sh`.
@@ -1562,6 +1595,103 @@ forța antetul `Host`**.
 
 ### 2026-09-15
 
+- **⚠️ SETĂRILE APLICAȚIEI: un singur pachet, `@xc/setari`, și un rând nou în meniul contului.**
+  Cerute de user: „pe toate paginile celorlalte aplicații… să afișăm un alt buton, în afară de
+  Administrare, numit Setări… Fiecare nivel va vedea mai multe lucruri." **Trei trepte**, așa cum
+  le-a cerut: utilizatorul simplu își vede **abonarea lui** și o schimbă; administratorul vede pe
+  deasupra **toți abonații aplicației** și poate **scoate** pe cineva; super-adminul vede peste tot
+  restul **jurnalul aplicației** — ce au făcut adminii și utilizatorii.
+  Scris o singură dată, ca abonarea. **Ce rămâne al aplicației: codul, numele, carcasa** și
+  legăturile pe care le are. `/setari` e legat în **11 aplicații** (nu în `account`, unde Profilul E
+  pagina, și nu în `admin`, care e panoul însuși).
+  **Patru hotărâri ale userului**, luate înainte de a scrie o linie:
+  **(1)** abonarea arătată e a **aplicației curente**, nu un newsletter al platformei;
+  **(2)** butonul apare **peste tot**, cu ce are fiecare — de aceea pagina are și rubrici pentru
+  aplicațiile fără audiență, și spune pe față ce lipsește în loc să lase un tabel gol;
+  **(3)** `audit.read` **iese din rolul de administrator** (jurnalul e al super-adminului);
+  **(4)** adminul **vede și scoate**, atât — adăugarea rămâne gestul omului, cu bifa termenilor și
+  cu contul lui, ca să nu se nască abonați fără cont.
+  ⚠️ **CONSECINȚA CARE ERA SĂ ÎNCUIE PĂRINTELE AFARĂ**: `audit.read` păzea **pagina de pornire a
+  Administrării**, nu doar `admin/schema` — scoasă din rolul de admin așa cum era codul, un
+  administrator lua **403 pe TOT panoul**: fără Oameni, fără Dispecerat, fără Module. De aceea
+  poarta panoului s-a mutat pe **cheile fiecărei secțiuni** (`roles.manage`, `communication.create`,
+  `modules.manage`, `audit.read`): intri dacă ai măcar una și vezi exact ce poți folosi; 403 rămâne
+  doar pentru cine n-are niciuna. **Nu o lega la loc de `audit.read`.** Probat sub masca
+  „vezi ca administrator": `/admin` dă 200 și arată Dispeceratul. Părintele **pierde `admin/schema`**,
+  cum a ales userul știind.
+  ⚠️ **Cheie nouă: `audience.manage`** (vede abonații + scoate), implicită la `admin` și `super-admin`.
+  Ca orice cheie nouă, cere republicarea lui **`xc-authz`**, nu doar a aplicațiilor.
+  ⚠️ **Jurnalul se scrie DIN PACHET**, nu din aplicație (spre deosebire de `@xc/abonare`, care
+  primește un `audit()` de la ea). Pricina e chiar zona de loguri: aplicații ca **Tipicul aveau
+  legătura `AUDIT` dar nu scriau nimic în ea niciodată**, deci super-adminul ar fi deschis Setările
+  și ar fi găsit un tabel gol.
+  ⚠️ **Auditul a căpătat `prefixActiune`** (`calendar.` → toate acțiunile calendarului): până azi
+  `/citeste` filtra numai pe o acțiune ANUME, deci „ce s-a întâmplat în aplicația asta" nu se putea
+  întreba deloc. Prefixul se cere cu punct la coadă și fără `%`/`_`, ca să nu devină tipar LIKE.
+  ⚠️ **Comunicarea a căpătat `/preferinte/citeste`**: preferința se putea numai SCRIE, deci nicăieri
+  în platformă nu se vedea dacă omul și-a oprit scrisorile.
+  ⚠️ **Opt configurații au primit legături noi** (`AUTORIZARE`, `COMUNICARE`, `AUDIT`, după caz, în
+  toate cele trei blocuri): buletin, newsletter, biblia, biblioteca, curatenie, live, radio, home.
+  Fără ele treptele de admin și super-admin n-ar fi avut pe cine întreba.
+  ⚠️ **Rubrica „E-mailul de la platformă" NU e a aplicației**, e a omului, peste tot — și scrie asta
+  pe ea, ca omul să nu oprească tot mailul crezând că oprește numai calendarul.
+  **Două capcane plătite azi**, amândouă scrise deja în NOTES și călcate iar:
+  **(a)** carcasa are `form { display:flex; flex-wrap:wrap }` — fără `display:block` pe formularele
+  Setărilor, bifa, mesajul de validare și butonul s-ar fi înșirat ca niște jetoane;
+  **(b)** ⚠️ **`const LOCAL = LOCAL_APP + STIL_SETARI` la nivel de modul, în `apps/home/src/index.ts`,
+  a oprit workerul din PORNIRE** cu „STIL_SETARI is not defined": la împachetare, corpul modulului de
+  intrare se evaluează înaintea pachetului. **`tsc` a trecut curat**; a căzut abia în `wrangler dev`.
+  În modulul de INTRARE, concatenarea cu un import se face leneș (funcție); în `stil.ts` merge, ca la
+  `STIL_ABONARE`. Ruda bună a regulii „typecheck curat nu înseamnă că se publică".
+  Probe: `tests/setari.test.ts` (18), între care poarta cheii la scoaterea unui abonat — cine trimite
+  formularul de mână ajunge tot acolo, deci paza nu stă în desenul butonului.
+  **Probat pe viu, local**: abonare din Setări → lista de admin arată 2 abonați cu „Scoate" →
+  jurnalul arată `calendar.subscribe` cu ora; prin „vezi ca", treptele coboară (user 2 rubrici,
+  admin 3, super-admin 4).
+  ⚠️ **`curatenie`, `live` și `radio` NU sunt în `pnpm dev`** — nu s-au putut proba local (era așa și
+  înainte). Typecheck-ul trece, dar prima lor probă adevărată e pe producție.
+- **⚠️ ABONAREA E UN SINGUR PACHET: `@xc/abonare`.** Până azi fereastra de abonare era COPIATĂ în
+  patru aplicații (calendar, program, buletin, tipic), identică literă cu literă, și **nu trimitea
+  nimic nicăieri**: `<form method="dialog">` o închidea și atât. Userul a tăiat-o scurt („ar trebui
+  să fie la fel peste tot. Nu ar trebui să copiez logica în mai multe locuri"), așa că acum butonul,
+  fereastra, ecranul celor șase cifre și tot drumul stau într-un loc.
+  **Ce a rămas al aplicației: un rând în registrul `ABONAMENTE`** — adică audiența în care se scrie
+  omul. Atât. ⚠️ **Un rând acolo = un buton în aplicație**; aplicația fără serviciu de trimis n-are
+  buton (regula userului). Azi sunt patru: `calendar`, `program`, `buletin`, `tipic`.
+  ⚠️ **Tipicul a căpătat și legătura `COMUNICARE`** (n-o avea deloc — butonul lui era gol pe
+  dinăuntru, fără nici măcar o rută dedesubt) și primește acum POST, unde până azi răspundea 405.
+  ⚠️ A doua bifă a ferestrei tipicului scria „Vreau să primesc anunțuri" în loc de termeni — o
+  scăpare veche din copiere, îndreptată odată cu fereastra comună.
+  **Drumul, întreg**: bifă termeni (fără ea nu pleacă — și în pagină, și la server) → dacă ești
+  intrat, te abonezi pe loc cu adresa contului; dacă nu, îți vine cod de șase cifre, îl scrii **în
+  pagina aplicației** (nu la Cont), și te întorci exact de unde ai plecat, cu cont `user` și abonat.
+  ⚠️ **Capcană plătită**: `ctx.spre` al aplicațiilor e o adresă ÎNTREAGĂ (`adresaPaginii`), nu o
+  cale — trecută neatinsă la `spreSigur`, ar fi fost refuzată la fiecare abonare și omul ar fi
+  aterizat mereu pe rădăcină. Traducerea e în `caleaDin`, cu probă.
+- **Calendarul: bara lunilor a coborât, data a urcat.** Șirul derulant al lunilor a ieșit din pastila
+  din rândul de unelte și stă acum într-o **bară a doua, sub antet, ascunsă** (`.bara-luni`); în locul
+  lui, în pastilă: bulina „Astăzi", **data scrisă** („15 septembrie 2026" pe luna de azi, „octombrie
+  2026" pe alta, fără zi) și **cheia cu iconița de calendar** care coboară șirul.
+  ⚠️ Închiderea barei la alegerea unei luni **nu e JS**: alegerea e o navigare, iar pagina următoare
+  se naște cu `hidden` scris de server. ⚠️ Centrarea lunii deschise se face la FIECARE coborâre a
+  barei, nu o dată la încărcare: cât e `hidden`, `offsetLeft` și `clientWidth` sunt 0.
+  ⚠️ Data NU e scrisă cu majuscule/răschirat ca lunile, și trece singură pe forma scurtă sub 600 px —
+  altfel rândul unic cerut de user s-ar fi rupt pe telefon.
+  **Și: la intrarea pe `/` pagina derulează singură la ziua de azi** (clasa `la-azi` pe corp, pusă de
+  server numai acolo — nu și când omul a ales el o lună, unde o săritură ar fi o răpire).
+- **Calendarul: a treia cruce nu se mai vede decât la admin.** Regula casei rămâne „butoanele fără
+  drept se sting, nu se ascund" — ⚠️ **„Sfinți cu evlavie" e singura abatere**, cerută anume pe
+  trepte. Primele două cruci rămân palite la neautentificat, apăsabile la restul. Ascunderea NU e o
+  poartă: `poateFiltra` taie mai departe `?filtru=evlavie` scris de mână; proba păzește și asta.
+- **Termeni și condiții: o pagină, a platformei**, la `home/termeni` — nu una per aplicație, fiindcă
+  textul vorbește despre cont, adresă și date, iar fereastra e la patru aplicații. Cuprinsul e cel
+  cerut: ce date se țin, că nu facem reclamă, că nu vindem nimic, că se șterg la cerere.
+  ⚠️ **Nu e text verificat de un avocat** și nu se poartă ca și cum ar fi.
+- **⚠️ `pnpm migreaza` era STRICAT, și cu el tot localul.** Cerea bazele `xc-<x>-staging`, care nu mai
+  există: `--local` n-are mediu, iar blocul fără `env` al configurațiilor poartă din 14.09 numele de
+  **producție**. Deci baza locală rămânea goală și `pnpm dev` dădea 500 („no such table") la orice
+  pagină cu date — taman acum, când localul e singurul loc de probă. Local se cheamă acum prin
+  **binding** (`DB`), care nu se schimbă de la un mediu la altul; pe remote rămâne numele.
 - **Schema platformei a intrat în admin**, la `admin/schema` (0.3.0), cerută în doi pași: întâi un
   link, apoi „detalieri pe toate aplicațiile și configurația generală". Pagina are desenul, ce e
   scris la fel peste tot (o dată, nu de 21 de ori) și o fișă pentru fiecare worker: versiune, adresă,

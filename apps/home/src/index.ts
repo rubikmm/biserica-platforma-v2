@@ -7,7 +7,8 @@
  * nimic punctat.
  */
 import { SESIUNE_ANONIMA } from '@xc/contracts'
-import { sesiuneCurenta } from '@xc/auth'
+import { principalDin, sesiuneCurenta, verificaCsrf } from '@xc/auth'
+import { ruteazaSetari, STIL_SETARI } from '@xc/setari'
 import { adresaPaginii, citesteConfig, navigatieDin, type Navigatie } from '@xc/config'
 import { correlationId, Logger } from '@xc/observability'
 import { dataVersiunii, esc, html, json, pagina } from '@xc/ui'
@@ -15,6 +16,10 @@ import pkg from '../package.json'
 
 export interface Env {
   IDENTITATE: Fetcher
+  /** Venite pe 15.09.2026, odata cu pagina de Setari: cheile, abonarile si jurnalul. */
+  AUTORIZARE: Fetcher
+  COMUNICARE: Fetcher
+  AUDIT: Fetcher
   MEDIU: string
   ORIGINE_PUBLICA: string
   DOMENIU_COOKIE: string
@@ -46,7 +51,7 @@ const APLICATII: Array<{ cheie: keyof Navigatie; nume: string }> = [
 ]
 
 /** Stilul butoanelor e cel de la website (V1), fara starile stinse. */
-const LOCAL = `
+const LOCAL_APP = `
 .apps { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr));
         gap:10px; margin:22px 0 8px }
 .apps a { display:block; text-align:center; padding:12px 10px;
@@ -57,7 +62,83 @@ const LOCAL = `
 .apps .adr { display:block; margin-top:4px; font:11.5px/1.2 ui-sans-serif,system-ui;
              color:var(--faint); letter-spacing:.01em }
 .apps a:hover .adr { color:var(--rosu) }
+/* Pagina de termeni: un text lung, de citit — coloana ingusta, randuri rare. */
+.text-lung { max-width:44em }
+.text-lung h2 { font-size:19px; font-weight:400; margin:26px 0 8px }
+.text-lung p, .text-lung li { line-height:1.6; color:var(--soft) }
+.text-lung ul { padding-left:20px }
+.text-lung .cand { color:var(--faint); font-size:.9rem }
 `
+
+/**
+ * Stilul aplicatiei plus bucatile paginii de Setari, care traiesc in `@xc/setari` (15.09.2026).
+ *
+ * ⚠️ FUNCTIE, nu constanta. Scrisa ca `const LOCAL = LOCAL_APP + STIL_SETARI`, workerul cadea la
+ * PORNIRE cu „STIL_SETARI is not defined": la impachetare, corpul modulului de intrare se
+ * evalueaza inaintea pachetului, deci legatura importata inca nu exista. `tsc` trece curat peste
+ * asta — s-a vazut abia in `wrangler dev`. Chemata la cerere, legatura e gata de mult.
+ */
+const LOCAL = () => LOCAL_APP + STIL_SETARI
+
+/**
+ * TERMENII ȘI CONDIȚIILE — una singură, a PLATFORMEI, nu a fiecărei aplicații (hotărât cu userul,
+ * 15.09.2026). La ea trimite bifa „Sunt de acord cu termenii și condițiile" din fereastra de abonare
+ * a tuturor aplicațiilor (`@xc/abonare`), în filă nouă. Aici stă fiindcă textul vorbește despre CONT,
+ * adresă de e-mail și date — adică despre platformă —, iar aceeași fereastră e la patru aplicații.
+ *
+ * ⚠️ Cuprinsul e cel cerut de user (15.09.2026): „informații generale despre stocarea datelor, că nu
+ * facem reclamă, nu vindem informații și că se pot șterge la cerere". Atât — fără clauze împrumutate
+ * de pe alte site-uri, care ar promite lucruri pe care parohia nu le face.
+ *
+ * ⚠️ NU e un text juridic verificat de un avocat, și nu se poartă ca și cum ar fi. Dacă parohia
+ * ajunge să aibă nevoie de unul, acesta e punctul de plecare, nu forma finală.
+ */
+const TERMENI = `<div class="cap">
+  <h1>Termeni și condiții</h1>
+  <p class="cand">Ultima schimbare: 15 septembrie 2026.</p>
+</div>
+<div class="text-lung">
+<p>Platforma aceasta este a Parohiei „Sfântul Ilie – Hanul Colței" și ține locul unei foi de la
+ușa bisericii: calendarul, programul slujbelor, buletinul parohial și celelalte. O puteți citi
+fără cont și fără să ne spuneți cine sunteți.</p>
+
+<h2>Ce date ținem</h2>
+<p>Cont vă faceți doar dacă vreți ceva ce cere unul — de pildă să primiți pe e-mail calendarul sau
+programul. Atunci ținem:</p>
+<ul>
+  <li><b>adresa de e-mail</b>, ca să vă putem trimite ce ați cerut și ca să vă putem recunoaște la
+  intrare;</li>
+  <li><b>numele</b>, dacă ni-l spuneți, ca să știm cum să vă scriem;</li>
+  <li><b>la ce sunteți abonat</b> și de când;</li>
+  <li>o urmă tehnică scurtă a intrărilor (data, adresa IP), ca să ne putem apăra de abuzuri.</li>
+</ul>
+<p>Nu cerem parolă și nu ținem niciuna: la intrare vă trimitem pe e-mail un cod de șase cifre,
+bun zece minute.</p>
+
+<h2>La ce le folosim</h2>
+<p>Numai ca să vă trimitem ce ați cerut și ca să meargă contul. <b>Nu facem reclamă</b> — nici a
+noastră, nici a altcuiva. <b>Nu vindem și nu dăm mai departe datele nimănui</b>, nici pe bani, nici
+pe gratis. Nu le folosim ca să vă urmărim prin alte părți ale internetului.</p>
+
+<h2>Cine le mai vede</h2>
+<p>Scrisorile pleacă prin furnizorul tehnic care ne ține site-ul și poșta. El le trimite în numele
+nostru și nu are voie să le folosească în alt scop.</p>
+
+<h2>Cât le ținem și cum le ștergeți</h2>
+<p>Le ținem atât timp cât aveți cont. <b>Vă puteți dezabona oricând</b>, dintr-un singur gest, din
+aplicația la care sunteți abonat. <b>Și puteți cere oricând să vă ștergem cu totul datele</b> —
+scrieți-ne și le ștergem, fără să vă cerem o pricină.</p>
+
+<h2>Ce mai puteți cere</h2>
+<p>Să vedeți ce date avem despre dumneavoastră, să le îndreptăm dacă sunt greșite, sau să le
+ștergem. Toate, la o simplă cerere.</p>
+
+<h2>Cum ne scrieți</h2>
+<p>Pe adresa parohiei, ori răspunzând la orice scrisoare primită de la noi.</p>
+
+<h2>Dacă se schimbă ceva</h2>
+<p>Dacă schimbăm ceva aici, scriem data de mai sus. Nu schimbăm în tăcere la ce folosim datele.</p>
+</div>`
 
 function buton(nume: string, url: string): string {
   const adresa = url.replace(/^https:\/\/|\/$/g, '') || 'aici'
@@ -103,7 +184,7 @@ export default {
       titlu: 'Platforma parohiei',
       acasa: '/',
       urlPlatforma: nav.home || '/',
-      local: LOCAL,
+      local: LOCAL(),
       versiune: pkg.version,
       modificata: dataVersiunii(env.VERSIUNE),
       cont: {
@@ -112,10 +193,46 @@ export default {
         admin: eAdmin,
         urlCont: nav.cont,
         urlAdmin: nav.admin,
+        // Setarile APLICATIEI (user, 15.09.2026). Home-ul n-are abonare si n-are echipa, deci aici
+        // omul gaseste preferinta lui de e-mail, iar super-adminul jurnalul `home.`.
+        urlSetari: '/setari',
         poateVedeaCa: sesiune.poateVedeaCa,
         veziCa: sesiune.veziCa,
         spre: adresaPaginii(cfg, url),
       },
+    }
+
+    // SETARILE — un singur loc, `@xc/setari` (user, 15.09.2026).
+    if (url.pathname === '/setari' || url.pathname.startsWith('/setari/')) {
+      if (req.method === 'POST') {
+        const problema = verificaCsrf(req, [cfg.ORIGINE_PUBLICA], cfg.MEDIU === 'dev')
+        if (problema) {
+          return html(pagina({ ...comune, titluPagina: 'Verificare de securitate', corp: `<h2>Verificare de securitate</h2><p>${problema}</p>` }), 403)
+        }
+      }
+      const raspunsSetari = await ruteazaSetari(req, url.pathname, env, {
+        cod: 'home',
+        nume: 'Platforma',
+        prefix: '',
+        cfg,
+        cid,
+        principal: principalDin(sesiune),
+        urlCont: nav.cont,
+        urlTermeni: `${nav.home || ''}/termeni`,
+        carcasa: (p) => pagina({ ...comune, titluPagina: p.titluPagina, corp: p.corp, ...(p.scripturi ? { scripturi: p.scripturi } : {}) }),
+      })
+      if (raspunsSetari) return raspunsSetari
+    }
+
+    // Termenii platformei — una singură, la ea trimit ferestrele de abonare ale tuturor aplicațiilor.
+    if (url.pathname === '/termeni') {
+      return html(
+        pagina({ ...comune, titluPagina: 'Termeni și condiții', indexabil: true, corp: TERMENI }),
+        200,
+        // ⚠️ aceeași grijă ca la ușa platformei: pagina poartă numele omului în antet, deci sub
+        // cont (ori sub masca „vezi ca") nu se dă la cache-ul browserului
+        { 'cache-control': utilizator || sesiune.veziCa ? 'private, no-store' : 'public, max-age=3600' },
+      )
     }
 
     if (url.pathname !== '/' && url.pathname !== '') {

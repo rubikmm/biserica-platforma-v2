@@ -25,7 +25,14 @@
   // Depozitul propriu: lista.json, cauta.json, stiri/<id>.html si media/uploads/…
   "r2_buckets": [{ "binding": "ARHIVA", "bucket_name": "xc-newsletter-production" }],
 
-  "services": [{ "binding": "IDENTITATE", "service": "xc-identity" }],
+  // AUTORIZARE, COMUNICARE si AUDIT au venit pe 15.09.2026, odata cu pagina de Setari: ea cere
+  // cheile omului (autorizare), abonarile lui (comunicare) si jurnalul (audit).
+  "services": [
+    { "binding": "IDENTITATE", "service": "xc-identity" },
+    { "binding": "AUTORIZARE", "service": "xc-authz" },
+    { "binding": "COMUNICARE", "service": "xc-communication" },
+    { "binding": "AUDIT", "service": "xc-audit" }
+  ],
 
   "env": {
     "staging": {
@@ -51,7 +58,12 @@
         "URL_ADMIN": "https://admin.staging.sfantul-ilie.ro"
       },
       "r2_buckets": [{ "binding": "ARHIVA", "bucket_name": "xc-newsletter-staging" }],
-      "services": [{ "binding": "IDENTITATE", "service": "xc-identity-staging" }],
+      "services": [
+        { "binding": "IDENTITATE", "service": "xc-identity-staging" },
+        { "binding": "AUTORIZARE", "service": "xc-authz-staging" },
+        { "binding": "COMUNICARE", "service": "xc-communication-staging" },
+        { "binding": "AUDIT", "service": "xc-audit-staging" }
+      ],
       "routes": [{ "pattern": "newsletter.staging.sfantul-ilie.ro", "custom_domain": true }]
     },
     "production": {
@@ -77,7 +89,12 @@
         "URL_ADMIN": "https://admin.sfantul-ilie.ro"
       },
       "r2_buckets": [{ "binding": "ARHIVA", "bucket_name": "xc-newsletter-production" }],
-      "services": [{ "binding": "IDENTITATE", "service": "xc-identity-production" }]
+      "services": [
+        { "binding": "IDENTITATE", "service": "xc-identity-production" },
+        { "binding": "AUTORIZARE", "service": "xc-authz-production" },
+        { "binding": "COMUNICARE", "service": "xc-communication-production" },
+        { "binding": "AUDIT", "service": "xc-audit-production" }
+      ]
       // Ruta de productie (`newsletter.sfantul-ilie.ro`) ramane a lui A8 pana la cutover-ul explicit.
     }
   }

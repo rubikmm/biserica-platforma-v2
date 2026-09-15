@@ -28,7 +28,19 @@ export async function sesiuneCurenta(
 ): Promise<SesiuneCurenta> {
   const token = citesteCookie(req, NUME_COOKIE_SESIUNE)
   if (!token) return SESIUNE_ANONIMA
+  return sesiuneDupaJeton(identitate, token)
+}
 
+/**
+ * Aceeasi intrebare, dar cu jetonul in mana, nu in cookie: dupa ce o aplicatie deschide ea insasi
+ * o sesiune (abonarea cu cont, `@xc/abonare`), cookie-ul abia urmeaza sa plece spre browser, deci
+ * `sesiuneCurenta` n-ar avea ce citi din cererea de acum. Fara asta, aplicatia ar sti ca omul a
+ * intrat, dar nu si CINE e — iar abonarea are nevoie de `userId` si de adresa lui.
+ */
+export async function sesiuneDupaJeton(
+  identitate: ServiciuIdentitate,
+  token: string,
+): Promise<SesiuneCurenta> {
   const raspuns = await identitate.fetch('https://identity.intern/sesiune', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -39,6 +51,59 @@ export async function sesiuneCurenta(
   const date = await raspuns.json()
   const parsat = SesiuneCurenta.safeParse(date)
   return parsat.success ? parsat.data : SESIUNE_ANONIMA
+}
+
+/**
+ * CELE DOUA VERBE ALE INTRARII FARA PAROLA, scrise o data pentru toata platforma.
+ *
+ * Pana la 15.09.2026 le stia numai aplicatia `cont`, care le chema de mana; de cand abonarea
+ * deschide si ea cont (vezi `@xc/abonare`), drumul ar fi fost copiat a doua oara — si cu el
+ * forma corpului, numele campurilor si felul in care se citesc erorile. Aici sunt o data.
+ *
+ * ⚠️ Nu fac nicio judecata: `/intrare` trimite codul ORICUI cere (identitatea are limitele ei
+ * de incercari), iar `/confirma-cod` doar spune daca cele sase cifre sunt bune. Cine deschide
+ * sesiunea si ce face cu ea mai departe ramane treaba celui care le cheama.
+ */
+export async function cereCodDeIntrare(
+  identitate: ServiciuIdentitate,
+  o: { email: string; ip: string; displayName?: string | null; correlationId?: string },
+): Promise<{ status: number; debugCod: string | null }> {
+  const raspuns = await identitate.fetch('https://identity.intern/intrare', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...(o.correlationId ? { 'x-correlation-id': o.correlationId } : {}) },
+    body: JSON.stringify({ email: o.email, ip: o.ip, ...(o.displayName ? { displayName: o.displayName } : {}) }),
+  })
+  const date = (await raspuns.json().catch(() => ({}))) as { debugCod?: string | null }
+  return { status: raspuns.status, debugCod: date.debugCod ?? null }
+}
+
+export type RaspunsCod =
+  | { ok: true; sessionToken: string; maxAge: number; contNou: boolean }
+  | { ok: false; motiv: string | null; ramase: number | null }
+
+export async function confirmaCodul(
+  identitate: ServiciuIdentitate,
+  o: { email: string; cod: string; ip: string; userAgent: string; correlationId?: string },
+): Promise<RaspunsCod> {
+  const raspuns = await identitate.fetch('https://identity.intern/confirma-cod', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...(o.correlationId ? { 'x-correlation-id': o.correlationId } : {}) },
+    body: JSON.stringify({ email: o.email, cod: o.cod, ip: o.ip, userAgent: o.userAgent }),
+  })
+  const date = (await raspuns.json().catch(() => ({}))) as Record<string, unknown>
+  if (!raspuns.ok || date.ok !== true) {
+    return {
+      ok: false,
+      motiv: typeof date.motiv === 'string' ? date.motiv : null,
+      ramase: typeof date.ramase === 'number' ? date.ramase : null,
+    }
+  }
+  return {
+    ok: true,
+    sessionToken: String(date.sessionToken),
+    maxAge: Number(date.maxAge),
+    contNou: date.contNou === true,
+  }
 }
 
 /**

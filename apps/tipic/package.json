@@ -10,6 +10,8 @@
     "deploy:staging": "wrangler deploy --env staging"
   },
   "dependencies": {
+    "@xc/abonare": "workspace:*",
+    "@xc/setari": "workspace:*",
     "@xc/actiuni": "workspace:*",
     "@xc/auth": "workspace:*",
     "@xc/authorization": "workspace:*",

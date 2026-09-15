@@ -20,6 +20,19 @@ function json(date: unknown, status = 200): Response {
 const CerereCitire = z.object({
   target: z.string().optional(),
   action: z.string().optional(),
+  /*
+   * Familia de actiuni a unei aplicatii: `calendar.` prinde `calendar.subscribe`,
+   * `calendar.unsubscribe` si tot ce va mai scrie calendarul de acum inainte (15.09.2026, pentru
+   * zona de loguri din Setari). Pana acum se putea cere numai o actiune ANUME, deci „ce s-a
+   * intamplat in aplicatia asta" nu se putea intreba deloc.
+   *
+   * ⚠️ Se cere sa se termine cu punct si sa n-aiba `%` ori `_`: altfel un prefix scris de mana ar
+   * deveni un tipar LIKE si ar scoate din jurnal si ce nu e al aplicatiei.
+   */
+  prefixActiune: z
+    .string()
+    .regex(/^[a-z0-9-]+\.$/, 'prefixul unei aplicatii se scrie `nume.`, cu punct la coada')
+    .optional(),
   limita: z.number().int().min(1).max(200).default(50),
 })
 
@@ -71,6 +84,10 @@ export default {
         if (date.action) {
           conditii.push('action = ?')
           legaturi.push(date.action)
+        }
+        if (date.prefixActiune) {
+          conditii.push('action LIKE ?')
+          legaturi.push(`${date.prefixActiune}%`)
         }
 
         const unde = conditii.length ? `WHERE ${conditii.join(' AND ')}` : ''

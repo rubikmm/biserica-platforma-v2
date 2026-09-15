@@ -32,6 +32,8 @@ function contDin(ctx: Ctx) {
     admin: ctx.eAdmin,
     urlCont: ctx.nav.cont,
     urlAdmin: ctx.nav.admin,
+    // Setarile APLICATIEI, nu ale platformei (user, 15.09.2026) — de aceea adresa e a noastra.
+    urlSetari: `${ctx.prefix}/setari`,
     poateVedeaCa: ctx.poateVedeaCa ?? false,
     veziCa: ctx.veziCa ?? null,
     spre: ctx.spre ?? "",
@@ -91,6 +93,14 @@ function sablon(ctx: Ctx, titlu: string, corp: string, q = "", scripturi = ""): 
 
 export function paginaMesaj(ctx: Ctx, titlu: string, corp: string, q = ""): string {
   return sablon(ctx, titlu, corp, q)
+}
+
+/**
+ * Carcasa goala a Bibliei — antet, subsol, stil — cu un corp dat de altcineva. O cere `@xc/setari`
+ * (15.09.2026). Randul de unelte ramane, ca antetul sa fie acelasi peste tot.
+ */
+export function paginaCarcasa(ctx: Ctx, o: { titluPagina: string; corp: string; scripturi?: string }): string {
+  return sablon(ctx, o.titluPagina, o.corp, "", o.scripturi ?? "")
 }
 
 const NUME_PARTE: Record<Parte, string> = {

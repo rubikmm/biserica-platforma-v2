@@ -28,8 +28,13 @@
     { "binding": "TEXTE", "bucket_name": "xc-biblia-production" }
   ],
 
+  // AUTORIZARE, COMUNICARE si AUDIT au venit pe 15.09.2026, odata cu pagina de Setari: ea cere
+  // cheile omului (autorizare), abonarile lui (comunicare) si jurnalul (audit).
   "services": [
-    { "binding": "IDENTITATE", "service": "xc-identity" }
+    { "binding": "IDENTITATE", "service": "xc-identity" },
+    { "binding": "AUTORIZARE", "service": "xc-authz" },
+    { "binding": "COMUNICARE", "service": "xc-communication" },
+    { "binding": "AUDIT", "service": "xc-audit" }
   ],
 
   "env": {
@@ -59,7 +64,10 @@
         { "binding": "TEXTE", "bucket_name": "xc-biblia-staging" }
       ],
       "services": [
-        { "binding": "IDENTITATE", "service": "xc-identity-staging" }
+        { "binding": "IDENTITATE", "service": "xc-identity-staging" },
+        { "binding": "AUTORIZARE", "service": "xc-authz-staging" },
+        { "binding": "COMUNICARE", "service": "xc-communication-staging" },
+        { "binding": "AUDIT", "service": "xc-audit-staging" }
       ],
       "routes": [{ "pattern": "biblia.staging.sfantul-ilie.ro", "custom_domain": true }]
     },
@@ -89,7 +97,10 @@
         { "binding": "TEXTE", "bucket_name": "xc-biblia-production" }
       ],
       "services": [
-        { "binding": "IDENTITATE", "service": "xc-identity-production" }
+        { "binding": "IDENTITATE", "service": "xc-identity-production" },
+        { "binding": "AUTORIZARE", "service": "xc-authz-production" },
+        { "binding": "COMUNICARE", "service": "xc-communication-production" },
+        { "binding": "AUDIT", "service": "xc-audit-production" }
       ]
       // Ruta de productie (`biblia.sfantul-ilie.ro`) ramane a lui A10 pana la cutover-ul explicit.
     }

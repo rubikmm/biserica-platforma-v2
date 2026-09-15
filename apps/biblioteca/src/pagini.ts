@@ -137,6 +137,8 @@ function contul(ctx: Ctx): OptiuniPagina["cont"] {
     href: ctx.nav.cont,
     urlCont: ctx.nav.cont,
     urlAdmin: ctx.nav.admin,
+    // Setarile APLICATIEI, nu ale platformei (user, 15.09.2026) — de aceea adresa e a noastra.
+    urlSetari: `${ctx.prefix}/setari`,
     poateVedeaCa: ctx.poateVedeaCa,
     veziCa: ctx.veziCa,
     spre: ctx.spre,

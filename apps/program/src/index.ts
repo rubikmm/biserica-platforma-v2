@@ -45,7 +45,9 @@ import { modulActiuni } from '@xc/actiuni'
 import { modulChat } from '@xc/chat'
 import { ACTIUNI } from './actiuni.js'
 import { htmlFoaiaSaptamanii, htmlPozaSaptamanii, htmlSfintiiZilei, saptamanaOriPropunere, textSaptamanii } from './hartii.js'
-import { LATIME_POZA, type Ctx, type Meniu, paginaArhiva, paginaMesaj, paginaSaptamana } from './pagini.js'
+import { ruteazaSetari } from '@xc/setari'
+import { abonamentul, ruteazaAbonare } from '@xc/abonare'
+import { LATIME_POZA, type Ctx, type Meniu, paginaArhiva, paginaCarcasa, paginaMesaj, paginaSaptamana } from './pagini.js'
 
 export interface Env {
   DB: D1Database
@@ -83,7 +85,8 @@ const CHAT = modulChat({ aplicatie: 'program', titlu: 'Întreabă' })
 const MODUL = modulActiuni<Env>({ aplicatie: 'program', versiune: pkg.version, actiuni: ACTIUNI })
 
 const SERVICIU = 'app-program'
-const AUDIENTA = 'program-abonati'
+/** Audienta abonatilor — numele ei sta in registrul `ABONAMENTE` din `@xc/abonare`, nu aici. */
+const ABONAMENT = abonamentul('program')
 const CACHE_PAGINI = 'public, max-age=300'
 
 function redirect(catre: string, antete: Record<string, string> = {}): Response {
@@ -175,6 +178,9 @@ export default {
       prefix,
       nav,
       utilizator: utilizatorReal,
+      // adresa contului, pentru fereastra de abonare: acolo se scrie in camp si se incuie, fiindca
+      // abonarea platformei sta pe adresa contului, nu pe una scrisa de mana
+      emailulContului: sesiune.user?.email ?? null,
       eAdmin: eAdminReal,
       eSuperAdmin: eSuperAdminReal,
       versiune: pkg.version,
@@ -242,20 +248,35 @@ export default {
         return html(paginaArhiva({ ctx, an, ani, saptamani, total: ac.saptamani, deLa: ac.de_la, meniu: meniuAzi() }), 200, cachePagina)
       }
 
-      // ------------------------------------------------------------ abonare
-      if (cale === '/abonare' || cale === '/dezabonare') {
-        if (req.method !== 'POST') return redirect(`${prefix}/`)
-        if (!principal) return redirect(`${nav.cont}/auth/login`)
-        const formular = await req.formData()
-        const spre = String(formular.get('spre') ?? `${prefix}/`)
-        const spreSigur = spre.startsWith('/') && !spre.startsWith('//') ? spre : `${prefix}/`
-        const inscrie = cale === '/abonare'
-        const r = inscrie
-          ? await comunicare(env, '/audiente/inscrie', { audienceId: AUDIENTA, nume: 'Abonații programului', userId: principal.userId, channel: 'email', adresa: principal.email })
-          : await comunicare(env, '/audiente/scoate', { audienceId: AUDIENTA, userId: principal.userId, channel: 'email' })
-        await scrieAudit(env, { action: inscrie ? 'program.subscribe' : 'program.unsubscribe', target: AUDIENTA, outcome: r ? 'success' : 'failure', correlationId: cid, actorId: principal.userId })
-        return redirect(`${spreSigur}?abonat=${!r ? 0 : inscrie ? 1 : 2}`)
-      }
+      /*
+       * ABONAREA — drumul intreg sta in `@xc/abonare`, acelasi pentru toata platforma (user,
+       * 15.09.2026). Programul da doar ce e al lui: randul din registru (audienta), carcasa in care
+       * se scriu paginile si jurnalul. Intoarce `null` cand adresa nu e a abonarii.
+       */
+      const raspunsAbonare = await ruteazaAbonare(req, cale, env, {
+        abonament: ABONAMENT,
+        prefix,
+        cfg,
+        cid,
+        principal,
+        carcasa: (p) => paginaCarcasa(ctx, p),
+        audit: (i) => scrieAudit(env, { ...i, correlationId: cid }),
+      })
+      if (raspunsAbonare) return raspunsAbonare
+
+      // SETARILE — tot un singur loc, `@xc/setari` (user, 15.09.2026).
+      const raspunsSetari = await ruteazaSetari(req, cale, env, {
+        cod: 'program',
+        nume: 'Programul',
+        prefix,
+        cfg,
+        cid,
+        principal,
+        urlCont: nav.cont,
+        urlTermeni: `${nav.home || ''}/termeni`,
+        carcasa: (p) => paginaCarcasa(ctx, p),
+      })
+      if (raspunsSetari) return raspunsSetari
 
       // ca in V1: titlul si cele doua linkuri, sub antetul intreg
       return html(paginaMesaj(ctx, 'Nu există pagina', '', 'info', meniuAzi()), 404)

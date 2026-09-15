@@ -9,7 +9,14 @@
  *
  * ⚠️ Fara accent grav in comentariile de aici: stilul e un template literal, iar un backtick intr-un
  * comentariu inchide sirul si `tsc` scoate erori fara legatura cu locul vinovat.
+ *
+ * ⚠️ La coada lui se lipeste `STIL_ABONARE` din `@xc/abonare`: bucatile NOI ale ferestrei (randul
+ * rosu al validarii, linkul din bifa, cele sase casute ale codului) stau o singura data, langa
+ * HTML-ul lor. Restul ferestrei (`.modal`, `.camp`, `.bifa`, `.btn-plin`) e mai jos, neatins.
  */
+import { STIL_ABONARE } from '@xc/abonare'
+import { STIL_SETARI } from '@xc/setari'
+
 export const LOCAL = `
 .marunt { font-size:14px; color:var(--faint) }
 .gol { color:var(--faint); font-style:italic }
@@ -161,4 +168,4 @@ a.coperta:hover img { border-color:var(--rosu) }
 .gasit p { margin:4px 0 0; font-size:14px; line-height:1.5; color:var(--soft) }
 .gasit mark { background:var(--azi-fund); color:var(--ink); font-weight:600; padding:0 1px; border-radius:3px }
 .gasit:hover b { color:var(--rosu) }
-`
+` + STIL_ABONARE + STIL_SETARI

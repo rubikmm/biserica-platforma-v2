@@ -40,6 +40,8 @@ import type { IntrareVocabular, Slujba, StareSaptamana } from '@xc/contracts'
 import type { Navigatie } from '@xc/config'
 import type { BucataChat } from '@xc/ui'
 import { ICOANE, LUNI, STIL_COMUN, ZILE_SAPTAMANA, adaugaZile, alerta, esc, intervalLizibil, luneaSaptamanii, pagina, ziuaSaptamanii } from '@xc/ui'
+import { JS_ABONARE, STIL_ABONARE, abonamentul, butonAbonare, fereastraAbonare } from '@xc/abonare'
+import { STIL_SETARI } from '@xc/setari'
 import type { CalendarSaptamana, ZiPeProgram } from './calendar.js'
 import { ziRosie } from './calendar.js'
 import { PAROHIA, randurileSlujbei } from './foaie.js'
@@ -50,6 +52,8 @@ export interface Ctx {
   chat?: BucataChat
   nav: Navigatie
   utilizator: string | null
+  /** Adresa contului — fereastra de abonare o scrie in camp si o incuie; `null` la neautentificat. */
+  emailulContului?: string | null
   eAdmin: boolean
   /** super-adminul vede hartiile pe tot istoricul, adminul doar pe saptamanile din navigare */
   eSuperAdmin?: boolean
@@ -139,8 +143,8 @@ const IC_ARHIVA = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" s
  */
 const IC_INAINTE = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12h14"/><path d="m12.5 6 6 6-6 6"/></svg>`
 
-/** Plicul abonării — aceeași măsură cu iconițele hârtiilor, ca butoanele din rând să se lege. */
-const IC_PLIC = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="m3.5 7 8.5 6 8.5-6"/></svg>`
+/* Plicul abonării a plecat în `@xc/abonare`, odată cu butonul lui: acolo e același desen pentru
+   toate aplicațiile, deci nu se mai poate întâmpla să se schimbe într-un loc și în celelalte nu. */
 
 /** Săgeata „înapoi", a butonului de deasupra titlului la săptămânile deschise din arhivă. */
 const IC_INAPOI = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19.5 12h-14"/><path d="m11.5 6-6 6 6 6"/></svg>`
@@ -281,6 +285,8 @@ body.cu-calendar .btns .poza-2 { display:flex }
      cinstit cand chiar nu mai incape, in loc sa taie iconitele. */
   .btns .pastila { flex:1 1 auto }
   .btns .mic .fel { display:none }
+  /* butonul de abonare vine acum din @xc/abonare si isi cheama cuvantul .cuv, nu .fel */
+  .btns .abon .cuv { display:none }
   /* ⚠️ BUTOANELE-ICONITA SUNT PATRATE (user, 11.09.2026, 16:02: „să fie atâta spațiu sus cât este
      stânga dreapta"). Padingul de sus e cel al carcasei (9px, din .btn), deci se scrie 9px si in
      laturi: iconita de 17–18 px iese intr-o tinta de ~36×36, mai usor de nimerit cu degetul decat
@@ -498,7 +504,7 @@ body:not(.cu-calendar) .zi.ultima { border-bottom:0 }
   .slujba .nume.dimineata, .slujba .det.rosu, .zi.rosie h3 { color:#000 }
   .stare { display:none }
 }
-`
+` + STIL_ABONARE + STIL_SETARI
 
 /**
  * JS-ul paginilor de om (slotul `scripturi`): intrerupatorul „Calendar" din antet — aprinde si stinge
@@ -575,19 +581,10 @@ export const SCRIPT = `
     if (href) marcheaza(href);
   });
 })();
-(function(){
-  // ABONAREA: butonul deschide fereastra. Inchiderea n-are nevoie de JS — formularul dinauntru e
-  // method="dialog", deci si „Abonare", si X-ul o inchid singure (si Escape, de la browser).
-  var b = document.getElementById("b-abonare");
-  var d = document.getElementById("d-abonare");
-  if (!b || !d || !d.showModal) return;
-  // ⚠️ Cat timp fereastra e deschisa, pagina din spate NU se deruleaza (user, 12.09.2026, 13:42), iar
-  // la inchidere isi capata derularea inapoi. <dialog> face pagina inertă, dar rotita mouse-ului tot
-  // misca fundalul, si atunci omul se trezeste in alta parte a saptamanii cand inchide. Oprirea o
-  // face carcasa, la orice showModal(), nu scriptul de aici (user, 13.09.2026: regula e generala).
-  b.addEventListener("click", function(){ d.showModal(); });
-})();
 `
+  // ABONAREA — butonul care deschide fereastra si paza bifei termenilor stau in `@xc/abonare`,
+  // o data pentru toata platforma (user, 15.09.2026).
+  + JS_ABONARE
 
 // ---------------------------------------------------------------------------
 // Bucati comune
@@ -600,6 +597,8 @@ function contDin(ctx: Ctx) {
     admin: ctx.eAdmin,
     urlCont: ctx.nav.cont,
     urlAdmin: ctx.nav.admin,
+    // Setarile APLICATIEI, nu ale platformei (user, 15.09.2026) — de aceea adresa e a noastra.
+    urlSetari: `${ctx.prefix}/setari`,
     poateVedeaCa: ctx.poateVedeaCa ?? false,
     veziCa: ctx.veziCa ?? null,
     spre: ctx.spre ?? '',
@@ -755,7 +754,7 @@ function unelte(ctx: Ctx, m: Meniu): string {
   const dreapta = intrerupatorCalendar(m) + pozaPaginii(ctx, m) + hartiile(ctx, m)
   // Abonarea sta indata dupa pastila („după săptămâna viitoare, abonare" — user, 11.09.2026), deci
   // inaintea barei si a uneltelor saptamanii. E a omului fara drepturi; la admin nu se scrie deloc.
-  return navigarea(ctx, m) + butonAbonare(ctx)
+  return navigarea(ctx, m) + butonAbonare(ABONAMENT)
     + (dreapta ? `<span class="unelte-dr"><span class="desparte" aria-hidden="true"></span>${dreapta}</span>` : '')
 }
 
@@ -882,34 +881,14 @@ function pozaPaginii(ctx: Ctx, m: Meniu): string {
  * gresita: dreptul de a administra nu-l scoate pe om din randul celor care vor sa primeasca vestea.
  * Regula e aceeasi si la Calendar; daca o schimbi intr-un loc, schimb-o in amandoua.
  *
- * ⚠️ DEOCAMDATA NU FACE NIMIC (cerut anume: „momentan, să nu facă nimic acest câmp, dar să fie făcut").
- * Fereastra e un `<dialog>` nativ, cu `<form method="dialog">` inauntru: asa ORICE buton din ea — si
- * „Abonare", si X-ul — doar o inchide, fara sa trimita nimic si fara o linie de JS pentru inchidere.
- * Cand abonarea se leaga cu adevarat, formularul capata `action`/`method` catre `POST /abonare`, ruta
- * care a ramas intreaga tot timpul (vezi index.ts); pana atunci nu se pierde nimic pe drum, fiindca
- * nimic nu pleaca.
+ * ⚠️ DIN 15.09.2026 CHIAR TRIMITE, si nu mai e scrisa aici: butonul, fereastra si tot drumul de dupa
+ * ea stau in `@xc/abonare`, pachetul comun (user: „ar trebui să fie la fel peste tot. Nu ar trebui să
+ * copiez logica în mai multe locuri"). Al programului a ramas numai randul din registru — audienta
+ * `program-abonati`, adica singurul lucru deosebit de la o aplicatie la alta.
+ * Pana atunci fereastra era numai infatisare („momentan, să nu facă nimic acest câmp, dar să fie
+ * făcut"), copiata litera cu litera si aici, si la Calendar, si la Buletin, si la Tipic.
  */
-function butonAbonare(_ctx: Ctx): string {
-  return `<button type="button" class="btn mic abon" id="b-abonare"`
-    + ` title="Primește programul pe email">${IC_PLIC}<span class="fel">Abonare</span></button>`
-}
-
-function fereastraAbonare(_ctx: Ctx): string {
-  return `<dialog class="modal" id="d-abonare" aria-labelledby="t-abonare">
-  <form method="dialog" class="modal-cutie">
-    <div class="modal-cap">
-      <h2 id="t-abonare">Abonare</h2>
-      <button value="inchide" class="modal-x" aria-label="Închide fereastra">&times;</button>
-    </div>
-    <p class="modal-spune">Pentru a vă abona, completați câmpul cu adresa de mail.</p>
-    <label class="camp"><span>Adresa de e-mail</span>
-      <input type="email" name="email" autocomplete="email" placeholder="nume@exemplu.ro"></label>
-    <label class="bifa"><input type="checkbox" name="cont"> Vreau să fac cont.</label>
-    <label class="bifa"><input type="checkbox" name="termeni"> Sunt de acord cu termenii și condițiile.</label>
-    <div class="modal-jos"><button value="abonare" class="btn-plin">Abonare</button></div>
-  </form>
-</dialog>`
-}
+const ABONAMENT = abonamentul('program')
 
 /**
  * Antetul intreg al paginilor de om: randul de unelte (cu amandoua grupurile) si JS-ul intrerupatorului.
@@ -918,7 +897,30 @@ function fereastraAbonare(_ctx: Ctx): string {
  * 11.09.2026, de cand hartiile au urcat in rand si casuta de sub antet a disparut.)
  */
 function antetul(ctx: Ctx, m: Meniu) {
-  return { unelte: unelte(ctx, m), subantet: fereastraAbonare(ctx), scripturi: SCRIPT }
+  return { unelte: unelte(ctx, m), subantet: fereastraProgramului(ctx), scripturi: SCRIPT }
+}
+
+/** Fereastra, cu adresa contului completata cand omul e intrat, si cu termenii platformei. */
+function fereastraProgramului(ctx: Ctx): string {
+  return fereastraAbonare({
+    prefix: ctx.prefix,
+    spre: ctx.spre ?? `${ctx.prefix}/`,
+    urlTermeni: `${ctx.nav.home || ''}/termeni`,
+    emailulContului: ctx.emailulContului ?? null,
+  })
+}
+
+/**
+ * Carcasa goala a programului — antet, subsol, stil — cu un corp dat de altcineva. O cere
+ * `@xc/abonare`, ca ecranul celor sase cifre sa fie IN program, nu intr-o pagina straina a contului.
+ */
+export function paginaCarcasa(ctx: Ctx, o: { titluPagina: string; corp: string; scripturi?: string }): string {
+  return pagina({
+    ...comune(ctx),
+    titluPagina: o.titluPagina,
+    ...(o.scripturi ? { scripturi: o.scripturi } : {}),
+    corp: o.corp,
+  })
 }
 
 /** „Luni, 7 septembrie" — cu majuscula, ca in V1. */

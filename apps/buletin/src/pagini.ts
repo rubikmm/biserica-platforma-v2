@@ -14,6 +14,7 @@
  */
 import type { Navigatie } from '@xc/config'
 import { ICOANE, LUNI, LUNI_SCURT, dataCuZi, dataLunga, esc, pagina } from '@xc/ui'
+import { JS_ABONARE, abonamentul, butonAbonare, fereastraAbonare } from '@xc/abonare'
 import { type Buletin, type BuletinScurt, type Gasit, plat } from './depozit.js'
 import { LOCAL } from './stil.js'
 
@@ -21,6 +22,8 @@ export interface Ctx {
   prefix: string
   nav: Navigatie
   utilizator: string | null
+  /** Adresa contului — fereastra de abonare o scrie in camp si o incuie; `null` la neautentificat. */
+  emailulContului?: string | null
   eAdmin: boolean
   versiune: string
   modificata: string
@@ -48,8 +51,8 @@ const IC_PDF = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stro
 /** Cartea deschisa: semnul rasfoitului. */
 const IC_CARTE = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 6.5S10 4.8 6.8 4.8c-1.4 0-2.3.3-2.8.5v13c.5-.2 1.4-.5 2.8-.5C10 17.8 12 19.5 12 19.5"/><path d="M12 6.5S14 4.8 17.2 4.8c1.4 0 2.3.3 2.8.5v13c-.5-.2-1.4-.5-2.8-.5C14 17.8 12 19.5 12 19.5"/><path d="M12 6.5v13"/></svg>`
 
-/** Plicul abonarii — acelasi desen ca la Calendar, Program si Tipic. */
-const IC_PLIC = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="m3.5 7 8.5 6 8.5-6"/></svg>`
+/* Plicul abonarii a plecat in `@xc/abonare`, odata cu butonul lui: acolo e acelasi desen pentru
+   toate aplicatiile, deci nu se mai poate intampla sa se schimbe intr-un loc si in celelalte nu. */
 
 function contDin(ctx: Ctx) {
   return {
@@ -58,6 +61,8 @@ function contDin(ctx: Ctx) {
     admin: ctx.eAdmin,
     urlCont: ctx.nav.cont,
     urlAdmin: ctx.nav.admin,
+    // Setarile APLICATIEI, nu ale platformei (user, 15.09.2026) — de aceea adresa e a noastra.
+    urlSetari: `${ctx.prefix}/setari`,
     poateVedeaCa: ctx.poateVedeaCa ?? false,
     veziCa: ctx.veziCa ?? null,
     spre: ctx.spre ?? '',
@@ -78,45 +83,33 @@ const ziuaScurt = (data: string): string => {
 }
 
 /**
- * ABONAREA — butonul din randul de unelte si fereastra care se deschide din el.
+ * ABONAREA — butonul, fereastra si tot drumul de dupa ea stau in `@xc/abonare`, pachetul comun
+ * (user, 15.09.2026: „ar trebui să fie la fel peste tot. Nu ar trebui să copiez logica în mai multe
+ * locuri"). Al buletinului a ramas numai randul din registru: audienta `buletin-abonati`.
  *
  * ⚠️ CINE IL VEDE: **TOATA LUMEA, si adminii** (user, 12.09.2026: „și ei se comportă ca un utilizator
- * care poate vor să fie anunțați"). Regula e a Calendarului, a Programului, a Tipicului si de acum a
- * Buletinului — daca se schimba intr-un loc, se schimba in toate.
+ * care poate vor să fie anunțați"). Regula sta acum in pachet, langa buton.
  *
- * ⚠️ Fereastra e aceeasi ca la Program, cu `<form method="dialog">`: orice buton din ea doar o inchide,
- * deci ABONAREA NU PLEACA DIN PAGINA. Ruta `POST /abonare` e intreaga si scrie in audienta
- * `buletin-abonati` a comunicarii (vezi index.ts) — se leaga de fereastra odata cu celelalte trei.
+ * ⚠️ Pana la 15.09.2026 fereastra era numai infatisare: `<form method="dialog">` o inchidea si atat,
+ * deci din pagina nu se abona nimeni, desi ruta `POST /abonare` era intreaga dedesubt. Acum trimite.
  */
-function butonAbonare(): string {
-  return (
-    `<button type="button" class="btn mic abon" id="b-abonare"` +
-    ` title="Primește buletinul pe email">${IC_PLIC}<span class="cuv">Abonare</span></button>`
-  )
-}
+const ABONAMENT = abonamentul('buletin')
 
-function fereastraAbonare(): string {
-  return `<dialog class="modal" id="d-abonare" aria-labelledby="t-abonare">
-  <form method="dialog" class="modal-cutie">
-    <div class="modal-cap">
-      <h2 id="t-abonare">Abonare</h2>
-      <button value="inchide" class="modal-x" aria-label="Închide fereastra">&times;</button>
-    </div>
-    <p class="modal-spune">Pentru a vă abona, completați câmpul cu adresa de mail.</p>
-    <label class="camp"><span>Adresa de e-mail</span>
-      <input type="email" name="email" autocomplete="email" placeholder="nume@exemplu.ro"></label>
-    <label class="bifa"><input type="checkbox" name="cont"> Vreau să fac cont.</label>
-    <label class="bifa"><input type="checkbox" name="termeni"> Sunt de acord cu termenii și condițiile.</label>
-    <div class="modal-jos"><button value="abonare" class="btn-plin">Abonare</button></div>
-  </form>
-</dialog>`
+/** Fereastra, cu adresa contului completata cand omul e intrat, si cu termenii platformei. */
+function fereastraBuletinului(ctx: Ctx): string {
+  return fereastraAbonare({
+    prefix: ctx.prefix,
+    spre: ctx.spre ?? `${ctx.prefix}/`,
+    urlTermeni: `${ctx.nav.home || ''}/termeni`,
+    emailulContului: ctx.emailulContului ?? null,
+  })
 }
 
 /** Randul din antet: abonarea, o liniuta verticala, apoi Arhiva si lupa (asezarea din V1). */
 function unelte(ctx: Ctx, m: Meniu): string {
   const p = esc(ctx.prefix)
   return (
-    butonAbonare() +
+    butonAbonare(ABONAMENT) +
     `<span class="desparte" aria-hidden="true"></span>` +
     `<a class="btn mic${m.arhiva ? ' activ' : ''}" href="${p}/arhiva" title="Arhiva buletinelor"` +
     ` aria-label="Arhiva buletinelor">${IC_ARHIVA}</a>` +
@@ -156,16 +149,6 @@ const JS_PAGINI = `
     b.setAttribute("aria-expanded", era ? "true" : "false");
     if (era) { var c = f.querySelector("input"); if (c) c.focus(); }
   });
-})();
-(function(){
-  // ABONAREA: butonul deschide fereastra. Inchiderea n-are nevoie de JS — formularul dinauntru e
-  // method="dialog", deci si „Abonare", si X-ul o inchid singure (si Escape, de la browser).
-  // ⚠️ Cat timp fereastra e deschisa, pagina din spate NU se deruleaza (user, 12.09.2026) — dar
-  // oprirea o face carcasa, la orice showModal(), nu scriptul de aici.
-  var b = document.getElementById("b-abonare");
-  var d = document.getElementById("d-abonare");
-  if (!b || !d || !d.showModal) return;
-  b.addEventListener("click", function(){ d.showModal(); });
 })();
 (function(){
   // RĂSFOITUL, cu modulul Real3D FlipBook — acelasi de la jurnaluldeafaceri (cerere user,
@@ -273,6 +256,27 @@ const JS_PAGINI = `
 })();
 `
 
+/**
+ * Carcasa goala a buletinului — antet, subsol, stil — cu un corp dat de altcineva. O cere
+ * `@xc/abonare`, ca ecranul celor sase cifre sa fie IN buletin, nu intr-o pagina straina a contului.
+ * Fara randul de unelte: cat scrii codul n-ai ce cauta si n-ai de ce sa te abonezi a doua oara.
+ */
+export function paginaCarcasa(ctx: Ctx, o: { titluPagina: string; corp: string; scripturi?: string }): string {
+  return pagina({
+    nume: 'BULETINUL',
+    titlu: 'Buletinul parohial',
+    titluPagina: o.titluPagina,
+    acasa: `${ctx.prefix}/`,
+    urlPlatforma: ctx.nav.home || '/',
+    local: LOCAL,
+    cont: contDin(ctx),
+    versiune: ctx.versiune,
+    modificata: ctx.modificata,
+    ...(o.scripturi ? { scripturi: o.scripturi } : {}),
+    corp: o.corp,
+  })
+}
+
 function sablon(ctx: Ctx, m: Meniu, titluPagina: string | undefined, corp: string): string {
   return pagina({
     nume: 'BULETINUL',
@@ -286,9 +290,9 @@ function sablon(ctx: Ctx, m: Meniu, titluPagina: string | undefined, corp: strin
     modificata: ctx.modificata,
     indexabil: true,
     unelte: unelte(ctx, m),
-    subantet: `${fereastraAbonare()}${formularCautare(ctx, m)}`,
+    subantet: `${fereastraBuletinului(ctx)}${formularCautare(ctx, m)}`,
     corp: `${vesteaAbonarii(m)}${corp}`,
-    scripturi: JS_PAGINI,
+    scripturi: JS_PAGINI + JS_ABONARE,
   })
 }
 

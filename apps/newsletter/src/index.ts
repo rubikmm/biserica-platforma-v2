@@ -26,17 +26,22 @@
  *  - carcasa (antet, subsol, tema) vine din `@xc/ui`, nu din `src/comun/` copiat in aplicatie.
  */
 import { SESIUNE_ANONIMA } from '@xc/contracts'
-import { principalDin, sesiuneCurenta } from '@xc/auth'
+import { principalDin, sesiuneCurenta, verificaCsrf } from '@xc/auth'
 import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
 import { Logger, correlationId } from '@xc/observability'
 import { dataVersiunii, html, json } from '@xc/ui'
 import pkg from '../package.json'
 import { type Fisa, citesteLista, citesteNumarul, citesteTextele } from './depozit.js'
-import { type Ctx, paginaArhiva, paginaCautare, paginaGoala, paginaMesaj, paginaNumar } from './pagini.js'
+import { ruteazaSetari } from '@xc/setari'
+import { type Ctx, paginaArhiva, paginaCarcasa, paginaCautare, paginaGoala, paginaMesaj, paginaNumar } from './pagini.js'
 
 export interface Env {
   ARHIVA: R2Bucket
   IDENTITATE: Fetcher
+  /** Venite pe 15.09.2026, odata cu pagina de Setari: cheile, abonarile si jurnalul. */
+  AUTORIZARE: Fetcher
+  COMUNICARE: Fetcher
+  AUDIT: Fetcher
   MEDIU: string
   ORIGINE_PUBLICA: string
   DOMENIU_COOKIE: string
@@ -140,7 +145,11 @@ export default {
       )
     }
 
-    if (req.method !== 'GET' && req.method !== 'HEAD') {
+    /*
+     * ⚠️ POST-ul e primit DIN 15.09.2026, si numai pentru Setari: pana atunci newsletterul raspundea
+     * 405 la orice in afara de GET/HEAD, fiindca n-avea ce scrie nimeni. Arhiva ramane neatinsa.
+     */
+    if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'POST') {
       return new Response('Metoda nu e permisă.', { status: 405 })
     }
 
@@ -157,7 +166,8 @@ export default {
     // ARHIVA E PUBLICA (user, 8 sept. 2026): newsletterele au plecat pe email catre oricine s-a
     // abonat, deci n-au ce ascunde. Sesiunea se cere doar ca sa stim pe cine salutam in antet.
     const sesiune = await sesiuneCurenta(env.IDENTITATE, req).catch(() => SESIUNE_ANONIMA)
-    principalDin(sesiune)
+    // Cine e omul — pana la Setari (15.09.2026) raspunsul se arunca, fiindca nu-l intreba nimeni.
+    const principal = principalDin(sesiune)
     const ctx: Ctx = {
       prefix,
       nav,
@@ -173,6 +183,26 @@ export default {
       'cache-control':
         ctx.utilizator || ctx.veziCa ? 'private, no-store' : env.MEDIU === 'dev' ? 'no-store' : CACHE_PAGINI,
     }
+
+    // Bariera de origine a platformei, pentru singura metoda care scrie ceva.
+    if (req.method === 'POST') {
+      const problema = verificaCsrf(req, [cfg.ORIGINE_PUBLICA], cfg.MEDIU === 'dev')
+      if (problema) return html(paginaCarcasa(ctx, { titluPagina: 'Verificare de securitate', corp: `<div class="cap"><h1 class="titlu-lista">Verificare de securitate</h1><p class="sursa">${problema}</p></div>` }), 403)
+    }
+
+    // SETARILE — un singur loc, `@xc/setari` (user, 15.09.2026).
+    const raspunsSetari = await ruteazaSetari(req, cale, env, {
+      cod: 'newsletter',
+      nume: 'Newsletterul',
+      prefix,
+      cfg,
+      cid,
+      principal,
+      urlCont: nav.cont,
+      urlTermeni: `${nav.home || ''}/termeni`,
+      carcasa: (p) => paginaCarcasa(ctx, p),
+    })
+    if (raspunsSetari) return raspunsSetari
 
     try {
       const lista = await citesteLista(env.ARHIVA)

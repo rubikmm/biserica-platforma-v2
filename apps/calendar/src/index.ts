@@ -37,7 +37,9 @@ import { extrageZi, faraTaguri, dataDinAcf, type RandZiExtras } from './extrager
 import { duminica, glasSiVoscreasna, perioadaOficiala, randuialaMesei, repereContract, sambataMortilor, ziLibera } from './pascalia.js'
 import { canonizeazaReferinta } from './titluri.js'
 import { type RandZi, desfaRandul, ziLiturgica } from './traducere.js'
-import { type Ctx, type FelFiltru, type Parte, type TexteZilei, paginaAdmin, paginaLuna, paginaMesaj, paginaSarbatori, paginaZi, poateFiltra, pozaSaptamaniiHtml, texteFereastra, trecePrinFiltru } from './pagini.js'
+import { abonamentul, ruteazaAbonare } from '@xc/abonare'
+import { ruteazaSetari } from '@xc/setari'
+import { type Ctx, type FelFiltru, type Parte, type TexteZilei, paginaAdmin, paginaCarcasa, paginaLuna, paginaMesaj, paginaSarbatori, paginaZi, poateFiltra, pozaSaptamaniiHtml, texteFereastra, trecePrinFiltru } from './pagini.js'
 
 export interface Env {
   DB: D1Database
@@ -63,8 +65,12 @@ export interface Env {
 }
 
 const SERVICIU = 'app-calendar'
-/** Abonarea la calendar e o audienta a serviciului de comunicare; aplicatia nu tine adrese. */
-const AUDIENTA = 'calendar-abonati'
+/**
+ * Abonarea la calendar e o audienta a serviciului de comunicare; aplicatia nu tine adrese.
+ * ⚠️ Numele ei nu se mai scrie aici: sta in registrul `ABONAMENTE` din `@xc/abonare`, laolalta cu
+ * al celorlalte aplicatii care au ce trimite.
+ */
+const ABONAMENT = abonamentul('calendar')
 
 async function comunicare<T = unknown>(env: Env, cale: string, corp: unknown): Promise<T | null> {
   try {
@@ -229,6 +235,9 @@ export default {
       prefix,
       nav,
       utilizator: sesiune.user?.displayName ?? sesiune.user?.email ?? null,
+      // adresa contului, pentru fereastra de abonare: acolo se scrie in camp si se incuie, fiindca
+      // abonarea platformei sta pe adresa contului, nu pe una scrisa de mana
+      emailulContului: sesiune.user?.email ?? null,
       eAdmin: sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin'),
       versiune: pkg.version,
       modificata: dataVersiunii(env.VERSIUNE),
@@ -273,7 +282,10 @@ export default {
         // fiindca CITITUL ramane la liber. Altfel poarta ar fi doar de fatada: butonul palit in bara,
         // dar lista filtrata la un `?filtru=` scris de mana.
         const cruce = felCerut && poateFiltra(ctx, felCerut) ? felCerut : undefined
-        return html(paginaLuna({ ctx, an, luna, randuri: lista, calculat, azi, ...(cruce ? { cruce } : {}), mesajAbonare }), 200, cachePagina)
+        // ⚠️ „Intrarea in aplicatie" = adresa fara luna. Numai atunci pagina se deruleaza singura la
+        // ziua de azi (user, 15.09.2026); pe `/2026-10` omul a ales el luna, deci nu se sare nicaieri.
+        const laAzi = cale === '/' && !cruce
+        return html(paginaLuna({ ctx, an, luna, randuri: lista, calculat, azi, ...(cruce ? { cruce } : {}), mesajAbonare, laAzi }), 200, cachePagina)
       }
 
       // ziua si partile ei — aceleasi adrese pe care le foloseste si fereastra din lista
@@ -323,20 +335,41 @@ export default {
         return html(paginaSarbatori({ ctx, fel, an, randuri: lista, calculat, azi }), 200, cachePagina)
       }
 
-      // abonarea: cu adresa contului, in audienta serviciului de comunicare
-      if (cale === '/abonare' || cale === '/dezabonare') {
-        if (req.method !== 'POST') return redirect(`${prefix}/`)
-        if (!principal) return redirect(`${nav.cont}/auth/login`)
-        const formular = await req.formData()
-        const spre = String(formular.get('spre') ?? `${prefix}/`)
-        const spreSigur = spre.startsWith('/') && !spre.startsWith('//') ? spre : `${prefix}/`
-        const inscrie = cale === '/abonare'
-        const r = inscrie
-          ? await comunicare(env, '/audiente/inscrie', { audienceId: AUDIENTA, nume: 'Abonații calendarului', userId: principal.userId, channel: 'email', adresa: principal.email })
-          : await comunicare(env, '/audiente/scoate', { audienceId: AUDIENTA, userId: principal.userId, channel: 'email' })
-        await scrieAudit(env, { action: inscrie ? 'calendar.subscribe' : 'calendar.unsubscribe', target: AUDIENTA, outcome: r ? 'success' : 'failure', correlationId: cid, actorId: principal.userId })
-        return redirect(`${spreSigur}?abonat=${!r ? 0 : inscrie ? 1 : 2}`)
-      }
+      /*
+       * ABONAREA — drumul intreg sta in `@xc/abonare`, acelasi pentru toata platforma (user,
+       * 15.09.2026: „nu ar trebui să copiez logica în mai multe locuri"). Calendarul da doar ce e
+       * al lui: randul din registru (adica audienta), carcasa in care se scriu paginile si jurnalul.
+       *
+       * ⚠️ Se cheama INAINTEA rutelor calendarului, dar DUPA sesiune: pasul „sunt deja intrat" se
+       * hotaraste din `principal`. Intoarce `null` cand adresa nu e a abonarii.
+       */
+      const raspunsAbonare = await ruteazaAbonare(req, cale, env, {
+        abonament: ABONAMENT,
+        prefix,
+        cfg,
+        cid,
+        principal,
+        carcasa: (p) => paginaCarcasa(ctx, p),
+        audit: (i) => scrieAudit(env, { ...i, correlationId: cid }),
+      })
+      if (raspunsAbonare) return raspunsAbonare
+
+      /*
+       * SETARILE — tot un singur loc, `@xc/setari` (user, 15.09.2026). Calendarul da codul, numele
+       * si carcasa; treptele (abonarea mea · abonatii · jurnalul) le hotaraste pachetul, din chei.
+       */
+      const raspunsSetari = await ruteazaSetari(req, cale, env, {
+        cod: 'calendar',
+        nume: 'Calendar',
+        prefix,
+        cfg,
+        cid,
+        principal,
+        urlCont: nav.cont,
+        urlTermeni: `${nav.home || ''}/termeni`,
+        carcasa: (p) => paginaCarcasa(ctx, p),
+      })
+      if (raspunsSetari) return raspunsSetari
 
       // administrare
       if (cale === '/admin' && req.method === 'GET') {
@@ -351,7 +384,7 @@ export default {
           importurile(env.DB),
           versiunile(env.DB),
           corecturile(env.DB),
-          comunicare<{ membri: Array<{ user_id: string; adresa: string; created_at: string }> }>(env, '/audiente/membri', { audienceId: AUDIENTA }),
+          comunicare<{ membri: Array<{ user_id: string; adresa: string; created_at: string }> }>(env, '/audiente/membri', { audienceId: ABONAMENT.audienta }),
         ])
         const abonati = membri?.membri ?? []
         return html(
