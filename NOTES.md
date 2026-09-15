@@ -659,7 +659,7 @@ propunerea automată, ca în V1.
 | biblia | `biblia.staging.sfantul-ilie.ro` | 80 de cărți, ediția sinodală |
 | biblioteca | `biblioteca.staging.sfantul-ilie.ro` | 1349 de titluri, 800 de fișe cu copertă; rezervări |
 | buletin | `buletin.staging.sfantul-ilie.ro` | 619 numere din 2012 încoace (D1) + 964 MB PDF/poze |
-| newsletter | `newsletter.staging.sfantul-ilie.ro` | 459 de numere trimise din 2017 (R2, 722 MB) |
+| newsletter | `newsletter.staging.sfantul-ilie.ro` | 460 de numere trimise din 2017 (R2, 722 MB) — la zi 15.09.2026 |
 | live | `live.staging.sfantul-ilie.ro` | directul slujbei: starea emisiei, aparatul din biserică, SFU |
 | radio | `radio.staging.sfantul-ilie.ro` | 777 de piese / 62,5 ore (R2 refolosit), ceasul, muzica, microfonul |
 | admin | `admin.staging.sfantul-ilie.ro` | audit, livrări, automatizări |
@@ -1748,6 +1748,69 @@ forța antetul `Host`**.
 ## Jurnal
 
 ### 2026-09-15
+
+- **NEWSLETTERUL (A8): MENIUL REFĂCUT, ABONARE VIE, ARHIVA LA ZI** (user, seara). Newsletter **0.3.0**,
+  publicat pe producție în două rânduri (0.2.0 meniul, 0.3.0 bara anilor + scrisul).
+  - **Antetul e acum ca la Calendar și Program**: o **pastilă** cât tot rândul — bulina numărului
+    curent · zona de scris · săgeata · Arhiva · lupa —, iar singură afară la dreapta **Abonarea**.
+    A căzut toată așezarea din V1 (două săgeți cu bulina între ele, bară despărțitoare, două butoane
+    mici). Lupa nu mai e link spre `/cauta`, e **cheie** care coboară o bară, ca la Calendar.
+  - ⚠️ **SĂGEATA E O FAPTĂ, NU O NAVIGARE** (lămurit cu userul, întrebat anume): duce la `/nou`,
+    ecranul de **adăugare manuală** a unui buletin („actualizare program sau altceva"). E numai a
+    adminilor, ca Arhiva Programului. **Ecranul nu compune încă nimic** — s-a hotărât pentru runda
+    următoare; pagina există ca săgeata să nu cadă în 404 și spune pe față unde s-a ajuns.
+    ⚠️ Poarta e **rolul** (`ctx.eAdmin`), nu o cheie nouă de permisiune: una nouă ar fi cerut și
+    republicarea lui `xc-authz`. Când ecranul va scrie în depozit, aici se pune cheia.
+  - ⚠️ **„◀ numărul dinainte" a ieșit din rând**, ales de user: înapoi se merge prin Arhivă, ca la
+    Program. Răsfoitul din aproape în aproape spre numerele vechi cere acum două apăsări.
+  - **Scrisul din pastilă, cerut anume**: „Buletinul nr. 571" pe numărul curent (nu generic
+    „Nr. curent"), „Buletin nou", „Arhiva", „Căutare", data pe numerele din arhivă. ⚠️ **Nu se mai
+    prescurtează pe telefon** („că e loc") — dar loc chiar N-ERA la 42 px pe buton: măsurat cu Browser
+    Rendering, „Buletinul nr. 571" cerea 121 px și primea 101 la un telefon de 390. De aceea banda
+    **381–411 px** își ia butoanele la 36 și sub 380 la 34. Acum încape întreg de la 360 în sus.
+    ⚠️ **Tăierea NU se vede măsurând `.acum`**: zona nu crește când `b`-ul dinăuntru e tăiat de
+    `text-overflow`. Se măsoară `scrollWidth` vs `clientWidth` pe **b-ul vizibil**.
+  - **ABONAREA E VIE**: rând nou în `ABONAMENTE` (`@xc/abonare`), audiența `newsletter-abonati`;
+    legătura `COMUNICARE` exista deja. ⚠️ **Singura abatere de la regula „un rând = un serviciu de
+    trimis"**, cerută de user: A8 nu trimite nimic, deci abonații așteaptă. Scris și în registru, și
+    în probă (`tests/abonare.test.ts` păzește lista întreagă, pe ordine).
+  - **BARA CU ANII la cheia Arhivei** (user: „când apăs pe History, să apară o bară cu anii, la fel
+    cum este la Program"): aceeași unealtă ca la Program — fâșie derulabilă, săgeți ‹ › scrise de JS
+    doar dacă anii nu încap, anul deschis adus la mijloc. Pe `/arhiva` bara vine **coborâtă** și cheia
+    e **inertă**, iar **pătrățelele cu ani au ieșit din corpul paginii** (un singur loc de ales anul).
+    Cele două bare (anii, căutarea) **se exclud**, ca la Calendar.
+  - ⚠️ **Lista nu mai stă pe veci în memoria izolatului** (`depozit.ts`): ține **5 minute**, cât și
+    cache-ul paginilor. Până azi ținea cât trăia izolatul — la prima aducere la zi depozitul avea 460
+    de numere și pagina arăta în continuare 459, iar singurul leac ar fi fost o republicare.
+  - ⚠️ **Plătită din nou regula backtick-ului**: accent grav într-un comentariu CSS din `stil.ts`.
+    `tsc` a trecut CURAT, esbuild a căzut. A treia oară în trei zile.
+  - 27 de probe noi/rescrise în `tests/buletin-newsletter.test.ts`; poze la 390 și 1100 px.
+
+- **ARHIVA NEWSLETTERULUI, ADUSĂ LA ZI DE PE LIVE** (user: „să aduci la zi și newsletterele — ia de pe
+  site"). **+1 număr: nr. 571 / 15 septembrie 2026** (id 537). Arhiva: **459 → 460**.
+  - Uneltele V1 (`biserica-newsletter/unelte/live/`) au fost **aduse în V2**, la
+    `infrastructure/import/newsletter-live/`: `nl-pull.py` + `nl-export.php` + `adu-la-zi.mjs`.
+    Procedura, neschimbată la temelie: se urcă prin FTPS un exportator PHP cu nume și jeton aleatoare
+    lângă `wp-config.php`, se cheamă **o dată** peste HTTPS, se **șterge** și se verifică peste HTTPS
+    că dă 403. Rulat cu `--dry` întâi, cu confirmarea userului între. Nu se atinge nimic altceva pe
+    live; se citesc DOAR `wp_mailpoet_newsletters`, `_sending_queues` și `_newsletter_links` (SELECT).
+  - ⚠️ **Exportatorul V1 nu era de ajuns**: scotea `body` (structura), nu HTML-ul randat. Acum ia și
+    `newsletter_rendered_body` din coada de trimitere — **chiar ce a plecat pe email**, ca cele 459
+    dinainte. MailPoet îl păstrează numai pentru numerele recente; tocmai alea ne trebuie.
+  - ⚠️ **HTML-ul din coadă NU e la fel cu cel re-randat**: adresele sunt urme de click
+    (`[mailpoet_click_data]-<hash>`) și la sfârșit stă un punct de urmărire (`[mailpoet_open_data]`).
+    Adresele adevărate vin din `wp_mailpoet_newsletter_links` (hash → url) — iar pentru legăturile de
+    abonare tabelul dă înapoi **chiar shortcode-urile V1**, deci după înlocuire HTML-ul arată ca în V1
+    și curățarea adusă din `prelucreaza.mjs` merge neschimbată. `utm_source=mailpoet&…` se taie:
+    cele 459 n-au așa ceva.
+  - ⚠️ **`LEFT JOIN` peste cozi dublează numerele** (nr. 571 a venit de două ori la prima tragere) —
+    se ține rândul cu HTML-ul cel mai lung.
+  - ⚠️ **Media se caută DUPĂ înlocuirea urmelor**: cât timp adresele sunt urme de click, în HTML nu se
+    vede niciun `/wp-content/`, deci pozele și PDF-urile ar fi trecut neobservate. Aduse 2 poze noi.
+  - Plase: `lista.json` și `cauta.json` salvate sub `.bak-20260915` **chiar în depozit**, iar un număr
+    deja în listă se sare după `id` — a doua rulare nu strică nimic. Newsletterul n-are cron.
+  - **Deschis**: aducerea la zi e tot **de mână**. Cât timp numerele se fac în WordPress-ul de pe
+    apex, V2 rămâne în urmă între rulări — de hotărât dacă se pune un cron.
 
 - **LUPA DE CĂUTARE ÎN PASTILA CALENDARULUI** (user, 20:14: „să avem o iconiță lupă de căutare înainte
   de cruce"). Calendar **0.8.0**, publicat pe producție.

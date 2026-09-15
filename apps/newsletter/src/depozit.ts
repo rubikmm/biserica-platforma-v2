@@ -9,6 +9,12 @@
  *
  * Lista citita o data ramane in memoria izolatului: se cere la fiecare pagina, iar fisa unui numar
  * nu se schimba dupa ce numarul a plecat pe email.
+ *
+ * ⚠️ DAR TINE DOAR CINCI MINUTE (15.09.2026). Pana azi tinea cat traia izolatul, adica oricat: la
+ * prima aducere la zi a arhivei (`infrastructure/import/newsletter-live/adu-la-zi.mjs`) depozitul
+ * avea 460 de numere si pagina arata in continuare 459 — lista veche statea in memorie, iar singurul
+ * leac ar fi fost o republicare a workerului. Un numar nou tot nu se schimba dupa ce a plecat pe
+ * email; ce se schimba e CATE sunt, si asta trebuie sa se vada fara deploy.
  */
 
 /** O fisa din lista.json — atat stim despre un numar fara sa-l aducem intreg. */
@@ -30,12 +36,17 @@ export interface Text {
 }
 
 let lista: Fisa[] | null = null
+let cititaLa = 0
+/** Cat tine lista in memorie — cat si cache-ul paginilor (`CACHE_PAGINI`), ca cele doua sa nu se
+ *  contrazica: n-are rost sa reimprospatam lista sub o pagina servita oricum din cache. */
+const RABDARE_MS = 5 * 60 * 1000
 
 /** Lista numerelor, in ordinea trimiterii — cel mai vechi primul, cel mai nou ultimul. */
 export async function citesteLista(depozit: R2Bucket): Promise<Fisa[]> {
-  if (lista) return lista
+  if (lista && Date.now() - cititaLa < RABDARE_MS) return lista
   const o = await depozit.get('lista.json')
   lista = o ? await o.json<Fisa[]>() : []
+  cititaLa = Date.now()
   return lista
 }
 

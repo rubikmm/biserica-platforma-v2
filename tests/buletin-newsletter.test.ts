@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { prefixSiCale } from '../packages/config/src/index.js'
 import { plat } from '../apps/buletin/src/depozit.js'
 import {
+  ANII,
   type Ctx,
   anul,
   luna,
+  paginaArhiva,
   paginaCautare,
   paginaGoala,
   paginaNou,
@@ -127,12 +129,26 @@ describe('newsletter · meniul din antet', () => {
     expect(ordinea(pastila).length).toBeGreaterThan(0)
   })
 
-  it('pe cel mai nou numar scrie „Nr. curent", iar bulina ramane apasata', () => {
+  /**
+   * ⚠️ Din 15.09.2026 nu mai scrie generic „Nr. curent", ci CHIAR numarul (user: „când sunt pe
+   * buletinul curent, scrie «Buletinul nr. 500»"), si nici nu se mai prescurteaza pe telefon.
+   */
+  it('pe cel mai nou numar scrie chiar numarul lui, iar bulina ramane apasata', () => {
     const h = paginaNumar(ctx(false), lista, 2, '<p>x</p>')
-    expect(h).toContain('Nr. curent')
+    expect(h).toContain('<b class="lung">Buletinul nr. 3</b>')
+    expect(h).toContain('<b class="scurt">Buletinul nr. 3</b>')
+    expect(h).not.toContain('Nr. curent<')
     expect(h).toContain('class="btn punct activ"')
     // bulina apasata nu mai e link: e inerta, ca la Program
     expect(h).not.toContain('href="/newsletter/n/3" title="Treci la numărul curent"')
+  })
+
+  it('un numar fara numar in subiect ramane pe „Nr. curent"', () => {
+    const anunt = [fisa(9, '2026-09-20 10:00:00', 'Schimbare de program')]
+    anunt[0].nr = null
+    const h = paginaNumar(ctx(false), anunt, 0, '<p>x</p>')
+    expect(h).toContain('Nr. curent')
+    expect(h).not.toContain('nr. null')
   })
 
   it('pe un numar mai vechi scrie data lui, iar bulina duce la cel curent', () => {
@@ -153,14 +169,14 @@ describe('newsletter · meniul din antet', () => {
   it('sageata e numai a adminilor; restul pastilei e a tuturor', () => {
     const alOmului = paginaNumar(ctx(false), lista, 0, '<p>x</p>')
     expect(alOmului).not.toContain('/newsletter/nou')
-    expect(alOmului).toContain('href="/newsletter/arhiva"')
+    expect(alOmului).toContain('id="ani-cheie"')
     expect(alOmului).toContain('id="cautare-cheie"')
   })
 
   it('sageata „◀ numărul dinainte" a iesit din rand — inapoi se merge prin Arhiva', () => {
     const h = paginaNumar(ctx(true), lista, 1, '<p>x</p>')
     expect(h).not.toContain('numărul dinainte')
-    expect(h).toContain('href="/newsletter/arhiva"')
+    expect(h).toContain('id="bara-ani"')
   })
 
   it('abonarea e in rand si o vad TOTI, si adminii', () => {
@@ -192,5 +208,60 @@ describe('newsletter · meniul din antet', () => {
     const h = paginaGoala(ctx(false))
     expect(h).toContain('class="btn punct gol"')
     expect(h).toContain('id="b-abonare"')
+    // fara ani n-are ce cobori: segmentul ramane LINKUL cinstit, nu o cheie moarta
+    expect(h).toContain('href="/newsletter/arhiva"')
+    expect(h).not.toContain('id="bara-ani"')
+  })
+})
+
+/*
+ * BARA CU ANII, coborata din cheia Arhivei (user, 15.09.2026: „când apăs pe History, să apară o bară
+ * cu anii, la fel cum este la Program"). Se poarta ca sora ei de la Program: ascunsa pe paginile
+ * obisnuite, coborata permanent pe /arhiva, unde cheia devine inerta.
+ */
+describe('newsletter · bara cu anii', () => {
+  const fisa = (id: number, trimis: string) =>
+    ({ id, nr: id, subiect: `Buletinul Parohiei nr. ${id}`, trimis, rezumat: '' })
+  const lista = [fisa(1, '2024-03-02 10:00:00'), fisa(2, '2025-07-11 10:00:00'), fisa(3, '2026-09-13 10:00:00')]
+  const ctx = (): Ctx => ({
+    prefix: '/newsletter',
+    nav: { home: 'https://website.sfantul-ilie.ro', cont: '/cont', admin: '/admin' } as Ctx['nav'],
+    utilizator: null,
+    eAdmin: false,
+    versiune: '0.3.0',
+    modificata: '15.09.2026',
+  })
+
+  it('anii ies din arhiva, descrescator — nu se scriu in cod', () => {
+    expect(ANII(lista)).toEqual([2026, 2025, 2024])
+  })
+
+  it('pe o pagina obisnuita bara e ascunsa, iar cheia o poate cobori', () => {
+    const h = paginaNumar(ctx(), lista, 2, '<p>x</p>')
+    expect(h).toContain('id="bara-ani" hidden')
+    expect(h).toContain('id="ani-cheie"')
+    expect(h).toContain('aria-expanded="false" aria-controls="bara-ani"')
+    expect(h).toContain('href="/newsletter/arhiva/2026"')
+    expect(h).toContain('href="/newsletter/arhiva/2024"')
+  })
+
+  it('pe pagina Arhivei bara vine coborata, iar cheia e inerta', () => {
+    const h = paginaArhiva(ctx(), lista, 2025)
+    expect(h).toContain('id="bara-ani"')
+    expect(h).not.toContain('id="bara-ani" hidden')
+    expect(h).toContain('aria-disabled="true"')
+    expect(h).toContain('aria-expanded="true" aria-controls="bara-ani"')
+    // anul deschis e marcat rosu in fasie, ca luna deschisa din bara Calendarului
+    expect(h).toContain('class="an-buton activ" href="/newsletter/arhiva/2025"')
+  })
+
+  it('patratelele cu ani au iesit din corpul paginii — anii se aleg dintr-un singur loc', () => {
+    const h = paginaArhiva(ctx(), lista, 2025)
+    expect(h).not.toContain('class="capitole"')
+  })
+
+  it('un an cerut care nu exista cade pe cel mai nou, nu pe cel mai vechi', () => {
+    const h = paginaArhiva(ctx(), lista, 1999)
+    expect(h).toContain('class="an-buton activ" href="/newsletter/arhiva/2026"')
   })
 })

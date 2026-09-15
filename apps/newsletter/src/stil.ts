@@ -146,6 +146,57 @@ export const LOCAL = `
              letter-spacing:.06em }
 .btns .mic svg { vertical-align:0 }
 
+/* CHEIA ARHIVEI: cat timp fasia anilor e coborata, segmentul sta aprins — ca omul sa stie de unde a
+   iesit sirul. Aceeasi purtare ca la cheia anilor din Program si la cea a lunilor din Calendar.
+   ⚠️ Aprinderea de la fasie (aria-expanded) si marcajul locului (.activ, pe pagina Arhivei) sunt DOUA
+   lucruri: al doilea ramane si cu fasia stransa.
+   ⚠️ Pe pagina Arhivei cheia e inerta: fasia e coborata de-a binelea, deci n-are ce inchide — atunci
+   nici degetul, nici trecerea mouse-ului n-au voie s-o dea drept apasabila. */
+.btns .pastila button.arh:not([aria-disabled="true"]) { cursor:pointer }
+.btns .pastila button.arh:not([aria-disabled="true"]):hover { color:var(--rosu); background:var(--paper) }
+.btns .pastila .arh[aria-expanded="true"] { color:var(--rosu);
+                 background:color-mix(in srgb, var(--rosu) 11%, transparent) }
+
+/* BARA ANILOR — sub randul de unelte, ascunsa pana se apasa cheia Arhivei (user, 15.09.2026: "cand
+   apas pe History, sa apara o bara cu anii, la fel cum este la Program") — DAR pe pagina Arhivei
+   coborata din capul locului, fiindca acolo a luat locul patratelelor cu ani din corpul paginii.
+   Chenarul si rotunjirea sunt ale pastilei de deasupra, ca sirul sa se citeasca drept o prelungire
+   a ei, nu un obiect strain.
+   ⚠️ Aici overflow:hidden E BUN (spre deosebire de pastila): din bara nu atarna nimic, iar taierea e
+   tocmai ce tine colturile rotunde peste fasia derulata. */
+.bara-ani { display:flex; align-items:stretch; margin:0 0 6px;
+            border:1px solid var(--rule); border-radius:10px; background:var(--tinta);
+            overflow:hidden }
+.bara-ani[hidden] { display:none }
+/* ⚠️ position:relative NU e de podoaba: JS-ul aduce anul deschis la mijloc cu offsetLeft, iar acela se
+   masoara fata de cel mai apropiat stramos asezat. Fara el, offsetParent ajunge pagina si fasia se
+   deschide derulata la capat (capcana platita la Calendar). */
+.bara-ani .fasie { flex:1 1 auto; min-width:0; position:relative;
+                   overflow-x:auto; overscroll-behavior-x:contain;
+                   -webkit-overflow-scrolling:touch; scrollbar-width:none }
+.bara-ani .fasie::-webkit-scrollbar { display:none }
+.bara-ani .ani { display:flex; align-items:stretch; gap:0; width:max-content; padding:0 }
+/* ANII: text simplu in capsula — fara chenar, fara fundal, fara rotunjire a lor; despartitura e o
+   linie de 1 px, ca intre segmentele pastilei. Arhiva newsletterului tine zece ani (2017 incoace),
+   deci pe telefon nu incap toti si fasia chiar se deruleaza. */
+.an-buton { flex:none; display:flex; align-items:center; justify-content:center;
+            color:var(--soft); text-decoration:none; background:transparent;
+            border:0; border-radius:0; padding:11px 13px;
+            font:600 12.5px/1 ui-sans-serif,system-ui; letter-spacing:.03em; white-space:nowrap }
+.an-buton + .an-buton { border-left:1px solid var(--rule) }
+.an-buton:hover { color:var(--rosu); background:var(--paper) }
+/* anul deschis: rosu si plin, ca segmentul pe care esti din pastila */
+.an-buton.activ { color:var(--rosu); font-weight:700;
+                  background:color-mix(in srgb, var(--rosu) 11%, transparent) }
+/* Sagetile — segmentele de la capetele barei, pentru cine n-are deget. JS-ul le ascunde cu totul cand
+   anii incap, ca sa nu stea doua segmente moarte in bara. */
+.bara-ani .sageata { flex:none; border:0; background:transparent; color:var(--faint); cursor:pointer;
+                     font:300 19px/1 ui-sans-serif,system-ui; padding:0 6px; border-radius:0 }
+.bara-ani .sageata + .fasie, .bara-ani .fasie + .sageata { border-left:1px solid var(--rule) }
+.bara-ani .sageata:hover:not([disabled]) { color:var(--rosu); background:var(--paper) }
+.bara-ani .sageata[disabled] { opacity:.25; cursor:default }
+.bara-ani .sageata[hidden] { display:none }
+
 /* BARA CAUTARII — sub randul de unelte, ascunsa pana se apasa lupa din pastila. Are chenarul si
    rotunjirea pastilei de deasupra, ca sa se recunoasca: e acelasi lucru, mutat cu un rand mai jos.
    Pana azi cautarea era un formular gol sub antet, fara chenar si fara masura.
@@ -201,10 +252,16 @@ export const LOCAL = `
 
 /* ⚠️ PE TELEFON TOT RANDUL STA PE O SINGURA LINIE (regula Programului, 15.09.2026). Ce cade e
    cuvantul ABONARII, al carui plic se citeste singur; zona de scris NU se ascunde niciodata (regula
-   Calendarului: "pe mobil, neaparat sa se vada scrisul") — trece doar pe forma scurta.
-   Socoteala la un telefon de 390, cu ~335 de folosit: patru butoane a 42 = 168, plus spatiile de 5
-   si abonarea de ~44, raman ~110 pentru scris. "Nr. curent" cere ~72, deci incape intreg, si la 360.
-   ⚠️ DACA MAI ADAUGI UN SEGMENT IN PASTILA, SOCOTEALA ASTA SE REFACE — nu mai e loc de imprumut. */
+   Calendarului: "pe mobil, neaparat sa se vada scrisul").
+   ⚠️ DIN 15.09.2026 SCRISUL NU SE MAI PRESCURTEAZA (user: "sa nu scrie doar «nou»; se scrie «Buletin
+   nou», ca e loc" si "cand sunt pe buletinul curent, scrie «Buletinul nr. 500»"). Loc chiar ERA — dar
+   nu la 42 px pe buton: masurat cu Browser Rendering, "Buletinul nr. 571" cere 121 px si primea 101
+   la un telefon de 390, deci se taia tocmai lucrul cerut. De aceea banda 381-411 px isi ia butoanele
+   la 36, iar sub 380 la 34; padingul zonei scade odata cu ele. Asa scrisul incape intreg de la 360 in
+   sus. Sub 360 (iPhone SE vechi) se taie cu trei puncte — plasa din regula .acum b de mai sus.
+   ⚠️ DACA MAI ADAUGI UN SEGMENT IN PASTILA, SOCOTEALA ASTA SE REFACE: masoara scrollWidth vs
+   clientWidth pe elementul b VIZIBIL, nu pe .acum — zona nu creste cand b-ul dinauntru e taiat, deci
+   pe ea taierea nu se vede. */
 @media (max-width:600px) {
   .btns { gap:5px; flex-wrap:wrap }
   .btns .btn { flex:0 0 auto; white-space:nowrap }
@@ -219,14 +276,22 @@ export const LOCAL = `
   .btns .pastila .acum .lung { display:none }
   .btns .pastila .acum .scurt { display:inline }
 }
-/* Telefoanele inguste (Android de 360 px si mai jos): butoanele mai lasa cativa pixeli si zona de
-   scris se strange si ea — nu mai sunt patrate la milimetru, dar randul ramane pe o linie. */
+/* ⚠️ PRAGUL E 411, nu 400: telefoanele din banda nu sunt rare — 390 (iPhone 14/15), 393 (Pixel 7),
+   400 (Galaxy). De la 412 in sus scrisul incape si cu butoane de 42, deci acolo nu se strange nimic
+   degeaba. Cei 24 px castigati aici (4 butoane x 6, plus 8 din padingul zonei) sunt exact cat lipsea. */
+@media (max-width:411px) {
+  .btns .pastila .punct, .btns .pastila .viit, .btns .pastila .arh, .btns .pastila .cheie {
+                 flex:0 0 36px; width:36px }
+  .btns .pastila .acum { padding:11px 6px }
+}
+/* Telefoanele inguste (Android de 360 px si mai jos): butoanele mai lasa cativa pixeli si scrisul se
+   strange si el — nu mai sunt patrate la milimetru, dar randul ramane pe o linie si intreg. */
 @media (max-width:380px) {
   .btns { gap:4px }
   .btns .mic { padding-left:7px; padding-right:7px }
   .btns .pastila .punct, .btns .pastila .viit, .btns .pastila .arh, .btns .pastila .cheie {
-                 flex:0 0 36px; width:36px }
-  .btns .pastila .acum { padding:11px 6px; font-size:12.5px }
+                 flex:0 0 34px; width:34px }
+  .btns .pastila .acum { padding:11px 5px; font-size:12.5px }
 }
 mark { background:var(--azi-fund); color:inherit; padding:0 2px; border-radius:3px }
 .gol { color:var(--soft) }
