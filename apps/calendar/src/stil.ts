@@ -136,6 +136,20 @@ html.fara-lin { scroll-behavior:auto }
 .pastila .sarb-cheie { border:0; border-left:1px solid var(--rule); border-radius:0;
                        background:transparent; display:flex; align-items:center;
                        justify-content:center }
+/* ⚠️ LINIA DINTRE SEGMENTE RAMANE NEUTRA, ORICE AR FACE BUTONUL (user, 15.09.2026: „pare o linie
+   roșie border left pe cruce"). Pricina: doua reguli de mai sus, scrise pe vremea cand crucea era un
+   buton de sine statator cu chenar de jur imprejur —
+       .btns .sarb:hover   { border-color:var(--rosu) }
+       .btns .sarb.activ   { border-color:var(--rosu) }
+   — pun rosul pe TOATE laturile. De cand crucea e segment al pastilei si singura ei latura e linia
+   despartitoare din stanga, rosul acela nu mai spunea „butonul e aprins", ci desena o dunga rosie in
+   mijlocul pastilei.
+   Se atinge NUMAI culoarea chenarului: rotunjirea nu se scrie aici, altfel la trecerea cu mausul
+   coltul din dreapta al pastilei s-ar indrepta (regula .pastila > :last-child are specificitate mai
+   mica si ar fi acoperita). Rosul ramane unde spune ceva: pe iconita si pe fundalul palid. */
+.pastila .sarb-cheie:hover,
+.pastila .sarb-cheie.activ,
+.pastila .sarb-cheie:focus-visible { border-color:var(--rule) }
 .pastila .sarb-cheie:hover { background:var(--paper) }
 .pastila .sarb-cheie.activ { background:var(--rosu-palid) }
 /* crucea stinsa: se vede ca exista, dar nu se apasa (.gol din carcasa da opacitatea si pointer-events) */

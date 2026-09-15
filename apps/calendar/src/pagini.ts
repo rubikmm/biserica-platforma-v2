@@ -211,8 +211,11 @@ function meniulFiltrelor(o: { ctx: Ctx; felActiv?: FelFiltru; lunaFiltru?: strin
   // — altfel meniul inchis n-ar spune nimic despre starea paginii.
   const activ = o.felActiv && poateFiltra(o.ctx, o.felActiv) ? o.felActiv : null
   const numeButon = activ ? `Sărbătorile — ${FILTRE[activ].meniu.toLowerCase()}` : 'Sărbătorile'
+  // ⚠️ Fara `role="button"` pe <summary>: browserul ii da singur rolul de deschizator ȘI starea
+  // „deschis/inchis"; scris de mana, rolul o stinge, iar cititorul de ecran nu mai spune daca meniul
+  // e deschis. Semantica nativa e mai bogata decat una pusa peste ea.
   return `<details class="filtre" id="filtre">
-      <summary class="btn mic sarb sarb-cheie${activ ? ` activ sarb-${activ}` : ''}" role="button"
+      <summary class="btn mic sarb sarb-cheie${activ ? ` activ sarb-${activ}` : ''}"
         title="${esc(numeButon)}" aria-label="${esc(numeButon)}">${IC_CRUCE}</summary>
       <div class="filtre-meniu" role="menu" aria-label="Sărbătorile">${feluri.map(rand).join('')}</div>
     </details>`
