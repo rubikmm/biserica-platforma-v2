@@ -987,6 +987,7 @@ copiată cu anii în locul lunilor — aceleași săgeți ‹ ›, scrise de JS 
 
 - **`hidden` îl scrie SERVERUL**, la fiecare pagină: fâșia se strânge singură după alegerea unui an,
   fără nicio linie de JS — alegerea e o navigare, iar pagina următoare se naște cu bara sus.
+  ⚠️ **AFARĂ DE PAGINA ARHIVEI, unde NU se scrie `hidden`** (18:56) — vezi punctul următor.
 - ⚠️ **Așezarea anului deschis la mijloc se face DUPĂ coborâre** (cât timp bara e `hidden`, `offsetLeft`
   și `clientWidth` sunt 0), iar `.fasie` are `position:relative` — fără el `offsetParent` ajunge pagina
   și fâșia se deschide derulată la capăt. Amândouă sunt capcane plătite la Calendar.
@@ -1000,8 +1001,23 @@ copiată cu anii în locul lunilor — aceleași săgeți ‹ ›, scrise de JS 
   pe săptămânile deschise din ea) sunt două lucruri: al doilea rămâne și cu fâșia strânsă.
 - **Drumul înapoi n-a slăbit**: săptămânile deschise din arhivă își păstrează butonul „← Înapoi la
   arhivă" de deasupra titlului, care le duce chiar unde rămăsese omul.
-- **Rândul de ani din pagina arhivei** (`nav.capitole`) **a rămas** — pe `/arhiva` el e selectorul la
-  vedere, fâșia din antet e scurtătura de pe orice pagină.
+- **⚠️ PE `/arhiva` FÂȘIA E PERMANENT LA VEDERE, IAR RÂNDUL DE ANI DIN PAGINĂ A FOST SCOS**
+  (15.09.2026, 18:56: „scoate din pagină anii atunci când ne aflăm în arhivă și să faci bara cu ani,
+  care apare sub antet, permanent vizibilă cât mă aflu pe o pagină arhivă"). `nav.capitole` din corpul
+  paginii a dispărut cu totul, cu potriveala lui de stil (`.capitole a.acum`) — clasa rămâne în carcasă,
+  pentru alte aplicații. **Cele două jumătăți se țin una de alta**: fâșia e acum SINGURUL drum dintre
+  ani, deci:
+  - **cheia se scrie INERTĂ acolo** (`aria-disabled="true"`, `aria-expanded="true"`, `aria-current`, ca
+    bulina și săgeata când ești chiar pe săptămâna lor), iar JS-ul **nu-i mai pune ascultătorul de
+    apăsare** — altfel omul ar putea strânge peste el singurul selector rămas. `:hover` și
+    `cursor:pointer` se scot cu `:not([aria-disabled="true"])`;
+  - **fâșia se scrie și pentru omul FĂRĂ drepturi de admin**, dar numai pe `/arhiva`: adresa n-a fost
+    niciodată încuiată (pagina de mesaj o dă ca link tuturor), iar fără fâșie ar rămâne închis într-un
+    singur an. Atunci bara stă **singură sub rândul de unelte**, fără cheie deasupra — de aceea JS-ul
+    merge și cu `cheie` lipsă (`if (!bara || !fasie) return`, nu `!cheie`);
+  - **așezarea la mijloc se face la încărcare**, nu la coborâre, fiindcă bara e deja jos.
+  Probele: `tests/program-arhiva-ani.test.ts` (5) — păzesc o regulă de DRUM, nu o funcție: oricare
+  dintre cele trei scăpări de mai sus lasă omul închis într-un an, fără nicio eroare vizibilă.
 
 **Pagina arhivei se cheamă doar „Arhiva"** (nu „Arhiva programelor"); sub titlu a rămas doar
 numărătoarea („654 săptămâni, din 2014 până azi") — propoziția despre importul din situl vechi a ieșit
@@ -1669,6 +1685,23 @@ forța antetul `Host`**.
 
 ### 2026-09-15
 
+- **FÂȘIA ANILOR RĂMÂNE JOS ÎN ARHIVĂ, RÂNDUL DE ANI DIN PAGINĂ IESE** (user, 18:56, două cereri într-o
+  propoziție). Program **0.7.4** pe producție. Amănuntele, în „Rândul de unelte din antet".
+  - **Cele două cereri se țin una de alta**, iar asta a hotărât restul: scoțând `nav.capitole` din corpul
+    paginii, fâșia de sub antet rămâne **singurul** drum dintre ani. De aici trei urmări care nu se vedeau
+    din cerere: cheia se scrie **inertă** pe `/arhiva` (altfel omul poate strânge peste el singurul
+    selector), așezarea anului la mijloc se mută **la încărcare** (bara e deja jos), iar `:hover` și
+    `cursor:pointer` se scot de pe cheia inertă.
+  - ⚠️ **`/arhiva` NU e încuiată adminilor** (pagina de mesaj o dă ca link tuturor) — găsit uitându-mă
+    după rute, nu după cerere. Bara era scrisă **numai** pentru admini, deci scoaterea rândului din
+    pagină ar fi lăsat enoriașul nimerit acolo **închis într-un singur an**, fără nicio eroare vizibilă.
+    Acum pe `/arhiva` fâșia se scrie pentru oricine, singură sub rândul de unelte, fără cheie deasupra.
+    **Regula generală**: când scoți un drum din pagină, întreabă întâi CINE mai ajunge în pagina aceea.
+  - **Prima probă a programului în `tests/`**: `program-arhiva-ani.test.ts` (5), pe HTML-ul întors de
+    `paginaArhiva`/`paginaMesaj` — nu pe funcții, ci pe regula de drum; tot setul, 292, trece.
+  - ⚠️ **A patra oară backtick-ul din comentariu** (același `TS1005` pe linii fără legătură): de data asta
+    în DOUĂ locuri deodată, unul în CSS și unul în JS-ul paginii. Comentariile din `STIL`/`SCRIPT` nu
+    primesc accente grave, nici măcar în jurul unui nume de funcție.
 - **SĂGEATA CENTRATĂ ȘI CHEIA ARHIVEI** (user, 18:28, două puncte). Program **0.7.3** pe producție.
   - **Săgeata „săptămâna viitoare" nu era centrată vertical**: vina o purta un `<span class="sgt">`
     moștenit de la Tipic, rămas în jurul desenului după ce cuvintele au ieșit de pe buton. Un înveliș
