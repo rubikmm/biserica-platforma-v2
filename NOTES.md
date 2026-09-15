@@ -491,10 +491,15 @@ propunerea automată, ca în V1.
    - nimic nu e publicat pe staging: acolo trebuie `wrangler secret put SECRET_INTERN` la fiecare
      worker cu acțiuni (`program`, `calendar`, `tipic`, `chat`) și migrația bazei `xc-chat-staging`;
    - de probat cu ochii pe telefon: bula pe ecran mic (panoul ia toată lățimea sub 480 px);
-   - ⚠️ **`program.retrage_validarea` (nou, 12.09.2026) nu e încă în lista de unelte din panou** —
-     până nu i se scrie numele acolo, modelul n-o vede și regula „validat → propus" din Îndrumări
-     rămâne fără braț. După ce se adaugă: reformulat îndrumarea ca să cheme unealta pe nume și
-     rerulate probele (a cincea unealtă îngreunează alegerea pentru modelele mici).
+   - ✅ **`program.retrage_validarea` E ÎN LISTA DE UNELTE din 15.09.2026** (a cincea), cu îndrumarea
+     rescrisă ca să o cheme pe nume. A stat trei zile publicată de aplicație, dar nevăzută de model:
+     regula „validat → propus" din Îndrumări era fără braț, iar chatul răspundea omului „cere-i
+     administratorului" la o treabă pe care o putea face singur. Probele: alegerea uneltei rămâne
+     bună la toate cele 19 fraze, deci a cincea unealtă n-a încurcat modelul mic.
+   - ⚠️ **DE FĂCUT: probele au nevoie de date semănate local.** Baza D1 locală e goală de la trecerea
+     localului spre producție, deci 9 din 19 probe pică la EXECUȚIE cu unealta aleasă corect —
+     scorul nu mai spune nimic despre model. Setul cere un „semănat" (o săptămână propusă + una
+     validată + slujbele lor) înainte de rulare, altfel citește doar alegerea uneltei.
 2. **Ce a mai rămas deosebit între local și public** (user, 11.09.2026: „să nu fie nicio diferență
    între testare și public"). Trei deosebiri, toate **structurale**, nu de afișare:
    - **emailul nu poate pleca din `wrangler dev`** — de aceea codul apare în pagină și `123456`
@@ -1448,14 +1453,18 @@ la chat-worker; local în `services/chat-worker/.dev.vars` (gitignored). Modelul
 în `@xc/chat/modele.ts`, `creier` se deduce din id (`@cf/…` = Workers AI).
 
 **Hățurile, toate din panoul de Module, nimic în cod**: `indrumari` (text liber, în instrucțiuni),
-`unelte` (lista canonică a ce vede modelul — pe program doar `modifica_slujba`, `adauga_slujba`,
-`valideaza_saptamana`, `sterge_slujba`; „fără rapoarte, enumerări, arhivă"), exemple cu argumente la
+`unelte` (lista canonică a ce vede modelul — pe program `modifica_slujba`, `adauga_slujba`,
+`valideaza_saptamana`, `sterge_slujba` și, din 15.09.2026, `retrage_validarea`; „fără rapoarte,
+enumerări, arhivă"), exemple cu argumente la
 acțiuni (`{fraza, argumente}`), setul de probe `infrastructure/eval/chat.mjs`. **Dacă cineva lărgește
 lista de unelte, să reruleze probele** — modelele mici cad exact la alegerea între unelte.
 
 ⚠️ **Lista din panou e un filtru, nu o listă de dorințe**: o unealtă nouă publicată de aplicație NU
 ajunge la model până nu i se scrie numele acolo (goală = toate; `chat-worker/src/index.ts`, `permis`).
-Așa a stat `program.retrage_validarea` după publicarea ei (12.09.2026).
+Așa a stat `program.retrage_validarea` **trei zile** (publicată 12.09.2026, scrisă în panou abia pe
+15.09.2026, după ce omul a lovit lipsa în pagină: a validat din greșeală și chatul i-a răspuns că nu
+poate retrage). ⚠️ **Semnul care trădează filtrul**: chatul spune „nu am cu ce" ori trimite omul la
+administrator pentru o treabă pe care codul o ȘTIE face. Când auzi asta, uită-te întâi în listă, nu în cod.
 
 **Drumul de antrenament, convenit prin practică**: utilizatorul se joacă pe staging → export
 (`node infrastructure/eval/discutii.mjs --remote --env staging`) → fiecare discuție dusă la capăt intră
@@ -1688,6 +1697,34 @@ forța antetul `Host`**.
 
 ### 2026-09-15
 
+- **VALIDAREA APĂSATĂ DIN GREȘEALĂ, RETRASĂ — ȘI CHATUL POATE DE ACUM SĂ O RETRAGĂ SINGUR** (user,
+  20:00: „vreau să mut starea pe propus și să dau drepturi Asistentului să facă și el la cerere
+  această modificare"). Săptămâna **21 – 27 septembrie 2026** e înapoi în **`propus`** pe producție.
+  - **Cauza n-a fost lipsa unei funcții, ci lipsa unui nume într-o listă**: `program.retrage_validarea`
+    era publicată din 12.09 și făcea exact ce trebuie, dar nu era în `unelte` din panoul de Module —
+    filtru, nu listă de dorințe — așa că modelul n-o vedea și îi răspundea omului „cere-i
+    administratorului parohiei". Adăugată a cincea, cu îndrumarea rescrisă ca să o cheme pe nume și
+    la frazele omului („am validat din greșeală", „scoate validarea", „treci-o înapoi în propus").
+    Copia configurației dinainte: `outputs/modul-chat.bak-20260915-2005.json` (în spațiul agentului).
+  - ⚠️ **Retragerea de azi s-a făcut cu SQL pe D1-ul de producție, nu prin aplicație** — și merită
+    știut de ce: `retrageValidarea()` e chemată **numai** din acțiunea de chat (n-are rută `/v1`, iar
+    `/_actiuni` cere `x-xc-intern`, care nu se poate citi înapoi de la Cloudflare). SQL-ul a
+    reprodus fidel toate cele trei scrieri ale funcției — `UPDATE saptamani`, rândul de `istoric`
+    (`'retras'`, cu `validat_de`/`validat_la` de dinainte în detalii) și evenimentul
+    `program.week.changed.v1` în `outbox` — ca să nu rămână o stare fără urmă. **Dacă mai apare o
+    dată nevoia asta, semnul e că retragerea ar trebui să aibă și un drum de om**, nu doar prin chat.
+  - **Probele (`infrastructure/eval/chat.mjs`, GLM 5.3 Flash): alegerea uneltei e bună la 19/19**,
+    deci a cincea unealtă n-a încurcat modelul mic — inclusiv la perechea care se confundă cel mai
+    ușor („programul e bun, validează-l" → `valideaza_saptamana`; „scoate validarea…" →
+    `retrage_validarea`). Trei probe noi în set, a doua cu fraza omului din ziua asta.
+  - ⚠️ **Scorul la capăt e însă 10/19, și NU din vina modelului: baza D1 LOCALĂ e goală** de la
+    trecerea localului spre producție (id-uri de producție, dar date simulate). Probele care cer o
+    slujbă existentă pică la execuție, cu unealta aleasă corect. Deci **setul de probe are nevoie de
+    date semănate local ca să mai însemne ceva cap-coadă** — altfel citește doar alegerea uneltei.
+    Drumul întreg al uneltei noi l-am probat separat, semănând o săptămână validată: propunere cu
+    rezumatul bun → „Da" → trecere în `propus`. Săptămâna de probă a fost ștearsă după.
+  - ⚠️ **`pkill -f "wrangler dev"` prin `sh -lc` nu omoară nimic** (regula veche, plătită iar):
+    tiparul e în linia shell-ului, deci se sinucide întâi. Omoară după PID.
 - **NUMĂRĂTOAREA DE SUB TITLUL ARHIVEI, SCOASĂ** (user, 19:22: „scoate textul acesta de la Arhiva").
   Program **0.7.5** pe producție. Sub „Arhiva" nu mai stă nimic, iar odată cu rândul a plecat și
   **interogarea `acoperire`** care îl hrănea — era singurul ei cititor acolo. **Regula**: când scoți un

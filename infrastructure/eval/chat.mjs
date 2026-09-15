@@ -38,6 +38,12 @@ const PROBE = [
   // frazele omului, nu ale noastre. Se adaugă aici fiecare discuție bună din export (discutii.mjs).
   { text: 'Slujba de luni să fie de la ora 7', unealta: 'program__modifica_slujba', propunere: true },
   { text: 'Adaugă marți la 18 slujba Sfântul Maslu', unealta: 'program__adauga_slujba', propunere: true },
+  // validarea și drumul ei înapoi — cele două se confundă ușor între ele (15.09.2026, de când
+  // `program.retrage_validarea` e în lista de unelte din panou); a doua frază e a omului, din
+  // ziua în care a apăsat validarea din greșeală
+  { text: 'programul e bun, validează-l', unealta: 'program__valideaza_saptamana', propunere: true },
+  { text: 'scoate validarea de săptămâna viitoare am apăsat din greșeală', unealta: 'program__retrage_validarea', propunere: true },
+  { text: 'treci săptămâna asta înapoi în propus', unealta: 'program__retrage_validarea', propunere: true },
   // NU e de aici: modelul trebuie să spună că nu poate, fără să inventeze
   { text: 'ce slujbe sunt duminică?', unealta: null, propunere: false },
   { text: 'fă-mi un raport cu slujbele din 2025', unealta: null, propunere: false },
