@@ -5,6 +5,7 @@ import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/co
 import { configChat, MODELE, normalizeaza, scrieConfigChat, type ConfigChat, type ModelDeAles } from '@xc/chat'
 import { Logger, correlationId } from '@xc/observability'
 import { alerta, dataVersiunii, esc, html, pagina } from '@xc/ui'
+import { SCHEMA_CITITA_LA, SCHEMA_CORP, SCHEMA_STIL } from './schema-generata.js'
 import pkg from '../package.json'
 
 export interface Env {
@@ -409,6 +410,38 @@ export default {
     const authz = new ClientAutorizare(env.AUTORIZARE, cid)
     const { prefix, cale } = prefixSiCale(url, '/admin')
 
+    /*
+     * ------------------------------------------------------------- schema
+     * Cum e legata platforma pe Cloudflare: desenul, configuratia generala si o fisa pentru fiecare
+     * aplicatie. Cere `audit.read`, ca panoul — aratam adrese interne, nume de resurse si numele
+     * secretelor, deci nu e pagina oricui. ⚠️ VALORILE secretelor NU apar: Cloudflare nu le da
+     * inapoi nimanui, iar unealta nici nu le cere.
+     *
+     * ⚠️ Continutul e GENERAT si adus in cod (`schema-generata.ts`), nu citit acum de la Cloudflare:
+     * un worker n-are ce cauta cu tokenul contului in el. Deci e o FOTOGRAFIE de la ultima rulare a
+     * uneltei, si asta scrie pe pagina. Se improspateaza cu:
+     *   node infrastructure/harta/schema-cloudflare.mjs --ts > apps/admin/src/schema-generata.ts
+     */
+    if (cale === '/schema') {
+      const comuneAici = comune(env, nav, eAdmin, sesiune, adresaPaginii(cfg, url))
+      const potVedea = await authz.can(principal, 'audit.read', SCOPE_GLOBAL)
+      if (!potVedea.allowed) {
+        return html(
+          pagina({ ...comuneAici, corp: `<h2>Schema platformei</h2>${alerta('rea', 'Îți trebuie permisiunea <code>audit.read</code>.')}` }),
+          403,
+        )
+      }
+      return html(
+        pagina({
+          ...comuneAici,
+          local: `${comuneAici.local}\n${SCHEMA_STIL}`,
+          corp: `<h2>Schema platformei</h2>
+${alerta('info', `Fotografie a contului Cloudflare de la <strong>${esc(SCHEMA_CITITA_LA)}</strong>. Nu se împrospătează singură.`)}
+${SCHEMA_CORP}`,
+        }),
+      )
+    }
+
     // ------------------------------------------------------------- module
     // Aprinderea si stingerea modulelor cere `modules.manage` — la super-admin, nu la admin:
     // un modul pornit costa bani la fiecare apasare.
@@ -654,7 +687,8 @@ export default {
 
 <p><a href="${prefix}/oameni">Oameni — rolurile pe platformă</a><br>
 <a href="${prefix}/dispecerat">Dispecerat — e-mailul și WhatsApp-ul parohiei</a><br>
-<a href="${prefix}/module">Module — pornirea și oprirea chatului</a></p>
+<a href="${prefix}/module">Module — pornirea și oprirea chatului</a><br>
+<a href="${prefix}/schema">Schema platformei — cum sunt legate toate pe Cloudflare</a></p>
 
 <h3>Audit — ultimele acțiuni</h3>
   ${tabelAudit(audit)}

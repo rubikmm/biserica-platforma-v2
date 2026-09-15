@@ -41,6 +41,46 @@ const [scripturi, domenii, cozi] = await Promise.all([
 const adrese = {}
 for (const d of domenii) (adrese[d.service] ??= []).push(d.hostname.replace('.sfantul-ilie.ro', ''))
 
+/**
+ * Ce face fiecare aplicație — luat din comentariul de sus al lui `wrangler.jsonc`, nu scris a doua
+ * oară aici. Acolo îl scrie cine a făcut aplicația, și acolo se actualizează când se schimbă;
+ * o descriere ținută în două locuri ajunge mincinoasă într-o săptămână.
+ */
+const { readFileSync, readdirSync, existsSync } = await import('node:fs')
+const RADACINA = new URL('../../', import.meta.url).pathname
+
+function fiseleAplicatiilor() {
+  const gasite = {}
+  for (const dosar of ['apps', 'services']) {
+    const cale = `${RADACINA}${dosar}`
+    if (!existsSync(cale)) continue
+    for (const nume of readdirSync(cale)) {
+      const w = `${cale}/${nume}/wrangler.jsonc`
+      if (!existsSync(w)) continue
+      const brut = readFileSync(w, 'utf8')
+      const numeWorker = brut.match(/"name"\s*:\s*"([^"]+)"/)?.[1]
+      if (!numeWorker) continue
+      // Comentariile de la început, până la prima linie care nu e comentariu.
+      const randuri = []
+      for (const r of brut.split('\n')) {
+        const t = r.trim()
+        if (t === '{' || t === '') continue
+        if (!t.startsWith('//')) break
+        randuri.push(t.replace(/^\/\/\s?/, ''))
+      }
+      const pachet = `${cale}/${nume}/package.json`
+      const versiune = existsSync(pachet) ? JSON.parse(readFileSync(pachet, 'utf8')).version : null
+      gasite[scurt(numeWorker)] = {
+        descriere: randuri.join('\n').trim(),
+        versiune,
+        unde: `${dosar}/${nume}`,
+      }
+    }
+  }
+  return gasite
+}
+const FISE = fiseleAplicatiilor()
+
 const N = {}
 for (const s of scripturi) {
   const [set, ceas] = await Promise.all([
@@ -48,7 +88,8 @@ for (const s of scripturi) {
     api(`/workers/scripts/${s.id}/schedules`).catch(() => ({ schedules: [] })),
   ])
   const b = set?.bindings ?? []
-  N[scurt(s.id)] = {
+  const n = scurt(s.id)
+  N[n] = {
     adrese: adrese[s.id] ?? [],
     cheama: b.filter((x) => x.type === 'service').map((x) => scurt(x.service)).sort(),
     d1: b.some((x) => x.type === 'd1'),
@@ -59,6 +100,13 @@ for (const s of scripturi) {
     browser: b.some((x) => x.type === 'browser'),
     email: b.some((x) => x.type === 'send_email'),
     cron: (ceas?.schedules ?? []).map((x) => x.cron),
+    // Pentru fișe: variabilele pe față, numele secretelor (valorile NU se pot citi înapoi), data
+    // ultimei publicări și ce scrie despre aplicație în propriul ei `wrangler.jsonc`.
+    vars: Object.fromEntries(b.filter((x) => x.type === 'plain_text').map((x) => [x.name, x.text])),
+    secrete: b.filter((x) => x.type === 'secret_text').map((x) => x.name).sort(),
+    publicat: s.modified_on,
+    compatibilitate: s.compatibility_date,
+    ...(FISE[n] ?? { descriere: '', versiune: null, unde: null }),
   }
 }
 
@@ -302,12 +350,36 @@ const randuriTabel = Object.keys(N).sort().map((n) => {
 
 const azi = new Date().toLocaleString('ro-RO', { timeZone: 'Europe/Bucharest' })
 
-console.log(`<!doctype html>
-<html lang="ro">
-<meta charset="utf-8">
-<title>Schema Cloudflare — parohia Sfântul Ilie</title>
-<style>
-  :root {
+// ---------------------------------------------------------------- configuratia
+/**
+ * Ce e scris la fel peste tot e CONFIGURAȚIE GENERALĂ și se arată o dată, sus; ce diferă de la o
+ * aplicație la alta stă în fișa ei. Altfel `EMAIL_SUPERADMIN` s-ar repeta de douăzeci de ori și
+ * nimeni n-ar mai vedea singurul lucru care contează: unde valoarea NU e cea obișnuită.
+ */
+const toateNumele = [...new Set(Object.values(N).flatMap((d) => Object.keys(d.vars)))].sort()
+const GENERALE = {}
+const PROPRII = {}
+for (const nume of toateNumele) {
+  const valori = {}
+  for (const [w, d] of Object.entries(N)) if (nume in d.vars) (valori[d.vars[nume]] ??= []).push(w)
+  const perechi = Object.entries(valori).sort((a, b) => b[1].length - a[1].length)
+  const [valoare, cine] = perechi[0]
+  // „Generală" = o singură valoare, la cel puțin trei aplicații. Restul sunt locale prin fire.
+  if (perechi.length === 1 && cine.length >= 3) GENERALE[nume] = { valoare, câți: cine.length }
+  else PROPRII[nume] = true
+}
+const numeSecrete = [...new Set(Object.values(N).flatMap((d) => d.secrete))].sort()
+
+const dataScurta = (s) => (s ? new Date(s).toLocaleString('ro-RO', { timeZone: 'Europe/Bucharest', dateStyle: 'short', timeStyle: 'short' }) : '—')
+
+/**
+ * ⚠️ TOATE selectoarele atârnă de `.schema-cf`, iar variabilele stau pe ea, nu pe `:root`.
+ * Desenul trăiește în două locuri: pagina lui de sine stătătoare ȘI, ca fragment, înăuntrul
+ * carcasei `@xc/ui` la `admin/schema`. Dacă stilul ar scăpa în afara clasei, ar repicta antetul
+ * și meniul aplicației — o schemă nu are voie să schimbe pagina în care e oaspete.
+ */
+const STIL = `
+  .schema-cf {
     color-scheme: light;
     --surface:        #fcfcfb;
     --surface-2:      #f4f4f1;
@@ -319,9 +391,10 @@ console.log(`<!doctype html>
     --coada:          #eb6834;
     --linie:          #9a9a93;
     --chenar:         #dedcd5;
+    color: var(--text-primary);
   }
   @media (prefers-color-scheme: dark) {
-    :root:where(:not([data-theme="light"])) {
+    :root:where(:not([data-theme="light"])) .schema-cf {
       color-scheme: dark;
       --surface:        #1a1a19;
       --surface-2:      #242422;
@@ -335,49 +408,81 @@ console.log(`<!doctype html>
       --chenar:         #3a3a36;
     }
   }
-  body { font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
-         background: var(--surface); color: var(--text-primary);
-         max-width: 78rem; margin: 2rem auto; padding: 0 1rem; }
-  h1 { font-size: 1.5rem; margin-bottom: .2rem; }
-  h2 { font-size: 1.05rem; margin-top: 2.4rem; }
-  .sub { color: var(--text-secondary); margin-top: 0; }
-  .schema { width: 100%; height: auto; display: block; margin: 1.5rem 0 .5rem; }
+  :root[data-theme="dark"] .schema-cf {
+    color-scheme: dark;
+    --surface:        #1a1a19;
+    --surface-2:      #242422;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #94938a;
+    --publica:        #3987e5;
+    --interna:        #199e70;
+    --coada:          #d95926;
+    --linie:          #6e6e66;
+    --chenar:         #3a3a36;
+  }
 
-  .nod rect { fill: var(--surface-2); stroke: var(--chenar); stroke-width: 1.5; }
-  .nod.publica rect { stroke: var(--publica); stroke-width: 2; }
-  .nod.interna rect { stroke: var(--interna); stroke-width: 2; }
-  .nod.coada-nod rect { stroke: var(--coada); stroke-width: 2; }
-  .nod.temelie rect { fill: var(--surface); stroke: var(--interna); stroke-width: 2; }
-  .nod .nume { font: 600 14px system-ui, sans-serif; fill: var(--text-primary); }
-  .nod .sub  { font: 11px ui-monospace, Menlo, Consolas, monospace; fill: var(--text-secondary); }
-  .nod .pastile { font: 10.5px ui-monospace, Menlo, Consolas, monospace; fill: var(--text-muted); }
-  .nod .cheie, .temelie-cheie { font: 700 12px ui-monospace, monospace; fill: var(--interna); }
-  .temelie-cheie { text-anchor: end; letter-spacing: 1px; }
+  .schema-cf .sub { color: var(--text-secondary); margin-top: 0; }
+  .schema-cf .schema { width: 100%; height: auto; display: block; margin: 1.5rem 0 .5rem; }
 
-  .linie { fill: none; stroke: var(--linie); stroke-width: 2; opacity: .85; }
-  .linie.coada { stroke: var(--coada); stroke-width: 2.5; }
-  .varf { fill: var(--linie); }
-  .varf-coada { fill: var(--coada); }
+  .schema-cf .nod rect { fill: var(--surface-2); stroke: var(--chenar); stroke-width: 1.5; }
+  .schema-cf .nod.publica rect { stroke: var(--publica); stroke-width: 2; }
+  .schema-cf .nod.interna rect { stroke: var(--interna); stroke-width: 2; }
+  .schema-cf .nod.coada-nod rect { stroke: var(--coada); stroke-width: 2; }
+  .schema-cf .nod.temelie rect { fill: var(--surface); stroke: var(--interna); stroke-width: 2; }
+  .schema-cf .nod .nume { font: 600 14px system-ui, sans-serif; fill: var(--text-primary); }
+  .schema-cf .nod .sub  { font: 11px ui-monospace, Menlo, Consolas, monospace; fill: var(--text-secondary); }
+  .schema-cf .nod .pastile { font: 10.5px ui-monospace, Menlo, Consolas, monospace; fill: var(--text-muted); }
+  .schema-cf .nod .cheie, .schema-cf .temelie-cheie { font: 700 12px ui-monospace, monospace; fill: var(--interna); }
+  .schema-cf .temelie-cheie { text-anchor: end; letter-spacing: 1px; }
 
-  .banda rect { fill: none; stroke: var(--chenar); stroke-width: 1.5; stroke-dasharray: 5 4; }
-  .titlu-zona, .titlu-banda { font: 600 12px system-ui, sans-serif; fill: var(--text-muted);
-                              text-transform: uppercase; letter-spacing: .08em; }
+  .schema-cf .linie { fill: none; stroke: var(--linie); stroke-width: 2; opacity: .85; }
+  .schema-cf .linie.coada { stroke: var(--coada); stroke-width: 2.5; }
+  .schema-cf .varf { fill: var(--linie); }
+  .schema-cf .varf-coada { fill: var(--coada); }
 
-  .legenda { display: flex; flex-wrap: wrap; gap: 1.4rem; margin: .5rem 0 0;
+  .schema-cf .banda rect { fill: none; stroke: var(--chenar); stroke-width: 1.5; stroke-dasharray: 5 4; }
+  .schema-cf .titlu-zona, .schema-cf .titlu-banda { font: 600 12px system-ui, sans-serif;
+                              fill: var(--text-muted); text-transform: uppercase; letter-spacing: .08em; }
+
+  .schema-cf .legenda { display: flex; flex-wrap: wrap; gap: 1.4rem; margin: .5rem 0 0;
              font-size: .88rem; color: var(--text-secondary); }
-  .legenda span { display: flex; align-items: center; gap: .45rem; }
-  .cheie-culoare { width: 15px; height: 15px; border-radius: 4px; border: 2px solid; background: var(--surface-2); }
-  .nota { background: var(--surface-2); border-left: 3px solid var(--publica);
+  .schema-cf .legenda span { display: flex; align-items: center; gap: .45rem; }
+  .schema-cf .cheie-culoare { width: 15px; height: 15px; border-radius: 4px; border: 2px solid;
+             background: var(--surface-2); display: inline-block; }
+  .schema-cf .nota { background: var(--surface-2); border-left: 3px solid var(--publica);
           padding: .7rem 1rem; margin: 1.4rem 0; font-size: .93rem; }
-  table { border-collapse: collapse; width: 100%; margin-top: .6rem; }
-  th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid var(--chenar);
-           vertical-align: top; font-size: .9rem; }
-  th { color: var(--text-secondary); font-weight: 600; }
-  td.mic { font: 12px ui-monospace, Menlo, Consolas, monospace; color: var(--text-secondary); }
-</style>
+  .schema-cf table { border-collapse: collapse; width: 100%; margin-top: .6rem; }
+  .schema-cf th, .schema-cf td { text-align: left; padding: .4rem .6rem;
+           border-bottom: 1px solid var(--chenar); vertical-align: top; font-size: .9rem; }
+  .schema-cf th { color: var(--text-secondary); font-weight: 600; }
+  .schema-cf td.mic { font: 12px ui-monospace, Menlo, Consolas, monospace; color: var(--text-secondary); }
+  .schema-cf .cand { font-size: .84rem; color: var(--text-muted); }
 
-<h1>Cum sunt legate toate pe Cloudflare</h1>
-<p class="sub">Parohia Sfântul Ilie — Hanul Colței · ${esc(azi)} · citit din contul viu, nu din fișiere</p>
+  .schema-cf .fise { display: grid; grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr));
+             gap: 1rem; margin-top: .8rem; }
+  .schema-cf .fisa { border: 1px solid var(--chenar); border-left-width: 4px; border-radius: 8px;
+             padding: .8rem 1rem; background: var(--surface-2); }
+  .schema-cf .fisa.publica { border-left-color: var(--publica); }
+  .schema-cf .fisa.interna { border-left-color: var(--interna); }
+  .schema-cf .fisa h4 { margin: 0 0 .2rem; font-size: 1.02rem; color: var(--text-primary); }
+  .schema-cf .fisa .tehnic { font: 400 .78rem ui-monospace, Menlo, Consolas, monospace;
+             color: var(--text-muted); }
+  .schema-cf .fisa .v { font: 400 .74rem ui-monospace, monospace; color: var(--text-muted);
+             border: 1px solid var(--chenar); border-radius: 10px; padding: 0 .4rem; }
+  .schema-cf .fisa .adr { margin: .1rem 0 .5rem; font: .82rem ui-monospace, monospace; }
+  .schema-cf .fisa .adr.fara { color: var(--text-muted); }
+  .schema-cf .fisa .desc { margin: .35rem 0; font-size: .88rem; color: var(--text-secondary); }
+  .schema-cf .fisa dl { display: grid; grid-template-columns: 5.4rem 1fr; gap: .15rem .6rem;
+             margin: .6rem 0 0; font-size: .85rem; }
+  .schema-cf .fisa dt { color: var(--text-muted); text-transform: uppercase;
+             font-size: .68rem; letter-spacing: .06em; padding-top: .22rem; }
+  .schema-cf .fisa dd { margin: 0; color: var(--text-secondary); }
+  .schema-cf .fisa dd.mic { font: .76rem ui-monospace, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+`
+
+const CORP = `<div class="schema-cf">
+<p class="sub">Parohia Sfântul Ilie — Hanul Colței · citit din contul viu, nu din fișiere</p>
 
 ${svg}
 
@@ -400,17 +505,100 @@ ${svg}
   Săgețile desenate sunt doar cele care spun ceva despre aplicația aceea anume.
 </div>
 
-<h2>Aceeași schemă, în cuvinte — toate legăturile, fără excepție</h2>
+<h3>Configurația generală</h3>
+<p class="sub">Ce e scris la fel în toate aplicațiile. Unde o aplicație are altceva, scrie în fișa ei.</p>
+<table>
+  <tr><th>Cheie</th><th>Valoare</th><th>În câte</th></tr>
+  ${Object.entries(GENERALE).map(([k, v]) => `<tr>
+    <td class="mic">${esc(k)}</td><td class="mic">${esc(v.valoare) || '<em>gol</em>'}</td>
+    <td class="mic">${v.câți}</td></tr>`).join('\n  ')}
+</table>
+<p class="cand">Secretele care există pe workeri: ${numeSecrete.map((s) => `<code>${esc(s)}</code>`).join(', ') || '—'}.
+  <strong>Valorile lor nu se pot citi înapoi de la Cloudflare</strong>, nici de aici, nici de nicăieri —
+  se pot doar înlocui. Aici scrie doar că există.</p>
+
+<h3>Fiecare aplicație în parte</h3>
+<div class="fise">
+${Object.keys(N).sort().map((n) => {
+  const d = N[n]
+  const proprii = Object.entries(d.vars).filter(([k]) => PROPRII[k])
+  return `<section class="fisa ${d.adrese.length ? 'publica' : 'interna'}">
+  <h4>${esc(ROMANESTE[n] ?? n)} <span class="tehnic">xc-${esc(n)}</span>
+    ${d.versiune ? `<span class="v">v${esc(d.versiune)}</span>` : ''}</h4>
+  ${d.adrese.length ? `<p class="adr">${d.adrese.map((a) => `<a href="https://${esc(a)}.sfantul-ilie.ro/">${esc(a)}.sfantul-ilie.ro</a>`).join(' · ')}</p>`
+    : '<p class="adr fara">fără adresă — se cheamă doar dinăuntru</p>'}
+  ${d.descriere ? `<p class="desc">${esc(d.descriere)
+      .replace(/\n\n/g, '</p><p class="desc">')
+      .replace(/\n/g, ' ')
+      // Accentele grave din comentariu sunt cod, ca peste tot în casă. Se traduc DUPĂ escapare.
+      .replace(/`([^`]+)`/g, '<code>$1</code>')}</p>` : ''}
+  <dl>
+    <dt>ține</dt><dd>${esc([
+      d.d1 ? 'o bază D1' : null,
+      ...d.r2.map((g) => `depozitul R2 ${g}`),
+      d.kv ? 'configurația (KV)' : null,
+      d.ai ? 'creierul AI' : null,
+      d.browser ? 'un Chrome (face poze/PDF)' : null,
+      d.email ? 'dreptul de a trimite e-mail' : null,
+    ].filter(Boolean).join(', ')) || '—'}</dd>
+    <dt>cheamă</dt><dd>${d.cheama.length ? d.cheama.map((c) => esc(ROMANESTE[c] ?? NUME_TEMELIE[c] ?? c)).join(', ') : '—'}</dd>
+    <dt>coadă</dt><dd>${d.coada.length ? 'scrie în ' + esc(d.coada.join(', ')) : (n === 'events' ? 'consumă xc-events-production' : '—')}</dd>
+    <dt>ceas</dt><dd>${d.cron.length ? esc(d.cron.join(', ')) + ' (' + esc(ceas(d.cron[0]).replace('⏱', '')) + ')' : 'n-are'}</dd>
+    <dt>publicat</dt><dd>${esc(dataScurta(d.publicat))}</dd>
+    ${proprii.length ? `<dt>ale ei</dt><dd class="mic">${proprii.map(([k, v]) => `${esc(k)} = ${esc(v) || '(gol)'}`).join('<br>')}</dd>` : ''}
+    ${d.unde ? `<dt>codul</dt><dd class="mic">${esc(d.unde)}</dd>` : ''}
+  </dl>
+</section>`
+}).join('\n')}
+</div>
+
+<h3>Aceeași schemă, în cuvinte — toate legăturile, fără excepție</h3>
 <table>
   <tr><th>Worker</th><th>Adrese</th><th>Cheamă</th><th>Ține</th><th>Ceas</th></tr>
   ${randuriTabel}
 </table>
 
-<p class="sub" style="margin-top:1.6rem; font-size:.86rem">
-  Desenată cu <code>infrastructure/harta/schema-cloudflare.mjs</code> — rulează unealta din nou după
-  orice schimbare și schema se reface singură.
+<p class="cand" style="margin-top:1.6rem">
+  Citită din contul Cloudflare la <strong>${esc(azi)}</strong> și desenată cu
+  <code>infrastructure/harta/schema-cloudflare.mjs</code>. ⚠️ Nu se împrospătează singură:
+  e o fotografie de atunci, nu o oglindă. După o schimbare la Cloudflare, rulează unealta din nou.
 </p>
+</div>`
+
+// ---------------------------------------------------------------- ce scoatem
+const CUM = process.argv.includes('--fragment') ? 'fragment' : process.argv.includes('--ts') ? 'ts' : 'pagina'
+
+if (CUM === 'fragment') {
+  console.log(`<style>${STIL}</style>\n${CORP}`)
+} else if (CUM === 'ts') {
+  /*
+   * Modulul pentru `apps/admin`. Textul se trece prin JSON.stringify, NU printr-un template
+   * literal: HTML-ul are backtick-uri si `${`-uri cu duiumul, iar regula casei (fara accent grav in
+   * sablon) a fost platita destul de scump ca sa n-o mai incercam o data.
+   */
+  const cap = `// GENERAT de infrastructure/harta/schema-cloudflare.mjs — nu se scrie de mana.\n` +
+    `// Se reface cu: node infrastructure/harta/schema-cloudflare.mjs --ts > apps/admin/src/schema-generata.ts\n` +
+    `// Fotografia contului de la ${azi}.\n`
+  console.log(`${cap}export const SCHEMA_STIL = ${JSON.stringify(STIL)}\n`)
+  console.log(`export const SCHEMA_CORP = ${JSON.stringify(CORP)}\n`)
+  console.log(`export const SCHEMA_CITITA_LA = ${JSON.stringify(azi)}\n`)
+} else {
+  console.log(`<!doctype html>
+<html lang="ro">
+<meta charset="utf-8">
+<title>Schema Cloudflare — parohia Sfântul Ilie</title>
+<style>
+  body { font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+         background: #fcfcfb; max-width: 78rem; margin: 2rem auto; padding: 0 1rem; }
+  @media (prefers-color-scheme: dark) { body { background: #1a1a19; } }
+  h1 { font-size: 1.5rem; margin-bottom: .2rem; color: #0b0b0b; }
+  @media (prefers-color-scheme: dark) { h1 { color: #fff; } }
+${STIL}
+</style>
+<h1>Cum sunt legate toate pe Cloudflare</h1>
+${CORP}
 `)
+}
 
 if (platite.length) {
   console.error(`\n⚠️ TEXT CARE NU ÎNCAPE ÎN CUTIE (curge peste vecin, SVG-ul nu taie):`)
