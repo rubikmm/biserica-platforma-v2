@@ -104,6 +104,23 @@ export const IC_PLIC = `<svg viewBox="0 0 24 24" width="17" height="17" fill="no
  * ERA eticheta; de când textul poartă un link, eticheta s-a mutat înăuntru și regula o prinde.
  */
 export const STIL_ABONARE = `
+/* BUTONUL DE ABONARE ARE MĂSURĂ FIXĂ, ACEEAȘI ÎN TOATE APLICAȚIILE (user, 15.09.2026: „păstrează o
+   dimensiune fixă pentru butonul de abonare, ca să fie afișat la fel pe toate aplicațiile pe care le
+   deschidem"). Până acum fiecare aplicație îl lăsa cât îi ținea scrisul, iar spațiul din laturi îl
+   dădea stilul ei local — deci butonul ieșea cu câțiva pixeli altfel de la Calendar la Buletin, și
+   se vedea mai ales când omul trecea de la una la alta.
+   ⚠️ Măsura stă AICI, lângă butonul însuși, nu în cele patru stiluri locale: e singurul fel în care
+   „la fel peste tot" rămâne adevărat și mâine.
+   ⚠️ 118 px e cât cere plicul (17) + spațiul (6) + cuvântul „Abonare" + laturile; dacă schimbi
+   scrisul butonului, schimbă și măsura, altfel cuvântul se taie. */
+.btns .abon { flex:0 0 auto; width:118px; justify-content:center }
+/* Pe telefon cade CUVÂNTUL, nu butonul: rămâne plicul, într-un pătrat de aceeași măsură peste tot.
+   Numele întreg stă în title, deci nu se pierde. */
+@media (max-width:600px) {
+  .btns .abon { width:44px; padding-left:0; padding-right:0 }
+  .btns .abon .cuv { display:none }
+}
+
 .bifa label { font:inherit; color:inherit; margin:0; display:inline; letter-spacing:normal;
               text-transform:none }
 .bifa a { color:inherit; text-underline-offset:2px }

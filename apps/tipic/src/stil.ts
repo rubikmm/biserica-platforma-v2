@@ -244,7 +244,6 @@ h3 { font-size:20px; font-weight:600; color:var(--capitol);
 @media (max-width:600px) {
   .btns { gap:7px }
   .btns .mic { padding:9px }
-  .btns .abon .cuv { display:none }
   .btns .unelte-dr { gap:5px }
   .btns .punct { padding-left:22px; padding-right:22px }
 }

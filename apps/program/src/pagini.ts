@@ -286,7 +286,6 @@ body.cu-calendar .btns .poza-2 { display:flex }
   .btns .pastila { flex:1 1 auto }
   .btns .mic .fel { display:none }
   /* butonul de abonare vine acum din @xc/abonare si isi cheama cuvantul .cuv, nu .fel */
-  .btns .abon .cuv { display:none }
   /* ⚠️ BUTOANELE-ICONITA SUNT PATRATE (user, 11.09.2026, 16:02: „să fie atâta spațiu sus cât este
      stânga dreapta"). Padingul de sus e cel al carcasei (9px, din .btn), deci se scrie 9px si in
      laturi: iconita de 17–18 px iese intr-o tinta de ~36×36, mai usor de nimerit cu degetul decat

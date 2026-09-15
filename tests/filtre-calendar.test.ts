@@ -64,9 +64,26 @@ describe('filtrele calendarului — treptele rolului', () => {
     for (const fel of ['rosie', 'neagra', 'evlavie'] as const) expect(poateFiltra(ADMIN, fel)).toBe(true)
   })
 
-  it('primele două cruci se sting, nu se ascund', () => {
-    expect(bara(ANONIM).palite).toEqual(['rosie', 'neagra'])
+  it('utilizatorul are cele două rânduri apăsabile', () => {
     expect(bara(UTILIZATOR).apasabile).toEqual(['rosie', 'neagra'])
+  })
+
+  /**
+   * ⚠️ CINE N-ARE NICIUN FILTRU APĂSABIL VEDE CRUCEA STINSĂ, FĂRĂ MENIU (user, 15.09.2026: „să se
+   * afișeze disabled, doar să nu mai afișeze nimic atunci când apeși pe ea… să nu reacționeze nici
+   * la apăsare și să nu afișeze butoanele de sub ea din meniul ei").
+   *
+   * Proba păzește mai ales că NU e un `<details>`: unul „dezactivat" nu există în HTML, s-ar deschide
+   * oricum la apăsare, iar oprirea ar fi căzut pe JS — deci ar fi mers doar cu JS.
+   */
+  it('neautentificatul vede crucea stinsă, fără meniu sub ea', () => {
+    const html = paginaLuna({ ctx: ANONIM, an: 2026, luna: 9, randuri: [], calculat: false, azi: '2026-09-13' })
+    expect(html).toContain('class="btn mic sarb sarb-cheie gol" aria-disabled="true"')
+    expect(html).not.toContain('<details class="filtre"')
+    // ⚠️ se caută MARCAJUL, nu cuvântul: „filtre-meniu" e și în stil, pe orice pagină
+    expect(html).not.toContain('<div class="filtre-meniu"')
+    // nici măcar rândurile palite: meniul nu există deloc
+    expect(bara(ANONIM)).toEqual({ apasabile: [], palite: [] })
   })
 
   /**
@@ -100,12 +117,11 @@ describe('filtrele calendarului — treptele rolului', () => {
     expect(fara).not.toContain('sarb-cheie activ')
   })
 
-  it('a treia cruce NU se vede decât la admin — nici palită (user, 15.09.2026)', () => {
+  it('„Sfinți cu evlavie" NU se scrie în meniu decât la admin — nici palit (user, 15.09.2026)', () => {
     expect(poateVedeaFiltrul(ANONIM, 'evlavie')).toBe(false)
     expect(poateVedeaFiltrul(UTILIZATOR, 'evlavie')).toBe(false)
     expect(poateVedeaFiltrul(ADMIN, 'evlavie')).toBe(true)
-    // în pagină: nicăieri, nici ca link, nici ca buton palit
-    expect(bara(ANONIM)).toEqual({ apasabile: [], palite: ['rosie', 'neagra'] })
+    // în meniu: nicăieri, nici ca legătură, nici ca rând palit
     expect(bara(UTILIZATOR)).toEqual({ apasabile: ['rosie', 'neagra'], palite: [] })
     expect(bara(ADMIN)).toEqual({ apasabile: ['rosie', 'neagra', 'evlavie'], palite: [] })
   })

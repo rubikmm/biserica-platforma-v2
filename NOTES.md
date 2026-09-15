@@ -1601,6 +1601,34 @@ forța antetul `Host`**.
 
 ### 2026-09-15
 
+- **⚠️ CARCASA ÎMBRACĂ ORICE `<details>` ÎNTR-O CUTIE — și asta îngroașă randul de unelte.** În
+  `@xc/ui`, pe eticheta goală: `details { border:1px solid var(--rule); border-radius:10px;
+  padding:10px 14px; margin:14px 0 }`. Făcută pentru cutiile pliante din corpul paginii, a prins și
+  meniul de filtre al calendarului: chenar peste chenar (user: „butonul cu crucea este într-un alt
+  buton") și 28 px de margine care au înălțat banda („s-a mărit totul pe înălțime"). Se scoate TOATĂ
+  local, cum face carcasa pentru `.cont-meniu`. **Orice `<details>` care intră în `.btns` are nevoie
+  de aceleași șase linii.**
+- **Calendar, forma finală a benzii** (user, 15.09.2026, mai multe treceri):
+  - **rândul ține 100% mereu**: pastila la stânga, o **pană** elastică, apoi abonarea și crucea
+    lipite de marginea din dreapta. ⚠️ Pană, nu `space-between`: cu `space-between`, un rând rupt pe
+    telefon și-ar fi zvârlit bucățile în laturi.
+  - **zona cu data NU e buton**, e semnalizare: fundal `--paper` (alb ziua, negru noaptea), nu
+    `--tinta` ca butoanele, cu chenar în amândouă laturile. Scrisul e **roșu întotdeauna** — și pe
+    luna de azi, și pe alta. ⚠️ Roșul ăsta nu spune „ești pe luna curentă"; aia o spune bulina. Nu-l
+    lega de `peLunaAzi`.
+  - **cine n-are niciun filtru apăsabil primește crucea STINSĂ, fără meniu** (user: „să nu
+    reacționeze nici la apăsare și să nu afișeze butoanele de sub ea"). ⚠️ E un `<span>`, nu un
+    `<details>`: un `details` „dezactivat" nu există în HTML, s-ar deschide oricum, iar oprirea ar fi
+    căzut pe JS. Azi asta înseamnă neautentificatul, dar regula e scrisă pe DREPT, nu pe treaptă.
+- **⚠️ Butonul de abonare are măsură FIXĂ, în `@xc/abonare`** (user: „ca să fie afișat la fel pe
+  toate aplicațiile pe care le deschidem"): 118 px cu cuvânt, 44 px fără, sub 600 px. Regula a ieșit
+  din cele patru stiluri locale și stă acum lângă buton — singurul fel în care „la fel peste tot"
+  rămâne adevărat și mâine. Dacă schimbi scrisul butonului, schimbă și măsura.
+- **⚠️ `turbo run typecheck` a picat de două ori cu pachete deosebite** (`authorization-worker`,
+  apoi `app-tipic`), iar `tsc` pe fiecare în parte trecea curat; cu `--force` trec toate 36. Pare
+  cache/paralelism al lui turbo, nu cod. **La o picare singulară, reia cu `--force` înainte să cauți
+  vinovatul în sursă.**
+
 - **Calendar: filtrele au intrat sub O SINGURĂ CRUCE, la dreapta, cu meniu** (user: „fă o singură
   cruce la dreapta, pe care, atunci când apeși, să apară un mic meniu"). Rândurile scriu ce a dictat
   el: *Sfinți cu cruce roșie · Sfinți cu cruce neagră · Sfinți cu evlavie*.

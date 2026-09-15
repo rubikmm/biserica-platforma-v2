@@ -4,6 +4,12 @@
  *
  * Se lipeste DUPA stilul global al carcasei (`@xc/ui`) si il suprascrie.
  *
+ * ⚠️⚠️ FARA BACKTICK IN COMENTARIILE DE MAI JOS. Tot ce urmeaza dupa `export const LOCAL = ` e un
+ * TEMPLATE LITERAL: un singur accent grav intr-un comentariu de stil inchide sirul, iar `tsc` si
+ * `esbuild` scot erori la zeci de randuri distanta de locul vinovat. S-a intamplat de trei ori
+ * intr-o singura zi (15.09.2026) — scrie numele proprietatilor CSS simplu, intre ghilimele
+ * romanesti daca trebuie scoase in evidenta.
+ *
  * ⚠️ La coada lui se lipeste `STIL_ABONARE` din `@xc/abonare`: bucatile NOI ale ferestrei de abonare
  * (randul rosu al validarii, linkul din bifa, cele sase casute ale codului) stau o singura data,
  * langa HTML-ul lor. Restul ferestrei (`.modal`, `.camp`, `.bifa`, `.btn-plin`) e mai jos, neatins.
@@ -40,7 +46,15 @@ html { scroll-padding-top:130px }
 .sursa { color:var(--soft); font-size:14.5px; margin:0 0 16px; max-width:58ch }
 
 /* RANDUL DE UNELTE din antet (refacut 12.09.2026): navigarea, abonarea si listele de sarbatori.
-   Navigarea ia spatiul ramas, restul stau cat le tine scrisul — de aceea numai .luni-rand creste. */
+   ⚠️ RANDUL TINE INTOTDEAUNA TOATA LATIMEA (user, 15.09.2026: „bara de sus din antet, meniul să fie
+   100% mereu"). Pastila sta la stanga, iar grupul din dreapta (abonarea si crucea) e IMPINS la
+   marginea din dreapta de o pana elastica — asa randul arata la fel si cand crucea lipseste
+   (la neautentificat), si cand e acolo: „dacă dispare crucea… Abonare vine la dreapta".
+   ⚠️ Pana e un element gol cu flex:1, nu justify-content:space-between pe rand: cu space-between,
+   un rand cu un singur copil si-ar fi lipit copilul la stanga, iar cand randul se rupe (telefoane
+   foarte inguste) bucatile ar fi sarit in laturi. */
+.btns { width:100% }
+.btns .pana { flex:1 1 auto; min-width:0 }
 .btns .mic { flex:0 0 auto; display:flex; align-items:center; justify-content:center; gap:6px;
              padding-left:14px; padding-right:14px; font:600 12.5px/1 ui-sans-serif,system-ui;
              letter-spacing:.06em }
@@ -99,9 +113,20 @@ html { scroll-padding-top:130px }
                     background:var(--rosu-palid) }
 
 /* ⚠️ E un <details>, nu un panou deschis din JS: meniul merge si fara JavaScript. De aceea sagetica
-   lui trebuie stinsa de mana, si in Firefox (list-style), si in WebKit (::-webkit-details-marker). */
-.btns .filtre { position:relative; flex:0 0 auto; display:flex }
-.btns .filtre > summary { cursor:pointer; list-style:none }
+   lui trebuie stinsa de mana, si in Firefox (list-style), si in WebKit (::-webkit-details-marker).
+
+   ⚠️⚠️ CARCASA IMBRACA ORICE <details> INTR-O CUTIE — si asta a ingrosat banda (user, 15.09.2026:
+   „butonul cu crucea este într-un alt buton, într-o altă zonă. S-a mărit totul pe înălțime").
+   In @xc/ui sta, pe eticheta goala:
+       details { border:1px solid var(--rule); border-radius:10px; padding:10px 14px; margin:14px 0 }
+   Facuta pentru cutiile pliante din corpul paginii, ea a prins si meniul asta: chenar peste chenar
+   (butonul parea in alt buton) si 14+14 px de margine care au inaltat randul intreg.
+   Se scoate TOATA aici, nu doar chenarul — cum face si carcasa pentru meniul contului (.cont-meniu).
+   Daca vreodata mai intra un <details> in randul de unelte, are nevoie de aceleasi sase linii. */
+.btns .filtre { border:0; border-radius:0; padding:0; margin:0; background:none;
+                position:relative; flex:0 0 auto; display:flex; align-items:stretch }
+.btns .filtre > summary { cursor:pointer; list-style:none; margin:0; color:inherit }
+.btns .filtre[open] > summary { margin-bottom:0 }
 .btns .filtre > summary::-webkit-details-marker { display:none }
 .btns .filtre > summary::marker { content:"" }
 /* meniul atarna SUB buton si e agatat de dreapta lui: la capatul randului, aliniat la stanga ar iesi
@@ -166,7 +191,6 @@ h2.luna .fel-filtru.f-evlavie { color:var(--mov) }
 @media (max-width:600px) {
   .btns { gap:7px }
   .btns .mic { padding-left:11px; padding-right:11px }
-  .btns .abon .cuv { display:none }
   .pastila .acum { padding:11px 10px; font-size:13px }
   .pastila .luni-cheie { padding:11px 10px }
   /* meniul nu e mai lat decat ecranul, oricat de ingust ar fi telefonul */
@@ -207,9 +231,20 @@ h2.luna .fel-filtru.f-evlavie { color:var(--mov) }
 /* Scrisul locului. ⚠️ NU e scris cu majuscule si nici raschirat, ca lunile din sir: „15 SEPTEMBRIE
    2026" ar fi cerut vreo 150 px si ar fi rupt randul unic pe telefon. Pe ecrane mici trece de la
    sine pe forma scurta („15 sep. 2026"), scrisa alaturi si ascunsa pana atunci. */
+/* ⚠️ SCRISUL E ROSU INTOTDEAUNA (user, 15.09.2026: „să fie cu roșu textul: luna, anul… când sunt pe
+   butonul roșu pe AZI, să fie și textul cu data roșie"). Deci rosul de aici NU spune „esti pe luna
+   de azi" — aia o spune bulina de langa el, care se aprinde numai pe luna curenta. Rosul scrisului
+   spune „aici esti", si atat; el e lucrul dupa care se uita omul intai. Nu-l lega de peLunaAzi. */
+/* ⚠️ NU E UN BUTON, E O ZONA DE SEMNALIZARE (user, 15.09.2026: „zona cu textul «15 septembrie 2026»…
+   să aibă un fundal alb sau negru, în funcție de ce temă este, astfel încât să nu se confunde cu
+   butoanele. Aici este mai mult o zonă de semnalizare"). De aceea fundalul ei e --paper (hartia
+   paginii: alb ziua, aproape negru noaptea), nu --tinta, care e umplutura butoanelor si a pastilei.
+   Se vede ca o fereastra taiata in pastila — si tocmai asta o deosebeste de bulina si de cheie.
+   Nu-i pune :hover si nu-i da cursor:pointer: nu se apasa. */
 .pastila .acum { display:flex; align-items:center; flex:0 0 auto; padding:11px 13px;
                  white-space:nowrap; border-left:1px solid var(--rule);
-                 font:600 14px/1 ui-sans-serif,system-ui; color:var(--ink) }
+                 border-right:1px solid var(--rule); background:var(--paper);
+                 font:600 14px/1 ui-sans-serif,system-ui; color:var(--rosu) }
 .pastila .acum .scurt { display:none }
 /* Cheia lunilor: cat timp bara e coborata, sta aprinsa — ca omul sa stie de unde a iesit sirul. */
 .pastila .luni-cheie { flex:none; display:flex; align-items:center; justify-content:center;

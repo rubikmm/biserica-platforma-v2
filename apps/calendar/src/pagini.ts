@@ -113,7 +113,14 @@ function unelte(o: {
   /** luna peste care lucreaza filtrele, „<an>-<luna>"; lipseste cand lista tine anul intreg */
   luna?: string
 }): string {
-  return `${o.navigarea ?? ''}${butonAbonare(ABONAMENT)}
+  /*
+   * ⚠️ RANDUL TINE INTOTDEAUNA TOATA LATIMEA (user, 15.09.2026: „bara de sus din antet, meniul să fie
+   * 100% mereu"). Pastila la stanga, apoi o PANA elastica, apoi grupul din dreapta — abonarea si
+   * crucea, lipite de margine. Asa randul arata la fel si cand crucea e stinsa, si cand are meniu.
+   */
+  return `${o.navigarea ?? ''}
+    <span class="pana" aria-hidden="true"></span>
+    ${butonAbonare(ABONAMENT)}
     <span class="desparte" aria-hidden="true"></span>
     ${meniulFiltrelor(o)}`
 }
@@ -149,7 +156,28 @@ function meniulFiltrelor(o: { ctx: Ctx; felActiv?: FelFiltru; luna?: string }): 
   const faraFel = o.luna ? `${p}/${o.luna}` : ''
 
   const feluri = (['rosie', 'neagra', 'evlavie'] as FelFiltru[]).filter((f) => poateVedeaFiltrul(o.ctx, f))
-  if (!feluri.length) return ''
+  const apasabile = feluri.filter((f) => poateFiltra(o.ctx, f))
+
+  /*
+   * ⚠️ CINE N-ARE NICIUN FILTRU APĂSABIL PRIMEȘTE CRUCEA STINSĂ, FĂRĂ MENIU (user, 15.09.2026, după
+   * ce s-a răzgândit de două ori în cincisprezece minute — asta e forma pe care a ales-o):
+   * „să se afișeze disabled, doar să nu mai afișeze nimic atunci când apeși pe ea… să nu reacționeze
+   * nici la apăsare și să nu afișeze butoanele de sub ea din meniul ei".
+   *
+   * Azi asta înseamnă neautentificatul, dar regula e scrisă pe DREPT, nu pe treaptă: un meniu care
+   * s-ar deschide numai ca să arate trei rânduri moarte nu spune nimic în plus față de o cruce
+   * stinsă — și cere o apăsare în plus ca s-o afle.
+   *
+   * ⚠️ NU e un `<details>`: e un `<span>`. Un `<details>` „dezactivat" nu există în HTML — s-ar fi
+   * deschis oricum la apăsare, iar oprirea ar fi căzut pe JS, deci ar fi mers doar cu JS. Așa,
+   * crucea chiar nu reacționează, cu sau fără JavaScript. Pricina stă în `title`.
+   */
+  if (!apasabile.length) {
+    const pricina = FILTRE[feluri[0] ?? 'rosie'].cere
+    const spune = `Sărbătorile — ${pricina}`
+    return `<span class="btn mic sarb sarb-cheie gol" aria-disabled="true"`
+      + ` title="${esc(spune)}" aria-label="${esc(spune)}">${IC_CRUCE}</span>`
+  }
 
   const rand = (fel: FelFiltru) => {
     const f = FILTRE[fel]
