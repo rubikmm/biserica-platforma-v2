@@ -647,6 +647,21 @@ propunerea automată, ca în V1.
     - de întrebat dacă răsfoitul se cuvine și la **Tipic** (cele trei cărți scanate, până la 67 MB).
       Acolo ar conta `Range` și numărul de pagini — altă socoteală decât o foaie de 4 pagini.
 
+15. **Textele citite la chinonic, ce a rămas** (16.09.2026, după runda de îndreptare a titlurilor):
+    - ⚠️ **62 de articole au NUMELE AUTORULUI scris în locul titlului** — buletinul n-a pus titlu
+      acolo, deci nu-l avem de unde ghici. Titlul adevărat stă însă în **adresa sursei**
+      (`…/sa-ne-rastignim-mintea-sa-ne-rastignim-viata…`, `…/predica-sfantului-luca-al-crimeei-la-duminica-femeii-samarinence`),
+      deci se poate lua fără să inventăm nimic. **De hotărât cu userul**: îl luăm de acolo (cu lista
+      arătată lui înainte de scriere, fiindcă unele site-uri scriu cu majuscule și își pun numele în
+      coadă) ori îl scrie el. **Întrebat 16.09.2026, 04:20 — n-a apucat să răspundă.**
+    - **3 articole fără titlu și fără autor** (nr. 198, 250, 556) și **3 titluri moștenite greșit**
+      între două texte din același număr (13.07.2020 Sofronie/Paisie, 07.04.2020, 02.04.2025) — de
+      îndreptat de mână, din pagina sursă.
+    - **52 nesigure · 75 fără text · 16 erori** din 438 cu link. Cele 33 de PDF-uri „nesigure" sunt
+      fișierele NOASTRE; unele țin mai multe predici într-un fișier, deci fără potrivirea fragmentului
+      nu se știe unde se taie. **De hotărât**: se acceptă PDF-ul întreg acolo unde e o singură predică?
+    - când textul e adus peste tot, **se scoate linkul spre sursă și rămâne doar numele** (hotărât).
+
 ## Aplicațiile de pe staging
 
 | Aplicație | Adresă | Ce ține |
@@ -1841,6 +1856,45 @@ forța antetul `Host`**.
     va fi adus peste tot, rămâne numai numele. ⚠️ Tot el a hotărât, întrebat anume, preluarea
     textelor întregi — i-am spus că republicarea integrală a articolelor altor site-uri e o
     chestiune de drepturi de autor; a ales știind.
+  - ✅ **TITLURI CIUNTITE, AUTORI LIPSĂ, COZI DE SITE — runda de îndreptare (03:50–05:00).** Userul a
+    arătat două fișe și amândouă au dus la aceeași rădăcină.
+    **(1) TITLUL RUPT PE RÂNDURI.** „Predică la duminica a VI-a după Paști –" avea drept autor
+    „Despre vindecarea minunată a orbului din naștere · Sfântul Nicolae Velimirovici". `titluDin` lua
+    primul rând drept titlu și TOT restul drept autor, lipit cu „·". În buletin titlul e rupt de
+    **lățimea coloanei, nu de înțeles**. Regula nouă (`import/chinonic/titlu-autor.mjs`): se caută
+    primul rând care e un NUME de om și care nu e urmarea celui dinainte; de acolo în jos e autorul,
+    deasupra e titlul. Rândurile titlului se lipesc cu spațiu, cu linie doar între două propoziții.
+    **(2) AUTORUL DIN CAPUL TEXTULUI.** La ~100 de articole numele nu e îngroșat, deci nu intra în
+    „cap": ajungea primul paragraf al fragmentului. Acum trece la `autor` și **iese din text**.
+    ⚠️ Nu se scoate când ce rămâne e sub 200 de semne (la ~25 de texte numele CHIAR e tot fragmentul).
+    **Rezultat: 144 → 239 de articole cu autor.**
+    **(3) COADA DE „ARTICOLE RECOMANDATE".** User: „Aici trebuia să se oprească: din: Preot Varnava
+    Iankos… Ce e sub trebuie șters". Recomandările WordPress sunt **îngroșate**, deci rândul începe
+    `* **[`, iar tiparul vechi cerea `* [` — treceau toate, și sunt rânduri lungi, de proză nu se
+    deosebesc prin lungime (18 rânduri deasupra textului, 24 sub el, la un singur articol). Hotar nou
+    de sfârșit: **mențiunea sursei („din: …") se păstrează și sub ea se taie**.
+    ⚠️ **Tot ele explicau și „nesigurele"**: `semneleInceputului` tăia fragmentul în propoziții DUPĂ
+    `plat()`, care scoate toată punctuația — deci nu găsea niciun punct și întorcea mereu **un singur
+    semn**. Rezerva gândită acolo („e destul ca UNA să se potrivească") **n-a lucrat niciodată**.
+    Cu ea reparată + numele scos din capul fragmentului: **258 → 295 gata, 86 → 52 nesigure.**
+    ⚠️ **`sql()` nu prindea căderile de rețea** (`fetch` aruncă, nu întoarce răspuns): o rulare peste
+    toată arhiva a murit la 119 din 438. Acum reîncearcă și la excepție, iar scrierea în bază e și ea
+    în `try` — o rulare de douăzeci de minute nu are voie să cadă de la o pană de o secundă.
+    ⚠️⚠️ **LACĂTUL ADRESELOR — `import/chinonic/sluguri.json`.** Slugul se naște din titlu, iar fișele
+    erau deja publicate: orice îndreptare de titlu le-ar fi mutat la altă adresă. Lacătul leagă adresa
+    de **`<newsletterId>#<k>`** (numărul buletinului + locul articolului în el), singura identitate
+    care nu atârnă de titlu. **448/448 adrese păstrate.** De aceea regula veche „nu mai rula
+    `--curata`" a expirat: importul se poate relua oricând, fără să omoare o adresă.
+    ⚠️ **O eroare adevărată prinsă de probe**: hotarul `\b` de la capătul titlurilor de cinste **nu se
+    potrivește niciodată după punct** (între „." și " " nu e hotar de cuvânt), deci „Sf.", „Pr.",
+    „Arhim.", „Protos." cădeau toate — și ele sunt jumătate din numele arhivei. Probe:
+    `tests/chinonic-titlu-autor.test.ts`, 15 cazuri luate din arhivă.
+    ✅ **„Fără autor" se scrie întotdeauna** (user: „dacă nu au autor scriem «Fără autor»"), stins și
+    înclinat, ca să nu se citească drept nume. Website **0.4.2**, publicat.
+    ⚠️ **Deschis**: **62 de articole au NUMELE AUTORULUI scris în locul titlului** — buletinul n-a pus
+    titlu acolo. Titlul adevărat există în adresa sursei
+    (`…/sa-ne-rastignim-mintea-sa-ne-rastignim-viata…`), deci se poate lua fără să inventăm nimic —
+    dar e hotărârea userului dacă îl luăm de acolo ori îl scrie el. Până atunci rămân cum sunt.
 
 - **NEWSLETTERUL, RUNDA A DOUA** (user, în noapte). Newsletter **0.6.0**, publicat pe producție în
   patru pași (0.4.0 → 0.6.0). ⚠️ **Din 16.09.2026 se publică DUPĂ FIECARE BUCATĂ**, cerut anume:

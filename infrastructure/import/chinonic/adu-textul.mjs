@@ -33,16 +33,30 @@ if (!cont || !jeton) {
   process.exit(1)
 }
 
+/*
+ * ⚠️ REINCERCAREA PRINDE SI CADERILE DE RETEA, nu doar raspunsurile rele (indreptat 16.09.2026, dupa
+ * ce o rulare peste toata arhiva a murit la 119 din 438 cu „fetch failed / other side closed").
+ * `fetch` nu intoarce un raspuns cand se rupe firul: ARUNCA — iar bucla de mai jos, care se uita doar
+ * la `r.ok`, nu apuca sa se mai invarta. O rulare de douazeci de minute nu are voie sa cada de la o
+ * pana de o secunda.
+ */
 async function sql(comanda, params = []) {
+  let pricina
   for (let i = 1; i <= 5; i++) {
-    const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${cont}/d1/database/${BAZA}/query`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${jeton}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ sql: comanda, params }),
-    })
-    const j = await r.json()
-    if (r.ok && j.success) return j.result
-    if (i === 5) throw new Error(`D1: ${r.status} ${JSON.stringify(j.errors ?? j).slice(0, 200)}`)
+    try {
+      const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${cont}/d1/database/${BAZA}/query`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${jeton}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ sql: comanda, params }),
+        signal: AbortSignal.timeout(60000),
+      })
+      const j = await r.json()
+      if (r.ok && j.success) return j.result
+      pricina = `D1: ${r.status} ${JSON.stringify(j.errors ?? j).slice(0, 200)}`
+    } catch (e) {
+      pricina = `D1: ${String(e?.message ?? e).slice(0, 200)}`
+    }
+    if (i === 5) throw new Error(pricina)
     await new Promise((s) => setTimeout(s, 1000 * i))
   }
 }
@@ -64,9 +78,17 @@ async function markdown(octeti, tip, nume) {
 
 /** Randuri care nu sunt text, ci podoaba paginii: se arunca oriunde ar fi. */
 const GUNOI = [
-  /^\s*$/, /^-{3,}$/, /^<!DOCTYPE/i, /^!\[/, /^\[\s*\]\(/, /^\[Skip to/i,
+  /^\s*$/, /^-{3,}$/, /^\\?\*\\?\*\\?\*\s*$/, /^<!DOCTYPE/i, /^!\[/, /^\[\s*\]\(/, /^\[Skip to/i,
   /^(description|title|image|author|date|lang|canonical|og:|twitter:)\s*:/i,
-  /^\*\s*\[/, /^\|/, /^\s*<[a-z!/]/i,
+  /^\|/, /^\s*<[a-z!/]/i,
+  /*
+   * ⚠️ RANDUL DE LISTA CARE E O LEGATURA e „articol recomandat", nu text (user, 16.09.2026: „ce e sub
+   * trebuie șters"). Tiparul vechi `^\*\s*\[` prindea numai `* [titlu](adresa)`; in WordPress
+   * recomandarile sunt INGROSATE, deci randul incepe `* **[` ori `* [**` ori `* _[` — si asa treceau
+   * toate: sunt randuri lungi, de proza nu se deosebesc prin lungime. La un singur articol urcau 18
+   * randuri deasupra textului si coborau 24 sub el.
+   */
+  /^\s*[*+-]\s*[*_\\]*\s*\[/,
 ]
 /** De aici in jos nu mai e articolul, ci subsolul site-ului. */
 /*
@@ -82,7 +104,16 @@ const OPRESTE = [
   /^\s*(las[aă] un (comentariu|r[aă]spuns)|adaug[aă] (un )?comentariu|comentarii\s*\(?\d*\)?\s*$)/i,
   /^\s*(articole? (din aceea[sș]i categorie|recomandate?|similare?)|v[aă] mai recomand[aă]m|te-ar putea interesa)/i,
   /^\s*copyright\b/i, /^\s*©/,
+  // capul listei de recomandari, oricum ar fi ingrosat: „**Legaturi:**", „Va mai recomandam:"
+  /^\s*[*_]{0,2}\s*(leg[aă]turi|v[aă] mai recomand[aă]m|cite[sș]te (si|și) |vezi (si|și)\b)/i,
 ]
+/**
+ * ⚠️ RANDUL DE SFARSIT: mentiunea sursei, cu care se incheie chiar textul (user, 16.09.2026: „Aici
+ * trebuia să se oprească: din: Preot Varnava Iankos, Biserica pacatosilor, Editura Egumenita, 2016.
+ * Ce e sub trebuie șters"). Spre deosebire de `OPRESTE`, randul acesta SE PASTREAZA — el e cinstirea
+ * sursei — si abia dupa el se taie.
+ */
+const ULTIMUL = /^\s*\(?\s*(din|surs[aă]|preluat din|text(ul)? preluat din)\s*:/i
 /** O lista de etichete: cel putin 6 bucati despartite prin virgula, in medie scurte, fara punct. */
 const eListaDeEtichete = (t) => {
   const bucati = t.split(',').map((x) => x.trim()).filter(Boolean)
@@ -208,12 +239,23 @@ function adresaPoartaTitlul(u, titlu) {
   return nimerite / cuvinte.length >= 0.6
 }
 
+/*
+ * ⚠️ PROPOZITIILE SE TAIE INAINTE DE NORMALIZARE (indreptat 16.09.2026). `plat` scoate toata
+ * punctuatia, deci taierea in propozitii facuta DUPA el nu gasea niciun punct: se intorcea mereu un
+ * singur semn — inceputul fragmentului — iar rezerva gandita aici („e destul ca UNA sa se
+ * potriveasca") n-a lucrat niciodata. Cand buletinul mai punea un rand inaintea textului (numele
+ * autorului, o introducere), singurul semn cadea si articolul ramanea „nesigur" ori, mai rau, se lua
+ * de la capul paginii, cu tot meniul deasupra.
+ */
 function semneleInceputului(fragment) {
-  const t = plat(fara(fragment ?? '').replace(/<[^>]+>/g, ' '))
+  const brut = fara(fragment ?? '').replace(/<[^>]+>/g, ' ')
+  const t = plat(brut)
   if (t.length < 40) return []
   const semne = [t.slice(0, 45)]
-  const propozitii = t.split(/(?<=[.!?]) /).filter((p) => p.length >= 45)
-  for (const p of propozitii.slice(0, 4)) semne.push(p.slice(0, 45))
+  for (const p of brut.split(/(?<=[.!?])\s+/).slice(0, 5)) {
+    const s = plat(p)
+    if (s.length >= 45) semne.push(s.slice(0, 45))
+  }
   return [...new Set(semne)]
 }
 
@@ -266,6 +308,9 @@ function paragrafe(md, titlu, semne) {
     if (bune.length && eListaDeEtichete(fara(curataLinia(linie)))) break
     // scoate marcajele markdown, pastrand scrisul
     let t = fara(curataLinia(linie))
+    // ⚠️ mentiunea sursei se cauta INAINTE de pragul de lungime: „(din: Doxologia)" are 16 semne, iar
+    // sub pragul de proza ar fi fost sarita — si atunci recomandarile de sub ea ar fi intrat in text
+    if (bune.length && ULTIMUL.test(t)) { bune.push(t); break }
     if (t.length < 60) continue
     // un rand care era aproape numai legaturi nu e proza
     const capLegaturi = (linie.match(/\]\(/g) ?? []).length
@@ -337,7 +382,10 @@ const [{ results: randuri }] = await sql(
   `SELECT slug, titlu, fragment, sursa_url, sursa_fel FROM texte_chinonic
    WHERE stare_text IN ${unde} AND sursa_url <> '' ORDER BY citit_la DESC`,
 )
-const deFacut = LIMITA ? randuri.slice(0, LIMITA) : randuri
+// `--doar=<slug>` — o singura fisa, pentru cand se incearca o regula noua de curatare
+const DOAR = process.argv.find((a) => a.startsWith('--doar='))?.slice(7)
+const alese = DOAR ? randuri.filter((r) => r.slug === DOAR) : randuri
+const deFacut = LIMITA ? alese.slice(0, LIMITA) : alese
 console.log(`de adus: ${deFacut.length} (din ${randuri.length} netrase)`)
 const feluri = {}
 for (const r of deFacut) feluri[r.sursa_fel] = (feluri[r.sursa_fel] ?? 0) + 1
@@ -359,12 +407,18 @@ for (const rand of deFacut) {
   } catch (e) {
     rez = { stare: 'eroare', text: '', de_ce: String(e.message).slice(0, 80) }
   }
-  await sql(
-    `UPDATE texte_chinonic SET text_intreg = ?, stare_text = ?, schimbat_la = datetime('now') WHERE slug = ?`,
-    [rez.text, rez.stare, rand.slug],
-  )
-  socoteala[rez.stare]++
   n++
+  // ⚠️ nici scrierea nu are voie sa omoare rularea: randul ramane cum era si se prinde la o reluare
+  try {
+    await sql(
+      `UPDATE texte_chinonic SET text_intreg = ?, stare_text = ?, schimbat_la = datetime('now') WHERE slug = ?`,
+      [rez.text, rez.stare, rand.slug],
+    )
+  } catch (e) {
+    console.log(`    ⚠️ nescris in baza (${String(e.message).slice(0, 60)}) — ${rand.slug}`)
+    continue
+  }
+  socoteala[rez.stare]++
   const semn = rez.stare === 'gata' ? '✓' : rez.stare === 'nesigur' ? '?' : rez.stare === 'fara-text' ? '·' : '✗'
   console.log(`${String(n).padStart(3)}/${deFacut.length} ${semn} [${rand.sursa_fel}] ${(rand.titlu || rand.slug).slice(0, 46).padEnd(46)} ${rez.de_ce}`)
 }

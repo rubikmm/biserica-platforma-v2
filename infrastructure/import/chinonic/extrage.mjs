@@ -28,7 +28,9 @@
  * ⚠️ POZA POATE STA SI INAINTE, SI DUPA TEXT (masurat: in nr. 511 inainte, in nr. 571 dupa), deci se
  * strang toate pozele din articol, nu „prima" sau „ultima".
  */
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
+// regulile de titlu/autor stau singure, ca sa poata fi probate — vezi tests/chinonic-titlu-autor
+import { autorulDinCap, desparte, ent } from './titlu-autor.mjs'
 
 const SCRIE = process.argv.includes('--scrie')
 const VEZI = Number(process.argv.find((a) => a.startsWith('--vezi='))?.slice(7)) || 0
@@ -54,20 +56,6 @@ async function ia(cheie) {
   return null
 }
 
-/*
- * ⚠️ Se decodeaza de DOUA ori: 45 de fragmente vechi au entitati codate de doua ori la trimitere
- * (`&amp;atilde;`, `&amp;shy;`), iar o singura trecere lasa „&atilde;" in textul curat (16.09.2026).
- * `atilde` (ã) e felul in care site-urile vechi scriau ă; `shy` e cratima moale, nevazuta.
- */
-const ENT = {
-  acirc: 'â', Acirc: 'Â', icirc: 'î', Icirc: 'Î', abreve: 'ă', Abreve: 'Ă', atilde: 'ă', Atilde: 'Ă',
-  scedil: 'ș', Scedil: 'Ș', tcedil: 'ț', Tcedil: 'Ț', amp: '&', nbsp: ' ', shy: '', quot: '"',
-  apos: "'", lt: '<', gt: '>', rsquo: '’', lsquo: '‘', ldquo: '„', rdquo: '”', ndash: '–', mdash: '—',
-  hellip: '…', bdquo: '„',
-}
-const entOData = (s) => s.replace(/&([a-zA-Z]+);/g, (m, n) => ENT[n] ?? m)
-  .replace(/&#(\d+);/g, (m, n) => String.fromCodePoint(+n))
-const ent = (s) => entOData(entOData(s))
 const platit = (h) => ent(h.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim()
 
 /**
@@ -162,10 +150,8 @@ function titluDin(brut) {
     .map((x) => platit(x))
     .filter(Boolean)
   if (!randuri.length) return { titlu: '', autor: '', rest: brut }
-  const titlu = randuri[0]
-  if (titlu.length < 3 || titlu.length > 160) return { titlu: '', autor: '', rest: brut }
-  // autorul e scurt (un nume); un rand lung dupa titlu e deja text, nu autor
-  const autor = randuri.slice(1).filter((r) => r.length <= 90).join(' · ')
+  if (randuri[0].length < 3 || randuri[0].length > 160) return { titlu: '', autor: '', rest: brut }
+  const { titlu, autor } = desparte(randuri)
   return { titlu, autor, rest }
 }
 
@@ -251,14 +237,16 @@ function articoleleDin(h, fisa) {
      *   - celula e numai titlu (ingrosata toata) → corpul vine din celulele urmatoare;
      *   - titlul e lipit de corp in aceeasi celula → se taie de acolo, iar restul celulei ramane corp.
      */
-    const { titlu, autor, rest } = titluDin(texte[0].brut)
+    const { titlu, autor: autorDinTitlu, rest } = titluDin(texte[0].brut)
     const corpBlocuri = titlu
       ? [...(platit(rest) ? [{ brut: rest, text: platit(rest) }] : []), ...texte.slice(1)]
       : texte
     const corpHtml = corpBlocuri.map((b) => b.brut.trim()).join('\n')
     const corpText = corpBlocuri.map((b) => b.text).join('\n\n')
     // fragmentul asa cum se ARATA: paragrafe de text curat, fara stilurile de email (vezi mai sus)
-    const corpCurat = inParagrafe(corpBlocuri.flatMap((b) => paragrafeCurate(b.brut)))
+    const paragrafe = corpBlocuri.flatMap((b) => paragrafeCurate(b.brut))
+    const { autor, paragrafe: corpParagrafe } = autorulDinCap(autorDinTitlu, paragrafe)
+    const corpCurat = inParagrafe(corpParagrafe)
     /*
      * ⚠️ ZONA SURSEI TINE DOUA LUCRURI, SI TREBUIE SA COEXISTE (user, 16.09.2026: „sursa poate să fie
      * mențiunea dintr-o carte, dar de obicei este completată și de un link"):
@@ -277,6 +265,9 @@ function articoleleDin(h, fisa) {
       newsletterId: fisa.id,
       nr: fisa.nr,
       trimis: fisa.trimis,
+      // ⚠️ LOCUL ARTICOLULUI IN NUMAR. Singura identitate a lui care NU atarna de titlu — deci
+      // singura pe care se poate sprijini inghetarea adreselor (`sluguri.json`, vezi `slugul`).
+      k,
       // ce e
       titlu,
       autor,
@@ -348,8 +339,26 @@ toate.sort((a, b) => a.trimis.localeCompare(b.trimis) || a.slug.localeCompare(b.
  * Se face DUPĂ sortare, ca ordinea să fie aceeași la fiecare rulare — altfel aceeași arhivă ar da
  * sluguri diferite de la o zi la alta, iar adresele de pe Website ar muri.
  */
+/*
+ * ⚠️⚠️ LACATUL ADRESELOR (`sluguri.json`, 16.09.2026). O adresa data mai departe nu se mai schimba —
+ * iar slugul se naste din TITLU, deci orice indreptare de titlu ar muta fisa la alta adresa si ar
+ * omori-o pe cea veche. De aceea articolele care erau in baza la prima publicare isi pastreaza
+ * adresa de atunci, oricat s-ar indrepta titlul lor de aici inainte. Cheia lacatului e singurul
+ * lucru din articol care NU atarna de titlu: numarul buletinului plus locul articolului in el.
+ * Articolele noi (necunoscute lacatului) isi iau slugul din titlu, ca pana acum.
+ */
+const LACAT = JSON.parse(readFileSync(new URL('./sluguri.json', import.meta.url), 'utf8'))
 const luate = new Set()
+const deLacat = new Set()
 for (const a of toate) {
+  const inchis = LACAT[`${a.newsletterId}#${a.k}`]
+  if (!inchis) continue
+  a.slug = inchis
+  luate.add(inchis)
+  deLacat.add(a)
+}
+for (const a of toate) {
+  if (deLacat.has(a)) continue
   let s = a.slug
   if (luate.has(s)) s = `${a.slug}-nr${a.nr ?? a.newsletterId}`
   let k = 2
@@ -357,6 +366,7 @@ for (const a of toate) {
   luate.add(s)
   a.slug = s
 }
+console.log(`adrese pastrate din lacat: ${deLacat.size} / ${toate.length}`)
 
 const cuTitlu = toate.filter((a) => a.titlu).length
 const cuPoza = toate.filter((a) => a.poze.length).length

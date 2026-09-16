@@ -92,11 +92,19 @@ function sursa(t: Text): string {
   return `<p class="ch-sursa"><span>Sursa:</span> ${parti.join(' · ')}${drum}</p>`
 }
 
+/*
+ * ⚠️ AUTORUL SE SCRIE INTOTDEAUNA (user, 16.09.2026: „Toate trebuie să aibă titlu și autor… dacă nu
+ * au autor scriem «Fără autor»"). Un rând gol acolo unde la vecini stă un nume se citește ca o
+ * scăpare; „Fără autor" spune limpede că textul chiar n-are unul.
+ */
+const numeleAutorului = (t: Text): string => t.autor || 'Fără autor'
+const faraAutor = (t: Text): string => (t.autor ? '' : ' ch-niciun-autor')
+
 /** Un rând din listă: data mică la stânga, titlul după ea — ca listele newsletterului. */
 const rand = (t: Text): string =>
   `<li><span class="cand">${esc(ziua(t.citit_la))}</span>` +
   `<a href="${CALE}/${esc(t.slug)}">${esc(t.titlu || '(fără titlu)')}</a>` +
-  `${t.autor ? `<span class="ch-autor">${esc(t.autor)}</span>` : ''}</li>`
+  `<span class="ch-autor${faraAutor(t)}">${esc(numeleAutorului(t))}</span></li>`
 
 /** Bucata de pe ușa Website-ului: cele mai noi zece și „Vezi toate". */
 export function bucataDeAcasa(texte: Text[], nTotal: number): string {
@@ -136,7 +144,7 @@ export function paginaText(t: Text, urlNewsletter: string): string {
    */
   return `<div class="cap">
   <h1 class="titlu-lista">${esc(t.titlu || '(fără titlu)')}</h1>
-  ${t.autor ? `<p class="ch-autorul">${esc(t.autor)}</p>` : ''}
+  <p class="ch-autorul${faraAutor(t)}">${esc(numeleAutorului(t))}</p>
   <p class="sursa">citit la strană pe ${esc(ziua(t.citit_la))}</p>
 </div>
 ${t.poza ? `<img class="ch-poza" src="${esc(poza(t, urlNewsletter))}" alt="">` : ''}
@@ -160,6 +168,8 @@ export const STIL_CHINONIC = `
 .numere a:hover { color:var(--rosu); text-decoration:underline }
 /* autorul, dupa titlu: se citeste ca o lamurire, nu ca parte din titlu */
 .ch-autor { display:block; margin:2px 0 0 128px; color:var(--faint); font-size:13px }
+/* „Fără autor" e o lipsa marturisita, nu un nume: se scrie mai stins si inclinat */
+.ch-niciun-autor { font-style:italic; opacity:.65 }
 .ch-toate { margin:14px 0 0 }
 .ch-toate a { color:var(--rosu); text-decoration:none; font:600 13.5px/1 ui-sans-serif,system-ui }
 .ch-toate a:hover { text-decoration:underline }
