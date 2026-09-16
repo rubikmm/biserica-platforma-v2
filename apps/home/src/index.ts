@@ -270,9 +270,12 @@ export default {
      */
     if (url.pathname === CALE_CHINONIC_STARE || url.pathname === `${CALE_CHINONIC_STARE}/`) {
       const [rez, numere] = await Promise.all([rezumate(env.DB), numereleDupaSlug(env.NEWSLETTER)])
+      // ⚠️ Filtrele sunt o NAVIGARE, nu o ascundere din JS: categoria (`?ce=`) și anul (`?an=`) vin
+      // din adresă, iar serverul trimite numai rândurile alese (user, 16.09.2026).
       return html(
         pagina({ ...comune, titluPagina: 'Texte citite la chinonic — starea lor',
-          corp: paginaStare(rez, numere, nav.newsletter || '') }),
+          corp: paginaStare(rez, numere, nav.newsletter || '',
+            url.searchParams.get('ce'), url.searchParams.get('an')) }),
         200,
         { 'cache-control': 'private, no-store' },
       )
@@ -280,7 +283,8 @@ export default {
     if (url.pathname === CALE_CHINONIC || url.pathname === `${CALE_CHINONIC}/`) {
       const rez = await rezumate(env.DB)
       return html(
-        pagina({ ...comune, titluPagina: 'Texte citite la chinonic', indexabil: true, corp: paginaToate(rez) }),
+        pagina({ ...comune, titluPagina: 'Texte citite la chinonic', indexabil: true,
+          corp: paginaToate(rez, url.searchParams.get('an')) }),
         200,
         { 'cache-control': utilizator || sesiune.veziCa ? 'private, no-store' : 'public, max-age=600' },
       )

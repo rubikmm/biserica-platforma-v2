@@ -158,6 +158,37 @@ describe('lista mare e compactă', () => {
   })
 })
 
+/**
+ * FILTRUL PE ANI (user, 16.09.2026: „aici să avem o filtrare pe ani… totul ascuns în afară de ce e
+ * selectat, la intrare prima opțiune selectată"). Ce se poate strica în tăcere: bara să rămână, dar
+ * pagina să scrie mai departe TOATE rândurile — filtrul ar arăta ca și cum ar merge.
+ */
+describe('lista mare se filtrează pe ani', () => {
+  const vechi: Rezumat = { ...rez, slug: 'cuvant-vechi', titlu: 'Cuvânt din 2019', citit_la: '2019-03-10' }
+  const nou: Rezumat = { ...rez, slug: 'cuvant-nou', titlu: 'Cuvânt din 2026', citit_la: '2026-01-11' }
+
+  it('la intrare e deschis anul cel mai nou, iar ceilalți ani sunt doar butoane', () => {
+    const h = paginaToate([nou, rez, vechi])
+    expect(h).toContain('Cuvânt din 2026')
+    expect(h).not.toContain('Cuvânt din 2019') // ⚠️ ascuns, nu doar mutat mai jos
+    expect(h).not.toContain('Viața Sfintei Cuvioase Parascheva')
+    expect(h).toContain('?an=2019') // dar se poate ajunge la el dintr-o apăsare
+    expect(h).toContain('?an=2025')
+  })
+
+  it('anul cerut din adresă e cel scris — și numai el', () => {
+    const h = paginaToate([nou, rez, vechi], '2019')
+    expect(h).toContain('Cuvânt din 2019')
+    expect(h).not.toContain('Cuvânt din 2026')
+    expect(h).toContain('aria-current="page"')
+  })
+
+  it('un an care nu există cade pe cel mai nou, nu pe o pagină goală', () => {
+    expect(paginaToate([nou, vechi], '1999')).toContain('Cuvânt din 2026')
+    expect(paginaToate([nou, vechi], null)).toContain('Cuvânt din 2026')
+  })
+})
+
 describe('pagina de stare — locul de investigat', () => {
   const numere = new Map([['viata-sfintei-cuvioase-parascheva', { id: 617, nr: 534, trimis: '2025-10-14', texte: ['viata-sfintei-cuvioase-parascheva'] }]])
   const stricat: Rezumat = { ...rez, stare_text: 'fara-text', n_text: 0, autor: '', link_stare: 'mort' }
@@ -168,6 +199,48 @@ describe('pagina de stare — locul de investigat', () => {
     expect(h).toContain('Fără autor')
     expect(h).toContain('Cu adresa sursei moartă')
     expect(h).toContain('adresa sursei nu mai există (404)')
+  })
+
+  /**
+   * ⚠️ O SINGURĂ CATEGORIE O DATĂ (user, 16.09.2026: „totul ascuns în afară de ce e selectat, la
+   * intrare prima opțiune selectată"). Numele categoriilor rămân — ele sunt butoanele filtrului —,
+   * deci proba se uită la RÂNDURI, nu la titluri: altfel ar trece și cu pagina veche, întreagă.
+   */
+  it('se scrie numai categoria aleasă; restul rămân butoane cu numărul lor', () => {
+    const altul: Rezumat = { ...rez, slug: 'cuvant-fara-autor', titlu: 'Cuvânt fără autor', autor: '' }
+    const cuNumere = new Map([...numere, ['cuvant-fara-autor', { id: 700, nr: 600, trimis: '2026-02-01', texte: ['cuvant-fara-autor'] }]])
+    const h = paginaStare([stricat, altul], cuNumere, '')
+    expect(h).toContain('Viața Sfintei Cuvioase Parascheva') // e în prima categorie, „Fără textul întreg"
+    expect(h).not.toContain('Cuvânt fără autor') // are text întreg — nu intră în categoria deschisă
+    expect(h).toContain('?ce=fara-autor') // dar se ajunge la el dintr-o apăsare
+  })
+
+  it('categoria cerută din adresă e cea scrisă', () => {
+    const altul: Rezumat = { ...rez, slug: 'cuvant-fara-autor', titlu: 'Cuvânt fără autor', autor: '' }
+    const cuNumere = new Map([...numere, ['cuvant-fara-autor', { id: 700, nr: 600, trimis: '2026-02-01', texte: ['cuvant-fara-autor'] }]])
+    const h = paginaStare([stricat, altul], cuNumere, '', 'fara-autor')
+    expect(h).toContain('Cuvânt fără autor')
+    expect(h).toContain('de căutat în pagina sursei')
+  })
+
+  /**
+   * ⚠️ NUMAI TEXTELE LEGATE DE UN NUMĂR TRIMIS (user, 16.09.2026: „vreau să mă uit doar pe texte care
+   * fac parte dintr-un anumit buletin online publicat și transmis… pune-le separat"). Un text fără
+   * asociere iese din TOATE categoriile, nu doar capătă un rând mai stins.
+   */
+  it('textul fără număr de buletin iese din categorii și stă în a lui', () => {
+    const orfan: Rezumat = { ...stricat, slug: 'text-fara-numar', titlu: 'Text fără număr' }
+    const h = paginaStare([stricat, orfan], numere, '')
+    expect(h).toContain('Viața Sfintei Cuvioase Parascheva')
+    expect(h).not.toContain('Text fără număr') // scos din „Fără textul întreg", deși i s-ar potrivi
+    expect(h).toContain('Fără număr de buletin')
+    expect(paginaStare([stricat, orfan], numere, '', 'fara-numar')).toContain('Text fără număr')
+  })
+
+  it('⚠️ dacă Newsletterul tace, nimic nu se mută la „fără număr" — necunoașterea nu e lipsă', () => {
+    const h = paginaStare([stricat], new Map(), '')
+    expect(h).toContain('Viața Sfintei Cuvioase Parascheva')
+    expect(h).not.toContain('Fără număr de buletin')
   })
 
   it('⚠️ scrie din ce număr de buletin vine, cu legătură spre el', () => {

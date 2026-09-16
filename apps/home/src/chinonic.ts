@@ -267,21 +267,63 @@ const randCompact = (r: Rezumat): string =>
       : 'nicio sursă scrisă')}</span>
 </li>`
 
-/** Pagina cu toate, pe ani: de la cel mai nou spre cel mai vechi. */
-export function paginaToate(rez: Rezumat[]): string {
-  const ani = [...new Set(rez.map((r) => +r.citit_la.slice(0, 4)))].sort((a, b) => b - a)
-  const peAni = ani
-    .map((an) => `<h2 class="anul">${an}</h2>
-<ul class="ch-compacta">${rez.filter((r) => +r.citit_la.slice(0, 4) === an).map(randCompact).join('')}</ul>`)
+/** Anul citirii, singurul fapt după care se filtrează lista mare. */
+const anulCitirii = (r: Rezumat): number => +r.citit_la.slice(0, 4)
+
+/** Un segment de bară: ce scrie pe el, unde duce, dacă e cel deschis. */
+interface Segment {
+  nume: string
+  href: string
+  activ: boolean
+  titlu?: string
+}
+
+/**
+ * ⚠️ BARA ANILOR E CEA DE LA PROGRAM ȘI NEWSLETTER — aceeași pastilă, aceeași fâșie derulabilă,
+ * aceleași clase (`bara-ani` / `an-buton`), ca aplicațiile să se recunoască între ele. Ce lipsește
+ * dinadins sunt săgețile ‹ ›: acolo le scrie JS-ul antetului, iar Website-ul n-are antetul acela;
+ * fâșia se derulează cu degetul, iar anii chinonicului sunt puțini.
+ *
+ * ⚠️ FILTRUL E O NAVIGARE, nu o ascundere din JavaScript: fiecare alegere are adresa ei
+ * (`?an=2025`), merge fără script, se poate da mai departe și se poate lăsa înapoi. Serverul trimite
+ * în pagină NUMAI rândurile alese — adică pagina se și ușurează, nu doar pare mai scurtă.
+ */
+function baraSegmentelor(eticheta: string, segmente: Segment[]): string {
+  const butoane = segmente
+    .map((s) => `<a class="an-buton${s.activ ? ' activ' : ''}" href="${esc(s.href)}"`
+      + `${s.activ ? ' aria-current="page"' : ''}${s.titlu ? ` title="${esc(s.titlu)}"` : ''}>${esc(s.nume)}</a>`)
     .join('')
+  return `<div class="bara-ani"><div class="fasie"><nav class="ani" aria-label="${esc(eticheta)}">${butoane}</nav></div></div>`
+}
+
+/**
+ * Pagina cu toate — **un singur an o dată** (user, 16.09.2026: „aici să avem o filtrare pe ani…
+ * totul ascuns în afară de ce e selectat; la intrare prima opțiune selectată").
+ *
+ * ⚠️ PRIMA OPȚIUNE E ANUL CEL MAI NOU, fiindcă anii merg descrescător — și tot el e cel ales când
+ * nu se cere niciunul ori când se cere unul care nu există. Nu există „toți anii": ar însemna tocmai
+ * lista de dinainte, cea de care s-a plâns că îngreunează browserul.
+ */
+export function paginaToate(rez: Rezumat[], anCerut?: string | number | null): string {
   const cuText = rez.filter(areTotR).length
+  const ani = [...new Set(rez.map(anulCitirii))].sort((a, b) => b - a)
+  const cerut = Number(anCerut)
+  const an = ani.includes(cerut) ? cerut : (ani[0] ?? 0)
+  const ale = rez.filter((r) => anulCitirii(r) === an)
+  const bara = ani.length
+    ? baraSegmentelor('Anii citirii', ani.map((a) => ({ nume: String(a), href: `${CALE}?an=${a}`, activ: a === an })))
+    : ''
   return `<div class="cap">
   <h1 class="titlu-lista">Texte citite la chinonic</h1>
   <p class="sursa">Ce s-a citit la strană, în timpul împărtășirii — ${rez.length} texte, din
-  ${ani[ani.length - 1]} încoace. ${cuText} au textul întreg preluat.</p>
+  ${ani[ani.length - 1] ?? ''} încoace. ${cuText} au textul întreg preluat.</p>
+  ${bara}
   <p class="ch-spre-stare"><a href="${CALE_STARE}">Starea lor, pe categorii →</a></p>
 </div>
-${peAni}`
+${ale.length
+    ? `<h2 class="anul">${an} <span class="ch-cate">${ale.length} ${ale.length === 1 ? 'text' : 'texte'}</span></h2>
+<ul class="ch-compacta">${ale.map(randCompact).join('')}</ul>`
+    : '<p class="ch-spune">Niciun text în anul acesta.</p>'}`
 }
 
 /** De ce nu are textul întreg — scris scurt, ca să se poată căuta pricina, nu doar lipsa. */
@@ -321,8 +363,23 @@ const randDeInvestigat = (r: Rezumat, n: Numar | undefined, urlNewsletter: strin
  *
  * ⚠️ E o pagină de LUCRU, nu una de citit: rândurile sunt scurte, categoriile se pot suprapune
  * (același text poate fi și fără autor, și fără text întreg) și nu se indexează la căutare.
+ *
+ * ⚠️ O SINGURĂ CATEGORIE O DATĂ (user, 16.09.2026: „aici la fel — să fie filtrare, adică totul
+ * ascuns în afară de ce e selectat; la intrare prima opțiune selectată"). Cuprinsul nu mai e un șir
+ * de ancore care sar prin pagină, ci FILTRUL însuși: se scrie numai categoria aleasă, iar celelalte
+ * rămân doar ca butoane, cu numărul lor. Prima opțiune — „Fără textul întreg", cea mai mare — e cea
+ * deschisă când nu se cere alta.
+ *
+ * ⚠️ Anii filtrează ÎNĂUNTRUL categoriei și acolo prima opțiune e „Toți anii": pe o pagină de
+ * investigat, a ascunde din pornire tot afară de anul curent ar ascunde tocmai ce e de cercetat.
  */
-export function paginaStare(rez: Rezumat[], numere: Map<string, Numar>, urlNewsletter: string): string {
+export function paginaStare(
+  rez: Rezumat[],
+  numere: Map<string, Numar>,
+  urlNewsletter: string,
+  ceCerut?: string | null,
+  anCerut?: string | number | null,
+): string {
   const grupe: { cheie: string; nume: string; spune: string; care: (r: Rezumat) => boolean; pricina: (r: Rezumat) => string }[] = [
     {
       cheie: 'fara-text',
@@ -375,22 +432,66 @@ export function paginaStare(rez: Rezumat[], numere: Map<string, Numar>, urlNewsl
     },
   ]
 
-  const cuprins = grupe
-    .map((g) => `<li><a href="#${g.cheie}">${esc(g.nume)}</a> <b>${rez.filter(g.care).length}</b></li>`)
+  /*
+   * ⚠️ SE INVESTIGHEAZĂ NUMAI TEXTELE LEGATE DE UN NUMĂR TRIMIS (user, 16.09.2026: „vreau să mă uit
+   * doar pe texte care fac parte dintr-un anumit buletin online publicat și transmis… pune-le
+   * separat, că nu vreau să mă uit pe ele"). Un text fără asociere n-are cum fi cercetat: nu se știe
+   * din ce număr vine, deci nici unde să te uiți ca să-l îndrepți. De aceea IESE din toate
+   * categoriile și stă într-a lui, ultima.
+   *
+   * ⚠️ Dar numai când Newsletterul CHIAR a răspuns. Dacă binding-ul tace, harta e goală și „fără
+   * număr" ar înghiți toate textele — necunoașterea noastră s-ar citi ca o lipsă a lor. Atunci
+   * pagina rămâne cum era, cu toate categoriile întregi.
+   */
+  const stimNumerele = numere.size > 0
+  const areNumar = (r: Rezumat): boolean => numere.has(r.slug)
+  const cuNumar = stimNumerele
+    ? grupe.map((g) => ({ ...g, care: (r: Rezumat) => areNumar(r) && g.care(r) }))
+    : grupe
+  if (stimNumerele) {
+    cuNumar.push({
+      cheie: 'fara-numar',
+      nume: 'Fără număr de buletin',
+      spune: 'Textul e în bază, dar Newsletterul nu-l leagă de niciun număr trimis — deci nu se știe ' +
+        'din ce buletin vine. Stau deoparte, scoase din celelalte categorii: n-ai de unde începe.',
+      care: (r) => !areNumar(r),
+      pricina: () => 'nicio asociere cu un număr trimis',
+    })
+  }
+
+  /*
+   * ⚠️ CUPRINSUL E FILTRUL, nu un șir de ancore: se scrie o singură categorie o dată, cea aleasă,
+   * iar celelalte rămân butoane cu numărul lor. Alegerea e o navigare (`?ce=…`), deci merge fără
+   * JavaScript și are adresă — un rând de investigat se poate da mai departe așa cum e.
+   */
+  const ales = cuNumar.find((g) => g.cheie === ceCerut) ?? cuNumar[0]!
+  const ale = rez.filter(ales.care)
+  const ani = [...new Set(ale.map(anulCitirii))].sort((a, b) => b - a)
+  const cerut = Number(anCerut)
+  const an = ani.includes(cerut) ? cerut : 0 // 0 = toți anii, prima opțiune a barei
+  const randuri = an ? ale.filter((r) => anulCitirii(r) === an) : ale
+
+  const cuprins = cuNumar
+    .map((g) => `<li${g.cheie === ales.cheie ? ' class="activ"' : ''}>`
+      + `<a href="${CALE_STARE}?ce=${g.cheie}${an ? `&amp;an=${an}` : ''}">${esc(g.nume)}</a>`
+      + ` <b>${rez.filter(g.care).length}</b></li>`)
     .join('')
 
-  const sectiuni = grupe
-    .map((g) => {
-      const ale = rez.filter(g.care)
-      return `<section class="ch-grupa" id="${g.cheie}">
-  <h2>${esc(g.nume)} <span class="ch-cate">${ale.length}</span></h2>
-  <p class="ch-spune">${esc(g.spune)}</p>
-  ${ale.length
-    ? `<ul class="ch-compacta">${ale.map((r) => randDeInvestigat(r, numere.get(r.slug), urlNewsletter, g.pricina(r))).join('')}</ul>`
-    : '<p class="ch-spune">Niciunul — categoria e goală.</p>'}
+  const baraAni = ani.length > 1
+    ? baraSegmentelor('Anii citirii', [
+      { nume: 'Toți anii', href: `${CALE_STARE}?ce=${ales.cheie}`, activ: !an },
+      ...ani.map((a) => ({ nume: String(a), href: `${CALE_STARE}?ce=${ales.cheie}&an=${a}`, activ: a === an })),
+    ])
+    : ''
+
+  const sectiune = `<section class="ch-grupa" id="${ales.cheie}">
+  <h2>${esc(ales.nume)} <span class="ch-cate">${ale.length}${an ? ` · ${randuri.length} în ${an}` : ''}</span></h2>
+  <p class="ch-spune">${esc(ales.spune)}</p>
+  ${baraAni}
+  ${randuri.length
+    ? `<ul class="ch-compacta">${randuri.map((r) => randDeInvestigat(r, numere.get(r.slug), urlNewsletter, ales.pricina(r))).join('')}</ul>`
+    : `<p class="ch-spune">${an ? 'Niciunul în anul acesta.' : 'Niciunul — categoria e goală.'}</p>`}
 </section>`
-    })
-    .join('')
 
   const cuText = rez.filter(areTotR).length
   const cuAutor = rez.filter((r) => r.autor).length
@@ -402,7 +503,7 @@ export function paginaStare(rez: Rezumat[], numere: Map<string, Numar>, urlNewsl
   <ul class="ch-cuprins">${cuprins}</ul>
   <p class="ch-spre-stare"><a href="${CALE}">← Lista întreagă</a></p>
 </div>
-${sectiuni}`
+${sectiune}`
 }
 
 /** Pagina unui text. */
@@ -495,12 +596,35 @@ export const STIL_CHINONIC = `
 .ch-bifa { font:12px/1.4 ui-sans-serif,system-ui; white-space:nowrap }
 .ch-bifa.da { color:var(--verde,#3a7d44) }
 .ch-bifa.nu { color:var(--faint); opacity:.75 }
+/* ⚠️ BARA ANILOR — aceeasi ca la Program si la Newsletter (aceleasi clase, acelasi desen), ca sa se
+   recunoasca dintr-o privire ca e acelasi lucru. Fara sageti: aici nu e antetul care le scrie. */
+.bara-ani { display:flex; align-items:stretch; margin:10px 0 0;
+            border:1px solid var(--rule); border-radius:10px; background:var(--tinta);
+            overflow:hidden }
+.bara-ani .fasie { flex:1 1 auto; min-width:0; overflow-x:auto; overscroll-behavior-x:contain;
+                   -webkit-overflow-scrolling:touch; scrollbar-width:none }
+.bara-ani .fasie::-webkit-scrollbar { display:none }
+.bara-ani .ani { display:flex; align-items:stretch; gap:0; width:max-content; padding:0 }
+.an-buton { flex:none; display:flex; align-items:center; justify-content:center;
+            color:var(--soft); text-decoration:none; background:transparent;
+            border:0; border-radius:0; padding:10px 13px;
+            font:600 12.5px/1 ui-sans-serif,system-ui; letter-spacing:.03em; white-space:nowrap }
+.an-buton + .an-buton { border-left:1px solid var(--rule) }
+.an-buton:hover { color:var(--rosu); background:var(--paper) }
+/* anul deschis: rosu si plin, ca segmentul pe care esti din pastila */
+.an-buton.activ { color:var(--rosu); font-weight:700;
+                  background:color-mix(in srgb, var(--rosu) 11%, transparent) }
 /* pagina de stare — locul de investigat */
+/* ⚠️ CUPRINSUL E FILTRUL: pastila apasata e cea deschisa, celelalte duc la ea. Se vede care e
+   aleasa, altfel omul n-ar sti de ce vede o singura categorie (user, 16.09.2026). */
 .ch-cuprins { list-style:none; display:flex; flex-wrap:wrap; gap:8px; padding:0; margin:12px 0 0 }
 .ch-cuprins li { border:1px solid var(--rule); border-radius:999px; padding:5px 12px; font-size:13px }
 .ch-cuprins a { color:var(--ink); text-decoration:none }
 .ch-cuprins a:hover { color:var(--rosu) }
 .ch-cuprins b { color:var(--rosu) }
+.ch-cuprins li.activ { border-color:var(--rosu);
+                       background:color-mix(in srgb, var(--rosu) 11%, transparent) }
+.ch-cuprins li.activ a { color:var(--rosu); font-weight:600 }
 .ch-grupa { margin:30px 0 0; padding:16px 0 0; border-top:1px solid var(--rule) }
 .ch-grupa > h2 { margin:0 0 2px; font-size:19px; font-weight:400 }
 .ch-cate { color:var(--faint); font-size:15px }

@@ -675,8 +675,34 @@ propunerea automată, ca în V1.
       **De reluat din când în când**: adresele mor în tăcere, iar pagina arată ce s-a măsurat ultima dată.
     - **Rămâne de hotărât** (întrebări puse userului, fără răspuns încă): (a) cele **33 de fișe cu
       bucată prea scurtă** (sub 40 de semne) au textul adus în bază, dar stau „nesigur" fiindcă n-a
-      existat cu ce fi verificat — îl arătăm? Se văd toate la `/stare#fisa-goala`. (b) se acceptă
+      existat cu ce fi verificat — îl arătăm? Se văd toate la `/stare?ce=fisa-goala`. (b) se acceptă
       întregi cele 33 de PDF-uri „nesigure" ale parohiei, acolo unde e o singură predică?
+    - ⚠️ **AMÂNDOUĂ PAGINILE SE FILTREAZĂ** (16.09.2026, Website 0.6.3, cerut anume: „totul ascuns în
+      afară de ce e selectat, la intrare prima opțiune selectată"). Lista mare: **bara anilor**
+      (`?an=`), prima opțiune = anul cel mai nou, **fără „toate"** — asta era tocmai lista grea; 2026
+      se deschide în 33 KB, față de 211 KB cât avea întreaga. Pagina de stare: **cuprinsul E filtrul**
+      (`?ce=`), o singură categorie o dată, prima la intrare, plus o **bară a anilor înăuntrul
+      categoriei**, unde prima opțiune E „Toți anii" (pe o pagină de investigat, a ascunde din pornire
+      tot afară de anul curent ar ascunde tocmai ce e de cercetat). Filtrul e o **navigare**, nu o
+      ascundere din JS: merge fără script, are adresă, iar serverul trimite numai rândurile alese.
+      Bara e cea de la Program și Newsletter (`bara-ani` / `an-buton`), fără săgeți (aici nu e antetul
+      care le scrie). Probe: încă 7 în `tests/chinonic-fisa.test.ts` (27 cu totul).
+    - ⚠️ **NUMAI TEXTELE LEGATE DE UN NUMĂR TRIMIS se investighează** (user: „vreau să mă uit doar pe
+      texte care fac parte dintr-un anumit buletin online publicat și transmis… pune-le separat, că nu
+      vreau să mă uit pe ele"). Un text fără asociere **iese din toate categoriile** și stă în ultima,
+      „Fără număr de buletin" — dar numai dacă Newsletterul **chiar a răspuns**: harta goală e
+      necunoaștere, nu lipsă, și atunci pagina rămâne întreagă.
+    - ⚠️⚠️ **CAPCANĂ: `chinonic/asocieri.json` din R2 se învechește în tăcere.** `asocieri.mjs` îl
+      scrie din `/data/chinonic.json` **pe slug**, deci orice rundă care schimbă sluguri (titluri noi
+      din `indreptari.json`) îl lasă în urmă, iar pagina de stare scrie „număr necunoscut" fără ca
+      ceva să pară stricat. **S-a întâmplat**: 114 din 448 rămăseseră pe sluguri vechi de felul
+      `text-232-1` — de acolo venea plângerea userului („nu știu din ce număr sunt"). Reparat la
+      16.09.2026 rulând `asocieri.mjs --chiar`; verificat 0 sluguri nepereche în ambele sensuri.
+      **După orice import care atinge slugurile, rulează unealta din nou.**
+    - **CÂT E BUN, CIFRELE ZILEI** (16.09.2026, D1 `xc-home-production`): **245 din 448 sunt complete**
+      — titlu + autor + textul întreg preluat —, și **toate 245 au și legătura spre sursă vie**. Restul:
+      448 cu sursă scrisă (niciunul fără), 445 cu titlu, 354 cu autor (64 „Sinaxar"), 295 cu text
+      întreg. **Toate 448 își știu numărul de buletin** după reparația asocierilor.
 
 ## Aplicațiile de pe staging
 
@@ -2034,6 +2060,33 @@ forța antetul `Host`**.
   — dintre ele **36 sunt deja gata**, **33 au textul adus în bază dar stau „nesigur"** (n-a existat cu
   ce fi verificat; ele sunt câștigul de luat) și 6 n-au niciun text.
   **Probe**: încă 7 în `tests/chinonic-fisa.test.ts` (20 cu totul); 373 trec.
+
+- ✅ **CHINONIC — FILTRE PE AMÂNDOUĂ PAGINILE + REPARAREA ASOCIERILOR** (user, 14:52 și 14:55).
+  Website **0.6.3**, publicat. Cerut: „filtrare pe ani" la lista mare, „la fel" la pagina de stare —
+  „adică totul ascuns în afară de ce e selectat; la intrare prima opțiune selectată".
+  **Lista mare**: bara anilor (`?an=`), zece ani, **prima opțiune = cel mai nou**, fără „toate" (asta
+  era tocmai lista grea). 2026 se deschide în **33 KB**, față de 211 KB cât avea întreaga.
+  **Pagina de stare**: **cuprinsul a devenit filtrul** (`?ce=`) — o singură categorie o dată, prima
+  („Fără textul întreg") la intrare, celelalte rămân butoane cu numărul lor — plus o **bară a anilor
+  înăuntrul categoriei**, unde prima opțiune E **„Toți anii"**: pe o pagină de investigat, a ascunde
+  din pornire tot afară de anul curent ar ascunde tocmai ce e de cercetat.
+  ⚠️ Filtrul e o **navigare**, nu o ascundere din JS: merge fără script, fiecare alegere are adresa ei
+  și **serverul trimite numai rândurile alese** — pagina chiar se ușurează, nu doar pare mai scurtă.
+  Bara e cea de la Program și Newsletter (`bara-ani` / `an-buton`), fără săgeți.
+  ⚠️⚠️ **BUG GĂSIT PRIN PLÂNGEREA LUI** („textele care nu au sursă nu știu din ce număr sunt"):
+  `chinonic/asocieri.json` din R2 rămăsese pe **sluguri vechi** (`text-232-1`), scrise înainte ca
+  titlurile să fie îndreptate — **114 din 448** de texte apăreau cu „număr necunoscut", deși toate 448
+  își au numărul. Fișierul se scrie **pe slug**, deci orice rundă care schimbă sluguri îl lasă în urmă,
+  **în tăcere**. Reparat rulând `asocieri.mjs --chiar` (318 numere); verificat în ambele sensuri: 0
+  sluguri nepereche. **De rulat după orice import care atinge slugurile.**
+  **Ce a cerut odată cu bug-ul**: textele nelegate de un număr **ies din toate categoriile** și stau
+  separat, în „Fără număr de buletin" — „vreau să mă uit doar pe texte care fac parte dintr-un anumit
+  buletin online publicat și transmis". Paza: dacă Newsletterul tace, nu se mută nimic acolo
+  (necunoașterea noastră nu e lipsa lor).
+  **Cât e bun, întrebat de el**: **245 din 448 sunt complete** — titlu + autor + text întreg —, și
+  **toate 245 au și legătura spre sursă vie**. 448 cu sursă scrisă, 445 cu titlu, 354 cu autor (64
+  „Sinaxar"), 295 cu text întreg, 448 cu numărul știut.
+  **Probe**: încă 7 în `tests/chinonic-fisa.test.ts` (27 cu totul); **380 trec**.
 
 ### 2026-09-15
 
