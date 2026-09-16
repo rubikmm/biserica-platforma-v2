@@ -649,9 +649,13 @@ propunerea automată, ca în V1.
 
 15. **Textele citite la chinonic, ce a rămas** (16.09.2026, după runda de îndreptare — subiectul
     titlurilor l-a închis userul la 12:28):
-    - **445/448 cu titlu · 291/448 cu autor.** Cele 157 fără autor: **64 sunt vieți de sfinți și
-      sinaxare**, unde autor nu există și „Fără autor" e răspunsul drept; restul de 93 sunt cuvinte
-      unde buletinul n-a scris niciun nume — nici în cap, nici în text.
+    - ⚠️ **LISTELE DE INVESTIGAT SE SCOT CU `stari.mjs`** (16.09.2026) — o categorie o dată, în
+      Markdown: `node infrastructure/import/chinonic/stari.mjs --lista=<nesigur|fara-text|eroare|
+      fara-link|link-mort|fara-autor|gata>`, redirectat într-un fișier. Fără argumente: socoteala.
+      Copiile trimise userului: `outputs/chinonic-*.md`.
+    - **445/448 cu titlu · 354/448 cu autor** (63 au primit „Sinaxar" la 16.09.2026, după regula din
+      `titlu-autor.mjs`). Cele **94 rămase fără autor** sunt cuvinte și predici unde buletinul n-a
+      scris niciun nume — nici în cap, nici în text: **de căutat la sursă**, e munca rămasă.
     - **3 articole fără titlu** (nr. 198, 250, 556: buletinul n-a scris niciunul, iar textul începe
       de-a dreptul) și **2 fără titlu găsibil la sursă** (`sfantul-simeon-noul-teolog`,
       `sfantul-ioan-gura-de-aur-nr523` — paginile nu mai dau nimic). Cinci rânduri, de scris de mână
@@ -663,7 +667,16 @@ propunerea automată, ca în V1.
       ALT text decât cel citit — corect lăsate ca fragment.
     - cele **75 „fără text"** sunt în cea mai mare parte **PDF-uri scanate** (fotografii ale unei foi,
       fără strat de text): de acolo nu se poate scoate nimic fără OCR adevărat.
-    - când textul e adus peste tot, **se scoate linkul spre sursă și rămâne doar numele** (hotărât).
+    - ⚠️ **HOTĂRÂREA DESPRE LINK S-A SCHIMBAT la 16.09.2026** și înlocuiește regula veche („când
+      textul e adus peste tot, se scoate linkul și rămâne doar numele"): **legătura se pune efectiv,
+      iar pragul nu mai e textul, ci adresa** — vie, se scrie; moartă (404/410) ori mută, rămâne doar
+      numele, nelegat, „ca să știu că nu mai era valabil linkul". Starea se ține în bază
+      (`link_stare`) și se aduce la zi cu `verifica-linkurile.mjs` (`--reia`, `--picate`, `--doar=`).
+      **De reluat din când în când**: adresele mor în tăcere, iar pagina arată ce s-a măsurat ultima dată.
+    - **Rămâne de hotărât** (întrebări puse userului, fără răspuns încă): (a) cele **33 de fișe
+      aproape goale** (fragment sub 40 de semne) au textul adus în bază, dar nu se arată fiindcă
+      n-a existat fragment cu care să fie verificat — îl arătăm? (b) se acceptă întregi cele 33 de
+      PDF-uri „nesigure" ale parohiei, acolo unde e o singură predică?
 
 ## Aplicațiile de pe staging
 
@@ -1966,6 +1979,38 @@ forța antetul `Host`**.
     amândouă cazurile ritmul săptămânal e **neîntrerupt**, deci numerele au fost sărite la numărătoare
     — nu lipsesc numere din arhivă.
   - ⚠️ **Nu se îndreaptă de la noi** (regula buletinului): arhiva e mărturia a ce a plecat.
+- ✅ **CHINONIC — FIȘA ÎN FORMA CERUTĂ + LISTELE DE INVESTIGAT** (user, la prânz). Website **0.5.0**,
+  publicat pe producție. Trei cereri într-un șir, toate făcute.
+  **(1) LISTELE SEPARATE, „ca să le pot investiga".** Unealtă nouă: `import/chinonic/stari.mjs` —
+  fără argumente dă socoteala, cu `--lista=<categorie>` scrie lista în Markdown (se redirectează
+  într-un fișier; cele șapte sunt în `outputs/chinonic-*.md`). Categoriile se exclud, în ordinea
+  `fara-link · eroare · fara-text · nesigur · gata · netras`, plus două tăieturi de-a curmezișul:
+  `fara-autor` și `link-mort`. ⚠️ `fara-link` se socotește ÎNAINTE de stare: fără adresă rândul a
+  rămas „netras", dar pricina lui nu e etapa, e lipsa sursei. Cifre: **295 gata · 75 fără text ·
+  52 nesigure · 16 erori · 10 fără link · 94 fără autor · 16 cu adresa moartă**.
+  **(2) LEGĂTURA SE PUNE NUMAI DACĂ ADRESA TRĂIEȘTE** (user: „dacă e 404 acel url să nu se pună —
+  așa știu că nu mai era valabil linkul"). Unealtă nouă: `verifica-linkurile.mjs`, care întreabă
+  fiecare adresă și scrie în bază `link_stare` / `link_cod` / `link_verificat_la` (coloane noi).
+  Din 438: **408 vii · 12 moarte (404/410) · 18 picate**.
+  ⚠️⚠️ **„N-a răspuns" NU înseamnă „nu mai există"** — lecția rundei. Din cele 18 picate, **14 erau
+  vii**: `cuvantul-ortodox.ro` are lanțul de certificate rupt, `ortodoxism.ro` cade la strângerea de
+  mână TLS, altele merg numai pe `http`. De aceea scriptul are **a doua șansă** (`node:https`, fără
+  cerere de certificat curat, apoi `http`) — fără ea am fi tăiat 14 legături bune. Rămân **16**
+  adrese care nu se mai scriu în pagină; la două dintre ele (`comuniune.ro`) a murit chiar și DNS-ul.
+  **(3) FORMA FIȘEI, cele cinci lucruri în aceeași ordine**: titlu · autor · **text scurt** (400 de
+  semne, tăiate la cuvânt, din textul întreg dacă îl avem, altfel din fragment) · **„Citește tot"** ·
+  **Sursa: [carte] · site**. ⚠️ **„Citește tot" E MARCAJUL textului întreg** (cerut anume: „să faci un
+  marcaj unde e textul complet"): îl are numai unde aducerea a trecut proba; unde nu, scrie „Doar
+  bucata citită la strană". ⚠️ **Desfășurarea merge și fără JS**: „Citește tot" e o legătură adevărată
+  spre fișă, iar scriptul o prinde din zbor și aduce corpul de la aceeași adresă cu `?bucata=text`
+  (numai corpul, fără carcasă) — 448 de texte întregi n-au ce căuta deodată în pagina cu toate.
+  **(4) AUTORUL „SINAXAR"** (user: „autor (Sinaxar sau fără autor ca excepție)"). Regula e în
+  `titlu-autor.mjs` (`eSinaxar`, sub probe): titlu care începe cu „Viața / Sinaxar / Pomenirea /
+  Icoana / Moaștele / Sfântul…" ȘI nu e un fel scris de cineva („Cuvânt", „Predică", „Tâlcuire",
+  „Despre"). **63 de articole** au primit „Sinaxar"; **94 rămân „Fără autor"** — acolo autorul chiar
+  e de căutat la sursă. ⚠️ Se pune LA URMĂ, după `indreptari.json`: hotărârea omului bate ghiceala.
+  Aplicată peste baza vie cu `autor-sinaxar.mjs`, ca să nu fie nevoie de o extragere întreagă.
+  **Probe**: `tests/chinonic-fisa.test.ts` (13, noi) + 3 în `chinonic-titlu-autor.test.ts`.
 
 ### 2026-09-15
 

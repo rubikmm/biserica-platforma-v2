@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — modul JS al importului, fără typings; probele îl folosesc ca atare
-import { autorulDinCap, desparte, eNume } from '../infrastructure/import/chinonic/titlu-autor.mjs'
+import { autorulDinCap, autorulScris, desparte, eNume, eSinaxar } from '../infrastructure/import/chinonic/titlu-autor.mjs'
 
 /**
  * TITLUL ȘI AUTORUL textelor citite la chinonic (user, 16.09.2026: „Titlul este incomplet și o parte
@@ -146,5 +146,38 @@ describe('autorul luat din capul textului', () => {
   it('un text care începe cu proză rămâne neatins', () => {
     expect(autorulDinCap('', ['Iubiţi creştini,', lung]))
       .toEqual({ autor: '', paragrafe: ['Iubiţi creştini,', lung] })
+  })
+})
+
+/**
+ * SINAXARUL NU ARE AUTOR, ARE UN FEL (user, 16.09.2026: „titlu + autor (Sinaxar sau fără autor ca
+ * excepție)"). Vieţile sfinţilor chiar n-au un scriitor al lor; „Fără autor" la ele se citeşte ca o
+ * scăpare. Regula ghiceşte după forma titlului, deci se poate strica în tăcere — de aceea probele.
+ */
+describe('sinaxarele își iau autorul din felul lor', () => {
+  it('viețile sfinților sunt sinaxare', () => {
+    expect(eSinaxar('Viața Sfântului Cuvios Ioan de la Prislop (secolele XV-XVI)')).toBe(true)
+    expect(eSinaxar('Viaţa Sfintei Cuvioase Parascheva')).toBe(true)
+    expect(eSinaxar('SINAXAR - 14 Septembrie')).toBe(true)
+    expect(eSinaxar('Pomenirea Sfântului Noului Mucenic Ioan Valahul (Românul)')).toBe(true)
+    expect(eSinaxar('Icoana Maicii Domnului Prodromița')).toBe(true)
+    expect(eSinaxar('Moaştele Sfântului Visarion')).toBe(true)
+    expect(eSinaxar('Sfântul Mare Mucenic Nichita')).toBe(true)
+  })
+
+  it('⚠️ un text SCRIS de cineva nu e sinaxar, oricât de sfânt ar fi în titlu', () => {
+    // aici autorul chiar lipseşte şi e de căutat la sursă — „Sinaxar" ar fi o minciună
+    expect(eSinaxar('Cuvânt la Sfântul Mare Mucenic Gheorghe')).toBe(false)
+    expect(eSinaxar('Predică la Botezul Domnului')).toBe(false)
+    expect(eSinaxar('TÂLCUIRE LA PILDA LUCRĂTORILOR CELOR RĂI')).toBe(false)
+    expect(eSinaxar('Despre sensul suferintei')).toBe(false)
+    expect(eSinaxar('Sfântul Nicolae Velimirovici despre iubirea vrăjmașilor')).toBe(false)
+  })
+
+  it('numele găsit are întâietate — „Sinaxar" se pune numai unde n-are nimeni', () => {
+    expect(autorulScris('Sfântul Nicolae Velimirovici', 'Viața Sfintei Maria Egipteanca'))
+      .toBe('Sfântul Nicolae Velimirovici')
+    expect(autorulScris('', 'Viața Sfintei Maria Egipteanca')).toBe('Sinaxar')
+    expect(autorulScris('', 'Predică la Duminica înmulțirii pâinilor')).toBe('')
   })
 })

@@ -15,10 +15,12 @@ import { dataVersiunii, esc, html, json, pagina } from '@xc/ui'
 import pkg from '../package.json'
 import {
   CALE as CALE_CHINONIC,
+  JS_CHINONIC,
   STIL_CHINONIC,
   bucataDeAcasa,
   cate as cateTexte,
   celeDeAcasa,
+  corpTextului,
   paginaText,
   paginaToate,
   toate as toateTextele,
@@ -258,7 +260,7 @@ export default {
     if (url.pathname === CALE_CHINONIC || url.pathname === `${CALE_CHINONIC}/`) {
       const texte = await toateTextele(env.DB)
       return html(
-        pagina({ ...comune, titluPagina: 'Texte citite la chinonic', indexabil: true, corp: paginaToate(texte) }),
+        pagina({ ...comune, titluPagina: 'Texte citite la chinonic', indexabil: true, corp: paginaToate(texte), scripturi: JS_CHINONIC }),
         200,
         { 'cache-control': utilizator || sesiune.veziCa ? 'private, no-store' : 'public, max-age=600' },
       )
@@ -272,6 +274,14 @@ export default {
 <nav class="vecini"><a href="${CALE_CHINONIC}">← Toate textele citite la chinonic</a></nav>` }),
           404,
         )
+      }
+      /*
+       * ⚠️ NUMAI CORPUL, pentru desfășurarea din listă („citește tot", user 16.09.2026): aceeași
+       * adresă, fără carcasă. Nu e o rută nouă și nu e o a doua sursă de adevăr — e aceeași fișă,
+       * dezbrăcată, ca pagina cu toate să nu care 448 de texte întregi deodată.
+       */
+      if (url.searchParams.get('bucata') === 'text') {
+        return html(corpTextului(t), 200, { 'cache-control': 'public, max-age=600' })
       }
       return html(
         pagina({ ...comune, titluPagina: t.titlu || 'Text citit la chinonic', indexabil: true, corp: paginaText(t, nav.newsletter || '') }),
@@ -296,7 +306,7 @@ export default {
       cateTexte(env.DB).catch(() => 0),
     ])
     return html(
-      pagina({ ...comune, corp: corp(nav) + bucataDeAcasa(ultimele, nTexte) }),
+      pagina({ ...comune, corp: corp(nav) + bucataDeAcasa(ultimele, nTexte), scripturi: JS_CHINONIC }),
       200,
       { 'cache-control': cachePagina },
     )

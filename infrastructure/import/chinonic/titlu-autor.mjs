@@ -111,6 +111,29 @@ export function desparte(randuri) {
 }
 
 /*
+ * ⚠️ SINAXARUL NU ARE AUTOR, ARE UN FEL (user, 16.09.2026: „titlu + autor (Sinaxar sau fără autor ca
+ * excepție)"). Vietile sfintilor din arhiva chiar n-au un scriitor al lor: sunt sinaxare, luate din
+ * Proloage ori de pe site-urile de sinaxar. „Fara autor" la ele se citeste ca o scapare; „Sinaxar"
+ * spune ce sunt. Ramane „Fara autor" numai unde textul chiar e al cuiva si nu i-am gasit numele.
+ *
+ * ⚠️ E o ghiceala dupa forma titlului, ca toate regulile din fisierul asta — de aceea sta sub probe,
+ * iar hotararea omului (`indreptari.json`) se pune PESTE ea: o intrare cu `autor` o anuleaza.
+ */
+const plat = (s) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[șşțţ]/g, (c) => (/[șş]/.test(c) ? 's' : 't')).toLowerCase()
+/** Cu ce incepe un titlu de sinaxar: fapta unui sfant, nu un text scris de cineva. */
+const INCEPUT_DE_SINAXAR = /^(viata|vietile|sinaxar|proloagele|pomenirea|soborul|aducerea|icoana|minunea|mucenicia|patimirea|acatistul|moastele|sf\.|sfantul|sfanta|sfantului|sfintei|sfintii|sfintilor|sfintele|cuviosul|cuvioasa|cuviosii|mucenicul|mucenita|martirul)(?!\p{L})/u
+/** …si ce il scoate din sinaxar: un fel literar anume, deci textul e al cuiva, chiar daca nu-i stim numele. */
+const FEL_SCRIS_DE_CINEVA = /(?:^|\P{L})(cuvant|cuvinte|predica|predici|omilie|omilii|talcuire|despre|invatatur|sfaturi|scrisoare|epistol|raspuns|convorbir|interviu)/u
+
+export const eSinaxar = (titlu) => {
+  const t = plat(titlu ?? '').trim()
+  return !!t && INCEPUT_DE_SINAXAR.test(t) && !FEL_SCRIS_DE_CINEVA.test(t)
+}
+
+/** Autorul scris in fisa: numele lui, „Sinaxar" la vietile sfintilor, altfel „Fără autor". */
+export const autorulScris = (autor, titlu) => autor || (eSinaxar(titlu) ? 'Sinaxar' : '')
+
+/*
  * ⚠️⚠️ AUTORUL NU STA INTOTDEAUNA IN TITLU. La vreo suta de articole buletinul scrie titlul ingrosat,
  * iar NUMELE pe randul urmator — care nu mai e ingrosat, deci nu intra in „capul" citit de `titluDin`
  * din `extrage.mjs`, ci ajunge primul paragraf al textului („Despre petrecerea revelionului" /

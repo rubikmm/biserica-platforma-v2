@@ -30,7 +30,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs'
 // regulile de titlu/autor stau singure, ca sa poata fi probate — vezi tests/chinonic-titlu-autor
-import { autorulDinCap, desparte, ent } from './titlu-autor.mjs'
+import { autorulDinCap, autorulScris, desparte, ent } from './titlu-autor.mjs'
 
 const SCRIE = process.argv.includes('--scrie')
 const VEZI = Number(process.argv.find((a) => a.startsWith('--vezi='))?.slice(7)) || 0
@@ -392,6 +392,18 @@ for (const a of toate) {
   if (i.autor) a.autor = i.autor
   indreptate++
 }
+/*
+ * ⚠️ „SINAXAR" SE PUNE LA URMĂ, dupa indreptarile de mana (user, 16.09.2026). Vietile sfintilor n-au
+ * un scriitor al lor; regula e in `titlu-autor.mjs`, sub probe. Ordinea conteaza: o indreptare de
+ * mana care da `autor` o anuleaza, fiindca hotararea omului bate ghiceala dupa forma titlului.
+ */
+let sinaxare = 0
+for (const a of toate) {
+  const pus = autorulScris(a.autor, a.titlu)
+  if (pus !== a.autor) { a.autor = pus; sinaxare++ }
+}
+console.log(`autor „Sinaxar" pus la: ${sinaxare} articole`)
+
 const nestiute = Object.keys(INDREPTARI).filter((s) => !toate.some((a) => a.slug === s))
 console.log(`indreptari de mana puse: ${indreptate} / ${Object.keys(INDREPTARI).length}`
   + (nestiute.length ? ` ⚠️ ${nestiute.length} pentru sluguri care nu mai exista: ${nestiute.slice(0, 4).join(', ')}` : ''))

@@ -10,10 +10,15 @@
  * ⚠️ ARTICOLUL E AL WEBSITE-ULUI, ASOCIEREA CU NUMĂRUL E A NEWSLETTERULUI (hotărât cu userul). Aici
  * nu se ține numărul buletinului, ci doar DATA citirii — un fapt despre text, nu despre buletin.
  *
- * ⚠️ UNDE MERGE: articolul trebuie să ajungă ÎNTREG la noi, fără trimitere în afară; din sursă rămâne
- * doar numele, pentru cinstirea autorului (user: „să nu facă trimitere în afară, doar ca să facem
- * referire la autor și sursă"). Până când textul întreg e adus pentru toate, legătura se arată
- * NUMAI unde textul lipsește — altfel omul ar rămâne cu un fragment și fără drum mai departe.
+ * ⚠️⚠️ FORMA FIȘEI, cerută anume (user, 16.09.2026): „titlu + autor (Sinaxar sau fără autor ca
+ * excepție) + text scurt + citește tot (desfășurare) + Sursa: [carte] + site (cu url-ul pus efectiv)
+ * — dacă e 404 acel url să nu se pună, așa știu că nu mai era valabil linkul". Deci:
+ *   - lista arată ÎNTOTDEAUNA aceleași cinci lucruri, în aceeași ordine;
+ *   - „Citește tot" e MARCAJUL textului întreg: îl are numai unde textul chiar a fost adus, iar unde
+ *     nu s-a putut aduce scrie limpede că e doar bucata din buletin;
+ *   - legătura spre sursă se scrie numai cât timp adresa mai trăiește (`link_stare`, scrisă de
+ *     `infrastructure/import/chinonic/verifica-linkurile.mjs`). O adresă moartă lasă numele gol de
+ *     legătură — tocmai ca să se VADĂ că nu mai e valabilă.
  */
 import { LUNI, esc } from '@xc/ui'
 
@@ -31,6 +36,8 @@ export interface Text {
   sursa_url: string
   sursa_fel: string
   poza: string
+  /** „viu" · „mort" · „picat" · „ocolit" · gol cât timp adresa n-a fost întrebată încă. */
+  link_stare?: string
 }
 
 export const CALE = '/texte-citite-la-chinonic'
@@ -38,7 +45,7 @@ export const CALE = '/texte-citite-la-chinonic'
 export const CATE_PE_ACASA = 10
 
 const CAMPURI = `slug, titlu, autor, citit_la, fragment, text_intreg, stare_text,
-                 sursa_text, sursa_nume, sursa_url, sursa_fel, poza`
+                 sursa_text, sursa_nume, sursa_url, sursa_fel, poza, link_stare`
 
 export async function celeDeAcasa(db: D1Database, cate = CATE_PE_ACASA): Promise<Text[]> {
   const r = await db.prepare(`SELECT ${CAMPURI} FROM texte_chinonic ORDER BY citit_la DESC, id DESC LIMIT ?`)
@@ -73,38 +80,98 @@ const poza = (t: Text, urlNewsletter: string) =>
   t.poza.startsWith('/') ? `${urlNewsletter}${t.poza}` : t.poza
 
 /**
- * SURSA, scrisă sub text. Are două părți care coexistă (user, 16.09.2026): mențiunea scrisă de om
- * — de multe ori o carte întreagă, cu editură și pagini — și numele site-ului de unde s-a luat.
- * ⚠️ Legătura se scrie DOAR cât timp textul întreg lipsește. Când îl avem, articolul e la noi și nu
- * mai trimite pe nimeni afară; rămâne numele, pentru cinstirea autorului.
+ * ⚠️ TEXTUL ÎNTREG E MARCAJUL. Un text e „întreg" numai dacă aducerea lui a trecut proba userului
+ * (începe la fel ca fragmentul din buletin) — altfel arătăm bucata din buletin și o spunem.
  */
-function sursa(t: Text): string {
-  const parti: string[] = []
-  if (t.sursa_text) parti.push(esc(t.sursa_text))
-  if (t.sursa_nume && !t.sursa_text.toLowerCase().includes(t.sursa_nume.toLowerCase())) {
-    parti.push(esc(t.sursa_nume))
-  }
-  if (!parti.length) return ''
-  const areTot = t.stare_text === 'gata' && !!t.text_intreg
-  const drum = !areTot && t.sursa_url && t.sursa_fel === 'pagina'
-    ? ` <a class="ch-drum" href="${esc(t.sursa_url)}" target="_blank" rel="noopener nofollow">deschide sursa</a>`
-    : ''
-  return `<p class="ch-sursa"><span>Sursa:</span> ${parti.join(' · ')}${drum}</p>`
-}
+export const areTot = (t: Text): boolean => t.stare_text === 'gata' && !!t.text_intreg
 
 /*
  * ⚠️ AUTORUL SE SCRIE INTOTDEAUNA (user, 16.09.2026: „Toate trebuie să aibă titlu și autor… dacă nu
- * au autor scriem «Fără autor»"). Un rând gol acolo unde la vecini stă un nume se citește ca o
- * scăpare; „Fără autor" spune limpede că textul chiar n-are unul.
+ * au autor scriem «Fără autor»"). Un rand gol acolo unde la vecini stă un nume se citeste ca o
+ * scapare; „Fără autor" spune limpede ca textul chiar n-are unul.
+ * ⚠️ „Sinaxar" NU se ghiceste aici, ci sta scris in baza: regula e la import (`titlu-autor.mjs`,
+ * `eSinaxar`), sub probe, si se pune la fiecare extragere. Pagina doar scrie ce a hotarat importul.
  */
 const numeleAutorului = (t: Text): string => t.autor || 'Fără autor'
 const faraAutor = (t: Text): string => (t.autor ? '' : ' ch-niciun-autor')
 
-/** Un rând din listă: data mică la stânga, titlul după ea — ca listele newsletterului. */
-const rand = (t: Text): string =>
-  `<li><span class="cand">${esc(ziua(t.citit_la))}</span>` +
-  `<a href="${CALE}/${esc(t.slug)}">${esc(t.titlu || '(fără titlu)')}</a>` +
-  `<span class="ch-autor${faraAutor(t)}">${esc(numeleAutorului(t))}</span></li>`
+/** HTML-ul textului, dezbrăcat: din el se face bucata scurtă din listă. */
+const dezbraca = (h: string): string =>
+  h.replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ').replace(/&#39;/g, "'").replace(/&quot;/g, '"')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ').trim()
+
+/** Cât se vede din text înainte de „Citește tot" — cât să se înțeleagă despre ce e, nu mai mult. */
+const SCURT = 400
+
+/** Bucata scurtă, tăiată la cuvânt: un text rupt în mijlocul unui cuvânt arată ca o stricăciune. */
+export function textScurt(t: Text): string {
+  const intreg = dezbraca(areTot(t) ? t.text_intreg : t.fragment)
+  if (intreg.length <= SCURT) return intreg
+  const taiat = intreg.slice(0, SCURT)
+  const capat = taiat.lastIndexOf(' ')
+  const bucata = (capat > SCURT / 2 ? taiat.slice(0, capat) : taiat).replace(/[,;:–—-]$/, '')
+  // o propozitie incheiata nu mai are nevoie de puncte de suspensie: „…Tracia.…" arata a stricaciune
+  return /[.!?…]$/.test(bucata) ? bucata : `${bucata}…`
+}
+
+/**
+ * SURSA, scrisă sub text. Are două părți care coexistă (user, 16.09.2026): mențiunea scrisă de om
+ * — de multe ori o carte întreagă, cu editură și pagini — și site-ul de unde s-a luat.
+ *
+ * ⚠️ LEGĂTURA SE PUNE NUMAI DACĂ ADRESA MAI TRĂIEȘTE. Unde a murit (404/410) sau unde nu mai
+ * răspunde nimeni, rămâne doar numele, nelegat: „așa știu că nu mai era valabil linkul" (user).
+ * Cine scrie `link_stare`: `infrastructure/import/chinonic/verifica-linkurile.mjs`.
+ */
+const adresaSeScrie = (t: Text): boolean =>
+  !!t.sursa_url && t.link_stare !== 'mort' && t.link_stare !== 'picat'
+
+function sursa(t: Text): string {
+  const parti: string[] = []
+  if (t.sursa_text) parti.push(esc(t.sursa_text))
+  // numele site-ului, legat cât timp adresa trăiește; unde nu există nume (PDF-urile parohiei),
+  // vorbeste mentiunea scrisa, iar legatura se agata de ea
+  const nume = t.sursa_nume && !t.sursa_text.toLowerCase().includes(t.sursa_nume.toLowerCase())
+    ? t.sursa_nume
+    : ''
+  if (nume) parti.push(esc(nume))
+  if (!parti.length && !adresaSeScrie(t)) return ''
+  const eticheta = nume || t.sursa_nume || (t.sursa_fel === 'pdf' ? 'fișierul PDF' : 'sursa')
+  const drum = adresaSeScrie(t)
+    ? `<a class="ch-drum" href="${esc(t.sursa_url)}" target="_blank" rel="noopener nofollow">${esc(eticheta)} ↗</a>`
+    : ''
+  // cand adresa traieste, numele nelegat iese si ramane doar legatura (ca sa nu scrie de doua ori)
+  const scrise = drum && nume ? parti.slice(0, -1) : parti
+  return `<p class="ch-sursa"><span>Sursa:</span> ${[...scrise, drum].filter(Boolean).join(' · ')}</p>`
+}
+
+/** Textul întreg, așa cum intră în fișă și în desfășurarea din listă. */
+export const corpTextului = (t: Text): string =>
+  areTot(t)
+    ? `<div class="ch-text">${t.text_intreg}</div>`
+    : `<div class="ch-text ch-fragment">${t.fragment}</div>`
+
+/*
+ * ⚠️ „CITEȘTE TOT" MERGE ȘI FĂRĂ JS. E o legătură adevărată către fișă (adresa ei e permanentă);
+ * scriptul de jos doar o prinde din zbor și aduce textul în loc să mute omul din pagină. Fără
+ * script, apăsarea deschide fișa — nimic nu se pierde.
+ */
+const citesteTot = (t: Text): string =>
+  areTot(t)
+    ? `<a class="ch-tot" href="${CALE}/${esc(t.slug)}" data-chinonic="${esc(t.slug)}">Citește tot</a>`
+    : `<span class="ch-doar">Doar bucata citită la strană` +
+      `${adresaSeScrie(t) ? ' — textul întreg e la sursă' : ''}</span>`
+
+/** O fișă din listă: titlu, autor, bucata scurtă, „Citește tot", sursa. Aceleași cinci, mereu. */
+const fisa = (t: Text): string =>
+  `<li class="ch-fisa">
+  <h3 class="ch-titlu"><a href="${CALE}/${esc(t.slug)}">${esc(t.titlu || '(fără titlu)')}</a></h3>
+  <p class="ch-autor${faraAutor(t)}">${esc(numeleAutorului(t))}</p>
+  <div class="ch-scurt">${esc(textScurt(t))}</div>
+  <p class="ch-rand-tot">${citesteTot(t)}<span class="ch-cand">citit la strană pe ${esc(ziua(t.citit_la))}</span></p>
+  ${sursa(t)}
+</li>`
 
 /** Bucata de pe ușa Website-ului: cele mai noi zece și „Vezi toate". */
 export function bucataDeAcasa(texte: Text[], nTotal: number): string {
@@ -112,7 +179,7 @@ export function bucataDeAcasa(texte: Text[], nTotal: number): string {
   return `<section class="ch-acasa">
   <h2>Texte citite la chinonic</h2>
   <p class="ch-spune">Ce s-a citit la strană, în timpul împărtășirii.</p>
-  <ul class="numere">${texte.map(rand).join('')}</ul>
+  <ul class="ch-lista">${texte.map(fisa).join('')}</ul>
   <p class="ch-toate"><a href="${CALE}">Vezi toate — ${nTotal} ${nTotal === 1 ? 'text' : 'texte'} →</a></p>
 </section>`
 }
@@ -122,7 +189,7 @@ export function paginaToate(texte: Text[]): string {
   const ani = [...new Set(texte.map((t) => +t.citit_la.slice(0, 4)))].sort((a, b) => b - a)
   const peAni = ani
     .map((an) => `<h2 class="anul">${an}</h2>
-<ul class="numere">${texte.filter((t) => +t.citit_la.slice(0, 4) === an).map(rand).join('')}</ul>`)
+<ul class="ch-lista">${texte.filter((t) => +t.citit_la.slice(0, 4) === an).map(fisa).join('')}</ul>`)
     .join('')
   return `<div class="cap">
   <h1 class="titlu-lista">Texte citite la chinonic</h1>
@@ -134,10 +201,6 @@ ${peAni}`
 
 /** Pagina unui text. */
 export function paginaText(t: Text, urlNewsletter: string): string {
-  const areTot = t.stare_text === 'gata' && !!t.text_intreg
-  const corp = areTot
-    ? `<div class="ch-text">${t.text_intreg}</div>`
-    : `<div class="ch-text ch-fragment">${t.fragment}</div>`
   /*
    * Ordinea ceruta de user (16.09.2026): TITLUL, apoi AUTORUL sub el, apoi textul. Autorul e rand
    * de sine statator, nu lipit de data: e parte din ce s-a citit, data e doar cand.
@@ -148,29 +211,72 @@ export function paginaText(t: Text, urlNewsletter: string): string {
   <p class="sursa">citit la strană pe ${esc(ziua(t.citit_la))}</p>
 </div>
 ${t.poza ? `<img class="ch-poza" src="${esc(poza(t, urlNewsletter))}" alt="">` : ''}
-${corp}
-${areTot ? '' : `<p class="ch-partial">Aici e doar bucata citită în buletin. Textul întreg încă n-a fost adus.</p>`}
+${corpTextului(t)}
+${areTot(t) ? '' : `<p class="ch-partial">Aici e doar bucata citită în buletin. Textul întreg încă n-a fost adus.</p>`}
 ${sursa(t)}
 <nav class="vecini"><a href="${CALE}">← Toate textele citite la chinonic</a></nav>`
 }
+
+/*
+ * ⚠️ DESFĂȘURAREA — „citește tot" fără să se mute omul din pagină (user, 16.09.2026). Textul se cere
+ * de la fișa lui, cu `?bucata=text` (numai corpul, fără carcasă), și se pune sub bucata scurtă. E
+ * îmbunătățire progresivă: fără script legătura duce la fișă, ca înainte, iar pagina cu toate rămâne
+ * ușoară — 448 de texte întregi n-au ce căuta deodată în ea.
+ */
+export const JS_CHINONIC = `
+(function(){
+  document.addEventListener('click', function(ev){
+    var a = ev.target.closest && ev.target.closest('a.ch-tot'); if (!a) return;
+    if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.button) return;
+    ev.preventDefault();
+    var fisa = a.closest('.ch-fisa'); if (!fisa) return;
+    var desfasurat = fisa.querySelector('.ch-desfasurat');
+    if (desfasurat) { // a doua apăsare strânge la loc
+      var deschis = desfasurat.hasAttribute('hidden');
+      if (deschis) desfasurat.removeAttribute('hidden'); else desfasurat.setAttribute('hidden','');
+      a.textContent = deschis ? 'Strânge' : 'Citește tot';
+      fisa.querySelector('.ch-scurt').hidden = deschis;
+      return;
+    }
+    a.textContent = 'Se aduce…';
+    fetch(a.getAttribute('href') + '?bucata=text').then(function(r){ return r.ok ? r.text() : Promise.reject(r.status) })
+      .then(function(h){
+        var d = document.createElement('div'); d.className = 'ch-desfasurat'; d.innerHTML = h;
+        fisa.querySelector('.ch-scurt').hidden = true;
+        a.parentNode.insertAdjacentElement('afterend', d);
+        a.textContent = 'Strânge';
+      })
+      .catch(function(){ a.textContent = 'Citește tot'; window.location = a.getAttribute('href') });
+  });
+})();
+`
 
 export const STIL_CHINONIC = `
 /* TEXTE CITITE LA CHINONIC (16.09.2026) — lista de pe usa Website-ului si paginile lor. */
 .ch-acasa { margin:34px 0 0; padding:20px 0 0; border-top:1px solid var(--rule) }
 .ch-acasa > h2 { margin:0 0 2px; font-size:21px; font-weight:400 }
 .ch-spune { margin:0 0 12px; color:var(--faint); font-size:14px }
-.numere { list-style:none; padding:0; margin:0 }
-.numere li { padding:9px 0; border-bottom:1px solid var(--rule) }
-.numere li:last-child { border-bottom:0 }
-.numere .cand { display:inline-block; min-width:128px; color:var(--faint);
-                font:13px/1.5 ui-sans-serif,system-ui }
-.numere a { color:var(--ink); text-decoration:none }
-.numere a:hover { color:var(--rosu); text-decoration:underline }
-/* autorul, dupa titlu: se citeste ca o lamurire, nu ca parte din titlu */
-.ch-autor { display:block; margin:2px 0 0 128px; color:var(--faint); font-size:13px }
+/* ⚠️ o fisa = titlu, autor, bucata scurta, „Citeste tot", sursa — mereu in aceeasi ordine */
+.ch-lista { list-style:none; padding:0; margin:0 }
+.ch-fisa { padding:16px 0 18px; border-bottom:1px solid var(--rule) }
+.ch-fisa:last-child { border-bottom:0 }
+.ch-titlu { margin:0; font-size:18px; font-weight:600; line-height:1.35 }
+.ch-titlu a { color:var(--ink); text-decoration:none }
+.ch-titlu a:hover { color:var(--rosu); text-decoration:underline }
+/* autorul, sub titlu: se citeste ca o lamurire, nu ca parte din titlu */
+.ch-autor { display:block; margin:3px 0 0; color:var(--soft); font-size:14px }
 /* „Fără autor" e o lipsa marturisita, nu un nume: se scrie mai stins si inclinat */
 .ch-niciun-autor { font-style:italic; opacity:.65 }
-.ch-toate { margin:14px 0 0 }
+.ch-scurt { margin:8px 0 0; color:var(--ink); line-height:1.65; font-size:15px }
+.ch-desfasurat { margin:10px 0 0 }
+.ch-rand-tot { display:flex; flex-wrap:wrap; align-items:baseline; gap:10px; margin:8px 0 0 }
+.ch-tot { color:var(--rosu); text-decoration:none; font:600 13.5px/1 ui-sans-serif,system-ui;
+          cursor:pointer }
+.ch-tot:hover { text-decoration:underline }
+/* unde textul intreg n-a putut fi adus se scrie limpede — e marcajul, pe dos */
+.ch-doar { color:var(--faint); font:13px/1.4 ui-sans-serif,system-ui; font-style:italic }
+.ch-cand { color:var(--faint); font:12.5px/1.4 ui-sans-serif,system-ui }
+.ch-toate { margin:16px 0 0 }
 .ch-toate a { color:var(--rosu); text-decoration:none; font:600 13.5px/1 ui-sans-serif,system-ui }
 .ch-toate a:hover { text-decoration:underline }
 .anul { margin:28px 0 2px; font-size:19px; color:var(--soft) }
@@ -187,13 +293,12 @@ export const STIL_CHINONIC = `
 /* fragmentul se vede ca fragment: o dunga la stanga spune ca textul nu e intreg */
 .ch-fragment { padding-left:14px; border-left:3px solid var(--rule) }
 .ch-partial { margin:12px 0 0; color:var(--faint); font-size:13.5px }
-.ch-sursa { margin:18px 0 0; padding:12px 14px; background:var(--tinta);
+.ch-sursa { margin:12px 0 0; padding:10px 12px; background:var(--tinta);
             border:1px solid var(--rule); border-radius:10px;
-            color:var(--soft); font-size:13.5px }
+            color:var(--soft); font-size:13px }
 .ch-sursa > span { font-weight:600; color:var(--ink) }
 .ch-drum { color:var(--rosu) }
 @media (max-width:560px) {
-  .numere .cand { min-width:0; display:block; margin:0 0 2px }
-  .ch-autor { margin-left:0 }
+  .ch-titlu { font-size:17px }
 }
 `
