@@ -187,6 +187,22 @@ export default {
     }
 
     /*
+     * ⚠️ ASOCIEREA articol ↔ număr E A NEWSLETTERULUI (user, 16.09.2026). Textele citite la chinonic
+     * sunt ale Website-ului; numărul de buletin la care s-a citit fiecare e al nostru, fiindcă
+     * numărul e al nostru. Website-ul îl CERE de aici (Service Binding `NEWSLETTER`) în loc să-l
+     * copieze — structura mare: „ce ține de altă aplicație se cere, nu se copiază".
+     * Fișierul e scris de `infrastructure/import/chinonic/asocieri.mjs`:
+     *   [{ id, nr, trimis, texte: [slug, …] }, …]
+     */
+    if (cale === '/v1/chinonic/asocieri') {
+      const obiect = await env.ARHIVA.get('chinonic/asocieri.json')
+      if (!obiect) return json([], 200, { 'cache-control': 'public, max-age=300' })
+      return new Response(obiect.body, {
+        headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=3600' },
+      })
+    }
+
+    /*
      * ⚠️ POST-ul e primit DIN 15.09.2026, si numai pentru Setari: pana atunci newsletterul raspundea
      * 405 la orice in afara de GET/HEAD, fiindca n-avea ce scrie nimeni. Arhiva ramane neatinsa.
      */

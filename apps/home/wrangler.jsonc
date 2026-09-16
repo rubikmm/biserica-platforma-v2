@@ -36,7 +36,10 @@
     { "binding": "IDENTITATE", "service": "xc-identity" },
     { "binding": "AUTORIZARE", "service": "xc-authz" },
     { "binding": "COMUNICARE", "service": "xc-communication" },
-    { "binding": "AUDIT", "service": "xc-audit" }
+    { "binding": "AUDIT", "service": "xc-audit" },
+    // ⚠️ NEWSLETTER, din 16.09.2026: asocierea „ce text s-a citit la ce numar" e a LUI, nu a noastra.
+    // O cerem la `/v1/chinonic/asocieri`, n-o copiem; se vede pe pagina de stare a chinonicului.
+    { "binding": "NEWSLETTER", "service": "xc-newsletter" }
   ],
 
   "env": {
@@ -66,7 +69,8 @@
         { "binding": "IDENTITATE", "service": "xc-identity-staging" },
         { "binding": "AUTORIZARE", "service": "xc-authz-staging" },
         { "binding": "COMUNICARE", "service": "xc-communication-staging" },
-        { "binding": "AUDIT", "service": "xc-audit-staging" }
+        { "binding": "AUDIT", "service": "xc-audit-staging" },
+        { "binding": "NEWSLETTER", "service": "xc-newsletter-staging" }
       ],
       // Subdomeniul `staging.` — nou, nu atinge nicio inregistrare DNS a V1.
       "routes": [{ "pattern": "staging.sfantul-ilie.ro", "custom_domain": true }]
@@ -104,7 +108,8 @@
         { "binding": "IDENTITATE", "service": "xc-identity-production" },
         { "binding": "AUTORIZARE", "service": "xc-authz-production" },
         { "binding": "COMUNICARE", "service": "xc-communication-production" },
-        { "binding": "AUDIT", "service": "xc-audit-production" }
+        { "binding": "AUDIT", "service": "xc-audit-production" },
+        { "binding": "NEWSLETTER", "service": "xc-newsletter-production" }
       ]
       // Apexul productiei e al WordPress-ului V1 pana la o decizie explicita.
     }

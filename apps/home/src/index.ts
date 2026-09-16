@@ -15,15 +15,18 @@ import { dataVersiunii, esc, html, json, pagina } from '@xc/ui'
 import pkg from '../package.json'
 import {
   CALE as CALE_CHINONIC,
+  CALE_STARE as CALE_CHINONIC_STARE,
   JS_CHINONIC,
   STIL_CHINONIC,
   bucataDeAcasa,
   cate as cateTexte,
   celeDeAcasa,
   corpTextului,
+  numereleDupaSlug,
+  paginaStare,
   paginaText,
   paginaToate,
-  toate as toateTextele,
+  rezumate,
   unul as unText,
 } from './chinonic.js'
 
@@ -34,6 +37,9 @@ export interface Env {
   DB: D1Database
   /** Venite pe 15.09.2026, odata cu pagina de Setari: cheile, abonarile si jurnalul. */
   AUTORIZARE: Fetcher
+  /** ⚠️ Newsletterul, din 16.09.2026: de la el se cere „ce text s-a citit la ce numar" — asocierea e
+   *  a lui, nu a noastra. Pagina de stare merge si fara el, doar fara numere. */
+  NEWSLETTER?: Fetcher
   COMUNICARE: Fetcher
   AUDIT: Fetcher
   MEDIU: string
@@ -257,10 +263,24 @@ export default {
      *   /texte-citite-la-chinonic          toate, pe ani
      *   /texte-citite-la-chinonic/<slug>   un text
      */
-    if (url.pathname === CALE_CHINONIC || url.pathname === `${CALE_CHINONIC}/`) {
-      const texte = await toateTextele(env.DB)
+    /*
+     * ⚠️ STAREA — pagina de lucru, cerută de user (16.09.2026): categoriile cu probleme, fiecare rând
+     * scurt, cu numărul de buletin din care vine. Se încearcă ÎNAINTEA fișei, altfel „stare" ar fi
+     * căutat ca slug. Nu se indexează: e unealtă, nu pagină de citit.
+     */
+    if (url.pathname === CALE_CHINONIC_STARE || url.pathname === `${CALE_CHINONIC_STARE}/`) {
+      const [rez, numere] = await Promise.all([rezumate(env.DB), numereleDupaSlug(env.NEWSLETTER)])
       return html(
-        pagina({ ...comune, titluPagina: 'Texte citite la chinonic', indexabil: true, corp: paginaToate(texte), scripturi: JS_CHINONIC }),
+        pagina({ ...comune, titluPagina: 'Texte citite la chinonic — starea lor',
+          corp: paginaStare(rez, numere, nav.newsletter || '') }),
+        200,
+        { 'cache-control': 'private, no-store' },
+      )
+    }
+    if (url.pathname === CALE_CHINONIC || url.pathname === `${CALE_CHINONIC}/`) {
+      const rez = await rezumate(env.DB)
+      return html(
+        pagina({ ...comune, titluPagina: 'Texte citite la chinonic', indexabil: true, corp: paginaToate(rez) }),
         200,
         { 'cache-control': utilizator || sesiune.veziCa ? 'private, no-store' : 'public, max-age=600' },
       )

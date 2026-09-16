@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bucataDeAcasa, paginaText, textScurt, type Text } from '../apps/home/src/chinonic.js'
+import { bucataDeAcasa, paginaStare, paginaText, paginaToate, textScurt, type Rezumat, type Text } from '../apps/home/src/chinonic.js'
 
 /**
  * FORMA FIȘEI de la „Texte citite la chinonic" (user, 16.09.2026): „titlu + autor (Sinaxar sau fără
@@ -117,5 +117,77 @@ describe('pagina unui text', () => {
     const h = paginaText({ ...deBaza, stare_text: 'eroare', text_intreg: '' }, '')
     expect(h).toContain('ch-fragment')
     expect(h).toContain('Textul întreg încă n-a fost adus')
+  })
+})
+
+/**
+ * LISTA MARE ȘI PAGINA DE STARE (user, 16.09.2026: „lista mare nu o mai fișa complet că se îngreunează
+ * browser-ul — doar titlurile și autorul și OK-ul că are textul preluat și Sursa completată… iar
+ * restul pe categorii… să scrie și din ce news sunt luate ca să investighez și eu").
+ */
+const rez: Rezumat = {
+  slug: 'viata-sfintei-cuvioase-parascheva',
+  titlu: 'Viața Sfintei Cuvioase Parascheva',
+  autor: 'Sinaxar',
+  citit_la: '2025-10-14',
+  stare_text: 'gata',
+  sursa_text: 'Proloagele, vol. I',
+  sursa_nume: 'doxologia.ro',
+  sursa_url: 'https://doxologia.ro/viata-sfintei-cuvioase-parascheva',
+  sursa_fel: 'pagina',
+  link_stare: 'viu',
+  n_fragment: 900,
+  n_text: 9600,
+}
+
+describe('lista mare e compactă', () => {
+  it('⚠️ nu cară textele în pagină — numai titlu, autor și cele două bife', () => {
+    const h = paginaToate([rez])
+    expect(h).toContain('Viața Sfintei Cuvioase Parascheva')
+    expect(h).toContain('Sinaxar')
+    expect(h).toContain('✓ text')
+    expect(h).toContain('✓ sursă')
+    expect(h).not.toContain('ch-scurt') // bucata de text nu are ce cauta aici
+    expect(h).not.toContain('Citește tot')
+  })
+
+  it('lipsurile se văd ca bife stinse, nu prin absență', () => {
+    const h = paginaToate([{ ...rez, stare_text: 'fara-text', n_text: 0, sursa_text: '', sursa_nume: '', sursa_url: '' }])
+    expect(h).toContain('— text')
+    expect(h).toContain('— sursă')
+  })
+})
+
+describe('pagina de stare — locul de investigat', () => {
+  const numere = new Map([['viata-sfintei-cuvioase-parascheva', { id: 617, nr: 534, trimis: '2025-10-14', texte: ['viata-sfintei-cuvioase-parascheva'] }]])
+  const stricat: Rezumat = { ...rez, stare_text: 'fara-text', n_text: 0, autor: '', link_stare: 'mort' }
+
+  it('fiecare categorie își numără textele și le dă rând scurt', () => {
+    const h = paginaStare([stricat], numere, 'https://newsletter.sfantul-ilie.ro')
+    expect(h).toContain('Fără textul întreg')
+    expect(h).toContain('Fără autor')
+    expect(h).toContain('Cu adresa sursei moartă')
+    expect(h).toContain('adresa sursei nu mai există (404)')
+  })
+
+  it('⚠️ scrie din ce număr de buletin vine, cu legătură spre el', () => {
+    const h = paginaStare([stricat], numere, 'https://newsletter.sfantul-ilie.ro')
+    expect(h).toContain('nr. 534')
+    expect(h).toContain('https://newsletter.sfantul-ilie.ro/n/617')
+  })
+
+  it('fără asocieri (Newsletterul tace), pagina se scrie mai departe', () => {
+    const h = paginaStare([stricat], new Map(), '')
+    expect(h).toContain('număr necunoscut')
+    expect(h).toContain('Fără textul întreg')
+  })
+
+  it('de pe fiecare rând se intră în fișă, ca să poată fi inspectat', () => {
+    expect(paginaStare([stricat], numere, '')).toContain('/texte-citite-la-chinonic/viata-sfintei-cuvioase-parascheva')
+  })
+
+  it('un text întreg și cu autor nu apare în categoriile cu probleme', () => {
+    const h = paginaStare([rez], numere, '')
+    expect(h).toContain('Niciunul — categoria e goală.')
   })
 })

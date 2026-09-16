@@ -649,10 +649,10 @@ propunerea automată, ca în V1.
 
 15. **Textele citite la chinonic, ce a rămas** (16.09.2026, după runda de îndreptare — subiectul
     titlurilor l-a închis userul la 12:28):
-    - ⚠️ **LISTELE DE INVESTIGAT SE SCOT CU `stari.mjs`** (16.09.2026) — o categorie o dată, în
-      Markdown: `node infrastructure/import/chinonic/stari.mjs --lista=<nesigur|fara-text|eroare|
-      fara-link|link-mort|fara-autor|gata>`, redirectat într-un fișier. Fără argumente: socoteala.
-      Copiile trimise userului: `outputs/chinonic-*.md`.
+    - ⚠️ **LOCUL DE INVESTIGAT E PAGINA `/texte-citite-la-chinonic/stare`** (16.09.2026): categoriile
+      cu probleme, fiecare rând cu pricina lui și cu numărul de buletin din care vine. Pentru lucru în
+      terminal, aceleași liste se scot și cu `stari.mjs` (`--lista=<nesigur|fara-text|eroare|
+      fara-link|link-mort|fara-autor|gata>`, Markdown la ieșire; fără argumente, socoteala).
     - **445/448 cu titlu · 354/448 cu autor** (63 au primit „Sinaxar" la 16.09.2026, după regula din
       `titlu-autor.mjs`). Cele **94 rămase fără autor** sunt cuvinte și predici unde buletinul n-a
       scris niciun nume — nici în cap, nici în text: **de căutat la sursă**, e munca rămasă.
@@ -673,10 +673,10 @@ propunerea automată, ca în V1.
       numele, nelegat, „ca să știu că nu mai era valabil linkul". Starea se ține în bază
       (`link_stare`) și se aduce la zi cu `verifica-linkurile.mjs` (`--reia`, `--picate`, `--doar=`).
       **De reluat din când în când**: adresele mor în tăcere, iar pagina arată ce s-a măsurat ultima dată.
-    - **Rămâne de hotărât** (întrebări puse userului, fără răspuns încă): (a) cele **33 de fișe
-      aproape goale** (fragment sub 40 de semne) au textul adus în bază, dar nu se arată fiindcă
-      n-a existat fragment cu care să fie verificat — îl arătăm? (b) se acceptă întregi cele 33 de
-      PDF-uri „nesigure" ale parohiei, acolo unde e o singură predică?
+    - **Rămâne de hotărât** (întrebări puse userului, fără răspuns încă): (a) cele **33 de fișe cu
+      bucată prea scurtă** (sub 40 de semne) au textul adus în bază, dar stau „nesigur" fiindcă n-a
+      existat cu ce fi verificat — îl arătăm? Se văd toate la `/stare#fisa-goala`. (b) se acceptă
+      întregi cele 33 de PDF-uri „nesigure" ale parohiei, acolo unde e o singură predică?
 
 ## Aplicațiile de pe staging
 
@@ -2011,6 +2011,29 @@ forța antetul `Host`**.
   e de căutat la sursă. ⚠️ Se pune LA URMĂ, după `indreptari.json`: hotărârea omului bate ghiceala.
   Aplicată peste baza vie cu `autor-sinaxar.mjs`, ca să nu fie nevoie de o extragere întreagă.
   **Probe**: `tests/chinonic-fisa.test.ts` (13, noi) + 3 în `chinonic-titlu-autor.test.ts`.
+- ✅ **CHINONIC — LISTA MARE UȘURATĂ + PAGINĂ DEDICATĂ DE STARE** (user, 13:25: „nu mă ajută afișarea
+  asta — vreau totul într-o pagină dedicată; lista mare nu o mai fișa complet că se îngreunează
+  browser-ul"). Website **0.6.2**, Newsletter **0.6.1**, amândouă publicate.
+  ⚠️ **LISTA MARE NU MAI CARĂ TEXTELE.** Trăgea din bază toate cele 448 de fișe ÎNTREGI (`fragment` +
+  `text_intreg`, vreo 3 MB) ca să scrie din ele niște titluri; pagina publicată a scăzut de la ~3 MB
+  la **211 KB**. Interogare nouă, `rezumate()`: metadate + `LENGTH(fragment)` / `LENGTH(text_intreg)`,
+  niciodată conținutul. **Un rând = titlu · autor · două bife** („✓ text", „✓ sursă"), cu pricina în
+  `title`. Textul se citește în fișa lui. Fișa bogată (text scurt + „Citește tot") a rămas numai pe
+  **ușa Website-ului**, unde sunt zece.
+  **PAGINA DE STARE: `/texte-citite-la-chinonic/stare`** — pagină de LUCRU (`private, no-store`,
+  neindexabilă), cu cuprins și șase categorii care se pot suprapune: **fără textul întreg 153 · fără
+  autor 94 · fără sursă 0 · cu adresa moartă 16 · fără titlu 3 · cu bucată prea scurtă ca să poată fi
+  verificat 39**. Fiecare rând: titlu (intră în fișă) · autor · **pricina scrisă** · **numărul de
+  buletin, cu legătură spre el**. ⚠️ Ruta se încearcă ÎNAINTEA fișei, altfel „stare" ar fi căutat ca slug.
+  ⚠️⚠️ **NUMĂRUL SE CERE DE LA NEWSLETTER, NU SE COPIAZĂ.** Asocierea articol ↔ număr e a lui
+  (hotărârea de dimineață), deci `apps/newsletter` a căpătat **`GET /v1/chinonic/asocieri`** (citește
+  `chinonic/asocieri.json` din R2), iar `home` un **Service Binding `NEWSLETTER`** în toate cele trei
+  medii. Dacă vecinul tace, pagina se scrie mai departe, doar fără numere — o pagină de lucru n-are
+  voie să cadă fiindcă altcineva n-a răspuns.
+  **Cifra care s-a schimbat**: „fișele aproape goale" nu sunt 33, ci **75 cu fragment sub 40 de semne**
+  — dintre ele **36 sunt deja gata**, **33 au textul adus în bază dar stau „nesigur"** (n-a existat cu
+  ce fi verificat; ele sunt câștigul de luat) și 6 n-au niciun text.
+  **Probe**: încă 7 în `tests/chinonic-fisa.test.ts` (20 cu totul); 373 trec.
 
 ### 2026-09-15
 
