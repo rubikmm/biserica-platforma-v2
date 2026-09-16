@@ -15,14 +15,15 @@ import { dataVersiunii, esc, html, json, pagina } from '@xc/ui'
 import pkg from '../package.json'
 import {
   CALE as CALE_CHINONIC,
+  CALE_BULETIN,
   CALE_STARE as CALE_CHINONIC_STARE,
-  JS_CHINONIC,
+  CALE_STARE_BULETIN,
   STIL_CHINONIC,
   bucataDeAcasa,
-  cate as cateTexte,
-  celeDeAcasa,
-  corpTextului,
+  caleaLui,
+  felulCaii,
   numereleDupaSlug,
+  paginaBuletin,
   paginaStare,
   paginaText,
   paginaToate,
@@ -260,22 +261,29 @@ export default {
     /*
      * TEXTE CITITE LA CHINONIC (16.09.2026) — secțiunea cerută de user. Adresele sunt PERMANENTE:
      * slugul e adresa fișei și nu se schimbă cât timp rândul e același text.
-     *   /texte-citite-la-chinonic          toate, pe ani
+     *   /texte-citite-la-chinonic          cele bune, pe ani
+     *   /texte-citite-la-chinonic/stare    ce e de lămurit, pe feluri de lipsă
      *   /texte-citite-la-chinonic/<slug>   un text
+     * …și la fel, cu aceleași trei, `/texte-din-buletin`.
      */
     /*
-     * ⚠️ STAREA — pagina de lucru, cerută de user (16.09.2026): categoriile cu probleme, fiecare rând
-     * scurt, cu numărul de buletin din care vine. Se încearcă ÎNAINTEA fișei, altfel „stare" ar fi
-     * căutat ca slug. Nu se indexează: e unealtă, nu pagină de citit.
+     * ⚠️ PAGINA DE PROBLEME — locul de lucru, cerut de user (16.09.2026): categoriile cu probleme,
+     * fiecare rând scurt, cu numărul de buletin din care vine. ⚠️ Se încearcă ÎNAINTEA fișei, altfel
+     * „stare" ar fi căutat ca slug. Nu se indexează: e unealtă, nu pagină de citit.
+     * ⚠️ FIECARE GRĂMADĂ ARE PROBLEMELE EI, la adresa ei: de când lista arată numai ce e bun, restul
+     * trebuie să aibă unde fi văzut — și la chinonic, și la textele din buletinul parohiei.
      */
-    if (url.pathname === CALE_CHINONIC_STARE || url.pathname === `${CALE_CHINONIC_STARE}/`) {
-      const [rez, numere] = await Promise.all([rezumate(env.DB), numereleDupaSlug(env.NEWSLETTER)])
+    const caleaStarii = [CALE_CHINONIC_STARE, CALE_STARE_BULETIN]
+      .find((c) => url.pathname === c || url.pathname === `${c}/`)
+    if (caleaStarii) {
+      const fel = felulCaii(caleaStarii.replace(/\/stare$/, ''))
+      const [rez, numere] = await Promise.all([rezumate(env.DB, fel), numereleDupaSlug(env.NEWSLETTER)])
       // ⚠️ Filtrele sunt o NAVIGARE, nu o ascundere din JS: categoria (`?ce=`) și anul (`?an=`) vin
       // din adresă, iar serverul trimite numai rândurile alese (user, 16.09.2026).
       return html(
-        pagina({ ...comune, titluPagina: 'Texte citite la chinonic — starea lor',
+        pagina({ ...comune, titluPagina: 'Ce e de lămurit',
           corp: paginaStare(rez, numere, nav.newsletter || '',
-            url.searchParams.get('ce'), url.searchParams.get('an')) }),
+            url.searchParams.get('ce'), url.searchParams.get('an'), fel) }),
         200,
         { 'cache-control': 'private, no-store' },
       )
@@ -289,8 +297,24 @@ export default {
         { 'cache-control': utilizator || sesiune.veziCa ? 'private, no-store' : 'public, max-age=600' },
       )
     }
-    if (url.pathname.startsWith(`${CALE_CHINONIC}/`)) {
-      const slug = decodeURIComponent(url.pathname.slice(CALE_CHINONIC.length + 1).replace(/\/$/, ''))
+    /*
+     * ⚠️ TEXTELE DIN BULETINUL PAROHIEI, a doua secțiune (user, 16.09.2026): ce s-a scos din
+     * fișierele PDF ale parohiei nu mai stă în lista chinonicului, ci aici. Nu se indexează: e
+     * grămada de materiale de unde începe adunarea pentru website, nu o pagină de citit.
+     */
+    if (url.pathname === CALE_BULETIN || url.pathname === `${CALE_BULETIN}/`) {
+      const rez = await rezumate(env.DB, 'buletin')
+      return html(
+        pagina({ ...comune, titluPagina: 'Texte din buletinul parohiei',
+          corp: paginaBuletin(rez, url.searchParams.get('an')) }),
+        200,
+        { 'cache-control': utilizator || sesiune.veziCa ? 'private, no-store' : 'public, max-age=600' },
+      )
+    }
+    /* Fișa unui text — aceeași, în oricare din cele două secțiuni ar sta textul. */
+    const sectiunea = [CALE_CHINONIC, CALE_BULETIN].find((c) => url.pathname.startsWith(`${c}/`))
+    if (sectiunea) {
+      const slug = decodeURIComponent(url.pathname.slice(sectiunea.length + 1).replace(/\/$/, ''))
       const t = slug ? await unText(env.DB, slug) : null
       if (!t) {
         return html(
@@ -300,15 +324,18 @@ export default {
         )
       }
       /*
-       * ⚠️ NUMAI CORPUL, pentru desfășurarea din listă („citește tot", user 16.09.2026): aceeași
-       * adresă, fără carcasă. Nu e o rută nouă și nu e o a doua sursă de adevăr — e aceeași fișă,
-       * dezbrăcată, ca pagina cu toate să nu care 448 de texte întregi deodată.
+       * ⚠️ O FIȘĂ ARE O SINGURĂ CASĂ, iar vechea adresă duce la ea. Textele mutate în secțiunea
+       * buletinului își păstrează slugul (el e adresa, nu se schimbă), deci legăturile date mai
+       * demult — în Slack, în vreun buletin — se mută o dată, permanent (301), în loc să moară.
        */
-      if (url.searchParams.get('bucata') === 'text') {
-        return html(corpTextului(t), 200, { 'cache-control': 'public, max-age=600' })
+      if (caleaLui(t) !== sectiunea) {
+        return Response.redirect(`${url.origin}${caleaLui(t)}/${encodeURIComponent(t.slug)}${url.search}`, 301)
       }
+      // ⚠️ se indexează numai fișele chinonicului; materialele din buletinul parohiei nu se dau la
+      // căutare cât timp sunt grămada de lucru a userului
       return html(
-        pagina({ ...comune, titluPagina: t.titlu || 'Text citit la chinonic', indexabil: true, corp: paginaText(t, nav.newsletter || '') }),
+        pagina({ ...comune, titluPagina: t.titlu || 'Text citit la chinonic',
+          indexabil: sectiunea === CALE_CHINONIC, corp: paginaText(t, nav.newsletter || '') }),
         200,
         { 'cache-control': utilizator || sesiune.veziCa ? 'private, no-store' : 'public, max-age=600' },
       )
@@ -323,14 +350,20 @@ export default {
     // „vezi ca": browserul servea pagina veche (cu banda) si dupa ce masca fusese scoasa, deci
     // butonul „Revino la super admin" parea ca nu face nimic (user, 11.09.2026).
     const cachePagina = utilizator || sesiune.veziCa ? 'private, no-store' : 'public, max-age=300'
-    // ⚠️ Cele mai noi ZECE texte citite la chinonic, sub butoanele aplicațiilor, cu „Vezi toate"
-    // (cerut anume: „afișate doar 10 + Vezi toate"). Dacă baza tace, ușa rămâne exact cum era.
-    const [ultimele, nTexte] = await Promise.all([
-      celeDeAcasa(env.DB).catch(() => []),
-      cateTexte(env.DB).catch(() => 0),
+    /*
+     * ⚠️ CELE DOUĂ CATEGORII, sub butoanele aplicațiilor: zece rânduri fiecare, doar titlul și
+     * autorul, plus „Vezi toate" (user, 16.09.2026: „sub lista de aplicații să afișezi cele două
+     * categorii articole-chinonic și articole-buletin doar titlul și autorul cu link — 10 elemente +
+     * vezi toate"). Dacă baza tace, ușa rămâne exact cum era.
+     * ⚠️ Se cer REZUMATELE, nu textele: judecata „e bun" are nevoie de lungimi și de starea adresei,
+     * iar ea e aceeași pe toate cele trei pagini — nu se scrie a doua dată în SQL.
+     */
+    const [aleChinonicului, aleBuletinului] = await Promise.all([
+      rezumate(env.DB).catch(() => []),
+      rezumate(env.DB, 'buletin').catch(() => []),
     ])
     return html(
-      pagina({ ...comune, corp: corp(nav) + bucataDeAcasa(ultimele, nTexte), scripturi: JS_CHINONIC }),
+      pagina({ ...comune, corp: corp(nav) + bucataDeAcasa(aleChinonicului, aleBuletinului) }),
       200,
       { 'cache-control': cachePagina },
     )

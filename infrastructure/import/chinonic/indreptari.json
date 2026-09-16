@@ -55,5 +55,10 @@
 
  "__2": "TITLURI MOȘTENITE GREȘIT: buletinul a scris un titlu de secțiune peste DOUĂ texte, iar al doilea l-a luat pe al primului. Textul adus e cel bun (proba a ținut), titlul nu era. Îndreptate după pagina sursă, 16.09.2026.",
  "cum-tratam-duhovniceste-pandemia-de-coronavirus-2": { "titlu": "Cuvânt la Duminica a cincea din Postul Mare", "autor": "Sfântul Teofan Zăvorâtul" },
- "viata-cuviosului-sofronie-saharov-2": { "titlu": "Părintele Paisie Aghioritul, trecut în rândul sfinților", "autor": "Viețile Sfinților" }
+ "viata-cuviosului-sofronie-saharov-2": { "titlu": "Părintele Paisie Aghioritul, trecut în rândul sfinților", "autor": "Viețile Sfinților" },
+
+ "__3": "CELE TREI FĂRĂ TITLU (user, 16.09.2026: „lipsă titlu — nu trebuie să fie, toate au titlu”). Buletinul n-a scris niciun titlu la ele: textul începe de-a dreptul. Titlurile de mai jos sunt cele de la sursă, citite din adresa paginii. Slugul rămâne cel înghețat („text-198-2”), fiindcă el e adresa fișei.",
+ "text-198-2": { "titlu": "Predică la Duminica a IV-a după Paști (a slăbănogului)", "autor": "Episcopul Sebastian al Slatinei și Romanaților", "deUnde": "acvila30.wordpress.com/2012/05/04/episcopul-sebastian-al-slatinei-si-romanatilor-predica-la-duminica-a-iv-a-dupa-pasti-a-slabanogului" },
+ "text-250-3": { "titlu": "O experiență marcantă a Părintelui Emilianos Simonopetritul", "autor": "Părintele Emilianos Simonopetritul", "deUnde": "vremurivechisinoi.blogspot.com/2013/09/o-experienta-marcanta-parintelui.html" },
+ "text-556-1": { "titlu": "Picături de înțelepciune de la Starețul Dionisie de la Colciu", "autor": "Sfântul Cuvios Dionisie Vatopedinul de la Colciu", "deUnde": "cuvantul-ortodox.ro/picaturi-de-intelepciune-de-la-staretul-dionisie-de-la-colciu-1" }
 }

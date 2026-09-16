@@ -10,15 +10,16 @@
  * ⚠️ ARTICOLUL E AL WEBSITE-ULUI, ASOCIEREA CU NUMĂRUL E A NEWSLETTERULUI (hotărât cu userul). Aici
  * nu se ține numărul buletinului, ci doar DATA citirii — un fapt despre text, nu despre buletin.
  *
- * ⚠️⚠️ FORMA FIȘEI, cerută anume (user, 16.09.2026): „titlu + autor (Sinaxar sau fără autor ca
- * excepție) + text scurt + citește tot (desfășurare) + Sursa: [carte] + site (cu url-ul pus efectiv)
- * — dacă e 404 acel url să nu se pună, așa știu că nu mai era valabil linkul". Deci:
- *   - lista arată ÎNTOTDEAUNA aceleași cinci lucruri, în aceeași ordine;
- *   - „Citește tot" e MARCAJUL textului întreg: îl are numai unde textul chiar a fost adus, iar unde
- *     nu s-a putut aduce scrie limpede că e doar bucata din buletin;
- *   - legătura spre sursă se scrie numai cât timp adresa mai trăiește (`link_stare`, scrisă de
- *     `infrastructure/import/chinonic/verifica-linkurile.mjs`). O adresă moartă lasă numele gol de
- *     legătură — tocmai ca să se VADĂ că nu mai e valabilă.
+ * ⚠️⚠️ TREI PAGINI, TREI TREBURI (forma cerută de user, 16.09.2026, seara):
+ *   - **ușa Website-ului**: două categorii, zece rânduri fiecare, DOAR titlul și autorul, plus
+ *     „Vezi toate" („să afișezi cele două categorii articole-chinonic și articole-buletin doar titlul
+ *     și autorul cu link — 10 elemente + vezi toate");
+ *   - **lista întreagă**: numai CELE BUNE, filtrate pe ani („la vezi toate să se vadă direct cele
+ *     bune — filtru pe ani"), cu legătură spre pagina de probleme;
+ *   - **pagina de probleme**: tot ce nu e bun, pe feluri de lipsă, o categorie o dată („și cu link
+ *     către pagina cu probleme unde avem clar filtru cu ce probleme au").
+ * ⚠️ Fișa bogată de pe ușă — bucată de text, „Citește tot", sursa — a IEȘIT atunci: pe ușă se scrie
+ * numai titlul și autorul. Nu o readu.
  */
 import { LUNI, esc } from '@xc/ui'
 
@@ -44,25 +45,53 @@ export const CALE = '/texte-citite-la-chinonic'
 /** Câte se arată pe ușa Website-ului, înainte de „Vezi toate" (cerut anume: 10). */
 export const CATE_PE_ACASA = 10
 
+/**
+ * ⚠️⚠️ TEXTELE DIN BULETINUL PAROHIEI STAU DEOPARTE, LA ADRESA LOR (user, 16.09.2026: „elimină toate
+ * textele preluate din buletinul parohiei, fișier PDF care se află în newsletter… le poți muta la
+ * `texte-din-buletin`, ca să fie începută treaba de adunare a materialelor pentru website").
+ *
+ * Ce le deosebește: sursa lor nu e un text publicat undeva, ci un PDF al parohiei, urcat în arhiva
+ * newsletterului (`newsletter.sfantul-ilie.ro/media/uploads/…`). Din newsletter ne interesează numai
+ * ARTICOLELE de după programul liturgic și după buletin — 1, 2 ori 3 la fiecare număr; ce vine din
+ * fișierul parohiei nu e articolul citit la strană, ci materialul nostru, de lucrat mai departe.
+ *
+ * ⚠️ Nu se șterge nimic din bază: rândurile trec într-o a doua secțiune, cu aceleași fișe. Slugul
+ * rămâne al textului, deci vechea adresă de la chinonic duce, printr-o mutare permanentă (301), la
+ * noua ei casă — regula slugului nu se încalcă.
+ */
+export const CALE_BULETIN = '/texte-din-buletin'
+const GAZDA_BULETIN = '//newsletter.sfantul-ilie.ro/'
+/** Aceeași judecată, scrisă o dată pentru bază și o dată pentru pagini — să nu se despartă. */
+const UNDE_BULETIN = `(sursa_fel = 'pdf' AND instr(sursa_url, '${GAZDA_BULETIN}') > 0)`
+export const dinBuletin = (t: { sursa_fel: string; sursa_url: string }): boolean =>
+  t.sursa_fel === 'pdf' && t.sursa_url.includes(GAZDA_BULETIN)
+
+/** Adresa fișei se citește din text: fiecare secțiune își ține ai ei, nimeni nu cară calea cu el. */
+export const caleaLui = (t: { sursa_fel: string; sursa_url: string }): string =>
+  dinBuletin(t) ? CALE_BULETIN : CALE
+
+/** Cele două grămezi. Una e de citit, cealaltă e material de lucru — dar se cercetează la fel. */
+export type Fel = 'chinonic' | 'buletin'
+
+/** Pagina de lucru a unei secțiuni: fiecare grămadă are problemele ei, la adresa ei. */
+export const stareaLui = (cale: string): string => `${cale}/stare`
+export const CALE_STARE = stareaLui(CALE)
+export const CALE_STARE_BULETIN = stareaLui(CALE_BULETIN)
+
+const CAILE: Record<Fel, { cale: string; titlu: string }> = {
+  chinonic: { cale: CALE, titlu: 'Texte citite la chinonic' },
+  buletin: { cale: CALE_BULETIN, titlu: 'Texte din buletinul parohiei' },
+}
+export const felulCaii = (cale: string): Fel => (cale === CALE_BULETIN ? 'buletin' : 'chinonic')
+
 const CAMPURI = `slug, titlu, autor, citit_la, fragment, text_intreg, stare_text,
                  sursa_text, sursa_nume, sursa_url, sursa_fel, poza, link_stare`
 
-export async function celeDeAcasa(db: D1Database, cate = CATE_PE_ACASA): Promise<Text[]> {
-  const r = await db.prepare(`SELECT ${CAMPURI} FROM texte_chinonic ORDER BY citit_la DESC, id DESC LIMIT ?`)
-    .bind(cate).all<Text>()
-  return r.results ?? []
-}
-
-export async function toate(db: D1Database): Promise<Text[]> {
-  const r = await db.prepare(`SELECT ${CAMPURI} FROM texte_chinonic ORDER BY citit_la DESC, id DESC`).all<Text>()
-  return r.results ?? []
-}
-
 /**
- * ⚠️ LISTA MARE NU CARĂ TEXTELE (user, 16.09.2026: „lista mare nu o mai fișa complet că se îngreunează
- * browser-ul"). 448 de texte întregi înseamnă vreo 3 MB scoși din bază și trimiși în pagină la
- * fiecare deschidere, ca să se vadă din ei niște titluri. Aici se cer numai faptele DESPRE text —
- * lungimile, nu conținutul —, iar textul se citește din fișa lui.
+ * ⚠️ NICI O PAGINĂ NU CARĂ TEXTELE (user, 16.09.2026: „lista mare nu o mai fișa complet că se
+ * îngreunează browser-ul"). 448 de texte întregi înseamnă vreo 3 MB scoși din bază și trimiși în
+ * pagină la fiecare deschidere, ca să se vadă din ei niște titluri. Aici se cer numai faptele DESPRE
+ * text — lungimile, nu conținutul —, iar textul se citește din fișa lui.
  */
 export interface Rezumat {
   slug: string
@@ -79,10 +108,12 @@ export interface Rezumat {
   n_text: number
 }
 
-export async function rezumate(db: D1Database): Promise<Rezumat[]> {
+/** `fel` alege secțiunea: textele citite la chinonic ori cele scoase din fișierele parohiei. */
+export async function rezumate(db: D1Database, fel: Fel = 'chinonic'): Promise<Rezumat[]> {
   const r = await db.prepare(`SELECT slug, titlu, autor, citit_la, stare_text, sursa_text, sursa_nume,
       sursa_url, sursa_fel, link_stare, LENGTH(fragment) AS n_fragment, LENGTH(text_intreg) AS n_text
-    FROM texte_chinonic ORDER BY citit_la DESC, id DESC`).all<Rezumat>()
+    FROM texte_chinonic WHERE ${fel === 'buletin' ? '' : 'NOT '}${UNDE_BULETIN}
+    ORDER BY citit_la DESC, id DESC`).all<Rezumat>()
   return r.results ?? []
 }
 
@@ -118,12 +149,6 @@ export async function unul(db: D1Database, slug: string): Promise<Text | null> {
   return await db.prepare(`SELECT ${CAMPURI} FROM texte_chinonic WHERE slug = ?`).bind(slug).first<Text>()
 }
 
-/** Câte sunt cu totul — se scrie pe „Vezi toate", ca omul să știe ce-l așteaptă. */
-export async function cate(db: D1Database): Promise<number> {
-  const r = await db.prepare('SELECT COUNT(*) AS n FROM texte_chinonic').first<{ n: number }>()
-  return r?.n ?? 0
-}
-
 /** „15 septembrie 2026" — data citirii, scrisă ca peste tot în platformă. */
 export function ziua(d: string): string {
   const [an, luna, zi] = d.split('-').map(Number)
@@ -148,8 +173,8 @@ export const areTot = (t: Text): boolean => t.stare_text === 'gata' && !!t.text_
  * ⚠️ „Sinaxar" NU se ghiceste aici, ci sta scris in baza: regula e la import (`titlu-autor.mjs`,
  * `eSinaxar`), sub probe, si se pune la fiecare extragere. Pagina doar scrie ce a hotarat importul.
  */
-const numeleAutorului = (t: Text): string => t.autor || 'Fără autor'
-const faraAutor = (t: Text): string => (t.autor ? '' : ' ch-niciun-autor')
+const numeleAutorului = (t: { autor: string }): string => t.autor || 'Fără autor'
+const faraAutor = (t: { autor: string }): string => (t.autor ? '' : ' ch-niciun-autor')
 
 /**
  * ⚠️⚠️ VIEȚILE DE SFINȚI AU O SINGURĂ SURSĂ: SINAXARUL (user, 16.09.2026: „viețile de sfinți — să le
@@ -163,27 +188,6 @@ const faraAutor = (t: Text): string => (t.autor ? '' : ' ch-niciun-autor')
  * ce se scrie în pagină.
  */
 export const eSinaxar = (autor: string): boolean => autor === 'Sinaxar'
-
-/** HTML-ul textului, dezbrăcat: din el se face bucata scurtă din listă. */
-const dezbraca = (h: string): string =>
-  h.replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ').replace(/&#39;/g, "'").replace(/&quot;/g, '"')
-    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
-    .replace(/\s+/g, ' ').trim()
-
-/** Cât se vede din text înainte de „Citește tot" — cât să se înțeleagă despre ce e, nu mai mult. */
-const SCURT = 400
-
-/** Bucata scurtă, tăiată la cuvânt: un text rupt în mijlocul unui cuvânt arată ca o stricăciune. */
-export function textScurt(t: Text): string {
-  const intreg = dezbraca(areTot(t) ? t.text_intreg : t.fragment)
-  if (intreg.length <= SCURT) return intreg
-  const taiat = intreg.slice(0, SCURT)
-  const capat = taiat.lastIndexOf(' ')
-  const bucata = (capat > SCURT / 2 ? taiat.slice(0, capat) : taiat).replace(/[,;:–—-]$/, '')
-  // o propozitie incheiata nu mai are nevoie de puncte de suspensie: „…Tracia.…" arata a stricaciune
-  return /[.!?…]$/.test(bucata) ? bucata : `${bucata}…`
-}
 
 /**
  * SURSA, scrisă sub text. Are două părți care coexistă (user, 16.09.2026): mențiunea scrisă de om
@@ -217,47 +221,55 @@ function sursa(t: Text): string {
   return `<p class="ch-sursa"><span>Sursa:</span> ${[...scrise, drum].filter(Boolean).join(' · ')}</p>`
 }
 
-/** Textul întreg, așa cum intră în fișă și în desfășurarea din listă. */
+/** Textul întreg, așa cum intră în fișă. */
 export const corpTextului = (t: Text): string =>
   areTot(t)
     ? `<div class="ch-text">${t.text_intreg}</div>`
     : `<div class="ch-text ch-fragment">${t.fragment}</div>`
 
-/*
- * ⚠️ „CITEȘTE TOT" MERGE ȘI FĂRĂ JS. E o legătură adevărată către fișă (adresa ei e permanentă);
- * scriptul de jos doar o prinde din zbor și aduce textul în loc să mute omul din pagină. Fără
- * script, apăsarea deschide fișa — nimic nu se pierde.
- */
-const citesteTot = (t: Text): string =>
-  areTot(t)
-    ? `<a class="ch-tot" href="${CALE}/${esc(t.slug)}" data-chinonic="${esc(t.slug)}">Citește tot</a>`
-    : `<span class="ch-doar">Doar bucata citită la strană` +
-      `${adresaSeScrie(t) ? ' — textul întreg e la sursă' : ''}</span>`
+/* — UȘA WEBSITE-ULUI: două categorii, zece rânduri, titlu și autor — */
 
-/** O fișă din listă: titlu, autor, bucata scurtă, „Citește tot", sursa. Aceleași cinci, mereu. */
-const fisa = (t: Text): string =>
-  `<li class="ch-fisa">
-  <h3 class="ch-titlu"><a href="${CALE}/${esc(t.slug)}">${esc(t.titlu || '(fără titlu)')}</a></h3>
-  <p class="ch-autor${faraAutor(t)}">${esc(numeleAutorului(t))}</p>
-  <div class="ch-scurt">${esc(textScurt(t))}</div>
-  <p class="ch-rand-tot">${citesteTot(t)}<span class="ch-cand">citit la strană pe ${esc(ziua(t.citit_la))}</span></p>
-  ${sursa(t)}
+/**
+ * ⚠️⚠️ UN RÂND DE PE UȘĂ = TITLU LEGAT + AUTOR. Atât (user, 16.09.2026: „doar titlul și autorul cu
+ * link — 10 elemente + vezi toate"). Înainte pe ușă stătea fișa întreagă, cu bucată de text, „Citește
+ * tot" și sursa; de acum lucrurile acelea se văd în fișă, unde e locul lor.
+ */
+const randDeUsa = (r: Rezumat): string =>
+  `<li class="ch-rand">
+  <a class="ch-t" href="${caleaLui(r)}/${esc(r.slug)}">${esc(r.titlu || '(fără titlu)')}</a>
+  <span class="ch-a${faraAutor(r)}">${esc(numeleAutorului(r))}</span>
 </li>`
 
-/** Bucata de pe ușa Website-ului: cele mai noi zece și „Vezi toate". */
-export function bucataDeAcasa(texte: Text[], nTotal: number): string {
-  if (!texte.length) return ''
-  return `<section class="ch-acasa">
-  <h2>Texte citite la chinonic</h2>
-  <p class="ch-spune">Ce s-a citit la strană, în timpul împărtășirii.</p>
-  <ul class="ch-lista">${texte.map(fisa).join('')}</ul>
-  <p class="ch-toate"><a href="${CALE}">Vezi toate — ${nTotal} ${nTotal === 1 ? 'text' : 'texte'} →</a></p>
+/**
+ * O categorie pe ușa Website-ului: cele mai noi zece BUNE și „Vezi toate".
+ *
+ * ⚠️ Se arată numai cele bune, ca și în lista întreagă: ușa e fața parohiei, nu locul de lucru. Ce
+ * n-are textul adus ori n-are autor se vede în pagina de probleme, nu aici.
+ */
+function categoriaDeAcasa(rez: Rezumat[], fel: Fel, spune: string): string {
+  const bune = rez.filter(eBun)
+  if (!bune.length) return ''
+  const { cale, titlu } = CAILE[fel]
+  const zece = bune.slice(0, CATE_PE_ACASA)
+  return `<section class="ch-categorie">
+  <h2>${esc(titlu)}</h2>
+  <p class="ch-spune">${esc(spune)}</p>
+  <ul class="ch-compacta">${zece.map(randDeUsa).join('')}</ul>
+  <p class="ch-toate"><a href="${cale}">Vezi toate — ${bune.length} ${bune.length === 1 ? 'text' : 'texte'} →</a></p>
 </section>`
 }
 
-/* — LISTA MARE ȘI PAGINA DE STARE, amândouă din rezumate (fără textele întregi) — */
+/** Bucata de pe ușa Website-ului: cele două categorii, una lângă alta. */
+export function bucataDeAcasa(chinonic: Rezumat[], buletin: Rezumat[]): string {
+  const doua = [
+    categoriaDeAcasa(chinonic, 'chinonic', 'Ce s-a citit la strană, în timpul împărtășirii.'),
+    categoriaDeAcasa(buletin, 'buletin', 'Texte scoase din buletinele parohiei.'),
+  ].filter(Boolean)
+  if (!doua.length) return ''
+  return `<div class="ch-usa">${doua.join('')}</div>`
+}
 
-export const CALE_STARE = `${CALE}/stare`
+/* — LISTA ÎNTREAGĂ ȘI PAGINA DE PROBLEME, amândouă din rezumate (fără textele întregi) — */
 
 const areTotR = (r: Rezumat): boolean => r.stare_text === 'gata' && r.n_text > 0
 // ⚠️ sinaxarul ESTE sursa unei vieți de sfânt (vezi `eSinaxar`): rândul e completat prin definiție,
@@ -265,29 +277,27 @@ const areTotR = (r: Rezumat): boolean => r.stare_text === 'gata' && r.n_text > 0
 const areSursaR = (r: Rezumat): boolean => eSinaxar(r.autor) || !!(r.sursa_text || r.sursa_nume || r.sursa_url)
 const adresaVie = (r: Rezumat): boolean =>
   !eSinaxar(r.autor) && !!r.sursa_url && r.link_stare !== 'mort' && r.link_stare !== 'picat'
-const numeR = (r: Rezumat): string => r.autor || 'Fără autor'
-
-/** Cele două OK-uri cerute de user: textul preluat și sursa completată. Bifa spune și de ce, în `title`. */
-const bifa = (da: boolean, ce: string, deCe: string): string =>
-  `<span class="ch-bifa ${da ? 'da' : 'nu'}" title="${esc(deCe)}">${da ? '✓' : '—'} ${ce}</span>`
 
 /**
- * ⚠️ UN RÂND DIN LISTA MARE = titlu, autor, două bife. Atât (user, 16.09.2026). Textul se citește în
- * fișă; aici pagina trebuie doar să se deschidă repede, cu 448 de rânduri în ea.
+ * ⚠️⚠️ „BUN" ÎNSEAMNĂ CHIAR BUN (user, 16.09.2026: „fă o categorie cu tot ce este bun, dar ai grijă
+ * să pui doar ce este chiar bun acolo"). De aceea se cer TOATE deodată, nu „mai nimic de făcut":
+ *   - are titlu și are autor scris — la viețile de sfinți autorul e «Sinaxar», adică un nume, nu o lipsă;
+ *   - textul întreg e adus ȘI a trecut proba (`stare_text = gata`), nu doar stă în bază („nesigur");
+ *   - textul adus e mai lung decât bucata din buletin — altfel n-am adus nimic pe deasupra ei;
+ *   - bucata din buletin a avut cel puțin 40 de semne, adică proba a avut cu ce fi făcută. La sinaxare
+ *     proba nu se cere (hotărârea userului), deci nici lungimea bucății nu le judecă;
+ *   - sursa e scrisă, iar adresa ei încă trăiește, ca omul să poată ajunge la ea; la sinaxare sursa e
+ *     Sinaxarul și atât.
+ *
+ * ⚠️⚠️ ACEEAȘI JUDECATĂ ȚINE ACUM TREI PAGINI: ce se scrie pe ușă, ce se scrie în lista întreagă și ce
+ * se numără în categoria „Bune" din pagina de probleme. Dacă se lărgește aici, se lărgește peste tot —
+ * de aceea nu se lărgește fără măsurătoare.
  */
-const randCompact = (r: Rezumat): string =>
-  `<li class="ch-rand">
-  <a class="ch-t" href="${CALE}/${esc(r.slug)}">${esc(r.titlu || '(fără titlu)')}</a>
-  <span class="ch-a${r.autor ? '' : ' ch-niciun-autor'}">${esc(numeR(r))}</span>
-  <span class="ch-bife">${bifa(areTotR(r), 'text', areTotR(r) ? 'textul întreg e preluat' : pricinaTextului(r))}${
-    bifa(areSursaR(r), 'sursă', eSinaxar(r.autor)
-      ? 'viață de sfânt — sursa e Sinaxarul'
-      : areSursaR(r)
-        ? `${r.sursa_nume || r.sursa_text}${adresaVie(r) ? ' — cu legătură' : r.sursa_url ? ' — adresa nu mai trăiește' : ' — fără adresă'}`
-        : 'nicio sursă scrisă')}</span>
-</li>`
+export const eBun = (r: Rezumat): boolean =>
+  !!r.titlu && !!r.autor && areTotR(r) && r.n_text > r.n_fragment
+  && (eSinaxar(r.autor) || (r.n_fragment >= 40 && adresaVie(r)))
 
-/** Anul citirii, singurul fapt după care se filtrează lista mare. */
+/** Anul citirii, singurul fapt după care se filtrează lista întreagă. */
 const anulCitirii = (r: Rezumat): number => +r.citit_la.slice(0, 4)
 
 /** Un segment de bară: ce scrie pe el, unde duce, dacă e cel deschis. */
@@ -317,33 +327,86 @@ function baraSegmentelor(eticheta: string, segmente: Segment[]): string {
 }
 
 /**
- * Pagina cu toate — **un singur an o dată** (user, 16.09.2026: „aici să avem o filtrare pe ani…
- * totul ascuns în afară de ce e selectat; la intrare prima opțiune selectată").
+ * ⚠️⚠️ UN RÂND DIN LISTA ÎNTREAGĂ = titlu, autor, ziua citirii. Bifele „✓ text" și „✓ sursă" au ieșit
+ * odată cu trecerea listei pe NUMAI CELE BUNE (user, 16.09.2026): într-o listă unde toate au textul
+ * adus și sursa vie, două bife verzi pe fiecare rând nu mai spun nimic. Ce lipsește se vede în pagina
+ * de probleme, cu pricina scrisă.
+ */
+const randCompact = (r: Rezumat): string =>
+  `<li class="ch-rand">
+  <a class="ch-t" href="${caleaLui(r)}/${esc(r.slug)}">${esc(r.titlu || '(fără titlu)')}</a>
+  <span class="ch-a${faraAutor(r)}">${esc(numeleAutorului(r))}</span>
+  <span class="ch-cand">${esc(ziua(r.citit_la))}</span>
+</li>`
+
+/**
+ * LISTA ÎNTREAGĂ — **numai cele bune, un singur an o dată** (user, 16.09.2026: „la vezi toate să se
+ * vadă direct cele bune — filtru pe ani / și cu link către pagina cu probleme").
  *
  * ⚠️ PRIMA OPȚIUNE E ANUL CEL MAI NOU, fiindcă anii merg descrescător — și tot el e cel ales când
  * nu se cere niciunul ori când se cere unul care nu există. Nu există „toți anii": ar însemna tocmai
  * lista de dinainte, cea de care s-a plâns că îngreunează browserul.
  */
 export function paginaToate(rez: Rezumat[], anCerut?: string | number | null): string {
-  const cuText = rez.filter(areTotR).length
-  const ani = [...new Set(rez.map(anulCitirii))].sort((a, b) => b - a)
+  return listaCelorBune(rez, anCerut, 'chinonic',
+    'Ce s-a citit la strană, în timpul împărtășirii.')
+}
+
+/**
+ * TEXTELE DIN BULETINUL PAROHIEI — a doua secțiune, cerută de user (16.09.2026). Aceeași listă, ca
+ * să se poată lucra la fel în ea; alta e numai proveniența, iar asta se spune limpede în cap.
+ *
+ * ⚠️ NU e o listă de citit, ci grămada de materiale de unde începe adunarea pentru website: textele
+ * astea n-au venit de la un autor publicat undeva, ci din fișierele PDF ale parohiei.
+ */
+export function paginaBuletin(rez: Rezumat[], anCerut?: string | number | null): string {
+  return listaCelorBune(rez, anCerut, 'buletin',
+    'Texte scoase din fișierele PDF ale parohiei, urcate în arhiva newsletterului. Ele stau deoparte '
+    + 'de cele citite la chinonic: de aici începe adunarea materialelor pentru website.')
+}
+
+/** Anii din care s-a citit, de la cel mai nou la cel mai vechi. */
+const aniiDin = (rez: Rezumat[]): number[] => [...new Set(rez.map(anulCitirii))].sort((a, b) => b - a)
+
+/**
+ * Trupul comun al celor două liste: cap, bara anilor, rândurile anului ales.
+ *
+ * ⚠️ SE CÂNTĂRESC TOATE, DAR SE SCRIU NUMAI CELE BUNE — iar ce a rămas afară se SPUNE, cu legătură
+ * spre locul unde se lucrează la el. O listă care ascunde în tăcere o parte din arhivă ar minți.
+ */
+function listaCelorBune(
+  rez: Rezumat[],
+  anCerut: string | number | null | undefined,
+  fel: Fel,
+  spune: string,
+): string {
+  const { cale, titlu } = CAILE[fel]
+  const bune = rez.filter(eBun)
+  const deLucru = rez.length - bune.length
+  const ani = aniiDin(bune)
   const cerut = Number(anCerut)
   const an = ani.includes(cerut) ? cerut : (ani[0] ?? 0)
-  const ale = rez.filter((r) => anulCitirii(r) === an)
+  const ale = bune.filter((r) => anulCitirii(r) === an)
   const bara = ani.length
-    ? baraSegmentelor('Anii citirii', ani.map((a) => ({ nume: String(a), href: `${CALE}?an=${a}`, activ: a === an })))
+    ? baraSegmentelor('Anii citirii', ani.map((a) => ({ nume: String(a), href: `${cale}?an=${a}`, activ: a === an })))
     : ''
+  const celalalt = fel === 'chinonic'
+    ? `<p class="ch-spre-stare"><a href="${CALE_BULETIN}">Texte din buletinul parohiei →</a></p>`
+    : `<p class="ch-spre-stare"><a href="${CALE}">← Textele citite la chinonic</a></p>`
   return `<div class="cap">
-  <h1 class="titlu-lista">Texte citite la chinonic</h1>
-  <p class="sursa">Ce s-a citit la strană, în timpul împărtășirii — ${rez.length} texte, din
-  ${ani[ani.length - 1] ?? ''} încoace. ${cuText} au textul întreg preluat.</p>
+  <h1 class="titlu-lista">${esc(titlu)}</h1>
+  <p class="sursa">${esc(spune)} <b>${bune.length} ${bune.length === 1 ? 'text bun' : 'texte bune'}</b>,
+  din ${ani[ani.length - 1] ?? ''} încoace.</p>
   ${bara}
-  <p class="ch-spre-stare"><a href="${CALE_STARE}">Starea lor, pe categorii →</a></p>
+  <p class="ch-spre-stare"><a href="${stareaLui(cale)}">${deLucru
+    ? `Cele cu probleme — ${deLucru} de lămurit →`
+    : 'Starea lor, pe categorii →'}</a></p>
+  ${celalalt}
 </div>
 ${ale.length
     ? `<h2 class="anul">${an} <span class="ch-cate">${ale.length} ${ale.length === 1 ? 'text' : 'texte'}</span></h2>
 <ul class="ch-compacta">${ale.map(randCompact).join('')}</ul>`
-    : '<p class="ch-spune">Niciun text în anul acesta.</p>'}`
+    : '<p class="ch-spune">Niciun text bun în anul acesta.</p>'}`
 }
 
 /** De ce nu are textul întreg — scris scurt, ca să se poată căuta pricina, nu doar lipsa. */
@@ -370,25 +433,37 @@ function dinCeNumar(n: Numar | undefined, urlNewsletter: string): string {
 /** Un rând de investigat: titlu, autor, din ce număr vine și ce e în neregulă cu el. */
 const randDeInvestigat = (r: Rezumat, n: Numar | undefined, urlNewsletter: string, pricina: string): string =>
   `<li class="ch-rand">
-  <a class="ch-t" href="${CALE}/${esc(r.slug)}">${esc(r.titlu || '(fără titlu)')}</a>
-  <span class="ch-a${r.autor ? '' : ' ch-niciun-autor'}">${esc(numeR(r))}</span>
+  <a class="ch-t" href="${caleaLui(r)}/${esc(r.slug)}">${esc(r.titlu || '(fără titlu)')}</a>
+  <span class="ch-a${faraAutor(r)}">${esc(numeleAutorului(r))}</span>
   <span class="ch-de-ce">${esc(pricina)}</span>
   ${dinCeNumar(n, urlNewsletter)}
 </li>`
 
 /**
- * PAGINA DE STARE — locul de investigat, cerut de user (16.09.2026): „restul pe categorii… fără text
- * preluat, fără autor, fără sursă etc. cu toate problemele — dar să le văd separat pe scurt și dacă
- * intru pe ele le pot inspecta; să scrie și din ce news sunt luate".
+ * ⚠️ FELUL SURSEI, așa cum e el în arhivă (user, 16.09.2026, întrebat cum arată datele): „sursa în
+ * general este website, dar ocazional mai este PDF sau tot ocazional este fără link, doar o mențiune
+ * carte. Există foarte rare situațiile fără sursă." De aceea cele patru feluri se NUMĂRĂ în capul
+ * paginii de probleme: așa se vede dintr-o privire dacă o cifră a plecat de unde trebuia să fie.
+ */
+const felulSursei = (r: Rezumat): 'pagina' | 'pdf' | 'mentiune' | 'fara' => {
+  if (r.sursa_url) return r.sursa_fel === 'pdf' ? 'pdf' : 'pagina'
+  if (r.sursa_text || r.sursa_nume) return 'mentiune'
+  return 'fara'
+}
+
+/**
+ * PAGINA DE PROBLEME — locul de investigat, cerut de user (16.09.2026): „restul pe categorii… fără
+ * text preluat, fără autor, fără sursă etc. cu toate problemele — dar să le văd separat pe scurt și
+ * dacă intru pe ele le pot inspecta; să scrie și din ce news sunt luate", apoi, seara: „link către
+ * pagina cu probleme unde avem clar filtru cu ce probleme au".
  *
  * ⚠️ E o pagină de LUCRU, nu una de citit: rândurile sunt scurte, categoriile se pot suprapune
  * (același text poate fi și fără autor, și fără text întreg) și nu se indexează la căutare.
  *
  * ⚠️ O SINGURĂ CATEGORIE O DATĂ (user, 16.09.2026: „aici la fel — să fie filtrare, adică totul
- * ascuns în afară de ce e selectat; la intrare prima opțiune selectată"). Cuprinsul nu mai e un șir
- * de ancore care sar prin pagină, ci FILTRUL însuși: se scrie numai categoria aleasă, iar celelalte
- * rămân doar ca butoane, cu numărul lor. Prima opțiune — „Fără textul întreg", cea mai mare — e cea
- * deschisă când nu se cere alta.
+ * ascuns în afară de ce e selectat; la intrare prima opțiune selectată"). Cuprinsul nu e un șir de
+ * ancore care sar prin pagină, ci FILTRUL însuși: se scrie numai categoria aleasă, iar celelalte
+ * rămân doar ca butoane, cu numărul lor.
  *
  * ⚠️ Anii filtrează ÎNĂUNTRUL categoriei și acolo prima opțiune e „Toți anii": pe o pagină de
  * investigat, a ascunde din pornire tot afară de anul curent ar ascunde tocmai ce e de cercetat.
@@ -399,7 +474,10 @@ export function paginaStare(
   urlNewsletter: string,
   ceCerut?: string | null,
   anCerut?: string | number | null,
+  fel: Fel = 'chinonic',
 ): string {
+  const { cale } = CAILE[fel]
+  const caleStare = stareaLui(cale)
   const grupe: { cheie: string; nume: string; spune: string; care: (r: Rezumat) => boolean; pricina: (r: Rezumat) => string }[] = [
     {
       cheie: 'fara-text',
@@ -411,20 +489,14 @@ export function paginaStare(
     {
       cheie: 'fara-autor',
       nume: 'Fără autor',
-      spune: 'Buletinul n-a scris niciun nume, iar titlul nu e de sinaxar — numele e de căutat la sursă.',
+      spune: 'Buletinul n-a scris niciun nume, iar titlul nu e de sinaxar — numele e de căutat la '
+        + 'sursă. Aproape toate textele au autor, deci fiecare rând de aici e o lipsă adevărată.',
       care: (r) => !r.autor,
       pricina: (r) => {
         if (adresaVie(r)) return 'de căutat în pagina sursei'
         if (areSursaR(r)) return `de căutat la „${r.sursa_nume || r.sursa_text}", dar fără adresă vie`
         return 'nici măcar sursa nu e scrisă'
       },
-    },
-    {
-      cheie: 'fara-sursa',
-      nume: 'Fără sursă',
-      spune: 'Nici mențiune scrisă, nici legătură — nu se știe de unde a fost luat.',
-      care: (r) => !areSursaR(r),
-      pricina: () => 'nimic în rândul „Sursă" al buletinului',
     },
     {
       cheie: 'link-mort',
@@ -436,21 +508,49 @@ export function paginaStare(
       pricina: (r) => (r.link_stare === 'mort' ? 'răspunde 404 — pagina a fost ștearsă' : 'nu mai răspunde nimeni la adresă'),
     },
     {
+      /*
+       * ⚠️ NU E UN DEFECT, E UN FEL DE SURSĂ (user, 16.09.2026: „tot ocazional este fără link, doar o
+       * mențiune carte"). Stă aici fiindcă e singurul loc unde se pot vedea la un loc — un text care
+       * arată cartea, dar nu are unde trimite. Textul întreg la ele nu se poate aduce de nicăieri.
+       */
+      cheie: 'doar-mentiune',
+      nume: 'Cu sursa scrisă, dar fără legătură',
+      spune: 'Buletinul a scris numai mențiunea — o carte, o editură —, fără nicio adresă. Nu e o '
+        + 'greșeală: așa a fost publicat. Dar de acolo nu se poate aduce textul întreg.',
+      care: (r) => felulSursei(r) === 'mentiune',
+      pricina: (r) => `numai mențiunea: „${r.sursa_text || r.sursa_nume}"`,
+    },
+    {
+      cheie: 'fara-sursa',
+      nume: 'Fără sursă',
+      spune: 'Nici mențiune scrisă, nici legătură — nu se știe de unde a fost luat. Sunt foarte rare.',
+      care: (r) => !areSursaR(r),
+      pricina: () => 'nimic în rândul „Sursă" al buletinului',
+    },
+    {
       cheie: 'fara-titlu',
       nume: 'Fără titlu',
-      spune: 'Buletinul n-a scris niciun titlu, iar la sursă nu s-a găsit unul.',
+      spune: 'Buletinul n-a scris niciun titlu, iar la sursă nu s-a găsit unul. Toate textele trebuie '
+        + 'să aibă titlu, deci categoria asta trebuie să rămână goală.',
       care: (r) => !r.titlu,
       pricina: () => 'de scris de mână în `indreptari.json`',
     },
     {
+      /*
+       * ⚠️ AICI SE VEDE UN DEFECT DE CITIRE, nu o lipsă a buletinului (user, 16.09.2026: „toate au
+       * text scurt — chiar dacă structural nu pare că e, vizual se vede mereu, 10-12 rânduri de text
+       * după autor"). Dacă un rând ajunge aici, extragerea n-a găsit corpul articolului, deși el e în
+       * pagină — așa s-a descoperit că textele puse ca CITAT în buletin nu erau citite deloc.
+       */
       cheie: 'fisa-goala',
-      nume: 'Cu bucată prea scurtă ca să poată fi verificat',
-      spune: 'Buletinul n-a lăsat decât câteva cuvinte, deci textul adus de la sursă n-a avut cu ce fi ' +
-        'verificat. Unde textul E în bază, el se poate arăta oricând — e hotărârea ta.',
-      care: (r) => r.n_fragment < 40 && !areTotR(r),
+      nume: 'Fără bucata din buletin',
+      spune: 'Din buletin n-au ieșit decât câteva semne, deci textul adus de la sursă n-a avut cu ce '
+        + 'fi verificat. Toate textele au în buletin 10-12 rânduri după autor: dacă un rând stă aici, '
+        + 'citirea buletinului a dat greș, nu buletinul.',
+      care: (r) => r.n_fragment < 40,
       pricina: (r) => (r.n_text > 500
-        ? `numai ${r.n_fragment} semne în buletin, dar textul adus (${r.n_text} semne) stă în bază`
-        : `numai ${r.n_fragment} semne în buletin și niciun text adus`),
+        ? `numai ${r.n_fragment} semne din buletin, dar textul adus (${r.n_text} semne) stă în bază`
+        : `numai ${r.n_fragment} semne din buletin și niciun text adus`),
     },
   ]
 
@@ -482,6 +582,24 @@ export function paginaStare(
   }
 
   /*
+   * ⚠️ CATEGORIA CELOR BUNE stă LA URMĂ, dinadins: pagina asta e locul de lucru, iar prima categorie e
+   * și cea deschisă la intrare — acolo trebuie să fie ce e de făcut, nu ce e gata. Ca linie de sosire
+   * însă, numărul ei se citește din cuprins fără să intri în ea, și asta se voia.
+   */
+  const bune = {
+    cheie: 'bune',
+    nume: 'Bune — nimic de făcut',
+    spune: 'Au tot ce trebuie: titlu, autor, textul întreg adus și trecut prin probă, mai lung decât ' +
+      'bucata din buletin, și o sursă la care se poate ajunge. Ele sunt cele care se văd în lista ' +
+      'întreagă și pe ușa Website-ului.',
+    care: eBun,
+    pricina: (r: Rezumat) => (eSinaxar(r.autor)
+      ? `${r.n_text} semne · sursa: Sinaxar`
+      : `${r.n_text} semne · ${r.sursa_nume || r.sursa_text || 'sursă scrisă'}, cu adresa vie`),
+  }
+  cuNumar.push(stimNumerele ? { ...bune, care: (r: Rezumat) => areNumar(r) && eBun(r) } : bune)
+
+  /*
    * ⚠️ CUPRINSUL E FILTRUL, nu un șir de ancore: se scrie o singură categorie o dată, cea aleasă,
    * iar celelalte rămân butoane cu numărul lor. Alegerea e o navigare (`?ce=…`), deci merge fără
    * JavaScript și are adresă — un rând de investigat se poate da mai departe așa cum e.
@@ -495,14 +613,14 @@ export function paginaStare(
 
   const cuprins = cuNumar
     .map((g) => `<li${g.cheie === ales.cheie ? ' class="activ"' : ''}>`
-      + `<a href="${CALE_STARE}?ce=${g.cheie}${an ? `&amp;an=${an}` : ''}">${esc(g.nume)}</a>`
+      + `<a href="${caleStare}?ce=${g.cheie}${an ? `&amp;an=${an}` : ''}">${esc(g.nume)}</a>`
       + ` <b>${rez.filter(g.care).length}</b></li>`)
     .join('')
 
   const baraAni = ani.length > 1
     ? baraSegmentelor('Anii citirii', [
-      { nume: 'Toți anii', href: `${CALE_STARE}?ce=${ales.cheie}`, activ: !an },
-      ...ani.map((a) => ({ nume: String(a), href: `${CALE_STARE}?ce=${ales.cheie}&an=${a}`, activ: a === an })),
+      { nume: 'Toți anii', href: `${caleStare}?ce=${ales.cheie}`, activ: !an },
+      ...ani.map((a) => ({ nume: String(a), href: `${caleStare}?ce=${ales.cheie}&an=${a}`, activ: a === an })),
     ])
     : ''
 
@@ -515,15 +633,15 @@ export function paginaStare(
     : `<p class="ch-spune">${an ? 'Niciunul în anul acesta.' : 'Niciunul — categoria e goală.'}</p>`}
 </section>`
 
-  const cuText = rez.filter(areTotR).length
-  const cuAutor = rez.filter((r) => r.autor).length
-  const cuSursa = rez.filter(areSursaR).length
+  const peFel = (f: ReturnType<typeof felulSursei>) => rez.filter((r) => felulSursei(r) === f).length
   return `<div class="cap">
-  <h1 class="titlu-lista">Texte citite la chinonic — starea lor</h1>
-  <p class="sursa">${rez.length} texte · ${cuText} cu textul întreg · ${cuAutor} cu autor ·
-  ${cuSursa} cu sursă scrisă. Numărul de buletin vine de la Newsletter; apasă-l ca să deschizi numărul.</p>
+  <h1 class="titlu-lista">${esc(CAILE[fel].titlu)} — ce e de lămurit</h1>
+  <p class="sursa">${rez.length} texte · <b>${rez.filter(eBun).length} chiar bune</b>. Sursa lor:
+  ${peFel('pagina')} de pe un site · ${peFel('pdf')} din PDF · ${peFel('mentiune')} numai cu mențiunea
+  scrisă · ${peFel('fara')} fără nicio sursă. Numărul de buletin vine de la Newsletter; apasă-l ca să
+  deschizi numărul.</p>
   <ul class="ch-cuprins">${cuprins}</ul>
-  <p class="ch-spre-stare"><a href="${CALE}">← Lista întreagă</a></p>
+  <p class="ch-spre-stare"><a href="${cale}">← Lista celor bune</a></p>
 </div>
 ${sectiune}`
 }
@@ -543,81 +661,31 @@ ${t.poza ? `<img class="ch-poza" src="${esc(poza(t, urlNewsletter))}" alt="">` :
 ${corpTextului(t)}
 ${areTot(t) ? '' : `<p class="ch-partial">Aici e doar bucata citită în buletin. Textul întreg încă n-a fost adus.</p>`}
 ${sursa(t)}
-<nav class="vecini"><a href="${CALE}">← Toate textele citite la chinonic</a></nav>`
+<nav class="vecini"><a href="${caleaLui(t)}">${dinBuletin(t)
+    ? '← Toate textele din buletinul parohiei'
+    : '← Toate textele citite la chinonic'}</a></nav>`
 }
 
-/*
- * ⚠️ DESFĂȘURAREA — „citește tot" fără să se mute omul din pagină (user, 16.09.2026). Textul se cere
- * de la fișa lui, cu `?bucata=text` (numai corpul, fără carcasă), și se pune sub bucata scurtă. E
- * îmbunătățire progresivă: fără script legătura duce la fișă, ca înainte, iar pagina cu toate rămâne
- * ușoară — 448 de texte întregi n-au ce căuta deodată în ea.
- */
-export const JS_CHINONIC = `
-(function(){
-  document.addEventListener('click', function(ev){
-    var a = ev.target.closest && ev.target.closest('a.ch-tot'); if (!a) return;
-    if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.button) return;
-    ev.preventDefault();
-    var fisa = a.closest('.ch-fisa'); if (!fisa) return;
-    var desfasurat = fisa.querySelector('.ch-desfasurat');
-    if (desfasurat) { // a doua apăsare strânge la loc
-      var deschis = desfasurat.hasAttribute('hidden');
-      if (deschis) desfasurat.removeAttribute('hidden'); else desfasurat.setAttribute('hidden','');
-      a.textContent = deschis ? 'Strânge' : 'Citește tot';
-      fisa.querySelector('.ch-scurt').hidden = deschis;
-      return;
-    }
-    a.textContent = 'Se aduce…';
-    fetch(a.getAttribute('href') + '?bucata=text').then(function(r){ return r.ok ? r.text() : Promise.reject(r.status) })
-      .then(function(h){
-        var d = document.createElement('div'); d.className = 'ch-desfasurat'; d.innerHTML = h;
-        fisa.querySelector('.ch-scurt').hidden = true;
-        a.parentNode.insertAdjacentElement('afterend', d);
-        a.textContent = 'Strânge';
-      })
-      .catch(function(){ a.textContent = 'Citește tot'; window.location = a.getAttribute('href') });
-  });
-})();
-`
-
 export const STIL_CHINONIC = `
-/* TEXTE CITITE LA CHINONIC (16.09.2026) — lista de pe usa Website-ului si paginile lor. */
-.ch-acasa { margin:34px 0 0; padding:20px 0 0; border-top:1px solid var(--rule) }
-.ch-acasa > h2 { margin:0 0 2px; font-size:21px; font-weight:400 }
+/* TEXTE CITITE LA CHINONIC (16.09.2026) — cele doua categorii de pe usa Website-ului si paginile lor. */
+/* ⚠️ pe usa stau DOUA categorii, una langa alta pe ecran larg, una sub alta pe telefon (user,
+   16.09.2026: „sub lista de aplicații să afișezi cele două categorii") */
+.ch-usa { display:grid; gap:26px; margin:34px 0 0; padding:20px 0 0; border-top:1px solid var(--rule) }
+@media (min-width:860px) { .ch-usa { grid-template-columns:1fr 1fr; gap:34px } }
+.ch-categorie > h2 { margin:0 0 2px; font-size:21px; font-weight:400 }
 .ch-spune { margin:0 0 12px; color:var(--faint); font-size:14px }
-/* ⚠️ o fisa = titlu, autor, bucata scurta, „Citeste tot", sursa — mereu in aceeasi ordine */
-.ch-lista { list-style:none; padding:0; margin:0 }
-.ch-fisa { padding:16px 0 18px; border-bottom:1px solid var(--rule) }
-.ch-fisa:last-child { border-bottom:0 }
-.ch-titlu { margin:0; font-size:18px; font-weight:600; line-height:1.35 }
-.ch-titlu a { color:var(--ink); text-decoration:none }
-.ch-titlu a:hover { color:var(--rosu); text-decoration:underline }
-/* autorul, sub titlu: se citeste ca o lamurire, nu ca parte din titlu */
-.ch-autor { display:block; margin:3px 0 0; color:var(--soft); font-size:14px }
-/* „Fără autor" e o lipsa marturisita, nu un nume: se scrie mai stins si inclinat */
-.ch-niciun-autor { font-style:italic; opacity:.65 }
-.ch-scurt { margin:8px 0 0; color:var(--ink); line-height:1.65; font-size:15px }
-.ch-desfasurat { margin:10px 0 0 }
-.ch-rand-tot { display:flex; flex-wrap:wrap; align-items:baseline; gap:10px; margin:8px 0 0 }
-.ch-tot { color:var(--rosu); text-decoration:none; font:600 13.5px/1 ui-sans-serif,system-ui;
-          cursor:pointer }
-.ch-tot:hover { text-decoration:underline }
-/* unde textul intreg n-a putut fi adus se scrie limpede — e marcajul, pe dos */
-.ch-doar { color:var(--faint); font:13px/1.4 ui-sans-serif,system-ui; font-style:italic }
-.ch-cand { color:var(--faint); font:12.5px/1.4 ui-sans-serif,system-ui }
-/* ⚠️ LISTA MARE E COMPACTA: titlu, autor, doua bife. Fara text, ca sa se deschida repede cu 448 de
-   randuri in ea (user, 16.09.2026: „lista mare nu o mai fisa complet ca se ingreuneaza browser-ul") */
+/* ⚠️ LISTELE SUNT COMPACTE PESTE TOT: titlu legat + autor. Fara text, ca sa se deschida repede
+   (user, 16.09.2026: „doar titlul și autorul cu link") */
 .ch-compacta { list-style:none; padding:0; margin:0 }
 .ch-rand { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 10px;
            padding:7px 0; border-bottom:1px solid var(--rule) }
 .ch-rand:last-child { border-bottom:0 }
-.ch-t { color:var(--ink); text-decoration:none; font-size:15px; flex:1 1 320px }
+.ch-t { color:var(--ink); text-decoration:none; font-size:15px; flex:1 1 260px }
 .ch-t:hover { color:var(--rosu); text-decoration:underline }
 .ch-a { color:var(--faint); font:13px/1.4 ui-sans-serif,system-ui; flex:0 1 auto }
-.ch-bife { display:flex; gap:8px; flex:0 0 auto }
-.ch-bifa { font:12px/1.4 ui-sans-serif,system-ui; white-space:nowrap }
-.ch-bifa.da { color:var(--verde,#3a7d44) }
-.ch-bifa.nu { color:var(--faint); opacity:.75 }
+/* „Fără autor" e o lipsa marturisita, nu un nume: se scrie mai stins si inclinat */
+.ch-niciun-autor { font-style:italic; opacity:.65 }
+.ch-cand { color:var(--faint); font:12.5px/1.4 ui-sans-serif,system-ui; white-space:nowrap }
 /* ⚠️ BARA ANILOR — aceeasi ca la Program si la Newsletter (aceleasi clase, acelasi desen), ca sa se
    recunoasca dintr-o privire ca e acelasi lucru. Fara sageti: aici nu e antetul care le scrie. */
 .bara-ani { display:flex; align-items:stretch; margin:10px 0 0;
@@ -636,7 +704,7 @@ export const STIL_CHINONIC = `
 /* anul deschis: rosu si plin, ca segmentul pe care esti din pastila */
 .an-buton.activ { color:var(--rosu); font-weight:700;
                   background:color-mix(in srgb, var(--rosu) 11%, transparent) }
-/* pagina de stare — locul de investigat */
+/* pagina de probleme — locul de investigat */
 /* ⚠️ CUPRINSUL E FILTRUL: pastila apasata e cea deschisa, celelalte duc la ea. Se vede care e
    aleasa, altfel omul n-ar sti de ce vede o singura categorie (user, 16.09.2026). */
 .ch-cuprins { list-style:none; display:flex; flex-wrap:wrap; gap:8px; padding:0; margin:12px 0 0 }
@@ -669,9 +737,21 @@ export const STIL_CHINONIC = `
 .ch-poza { display:block; width:100%; height:auto; border-radius:12px; margin:18px 0 0 }
 /* ⚠️ textul e al nostru, in <p>-uri curate, deci ia culorile temei — nu mai e HTML de email cu
    scris negru scris inline, care pe tema intunecata nu se vedea (user, 16.09.2026) */
-.ch-text { color:var(--ink) }
-.ch-text { margin:18px 0 0; line-height:1.7 }
+.ch-text { color:var(--ink); margin:18px 0 0; line-height:1.7 }
 .ch-text p { margin:0 0 12px }
+/* ⚠️ FORMAREA MINIMA a textului adus (user, 16.09.2026: „text raw cu formatare minimă — bold,
+   italic, liste"): atat se pastreaza din izvor, si atat se deseneaza aici. Regula e in
+   infrastructure/import/chinonic/formatare.mjs — patru marcaje, nimic mai mult. */
+.ch-text strong { font-weight:600 }
+.ch-text em { font-style:italic }
+.ch-text ul { margin:0 0 12px; padding-left:22px }
+.ch-text li { margin:0 0 5px }
+.ch-text blockquote { margin:0 0 12px; padding-left:14px; border-left:3px solid var(--rule);
+                      color:var(--soft) }
+.ch-text blockquote p:last-child { margin-bottom:0 }
+/* ⚠️ subtitlul dinauntrul textului e PARAGRAF INGROSAT, nu titlu de secțiune (hotararea userului,
+   16.09.2026: „paragraf bold") — deci nu-si ia rang in pagina, doar puțin aer deasupra */
+.ch-text .ch-sub { margin:20px 0 10px }
 /* fragmentul se vede ca fragment: o dunga la stanga spune ca textul nu e intreg */
 .ch-fragment { padding-left:14px; border-left:3px solid var(--rule) }
 .ch-partial { margin:12px 0 0; color:var(--faint); font-size:13.5px }
@@ -680,7 +760,4 @@ export const STIL_CHINONIC = `
             color:var(--soft); font-size:13px }
 .ch-sursa > span { font-weight:600; color:var(--ink) }
 .ch-drum { color:var(--rosu) }
-@media (max-width:560px) {
-  .ch-titlu { font-size:17px }
-}
 `

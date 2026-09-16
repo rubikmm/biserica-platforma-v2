@@ -7,19 +7,12 @@
  */
 
 /*
- * ⚠️ Se decodeaza de DOUA ori: 45 de fragmente vechi au entitati codate de doua ori la trimitere
- * (`&amp;atilde;`, `&amp;shy;`), iar o singura trecere lasa „&atilde;" in textul curat (16.09.2026).
- * `atilde` (ã) e felul in care site-urile vechi scriau ă; `shy` e cratima moale, nevazuta.
+ * Decodarea entităților stă acum în `formatare.mjs`, lângă restul curățării textului — era scrisă de
+ * două ori, aici și la aducerea textului întreg. Se dă mai departe, fiindcă `titluri-din-sursa.mjs` o
+ * cere de aici.
  */
-const ENT = {
-  acirc: 'â', Acirc: 'Â', icirc: 'î', Icirc: 'Î', abreve: 'ă', Abreve: 'Ă', atilde: 'ă', Atilde: 'Ă',
-  scedil: 'ș', Scedil: 'Ș', tcedil: 'ț', Tcedil: 'Ț', amp: '&', nbsp: ' ', shy: '', quot: '"',
-  apos: "'", lt: '<', gt: '>', rsquo: '’', lsquo: '‘', ldquo: '„', rdquo: '”', ndash: '–', mdash: '—',
-  hellip: '…', bdquo: '„', bull: '•', middot: '·', laquo: '«', raquo: '»', deg: '°',
-}
-const entOData = (s) => s.replace(/&([a-zA-Z]+);/g, (m, n) => ENT[n] ?? m)
-  .replace(/&#(\d+);/g, (m, n) => String.fromCodePoint(+n))
-export const ent = (s) => entOData(entOData(s))
+export { ent } from './formatare.mjs'
+import { ent } from './formatare.mjs'
 
 /**
  * Semnele cu care un rand SE CONTINUA in randul urmator — dupa ele nu poate incepe autorul.

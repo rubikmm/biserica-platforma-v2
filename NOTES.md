@@ -647,24 +647,41 @@ propunerea automată, ca în V1.
     - de întrebat dacă răsfoitul se cuvine și la **Tipic** (cele trei cărți scanate, până la 67 MB).
       Acolo ar conta `Range` și numărul de pagini — altă socoteală decât o foaie de 4 pagini.
 
-15. **Textele citite la chinonic, ce a rămas** (16.09.2026, după runda de îndreptare — subiectul
-    titlurilor l-a închis userul la 12:28):
+15. **Textele citite la chinonic, ce a rămas** (16.09.2026, după REPARSAREA ÎNTREGII ARHIVE, seara —
+    Website **0.7.0**, publicat):
+    - ⚠️⚠️ **CIFRELE DE ACUM** (după reparsare, măsurate pe `/stare`): la chinonic **252 bune din 317**
+      (erau 186), fără textul întreg 46, fără autor 21, adresă moartă 8, **fără titlu 0**, **fără
+      bucata din buletin 0**, fără sursă 0, numai cu mențiune (fără legătură) 10. La textele din
+      buletinul parohiei: **61 bune din 131**, 68 fără textul întreg (PDF-uri scanate). Aducerea:
+      334 cu text întreg (erau 295), **14 nesigure (erau 52)**, 74 fără text, 16 erori.
+    - ⚠️⚠️ **CAUZA CELOR TREI DEFECTE DE CLASĂ ERA UNA: celulele `mailpoet_blockquote` nu se citeau.**
+      Când redactorul a pus textul citit ca CITAT, corpul articolului stătea într-un tabel încuibat:
+      celula de afară se taie la primul `</td>` (al dungii citatului), deci ieșea goală, iar cea de
+      dinăuntru n-avea clasa cerută de `blocuri()`. Urmarea: articolul rămânea cu titlul și numele
+      autorului drept tot corpul lui — de unde „fără autor cu numele drept text", bucățile sub 40 de
+      semne și textele bune ținute „nesigure". **Articole cu corp sub 200 de semne: 85 → 3.** Userul
+      avea dreptate: „vizual se vede mereu, 10-12 rânduri de text după autor".
+    - ⚠️ Ce a mai ieșit la reparsare: `sursa_text` care e doar numele gazdei **nu se mai scrie**
+      (`eNumeleGazdei` — se compară numai literele, deci și „Cuvântul Ortodox" față de
+      `cuvantul-ortodox.ro`); mențiuni scrise de om rămase: 156 din 448, în loc de 290 de nume de gazdă.
+    - **De lucrat mai departe** (munca omului, nu a uneltei): cele **21 fără autor** și **46 fără
+      textul întreg** de la chinonic; la fiecare, pricina e scrisă pe rând în `/stare`.
+    - ⚠️ **CE N-A IEȘIT CURAT: coada a vreo 40 de fișe.** Măsurat pe cele 348 cu text întreg: 230 se
+      sfârșesc curat, 20 cu mențiunea sursei (așa trebuie), **98 nici una nici alta** — din care cele
+      mai multe sunt sfârșituri adevărate fără punct („…în veci. Amin", „Ed. Egumeniţa, 2008"), dar
+      vreo 40 au în coadă o rămășiță de site („Urmăriți-ne pe Facebook", un titlu de articol vecin) ori
+      se opresc la mijloc de frază. Sunt pagini-adunătură, unde hotarul de jos nu se poate ghici după
+      formă. **Nu se repară la nimereală**: se cere userului o fișă anume și se măsoară pe ea.
     - ⚠️ **LOCUL DE INVESTIGAT E PAGINA `/texte-citite-la-chinonic/stare`** (16.09.2026): categoriile
       cu probleme, fiecare rând cu pricina lui și cu numărul de buletin din care vine. Pentru lucru în
       terminal, aceleași liste se scot și cu `stari.mjs` (`--lista=<nesigur|fara-text|eroare|
       fara-link|link-mort|fara-autor|gata>`, Markdown la ieșire; fără argumente, socoteala).
-    - **445/448 cu titlu · 354/448 cu autor** (63 au primit „Sinaxar" la 16.09.2026, după regula din
-      `titlu-autor.mjs`). Cele **94 rămase fără autor** sunt cuvinte și predici unde buletinul n-a
-      scris niciun nume — nici în cap, nici în text: **de căutat la sursă**, e munca rămasă.
-    - **3 articole fără titlu** (nr. 198, 250, 556: buletinul n-a scris niciunul, iar textul începe
-      de-a dreptul) și **2 fără titlu găsibil la sursă** (`sfantul-simeon-noul-teolog`,
-      `sfantul-ioan-gura-de-aur-nr523` — paginile nu mai dau nimic). Cinci rânduri, de scris de mână
-      în `indreptari.json` dacă userul vrea.
-    - **295 cu text întreg · 52 nesigure · 75 fără text · 16 erori · 10 fără link.** Cele 33 de
-      PDF-uri „nesigure" sunt fișierele NOASTRE; unele țin mai multe predici într-un fișier, deci
-      fără potrivirea fragmentului nu se știe unde se taie. **De hotărât**: se acceptă PDF-ul întreg
-      acolo unde e o singură predică? Cele 52 de pagini nesigure arată, la verificare pe eșantion,
-      ALT text decât cel citit — corect lăsate ca fragment.
+    - **448/448 cu titlu · 420/448 cu autor** (61 au „Sinaxar", după regula din `titlu-autor.mjs`).
+      Cele **28 rămase fără autor** sunt cuvinte și predici unde buletinul n-a scris niciun nume —
+      nici în cap, nici în text: **de căutat la sursă**, e munca rămasă.
+    - **Cele trei fără titlu s-au închis** (nr. 198, 250, 556: buletinul n-a scris niciunul, iar textul
+      începe de-a dreptul). Titlurile sunt luate de la sursă, din adresa paginii, și stau în
+      `indreptari.json` sub „__3". ⚠️ Slugul lor rămâne cel înghețat (`text-198-2`): el e adresa fișei.
     - cele **75 „fără text"** sunt în cea mai mare parte **PDF-uri scanate** (fotografii ale unei foi,
       fără strat de text): de acolo nu se poate scoate nimic fără OCR adevărat.
     - ⚠️ **HOTĂRÂREA DESPRE LINK S-A SCHIMBAT la 16.09.2026** și înlocuiește regula veche („când
@@ -673,10 +690,12 @@ propunerea automată, ca în V1.
       numele, nelegat, „ca să știu că nu mai era valabil linkul". Starea se ține în bază
       (`link_stare`) și se aduce la zi cu `verifica-linkurile.mjs` (`--reia`, `--picate`, `--doar=`).
       **De reluat din când în când**: adresele mor în tăcere, iar pagina arată ce s-a măsurat ultima dată.
-    - **Rămâne de hotărât** (întrebări puse userului, fără răspuns încă): (a) cele **33 de fișe cu
-      bucată prea scurtă** (sub 40 de semne) au textul adus în bază, dar stau „nesigur" fiindcă n-a
-      existat cu ce fi verificat — îl arătăm? Se văd toate la `/stare?ce=fisa-goala`. (b) se acceptă
-      întregi cele 33 de PDF-uri „nesigure" ale parohiei, acolo unde e o singură predică?
+    - ⚠️ **HOTĂRÂRILE USERULUI DE DINAINTEA REPARSĂRII** (16.09.2026, seara, întrebat pe cele trei):
+      (a) rândul „din: Editura…" de la capătul articolului **se PĂSTREAZĂ** — e cinstirea sursei;
+      (b) subtitlurile dinăuntrul articolului devin **paragraf îngroșat**, nu titlu (`<p class="ch-sub">`);
+      (c) textul se rescrie **la toate**, nu doar la cele stricate. Iar întrebarea despre cele 33 de
+      fișe cu bucată prea scurtă a căzut de la sine: erau tocmai defectul de citire de mai sus, iar
+      acum categoria e goală.
     - ⚠️ **AMÂNDOUĂ PAGINILE SE FILTREAZĂ** (16.09.2026, Website 0.6.3, cerut anume: „totul ascuns în
       afară de ce e selectat, la intrare prima opțiune selectată"). Lista mare: **bara anilor**
       (`?an=`), prima opțiune = anul cel mai nou, **fără „toate"** — asta era tocmai lista grea; 2026
@@ -716,12 +735,17 @@ propunerea automată, ca în V1.
       dar pagina/PDF-ul n-a dat text (scanări), 4 au adresa moartă. Ele nu se pot „muta la valide" —
       n-au ce arăta. **Deschis**: le căutăm textul într-un sinaxar oarecare, după numele sfântului?
       Hotărârea userului tocmai a deschis drumul (sursa nu mai contează), dar e muncă de pornit anume.
-    - **CÂT E BUN, CIFRELE ZILEI** (16.09.2026, D1 `xc-home-production`): **248 din 448 sunt complete**
-      — titlu + autor + textul întreg preluat. Restul: 448 cu sursă scrisă (niciunul fără), 445 cu
-      titlu, 354 cu autor (64 „Sinaxar", din care 38 gata), 298 cu text întreg. **Toate 448 își știu
-      numărul de buletin** după reparația asocierilor. Categoriile de pe `/stare` după runda vieților
-      de sfinți: fără text 150 · fără autor 94 · fără sursă 0 · adresă moartă 12 · fără titlu 3 ·
-      bucată prea scurtă 36 · fără număr 0.
+    - ⚠️⚠️ **CELE TREI PAGINI, FORMA CERUTĂ SEARA** (user, 16.09.2026, Website 0.7.0): pe **ușa
+      Website-ului** stau **DOUĂ categorii** (chinonic și buletin), zece rânduri fiecare, **doar titlul
+      și autorul**, plus „Vezi toate" — fișa bogată de dinainte (bucată de text, „Citește tot", sursa)
+      a IEȘIT de pe ușă, cu tot cu scriptul desfășurării și cu ruta `?bucata=text`; **lista întreagă**
+      arată **numai cele bune**, filtrate pe ani, și spune câte au rămas de lămurit; **pagina de
+      probleme** (`/stare`) ține restul, pe feluri de lipsă, o categorie o dată.
+      ⚠️ **Fiecare grămadă are pagina ei de probleme**: `/texte-citite-la-chinonic/stare` ȘI
+      `/texte-din-buletin/stare` — altfel, de când lista arată numai ce e bun, grămada de lucru a
+      userului ar fi devenit invizibilă.
+      ⚠️ **Un singur `eBun` ține toate trei paginile.** Dacă se lărgește judecata, se lărgește și ce
+      urcă pe fața parohiei — de aceea nu se atinge fără măsurătoare.
 
 ## Aplicațiile de pe staging
 
@@ -3280,3 +3304,51 @@ forța antetul `Host`**.
   jos) din antet, lângă întrerupătorul Calendar. Ca să n-ajungem la tiparul V1 cu cod copiat între
   aplicații, PDF-ul/JPG-ul/PNG-ul și cache-ul lor au urcat în `@xc/ui` (`packages/ui/src/hartie.ts`),
   iar calendarul a căpătat binding-ul `BROWSER` (dev + staging).
+
+- **REPARSAREA ÎNTREGII ARHIVE DE CHINONIC + cele trei pagini, forma cerută de user** (seara, Website
+  **0.7.0**, publicat). Userul a hotărât cele trei întrebări deschise („păstrează" / „paragraf bold" /
+  „da"), a cerut „să faci curățenie și apoi să publici" și a spus cum arată datele adevărate — de acolo
+  a ieșit tot restul.
+  - ⚠️⚠️ **O SINGURĂ CAUZĂ pentru cele trei defecte de clasă: celulele `mailpoet_blockquote` nu se
+    citeau deloc.** Textul pus ca CITAT în buletin stă într-un tabel încuibat — celula de afară se taie
+    la primul `</td>`, care e al dungii citatului, deci iese goală; cea de dinăuntru n-avea clasa cerută
+    de `blocuri()`. Așa au ieșit „33 de fișe fără autor, cu numele drept corp", bucățile sub 40 de semne
+    și textele bune ținute „nesigure": corpul articolului pur și simplu nu ajungea la noi. Userul a
+    spus-o exact: „toate au text scurt — chiar dacă structural nu pare că e, vizual se vede mereu,
+    10-12 rânduri de text după autor". **Articole cu corp sub 200 de semne: 85 → 3.**
+  - **FORMATARE MINIMĂ, scrisă o dată: `import/chinonic/formatare.mjs`** — patru marcaje și nimic mai
+    mult (îngroșat, înclinat, liste, citate), folosită ȘI la fragmentul din buletin, ȘI la textul adus
+    de la sursă. Subtitlurile devin **paragraf îngroșat** (hotărârea userului), nu `<h2>`: un titlu
+    străin n-are ce căuta în ierarhia paginii noastre. ⚠️ **Drumul de siguranță**: marcajele care au
+    voie se prefac în semne de control, restul etichetelor se taie, textul se escapează ÎNTREG, și abia
+    la urmă semnele devin iar etichete — ale noastre. Un `<strong>` neînchis se aruncă întreg (altfel ar
+    îngroșa pagina de la locul lui în jos), iar `<script>`/`<style>` se scot cu tot cu trupul lor.
+    Probe: `tests/chinonic-formatare.test.ts` (23).
+  - ⚠️⚠️ **PRAGUL DE 60 DE SEMNE A CĂZUT** — el arunca replicile, versurile, subtitlurile și rândurile
+    de listă. Apărarea împotriva meniurilor s-a mutat de la LUNGIME la LOC și la NUME: murdăria stă la
+    margini, nu în mijloc. Patru lucruri învățate pe drum, toate măsurate:
+    **(1)** hotarele de sfârșit se deschid după primul rând de **PROZĂ**, nu după primul rând strâns —
+    altfel un „Distribuie" de deasupra articolului reteza totul (`examenul-credintei`: 49 de semne în
+    loc de 10.000); **(2)** **fruntea de metadate a uneltei de conversie se taie**: `description:` e
+    chiar începutul articolului, deci potrivirea cădea acolo și „începutul" nimerea în capul paginii;
+    **(3)** **trei subtitluri unul sub altul sunt un RAFT, nu o structură** — bara laterală a acvila30
+    scria treizeci de titluri de cărți în coada fișei; **(4)** un rând care e **numai o legătură** e
+    navigare, oricât ar arăta ca text.
+    ⚠️ **Ce s-a încercat și s-a scos**: tăierea de la capăt a oricărui rând scurt fără punct. Mânca
+    tocmai sfârșitul dialogurilor („— Ce faci, băiete? îl întreabă curios") — adică exact ce se cerea
+    păstrat. Ce e murdărie se taie **pe nume**, nu după formă.
+  - **Cifre**: 252 bune din 317 la chinonic (erau 186, ținta pusă dimineață era „peste 240"), 61 din
+    131 la buletin; 334 cu text întreg (295), **14 nesigure (52)**; 448/448 cu titlu, 420 cu autor.
+    Fișa arătată de user ca „inutilizabilă" (`examenul-credintei`) are acum titlu, autor, 10.050 de
+    semne de text și o singură linie de sursă, cu legătura vie.
+  - **Ordinea rulării, cu plasă**: copie a tabelei pe NAS
+    (`_arhiva-cloudflare/2026-09-16/d1/…-inainte-de-reparsare.sql`) → `extrage.mjs` fără scriere,
+    măsurat → `--scrie` → `in-baza.mjs --chiar` → `adu-textul.mjs --refa --martori=25` (probă fără
+    scriere, nouă: aduce și arată, nu scrie) → `--refa --chiar` peste toate 438 → `asocieri.mjs --chiar`.
+  - **Ce a mai ieșit**: `sursa_text` care e doar numele gazdei nu se mai scrie (rândul „Sursa" se scria
+    de două ori la 290 din 317); entitățile se decodează acum complet (greacă, latine cu semne, iar
+    `&not;` se aruncă — în arhiva asta ține locul cratimei de despărțire); cele 3 fișe fără titlu s-au
+    închis din `indreptari.json`, cu titlurile luate de la sursă.
+  - ⚠️ **Ce NU e curat**: coada a vreo 40 de fișe din 348 — rămășițe de site ori o frază tăiată la
+    mijloc, pe pagini-adunătură unde hotarul de jos nu se ghicește după formă. Se repară pe fișă anume,
+    la arătarea userului, nu la nimereală.

@@ -30,7 +30,9 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs'
 // regulile de titlu/autor stau singure, ca sa poata fi probate — vezi tests/chinonic-titlu-autor
-import { autorulDinCap, autorulScris, desparte, ent } from './titlu-autor.mjs'
+import { autorulDinCap, autorulScris, desparte } from './titlu-autor.mjs'
+// formatarea minima (bold, italic, liste, citate) e scrisa o data, pentru fragment si pentru textul adus
+import { blocuriDinHtml, ent, faraSentinele, imbraca, textulGol } from './formatare.mjs'
 
 const SCRIE = process.argv.includes('--scrie')
 const VEZI = Number(process.argv.find((a) => a.startsWith('--vezi='))?.slice(7)) || 0
@@ -62,13 +64,25 @@ const platit = (h) => ent(h.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim(
  * Blocurile unui numar, in ordinea din pagina: fiecare celula de text sau de poza a MailPoet.
  * ⚠️ Se iau si `mailpoet_paragraph`, nu doar `mailpoet_text`: articolele vechi isi tin paragrafele
  * in celule de felul al doilea, iar fara ele textul ar fi iesit ciuntit.
+ *
+ * ⚠️⚠️ SI `mailpoet_blockquote` — DE AICI SE PIERDEA CORPUL ARTICOLULUI (masurat 16.09.2026, pe fisa
+ * `examenul-credintei`, aratata de user ca „inutilizabila"). Cand redactorul a pus textul citit ca
+ * CITAT, el sta intr-un tabel incuibat: celula de afara (`mailpoet_text`) se taie la primul `</td>`,
+ * care e al dungii de 2px a citatului, deci iese GOALA si se sare; iar celula de dinauntru n-avea
+ * clasa ceruta aici, deci nu era citita de nimeni. Rezultatul: articolul ramanea cu titlul si numele
+ * autorului drept tot corpul lui — de unde si cele 33 de fise „fara autor, cu numele drept text" si
+ * bucatile de sub 40 de semne, care nu mai aveau cu ce dovedi textul adus de la sursa.
+ * User, 16.09.2026: „Toate au text scurt — chiar dacă structural nu pare că e, vizual se vede mereu,
+ * 10-12 rânduri de text după autor." Chiar asa era: textul era in pagina, dar nu in citirea noastra.
  */
 function blocuri(h) {
-  const re = /<td class="(mailpoet_text|mailpoet_image|mailpoet_paragraph)[^"]*"[^>]*>([\s\S]*?)<\/td>/g
+  const re = /<td class="(mailpoet_text|mailpoet_image|mailpoet_paragraph|mailpoet_blockquote)[^"]*"[^>]*>([\s\S]*?)<\/td>/g
   const out = []
   let m
   while ((m = re.exec(h))) {
     const fel = m[1] === 'mailpoet_image' ? 'poza' : 'text'
+    // ⚠️ citatul se ține minte ca citat: la scrierea textului el se îmbracă în <blockquote>, nu în <p>
+    const citat = m[1] === 'mailpoet_blockquote'
     const brut = m[2]
     const text = platit(brut)
     const poze = [...brut.matchAll(/<img[^>]*src="([^"]+)"/g)].map((x) => x[1])
@@ -78,7 +92,7 @@ function blocuri(h) {
     const linkuri = [...brut.matchAll(/href="((?:https?:\/\/|\/)[^"#][^"]*)"/g)].map((x) => x[1])
     if (fel === 'poza' && !poze.length) continue
     if (fel === 'text' && !text) continue
-    out.push({ fel, brut, text, poze, linkuri })
+    out.push({ fel, citat, brut, text, poze, linkuri })
   }
   return out
 }
@@ -155,42 +169,37 @@ function titluDin(brut) {
   return { titlu, autor, rest }
 }
 
-/**
- * PARAGRAFE DE TEXT CURAT din HTML-ul de email (user, 16.09.2026: „nu se afișează bine ca și cum
- * copiezi HTML-ul… să ai texte brute pe care le poți afișa atât pe tema dark, cât și pe tema light").
+/*
+ * TEXTUL CURAT din HTML-ul de email (user, 16.09.2026: „nu se afișează bine ca și cum copiezi
+ * HTML-ul… să ai texte brute pe care le poți afișa atât pe tema dark, cât și pe tema light").
  * MailPoet scrie culori, fonturi si tabele inline — pe tema intunecata scrisul negru pe fond negru
- * nu se vede. Aici se pastreaza doar CE SCRIE, in paragrafe: se taie la marginile blocurilor, se
- * decodeaza entitatile, se scot etichetele. Ce iese e text, imbracat de noi in <p>, deci arata bine
- * pe orice tema si nu poate strica pagina.
+ * nu se vede. Regula e in `formatare.mjs`, scrisa o data si pentru textul adus de la sursa: se
+ * pastreaza CE SCRIE plus patru marcaje (ingrosat, inclinat, liste, citate), restul se taie.
  */
-function paragrafeCurate(html) {
-  return ent(html)
-    .replace(/<br\s*\/?>|<\/(p|div|td|li|tr|h[1-6]|blockquote)>/gi, '\n')
-    .replace(/<[^>]+>/g, ' ')            // pozele pleaca odata cu etichetele (user: „imaginile șterge-le")
-    .split('\n')
-    .map((x) => normalizeaza(x))
-    .filter((x) => x.length > 1)
-}
-/**
- * ⚠️ NORMALIZAREA TEXTULUI (user, 16.09.2026: „referințele păstrează-le, dar imaginile șterge-le și
- * adresele și tot"). Referintele — „(Psalmul 18)", numele unei carti — sunt cuvinte si raman.
- * Adresele („http://…", „www.…") nu sunt text de citit si ies; la fel resturile de markdown.
- */
-export function normalizeaza(x) {
-  return x
-    .replace(/https?:\/\/[^\s)\]»"]+/gi, '')
-    .replace(/\bwww\.[^\s)\]»"]+/gi, '')
-    .replace(/\(\s*\)|\[\s*\]/g, '')      // parantezele ramase goale dupa scoaterea adresei
-    .replace(/\s+([,.;:!?])/g, '$1')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-const escapa = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
-const inParagrafe = (bucati) => bucati.map((p) => `<p>${escapa(p)}</p>`).join('\n')
 
 /** Gazda unui link, fara „www." — pentru fisa articolului si pentru socoteala. */
 function gazda(u) {
   try { return new URL(u).hostname.replace(/^www\./, '') } catch { return null }
+}
+
+/** Doar literele si cifrele, fara diacritice: forma in care se pot compara doua scrieri ale aceluiasi nume. */
+const doarLitere = (s) => ent(s ?? '').toLowerCase()
+  .normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '')
+
+/**
+ * ⚠️⚠️ MENTIUNEA CARE E DOAR NUMELE SITE-ULUI NU E O MENTIUNE (masurat 16.09.2026: la 290 din 317
+ * `sursa_text` era chiar gazda, deci randul „Sursa" din fisa se scria de doua ori —
+ * „oasteadomnului.ro · oasteadomnului.ro ↗"). Se pastreaza numai ce ADAUGA ceva peste legatura:
+ * numele cartii, editura, „fisier PDF". Numele gazdei il scrie oricum legatura.
+ *
+ * Se recunoaste si scrisa frumos („Cuvântul Ortodox" fata de `cuvantul-ortodox.ro`): se compara numai
+ * literele si cifrele, cu si fara terminatia adresei.
+ */
+function eNumeleGazdei(mentiune, url) {
+  const g = gazda(url)
+  const m = doarLitere(mentiune)
+  if (!g || !m) return false
+  return m === doarLitere(g) || m === doarLitere(g.replace(/\.[a-z.]+$/i, ''))
 }
 /**
  * Legaturile de sarit: unelte de lista si retele, niciodata sursa unui text citit la strana.
@@ -242,11 +251,18 @@ function articoleleDin(h, fisa) {
       ? [...(platit(rest) ? [{ brut: rest, text: platit(rest) }] : []), ...texte.slice(1)]
       : texte
     const corpHtml = corpBlocuri.map((b) => b.brut.trim()).join('\n')
-    const corpText = corpBlocuri.map((b) => b.text).join('\n\n')
-    // fragmentul asa cum se ARATA: paragrafe de text curat, fara stilurile de email (vezi mai sus)
-    const paragrafe = corpBlocuri.flatMap((b) => paragrafeCurate(b.brut))
-    const { autor, paragrafe: corpParagrafe } = autorulDinCap(autorDinTitlu, paragrafe)
-    const corpCurat = inParagrafe(corpParagrafe)
+    // fragmentul asa cum se ARATA: blocuri de text curat, cu formatare minima (vezi `formatare.mjs`)
+    const blocuri = corpBlocuri.flatMap((b) => blocuriDinHtml(b.brut, b.citat === true))
+    /*
+     * ⚠️ AUTORUL SE CAUTA IN TEXTUL GOL, nu in blocuri: regulile lui (`titlu-autor.mjs`) sunt despre
+     * cuvinte, nu despre formatare, si stau sub probe cu siruri simple. Cate rânduri a luat se vede
+     * din cat s-a scurtat sirul — asa blocurile se taie la fel, cu tot cu marcajele lor.
+     */
+    const plate = blocuri.map((b) => faraSentinele(b.text))
+    const { autor, paragrafe: ramase } = autorulDinCap(autorDinTitlu, plate)
+    const corpFinal = blocuri.slice(plate.length - ramase.length)
+    const corpCurat = imbraca(corpFinal)
+    const corpText = textulGol(corpFinal)
     /*
      * ⚠️ ZONA SURSEI TINE DOUA LUCRURI, SI TREBUIE SA COEXISTE (user, 16.09.2026: „sursa poate să fie
      * mențiunea dintr-o carte, dar de obicei este completată și de un link"):
@@ -260,6 +276,7 @@ function articoleleDin(h, fisa) {
     const dinText = parti.filter((b) => b.fel === 'text').flatMap((b) => b.linkuri).filter((u) => !deSarit(u))
     const linkuri = [...new Set([...dinSursa, ...dinPoze, ...dinText].map(intreaga))]
     const sursaUrl = linkuri[0] ?? ''
+    const mentiune = ent(sursaBloc.text).replace(/^\s*surs[ăa]\s*:?\s*/i, '').trim()
     out.push({
       // de unde vine
       newsletterId: fisa.id,
@@ -276,7 +293,8 @@ function articoleleDin(h, fisa) {
       corpText,
       corpCurat,
       poze,
-      sursaText: ent(sursaBloc.text).replace(/^\s*surs[ăa]\s*:?\s*/i, '').trim(),
+      // ⚠️ mentiunea care e doar numele gazdei nu se scrie: ar ieși de doua ori (vezi `eNumeleGazdei`)
+      sursaText: eNumeleGazdei(mentiune, sursaUrl) ? '' : mentiune,
       sursaUrl,
       sursaFel: !sursaUrl ? 'fara' : ePdf(sursaUrl) ? 'pdf' : 'pagina',
       linkuri,
@@ -307,12 +325,15 @@ if (VEZI) {
   for (const a of art) {
     console.log('─'.repeat(70))
     console.log('titlu :', a.titlu || '(fără)')
+    console.log('autor :', a.autor || '(fără)')
     console.log('slug  :', a.slug)
-    console.log('sursa :', a.sursa || '(fără)')
+    console.log('sursa :', `${a.sursaText || '(fără mențiune)'} [${a.sursaFel}]`)
     console.log('poze  :', a.poze.map((u) => u.split('/').pop()).join(', ') || '(fără)')
     console.log('linkuri:', a.linkuri.join(', ') || '(fără)')
-    console.log('corp  :', a.corpText.slice(0, 300).replace(/\n+/g, ' ⏎ '), a.corpText.length > 300 ? '…' : '')
-    console.log('       ', a.corpText.length, 'semne')
+    // ⚠️ se arata FRAGMENTUL asa cum ajunge in baza (cu formatarea minima), nu textul plat: aici se
+    // vede daca s-au pastrat ingrosarile, listele si citatele
+    console.log('fragment:\n' + a.corpCurat.slice(0, 900) + (a.corpCurat.length > 900 ? '\n…' : ''))
+    console.log('       ', a.corpText.length, 'semne de text')
   }
   process.exit(0)
 }
@@ -424,6 +445,11 @@ for (const a of toate) for (const g of a.gazde) gazde[g] = (gazde[g] ?? 0) + 1
 console.log(`numere citite: ${citite} / ${lista.length}`)
 console.log(`ARTICOLE: ${toate.length}, din ${numere.size} numere`)
 console.log(`  cu titlu: ${cuTitlu} · cu poză: ${cuPoza}`)
+// ⚠️ autorul si mentiunea sunt cele doua lucruri care se strica in tacere la o schimbare de reguli —
+// de aceea se numara la fiecare rulare, nu doar cand cineva se uita anume
+console.log(`  cu autor: ${toate.filter((a) => a.autor).length} (din care „Sinaxar": ${
+  toate.filter((a) => a.autor === 'Sinaxar').length}) · fără autor: ${toate.filter((a) => !a.autor).length}`)
+console.log(`  cu mențiune de sursă scrisă de om: ${toate.filter((a) => a.sursaText).length}`)
 console.log(`  SURSA: ${cuPdf} PDF · ${cuPagina} pagină web · ${faraLink} fără link (din care ${faraNimic} fără nimic)`)
 console.log(`  cu link, cu totul: ${cuLink}`)
 console.log(`  corp: median ${mediana} semne, cel mai scurt ${lungimi[0]}, cel mai lung ${lungimi[lungimi.length - 1]}`)

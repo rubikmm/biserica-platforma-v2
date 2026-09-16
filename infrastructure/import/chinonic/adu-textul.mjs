@@ -22,6 +22,12 @@
  *
  * Cere tokenul: `set -a; . /backup/_setup/cloudflare.env; set +a`.
  */
+/*
+ * ⚠️ FORMATAREA E SCRISĂ O SINGURĂ DATĂ, în `formatare.mjs` — aceeași și pentru fragmentul scos din
+ * buletin, și pentru textul adus de aici. Altfel fișa ar arăta în două feluri, după noroc.
+ */
+import { blocDinMarkdown, ent, faraSentinele, imbraca, inlineDinMarkdown, textulGol } from './formatare.mjs'
+
 const CHIAR = process.argv.includes('--chiar')
 const RELUA = process.argv.includes('--reia')
 const LIMITA = Number(process.argv.find((a) => a.startsWith('--limita='))?.slice(9)) || 0
@@ -89,6 +95,41 @@ const GUNOI = [
    * randuri deasupra textului si coborau 24 sub el.
    */
   /^\s*[*+-]\s*[*_\\]*\s*\[/,
+  /*
+   * ⚠️ UN TITLU CARE E DOAR O LEGĂTURĂ e titlul ALTUI articol, nu al unei bucăți din acesta. Așa își
+   * scriu site-urile „articolele recomandate" de sub text: `#### [Titlu](adresa)`. Nu se poate
+   * deosebi după lungime — sunt titluri adevărate, doar că ale altor texte.
+   */
+  /^\s*#{1,6}\s*[*_\\]*\s*\[/,
+  /*
+   * ⚠️ UN RÂND CARE E NUMAI O LEGĂTURĂ e navigare, niciodată proză: `[Oastea Domnului](…/category/…)`,
+   * `[imunify-bot-check](…)`. Se recunoaște după STRUCTURĂ, nu după cuvinte — de aceea prinde și ce
+   * n-am văzut încă. Un rând de text care se întâmplă să aibă o legătură în el nu intră aici: aceasta
+   * trebuie să fie singură pe rând, de la un cap la altul.
+   */
+  /^\s*[*_\\]*\s*\[[^\]]*\]\([^)]*\)\s*[*_\\]*\s*$/,
+]
+
+/**
+ * ⚠️ MURDĂRIA CARE SE VEDE ABIA DUPĂ CURĂȚARE. Rândurile de mai sus se recunosc în markdown-ul brut;
+ * astea se recunosc numai în textul curat, fiindcă în brut sunt îmbrăcate — „**Share**",
+ * „[imunify-bot-check](/imunify-bot-check)". Toate sunt rânduri SCURTE, care pe vremea pragului de 60
+ * de semne cădeau de la sine; de când rândurile scurte se păstrează (ca să nu se piardă replicile și
+ * versurile), trebuie numite pe nume.
+ */
+const LUNILE = 'ianuarie|februarie|martie|aprilie|mai|iunie|iulie|august|septembrie|octombrie|noiembrie|decembrie'
+const GUNOI_CURAT = [
+  new RegExp('^(share|distribuie|tip[aă]re[sș]te|print|imprim[aă]|e-?mail|facebook|twitter|whatsapp'
+    + '|telegram|pinterest|linkedin|instagram|abonare|abonea?z[aă]-te|reclam[aă]|publicitate'
+    + '|advertisement|meniu|acas[aă]|c[aă]utare|search|autentificare|meta|comentarii)$', 'i'),
+  /^\d{1,4}$/,                                     // un rând care e numai o cifră: numărătoare de pagini
+  new RegExp(`^\\d{1,2} (${LUNILE}) \\d{4}$`, 'i'), // data unui articol recomandat, scrisă singură
+  /*
+   * ⚠️ UN NUME TEHNIC SINGUR PE RÂND nu e text: „imunify-bot-check" (paza de roboți a gazdei) ajungea
+   * ultimul paragraf al fișei. Se recunoaște după formă — o singură bucată cu cratime, fără spații și
+   * fără diacritice —, deci „Doamne-ajută" ori „nord-est" nu intră aici.
+   */
+  /^[a-z0-9]+(?:-[a-z0-9]+){1,5}$/i,
 ]
 /** De aici in jos nu mai e articolul, ci subsolul site-ului. */
 /*
@@ -104,9 +145,29 @@ const OPRESTE = [
   /^\s*(las[aă] un (comentariu|r[aă]spuns)|adaug[aă] (un )?comentariu|comentarii\s*\(?\d*\)?\s*$)/i,
   /^\s*(articole? (din aceea[sș]i categorie|recomandate?|similare?)|v[aă] mai recomand[aă]m|te-ar putea interesa)/i,
   /^\s*copyright\b/i, /^\s*©/,
+  /^\s*(navigare|naviga[tț]ie|articol(ul)? (anterior|precedent|urm[aă]tor)|postare (anterioar[aă]|urm[aă]toare))\b/i,
   // capul listei de recomandari, oricum ar fi ingrosat: „**Legaturi:**", „Va mai recomandam:"
-  /^\s*[*_]{0,2}\s*(leg[aă]turi|v[aă] mai recomand[aă]m|cite[sș]te (si|și) |vezi (si|și)\b)/i,
+  // ⚠️ marcajele de îngroșare pot fi și trei („_**Legături:**_"), nu doar două — măsurat pe acvila30.ro
+  /^\s*[*_]{0,3}\s*(leg[aă]turi|v[aă] mai recomand[aă]m|cite[sș]te (si|și|despre)\b|vezi (si|și)\b)/i,
 ]
+/**
+ * ⚠️ SUBSOLUL SITE-ULUI, recunoscut ORIUNDE ÎN RÂND, nu doar la începutul lui (16.09.2026): platformele
+ * de blog își scriu subsolul pe un singur rând, lipit de altceva — „Arhiepiscopia Iașilor | ©
+ * doxologia.ro", „Creează un site ca acesta, cu WordPress.com". Anticul tipar ancorat la început nu le
+ * prindea, și intrau în text ca ultim paragraf al articolului.
+ *
+ * ⚠️ Se caută în textul CURAT, nu în rândul brut de markdown: acolo nu mai sunt adrese. Altfel, la cele
+ * opt articole găzduite chiar pe `…wordpress.com`, orice legătură dinăuntrul articolului ar fi tăiat
+ * textul la mijloc.
+ */
+const OPRESTE_ORIUNDE = [
+  /cre[ea]z[ăa] (un )?(site|blog)\b/i,
+  /\bwordpress\.com\b/i,
+  /toate drepturile rezervate/i,
+  /\bpowered by\b/i,
+  /©\s*\d{4}|\|\s*©/,
+]
+
 /**
  * ⚠️ RANDUL DE SFARSIT: mentiunea sursei, cu care se incheie chiar textul (user, 16.09.2026: „Aici
  * trebuia să se oprească: din: Preot Varnava Iankos, Biserica pacatosilor, Editura Egumenita, 2016.
@@ -128,8 +189,7 @@ const eListaDeEtichete = (t) => {
  * (amestec de litere, cifre si semne) si multe semne straine de scris. Sub prag, textul nu e text —
  * se scrie „fara-text", nu „gata", oricat de bine ar fi purtat numele fisierului titlul.
  */
-function eLizibil(par) {
-  const t = par.join(' ')
+function eLizibil(t) {
   if (t.length < 400) return false
   const bucati = t.split(/\s+/).filter(Boolean)
   // cuvinte: litere, ori numere (ani, versete, pagini) — cu semnele de punctuatie din jur
@@ -188,40 +248,16 @@ function deUndeIncepe(randuri, titlu) {
  * „s a nascut icirc n 1821" — litere lipite în mijlocul cuvintelor, deci nicio potrivire cu textul
  * de pe site. Din 9 încercări se potrivea UNA, și aceea din întâmplare.
  */
-/*
- * ⚠️ DUBLA CODARE (masurat 16.09.2026, 02:10): 45 de fragmente vechi au `&amp;atilde;`, `&amp;shy;` —
- * adica entitatea a fost codata de doua ori la trimitere. O singura trecere lasa „&atilde;" in
- * text, iar normalizarea o face „c amp atilde", deci nicio potrivire. Se decodeaza de DOUA ori.
- * `atilde` (ã) e felul in care site-urile vechi scriau ă; `shy` e cratima moale, care nu se vede.
- */
-const ENT = {
-  acirc: 'â', Acirc: 'Â', icirc: 'î', Icirc: 'Î', abreve: 'ă', Abreve: 'Ă', atilde: 'ă', Atilde: 'Ă',
-  scedil: 'ș', Scedil: 'Ș', tcedil: 'ț', Tcedil: 'Ț', amp: '&', nbsp: ' ', shy: '', quot: '"',
-  apos: "'", lt: '<', gt: '>', rsquo: '’', lsquo: '‘', ldquo: '„', rdquo: '”', ndash: '–', mdash: '—',
-  hellip: '…', bdquo: '„',
-}
-const faraOData = (s) => s.replace(/&([a-zA-Z]+);/g, (m, n) => ENT[n] ?? ' ')
-  .replace(/&#(\d+);/g, (m, n) => String.fromCodePoint(+n))
-const fara = (s) => faraOData(faraOData(s))
-/** Marcajele markdown scoase INAINTE de comparatie: intr-o legatura `[cuvant](adresa)` adresa intra
- *  in text si strica fereastra de 45 de semne. (56 din 130 de pagini „nesigure" aveau fragmentul in
- *  text, ascuns tocmai asa.) */
-const faraMarcaje = (l) => l.replace(/!\[[^\]]*\]\([^)]*\)/g, ' ').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
 /**
- * CURATAREA UNUI RAND — o singura functie, folosita si la ce se STOCHEAZA, si la ce se COMPARA.
- * ⚠️ user, 16.09.2026: „referințele păstrează-le, dar imaginile șterge-le și adresele și tot".
- * Etichetele HTML ramase in markdown (tomarkdown le lasa uneori) ies si ele: altfel „a href https…"
- * intra in text.
+ * CURATAREA UNUI RAND — o singura functie, folosita si la ce se STOCHEAZA, si la ce se COMPARA
+ * (`inlineDinMarkdown` din `formatare.mjs`: scoate legaturile, adresele si marcajele, pastrand
+ * scrisul si cele patru feluri de formatare). Aici se cere varianta GOALA, fara marcaje: ce se
+ * compara trebuie sa fie chiar ce se pastreaza, altfel fereastra de potrivire cade in gol.
+ * ⚠️ Lecția din 16.09.2026, 02:30: fereastra de 45 de semne se căuta în rândurile BRUTE de markdown,
+ * unde rămâneau etichete și adrese întregi, iar în textul stocat ele nu mai erau — 35 din 60 de
+ * pagini „nesigure" aveau fragmentul CHIAR în textul stocat.
  */
-const curataLinia = (linie) => faraMarcaje(linie)
-  .replace(/<[^>]+>/g, ' ')                       // etichete HTML ramase
-  .replace(/[*_`>#]+/g, ' ')
-  .replace(/https?:\/\/[^\s)\]»"]+/gi, '')        // adresele scrise in text
-  .replace(/\bwww\.[^\s)\]»"]+/gi, '')
-  .replace(/\(\s*\)|\[\s*\]/g, '')
-  .replace(/\s+([,.;:!?])/g, '$1')
-  .replace(/\s+/g, ' ')
-  .trim()
+const curat = (linie) => faraSentinele(inlineDinMarkdown(linie))
 
 /**
  * CRITERIUL DE REZERVA (16.09.2026, 02:30): cand fragmentul din buletin nu e de folos — la vreo 25 de
@@ -231,7 +267,7 @@ const curataLinia = (linie) => faraMarcaje(linie)
  * articolului. E o proba cinstita: adresa a fost pusa de site odata cu articolul, nu ghicita de noi.
  */
 function adresaPoartaTitlul(u, titlu) {
-  const cuvinte = [...new Set(plat(fara(titlu ?? '')).split(' ').filter((w) => w.length >= 4))]
+  const cuvinte = [...new Set(plat(ent(titlu ?? '')).split(' ').filter((w) => w.length >= 4))]
   if (cuvinte.length < 3) return false
   let cale = ''
   try { cale = plat(decodeURIComponent(new URL(u).pathname)) } catch { return false }
@@ -248,7 +284,9 @@ function adresaPoartaTitlul(u, titlu) {
  * de la capul paginii, cu tot meniul deasupra.
  */
 function semneleInceputului(fragment) {
-  const brut = fara(fragment ?? '').replace(/<[^>]+>/g, ' ')
+  // ⚠️ etichetele se taie ÎNTÂI, apoi se decodează: fragmentul din bază e HTML-ul NOSTRU, iar în el
+  // un „<" din text stă scris `&lt;` — decodat mai devreme, ar deveni etichetă și s-ar pierde
+  const brut = ent((fragment ?? '').replace(/<[^>]+>/g, ' '))
   const t = plat(brut)
   if (t.length < 40) return []
   const semne = [t.slice(0, 45)]
@@ -266,6 +304,15 @@ function paragrafe(md, titlu, semne) {
    * „xmpmm documentid uuid…"). Unealta il scrie ca `## Metadata` cu randuri `- cheie=valoare`.
    */
   md = md.replace(/^#{1,3}\s*Metadata\b[\s\S]*?(?=\n#{1,3}\s|\n\n(?![-\s])|$)/m, '')
+  /*
+   * ⚠️⚠️ FRUNTEA DE METADATE SE TAIE ÎNAINTE DE CĂUTARE (16.09.2026). Unealta de conversie scrie în
+   * capul markdown-ului un bloc între două rânduri de „---", cu `title:`, `description:` și `image:`,
+   * iar `description:` e CHIAR ÎNCEPUTUL articolului — adică tocmai semnul după care căutăm unde
+   * începe textul. Potrivirea cădea acolo, la rândul 2, deci „începutul" nimerea deasupra paginii, iar
+   * în text urcau sigla site-ului, firimiturile, titlul lui și rândul „de Editor · 1 februarie 2025".
+   * Cât timp rândurile scurte se aruncau după lungime nu se vedea; de când se păstrează, se vede.
+   */
+  md = md.replace(/^\s*---\r?\n[\s\S]*?\r?\n---[ \t]*\r?\n/, '')
   const toate = md.split(/\r?\n/).filter((l) => !/^\s*-\s*[\w:.]+=\S/.test(l))
   /*
    * ⚠️ CĂUTAREA SE FACE ÎN TEXTUL LIPIT, nu rând cu rând: în markdown un paragraf se poate rupe pe
@@ -278,7 +325,7 @@ function paragrafe(md, titlu, semne) {
    * si adrese intregi — iar in textul stocat ele nu mai sunt. Diagnosticul: 35 din 60 „nesigure"
    * aveau fragmentul CHIAR in textul stocat. Deci ce se cauta = ce se pastreaza.
    */
-  const platLinii = toate.map((l) => plat(fara(curataLinia(l))))
+  const platLinii = toate.map((l) => plat(curat(l)))
   const capete = []
   let lipit = ''
   for (let i = 0; i < platLinii.length; i++) {
@@ -297,32 +344,98 @@ function paragrafe(md, titlu, semne) {
   // găsit → chiar de acolo începe textul; negăsit → reperul slab, titlul
   const gasit = de >= 0
   const randuri = toate.slice(gasit ? de : deUndeIncepe(toate, titlu))
-  randuri.potrivit = gasit
   const bune = []
-  for (let linie of randuri) {
-    // ⚠️ hotarele de SFARSIT lucreaza numai dupa ce s-a strans macar un rand de text: unele site-uri
-    // scriu „Comentarii (0)" ori „Distribuie" DEASUPRA articolului, si taiau totul (0 semne)
-    if (bune.length && OPRESTE.some((re) => re.test(linie))) break
-    if (GUNOI.some((re) => re.test(linie))) continue
+  /*
+   * ⚠️⚠️ HOTARELE DE SFÂRȘIT SE DESCHID DUPĂ PRIMUL RÂND DE PROZĂ, nu după primul rând strâns
+   * (îndreptat 16.09.2026, odată cu păstrarea rândurilor scurte). Unele site-uri scriu „Distribuie"
+   * ori „Comentarii (0)" DEASUPRA articolului. Cât timp rândurile scurte se aruncau după lungime,
+   * până la textul adevărat nu se strângea nimic, deci hotarul nu se deschidea și butoanele de sus nu
+   * tăiau nimic. De când rândurile scurte se păstrează, un singur cuvânt de meniu deschidea hotarul,
+   * iar „Distribuie" de sub el reteza articolul înainte să înceapă: fișa `examenul-credintei` a ieșit
+   * cu 49 de semne în loc de 10.000. Semnul că articolul a început rămâne PROZA, nu orice rând.
+   */
+  let proza = false
+  for (const linie of randuri) {
+    const gol = curat(linie)
+    if (proza && (OPRESTE.some((re) => re.test(linie)) || OPRESTE_ORIUNDE.some((re) => re.test(gol)))) break
+    if (GUNOI.some((re) => re.test(linie)) || GUNOI_CURAT.some((re) => re.test(gol))) continue
     // o lista de etichete e semnul ca articolul s-a terminat: de aici in jos e podoaba site-ului
-    if (bune.length && eListaDeEtichete(fara(curataLinia(linie)))) break
-    // scoate marcajele markdown, pastrand scrisul
-    let t = fara(curataLinia(linie))
-    // ⚠️ mentiunea sursei se cauta INAINTE de pragul de lungime: „(din: Doxologia)" are 16 semne, iar
-    // sub pragul de proza ar fi fost sarita — si atunci recomandarile de sub ea ar fi intrat in text
-    if (bune.length && ULTIMUL.test(t)) { bune.push(t); break }
-    if (t.length < 60) continue
+    if (proza && eListaDeEtichete(gol)) break
+    // ⚠️ mentiunea sursei se cauta INAINTE de orice prag de lungime: „(din: Doxologia)" are 16 semne,
+    // iar sub pragul de proza ar fi fost sarita — si atunci recomandarile de sub ea ar fi intrat in text
+    if (proza && ULTIMUL.test(gol)) {
+      // ⚠️ se PĂSTREAZĂ (hotărârea userului, 16.09.2026, întrebat anume: „păstrează") — e cinstirea
+      // sursei, scrisă de cel care a publicat textul. Abia sub ea încep recomandările site-ului.
+      bune.push({ fel: 'p', text: gol, sursa: true })
+      break
+    }
     // un rand care era aproape numai legaturi nu e proza
     const capLegaturi = (linie.match(/\]\(/g) ?? []).length
-    if (capLegaturi >= 3 && t.length < 200) continue
-    bune.push(t)
+    if (capLegaturi >= 3 && gol.length < 200) continue
+    const b = blocDinMarkdown(linie)
+    if (!b) continue
+    bune.push(b)
+    if (gol.length >= PROZA) proza = true
   }
-  bune.potrivit = randuri.potrivit === true
-  return bune
+  const alese = coadaCurata(capulCurat(bune, gasit))
+  alese.potrivit = gasit
+  return alese
 }
 
-const escapa = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
-const inHtml = (par) => par.map((p) => `<p>${escapa(p)}</p>`).join('\n')
+/** Cât are un rând de proză, la măsura site-urilor: sub atât poate fi și un buton de meniu. */
+const PROZA = 60
+
+/**
+ * ⚠️⚠️ RÂNDURILE SCURTE SE PĂSTREAZĂ (user, 16.09.2026: text „raw cu formatare minimă"). Până azi
+ * `paragrafe()` arunca ORICE rând sub 60 de semne — așa se pierdeau replicile unui dialog, versurile,
+ * subtitlurile și rândurile de listă, adică tocmai ce dă forma unui text. Pragul era însă singura
+ * apărare împotriva meniurilor site-ului, care sunt și ele rânduri scurte.
+ *
+ * Apărarea se mută de la LUNGIME la LOC: murdăria unui site stă la MARGINI — firimituri și butoane
+ * deasupra articolului, „distribuie" și etichete dedesubt —, nu în mijlocul lui. Deci:
+ *   - la CAP, când începutul e dovedit de fragmentul din buletin, nu se taie nimic (începe chiar
+ *     acolo); când nu e dovedit, se coboară până la primul rând de proză, ca înainte;
+ *   - la COADĂ se taie rândurile scurte care nu încheie o propoziție — un buton, nu un gând.
+ * Înăuntru rămâne tot.
+ */
+function capulCurat(blocuri, potrivit) {
+  if (potrivit) return blocuri
+  const de = blocuri.findIndex((b) => faraSentinele(b.text).length >= PROZA)
+  return de < 0 ? [] : blocuri.slice(de)
+}
+
+/**
+ * ⚠️⚠️ UN SUBTITLU LA CAPĂTUL TEXTULUI NU E SUBTITLU (măsurat 16.09.2026, pe fișa cea mai lungă:
+ * 71.000 de semne, din care sute de rânduri erau BARA LATERALĂ a site-ului). Site-urile mai vechi își
+ * scriu rafturile de cărți ca titluri de secțiune, fiecare urmat de o copertă: `### Noul Theotokarion`
+ * și o poză. Pozele pleacă singure (o legătură pe o poză nu lasă nimic în urmă), dar titlurile
+ * rămâneau — rânduri lungi, deci pragul de proză nu le atingea, și îngroșate, deci arătau ca
+ * subtitluri adevărate. Semnul care le dă de gol: **sub ele nu scrie nimic.** Un titlu fără text sub
+ * el nu e titlu.
+ *
+ * ⚠️⚠️ ȘI NIMIC MAI MULT. Prima scriere tăia de la capăt orice rând scurt care nu încheia o propoziție —
+ * și mânca tocmai sfârșitul dialogurilor („— Ce faci, băiete? îl întreabă curios"), adică exact ce s-a
+ * cerut să fie păstrat. Măsurat: 155 din 344 de texte nu se sfârșeau curat, iar o parte din ele erau
+ * ciuntite de regula asta, nu de site. Ce e murdărie se taie pe NUME (vezi `OPRESTE` și
+ * `OPRESTE_ORIUNDE`), nu după formă: mai bine un rând de prisos decât o replică pierdută.
+ */
+/**
+ * ⚠️⚠️ TREI SUBTITLURI UNUL SUB ALTUL SUNT UN RAFT, NU O STRUCTURĂ (măsurat 16.09.2026 pe acvila30.ro:
+ * o bară laterală de TREIZECI de titluri de cărți, fiecare cu coperta ei, se scria în coada fișei —
+ * „Cartea «Ne vorbeşte Părintele Augustin…» vol. XV", XVI, XVII…). Un subtitlu adevărat are text sub
+ * el, deci nu stă niciodată lipit de alte două. De la primul asemenea raft în jos nu mai e articolul.
+ */
+const RAFT = 3
+
+function coadaCurata(blocuri) {
+  const b = blocuri.slice()
+  for (let i = 0; i + RAFT <= b.length; i++) {
+    if (b.slice(i, i + RAFT).every((x) => x.fel === 'sub')) return b.slice(0, i)
+  }
+  // …și, oricum, un subtitlu la capăt nu e subtitlu: un titlu fără text sub el e podoaba site-ului
+  while (b.length && b[b.length - 1].fel === 'sub') b.pop()
+  return b
+}
 
 /**
  * ⚠️ CERTIFICATE STRICATE (masurat 16.09.2026, 02:20): `cuvantul-ortodox.ro` — cea mai mare sursa,
@@ -355,14 +468,15 @@ async function adu(rand) {
   const ePdf = rand.sursa_fel === 'pdf' || /application\/pdf/i.test(r.headers.get('content-type') ?? '')
   const md = await markdown(octeti, ePdf ? 'application/pdf' : 'text/html', ePdf ? 'a.pdf' : 'a.html')
   const par = paragrafe(md, rand.titlu, semneleInceputului(rand.fragment))
-  const text = inHtml(par)
-  const semne = par.join(' ').length
+  const text = imbraca(par)
+  const gol = textulGol(par)
+  const semne = gol.length
   // ⚠️ Sub 400 de semne nu e un articol: e un PDF scanat (fara text) ori o pagina care n-a dat nimic.
   // Se scrie „fara-text", nu „gata": altfel fisa ar arata un text intreg care nu e intreg.
   if (semne < 400) return { stare: 'fara-text', text: '', de_ce: `numai ${semne} semne` }
   // ⚠️ proba de lizibilitate e NUMAI pentru PDF: scanarile proaste vin doar de acolo, iar pe pagini
   // web ea dadea fals „ilizibil" la textele cu multe date si citate (masurat 16.09.2026, 03:10)
-  if (ePdf && !eLizibil(par)) return { stare: 'fara-text', text: '', de_ce: `${semne} semne, dar ILIZIBIL (scanare proastă)` }
+  if (ePdf && !eLizibil(gol)) return { stare: 'fara-text', text: '', de_ce: `${semne} semne, dar ILIZIBIL (scanare proastă)` }
   // ⚠️ PROBA USERULUI: textul adus trebuie sa inceapa ca fragmentul din buletin. Daca nu se
   // potriveste, se pastreaza — dar ca „nesigur", iar pagina arata tot fragmentul.
   if (!par.potrivit) {
@@ -400,10 +514,36 @@ const feluri = {}
 for (const r of deFacut) feluri[r.sursa_fel] = (feluri[r.sursa_fel] ?? 0) + 1
 console.log('  pe feluri:', JSON.stringify(feluri))
 
+/*
+ * ⚠️ MARTORII — plasa de dinaintea unei rescrieri mari (`--refa` peste toată arhiva). Aduce cât i se
+ * cere, ARATĂ ce ar scrie și nu scrie nimic: așa se vede pe câteva fișe dacă o regulă nouă de curățare
+ * a câștigat ori a stricat, fără să se atingă baza. `--martori=20` doar socoteala, `--doar=<slug>`
+ * scrie în terminal chiar textul întreg, gata de citit cu ochiul.
+ */
+const MARTORI = Number(process.argv.find((a) => a.startsWith('--martori='))?.slice(10)) || 0
 if (!CHIAR) {
-  console.log('\nprimele cinci:')
-  for (const r of deFacut.slice(0, 5)) console.log(`  [${r.sursa_fel}] ${r.titlu.slice(0, 48)} → ${r.sursa_url.slice(0, 80)}`)
-  console.log('\n(fara --chiar) — nu s-a adus si nu s-a scris nimic.')
+  const deProbat = MARTORI ? deFacut.slice(0, MARTORI) : DOAR ? deFacut : []
+  if (!deProbat.length) {
+    console.log('\nprimele cinci:')
+    for (const r of deFacut.slice(0, 5)) console.log(`  [${r.sursa_fel}] ${r.titlu.slice(0, 48)} → ${r.sursa_url.slice(0, 80)}`)
+    console.log('\n(fara --chiar) — nu s-a adus si nu s-a scris nimic.')
+    process.exit(0)
+  }
+  const socoteala = {}
+  for (const rand of deProbat) {
+    let rez
+    try {
+      rez = await adu(rand)
+    } catch (e) {
+      rez = { stare: 'eroare', text: '', de_ce: String(e.message).slice(0, 80) }
+    }
+    socoteala[rez.stare] = (socoteala[rez.stare] ?? 0) + 1
+    const semn = rez.stare === 'gata' ? '✓' : rez.stare === 'nesigur' ? '?' : rez.stare === 'fara-text' ? '·' : '✗'
+    console.log(`${semn} [${rand.sursa_fel}] ${(rand.titlu || rand.slug).slice(0, 46).padEnd(46)} ${rez.de_ce}`)
+    if (DOAR) console.log(`\n${rez.text}\n`)
+  }
+  console.log(`\nsocoteala martorilor: ${JSON.stringify(socoteala)}`)
+  console.log('(fara --chiar) — nu s-a scris nimic in baza.')
   process.exit(0)
 }
 
