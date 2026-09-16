@@ -368,6 +368,34 @@ for (const a of toate) {
 }
 console.log(`adrese pastrate din lacat: ${deLacat.size} / ${toate.length}`)
 
+/*
+ * ⚠️⚠️ INDREPTARILE DE MANA (`indreptari.json`, 16.09.2026). Ce nu se poate scoate din buletin se
+ * scrie aici, o data, si se pune peste ce a scos extragerea — LA FIECARE RULARE. Fara asta,
+ * urmatoarea extragere ar sterge munca omului: ea citeste tot de la capat din arhiva, iar arhiva a
+ * ramas cum e (la 64 de articole buletinul a scris NUMELE AUTORULUI in locul titlului, la altele a
+ * dat aceluiasi titlu la doua texte din acelasi numar).
+ *
+ * Aceeasi regula ca la biblioteca: unealta propune, OMUL HOTARASTE, iar hotararea lui sta intr-un
+ * fisier care calatoreste cu git — nu in baza, care se rescrie la fiecare import.
+ *
+ * Cheia e SLUGUL, care e inghetat de lacatul de mai sus, deci nu se poate rupe de la o rulare la alta.
+ * Fiecare intrare poate da `titlu`, `autor` sau amandoua; `deUnde` si `sursa` sunt doar pentru om.
+ */
+const INDREPTARI = JSON.parse(readFileSync(new URL('./indreptari.json', import.meta.url), 'utf8'))
+// cheile care incep cu „_" sunt lamuriri pentru om, nu articole
+for (const c of Object.keys(INDREPTARI)) if (c.startsWith('_')) delete INDREPTARI[c]
+let indreptate = 0
+for (const a of toate) {
+  const i = INDREPTARI[a.slug]
+  if (!i) continue
+  if (i.titlu) a.titlu = i.titlu
+  if (i.autor) a.autor = i.autor
+  indreptate++
+}
+const nestiute = Object.keys(INDREPTARI).filter((s) => !toate.some((a) => a.slug === s))
+console.log(`indreptari de mana puse: ${indreptate} / ${Object.keys(INDREPTARI).length}`
+  + (nestiute.length ? ` ⚠️ ${nestiute.length} pentru sluguri care nu mai exista: ${nestiute.slice(0, 4).join(', ')}` : ''))
+
 const cuTitlu = toate.filter((a) => a.titlu).length
 const cuPoza = toate.filter((a) => a.poze.length).length
 const cuLink = toate.filter((a) => a.sursaUrl).length

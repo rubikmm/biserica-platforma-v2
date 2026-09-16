@@ -647,19 +647,22 @@ propunerea automată, ca în V1.
     - de întrebat dacă răsfoitul se cuvine și la **Tipic** (cele trei cărți scanate, până la 67 MB).
       Acolo ar conta `Range` și numărul de pagini — altă socoteală decât o foaie de 4 pagini.
 
-15. **Textele citite la chinonic, ce a rămas** (16.09.2026, după runda de îndreptare a titlurilor):
-    - ⚠️ **62 de articole au NUMELE AUTORULUI scris în locul titlului** — buletinul n-a pus titlu
-      acolo, deci nu-l avem de unde ghici. Titlul adevărat stă însă în **adresa sursei**
-      (`…/sa-ne-rastignim-mintea-sa-ne-rastignim-viata…`, `…/predica-sfantului-luca-al-crimeei-la-duminica-femeii-samarinence`),
-      deci se poate lua fără să inventăm nimic. **De hotărât cu userul**: îl luăm de acolo (cu lista
-      arătată lui înainte de scriere, fiindcă unele site-uri scriu cu majuscule și își pun numele în
-      coadă) ori îl scrie el. **Întrebat 16.09.2026, 04:20 — n-a apucat să răspundă.**
-    - **3 articole fără titlu și fără autor** (nr. 198, 250, 556) și **3 titluri moștenite greșit**
-      între două texte din același număr (13.07.2020 Sofronie/Paisie, 07.04.2020, 02.04.2025) — de
-      îndreptat de mână, din pagina sursă.
-    - **52 nesigure · 75 fără text · 16 erori** din 438 cu link. Cele 33 de PDF-uri „nesigure" sunt
-      fișierele NOASTRE; unele țin mai multe predici într-un fișier, deci fără potrivirea fragmentului
-      nu se știe unde se taie. **De hotărât**: se acceptă PDF-ul întreg acolo unde e o singură predică?
+15. **Textele citite la chinonic, ce a rămas** (16.09.2026, după runda de îndreptare — subiectul
+    titlurilor l-a închis userul la 12:28):
+    - **445/448 cu titlu · 291/448 cu autor.** Cele 157 fără autor: **64 sunt vieți de sfinți și
+      sinaxare**, unde autor nu există și „Fără autor" e răspunsul drept; restul de 93 sunt cuvinte
+      unde buletinul n-a scris niciun nume — nici în cap, nici în text.
+    - **3 articole fără titlu** (nr. 198, 250, 556: buletinul n-a scris niciunul, iar textul începe
+      de-a dreptul) și **2 fără titlu găsibil la sursă** (`sfantul-simeon-noul-teolog`,
+      `sfantul-ioan-gura-de-aur-nr523` — paginile nu mai dau nimic). Cinci rânduri, de scris de mână
+      în `indreptari.json` dacă userul vrea.
+    - **295 cu text întreg · 52 nesigure · 75 fără text · 16 erori · 10 fără link.** Cele 33 de
+      PDF-uri „nesigure" sunt fișierele NOASTRE; unele țin mai multe predici într-un fișier, deci
+      fără potrivirea fragmentului nu se știe unde se taie. **De hotărât**: se acceptă PDF-ul întreg
+      acolo unde e o singură predică? Cele 52 de pagini nesigure arată, la verificare pe eșantion,
+      ALT text decât cel citit — corect lăsate ca fragment.
+    - cele **75 „fără text"** sunt în cea mai mare parte **PDF-uri scanate** (fotografii ale unei foi,
+      fără strat de text): de acolo nu se poate scoate nimic fără OCR adevărat.
     - când textul e adus peste tot, **se scoate linkul spre sursă și rămâne doar numele** (hotărât).
 
 ## Aplicațiile de pe staging
@@ -1891,10 +1894,27 @@ forța antetul `Host`**.
     `tests/chinonic-titlu-autor.test.ts`, 15 cazuri luate din arhivă.
     ✅ **„Fără autor" se scrie întotdeauna** (user: „dacă nu au autor scriem «Fără autor»"), stins și
     înclinat, ca să nu se citească drept nume. Website **0.4.2**, publicat.
-    ⚠️ **Deschis**: **62 de articole au NUMELE AUTORULUI scris în locul titlului** — buletinul n-a pus
-    titlu acolo. Titlul adevărat există în adresa sursei
-    (`…/sa-ne-rastignim-mintea-sa-ne-rastignim-viata…`), deci se poate lua fără să inventăm nimic —
-    dar e hotărârea userului dacă îl luăm de acolo ori îl scrie el. Până atunci rămân cum sunt.
+  - ✅ **TITLURILE CARE LIPSEAU DIN BULETIN, LUATE DE LA SURSĂ** (user, 16.09.2026, 12:28: „ia-le de
+    acolo și să închidem subiectul"). La 64 de articole buletinul scrisese NUMELE AUTORULUI în locul
+    titlului. Unealta: `titluri-din-sursa.mjs` — aduce pagina, o trece prin `tomarkdown`, strânge
+    capetele (`#`…`###`) și rândul `title:`, și alege **acela care seamănă cel mai bine cu ADRESA**.
+    ⚠️ **Adresa spune CARE e titlul, pagina spune CUM SE SCRIE**: adresa poartă cuvintele articolului
+    dar fără diacritice și fără punctuație, iar capul paginii le are pe amândouă — însă pe lângă titlu
+    mai are și meniuri și titluri de alte articole. Potrivirea cu adresa e singurul ales pe care nu-l
+    facem noi. Găsite 59 din 64; alese cu ochiul, fiindcă unele site-uri scriu cu majuscule, își pun
+    numele în coadă și repetă numele autorului în titlu.
+    **Rezultat: 54 de îndreptări** — 52 de titluri luate de la sursă + **2 titluri moștenite greșit**
+    (07.04.2020 → era predica Sf. Teofan Zăvorâtul la Duminica a cincea din Post; 13.07.2020 → era
+    despre Părintele Paisie Aghioritul). Al treilea (02.04.2025) s-a îndreptat odată cu celelalte.
+    **Cu autor: 144 → 291.**
+    ⚠️ **10 din cele 64 NU s-au atins**: sunt sinaxare, unde titlul CHIAR e numele sfântului
+    („Sfântul slăvitul Marele Mucenic Dimitrie") și autor nu există. **2 n-au titlu nicăieri**
+    (`sfantul-simeon-noul-teolog`, `sfantul-ioan-gura-de-aur-nr523` — sursa nu mai dă nimic).
+    ⚠️⚠️ **ÎNDREPTĂRILE STAU ÎN `indreptari.json`, NU ÎN BAZĂ.** Extragerea citește tot de la capăt
+    din arhivă, iar arhiva a rămas cum e — deci fără fișierul ăsta următoarea rulare ar pune la loc
+    numele drept titlu. Se pun PESTE ce a scos extragerea, la fiecare rulare, pe cheia `slug` (care e
+    înghețată de lacăt). Aceeași regulă ca la bibliotecă: **unealta propune, omul hotărăște, iar
+    hotărârea stă într-un fișier care călătorește cu git.**
 
 - **NEWSLETTERUL, RUNDA A DOUA** (user, în noapte). Newsletter **0.6.0**, publicat pe producție în
   patru pași (0.4.0 → 0.6.0). ⚠️ **Din 16.09.2026 se publică DUPĂ FIECARE BUCATĂ**, cerut anume:
