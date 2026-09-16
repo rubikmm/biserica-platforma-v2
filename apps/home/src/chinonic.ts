@@ -151,6 +151,19 @@ export const areTot = (t: Text): boolean => t.stare_text === 'gata' && !!t.text_
 const numeleAutorului = (t: Text): string => t.autor || 'Fără autor'
 const faraAutor = (t: Text): string => (t.autor ? '' : ' ch-niciun-autor')
 
+/**
+ * ⚠️⚠️ VIEȚILE DE SFINȚI AU O SINGURĂ SURSĂ: SINAXARUL (user, 16.09.2026: „viețile de sfinți — să le
+ * validezi, lasă doar Sinaxar la sursă și atât"). O viață de sfânt nu e textul cuiva: e aceeași
+ * povestire, tipărită în sinaxar și repovestită de zeci de site-uri. A scrie de pe care dintre ele am
+ * luat-o nu spune nimic despre text, iar o adresă moartă acolo nu e o pierdere: sursa n-a fost
+ * niciodată site-ul. De aceea la sinaxare rândul „Sursa" scrie doar «Sinaxar», fără mențiune și fără
+ * legătură — și de aceea ele nu mai intră în categoria adreselor moarte.
+ *
+ * ⚠️ Adresa NU se șterge din bază: de acolo se aduce textul (`adu-textul.mjs`). Aici se schimbă numai
+ * ce se scrie în pagină.
+ */
+export const eSinaxar = (autor: string): boolean => autor === 'Sinaxar'
+
 /** HTML-ul textului, dezbrăcat: din el se face bucata scurtă din listă. */
 const dezbraca = (h: string): string =>
   h.replace(/<[^>]+>/g, ' ')
@@ -181,9 +194,11 @@ export function textScurt(t: Text): string {
  * Cine scrie `link_stare`: `infrastructure/import/chinonic/verifica-linkurile.mjs`.
  */
 const adresaSeScrie = (t: Text): boolean =>
-  !!t.sursa_url && t.link_stare !== 'mort' && t.link_stare !== 'picat'
+  !eSinaxar(t.autor) && !!t.sursa_url && t.link_stare !== 'mort' && t.link_stare !== 'picat'
 
 function sursa(t: Text): string {
+  // ⚠️ la o viață de sfânt, sursa e Sinaxarul — atât, oricare ar fi site-ul de unde s-a adus textul
+  if (eSinaxar(t.autor)) return '<p class="ch-sursa"><span>Sursa:</span> Sinaxar</p>'
   const parti: string[] = []
   if (t.sursa_text) parti.push(esc(t.sursa_text))
   // numele site-ului, legat cât timp adresa trăiește; unde nu există nume (PDF-urile parohiei),
@@ -245,8 +260,11 @@ export function bucataDeAcasa(texte: Text[], nTotal: number): string {
 export const CALE_STARE = `${CALE}/stare`
 
 const areTotR = (r: Rezumat): boolean => r.stare_text === 'gata' && r.n_text > 0
-const areSursaR = (r: Rezumat): boolean => !!(r.sursa_text || r.sursa_nume || r.sursa_url)
-const adresaVie = (r: Rezumat): boolean => !!r.sursa_url && r.link_stare !== 'mort' && r.link_stare !== 'picat'
+// ⚠️ sinaxarul ESTE sursa unei vieți de sfânt (vezi `eSinaxar`): rândul e completat prin definiție,
+// iar adresa de site nu se mai judecă — nu de acolo vine textul, ci din sinaxar
+const areSursaR = (r: Rezumat): boolean => eSinaxar(r.autor) || !!(r.sursa_text || r.sursa_nume || r.sursa_url)
+const adresaVie = (r: Rezumat): boolean =>
+  !eSinaxar(r.autor) && !!r.sursa_url && r.link_stare !== 'mort' && r.link_stare !== 'picat'
 const numeR = (r: Rezumat): string => r.autor || 'Fără autor'
 
 /** Cele două OK-uri cerute de user: textul preluat și sursa completată. Bifa spune și de ce, în `title`. */
@@ -262,9 +280,11 @@ const randCompact = (r: Rezumat): string =>
   <a class="ch-t" href="${CALE}/${esc(r.slug)}">${esc(r.titlu || '(fără titlu)')}</a>
   <span class="ch-a${r.autor ? '' : ' ch-niciun-autor'}">${esc(numeR(r))}</span>
   <span class="ch-bife">${bifa(areTotR(r), 'text', areTotR(r) ? 'textul întreg e preluat' : pricinaTextului(r))}${
-    bifa(areSursaR(r), 'sursă', areSursaR(r)
-      ? `${r.sursa_nume || r.sursa_text}${adresaVie(r) ? ' — cu legătură' : r.sursa_url ? ' — adresa nu mai trăiește' : ' — fără adresă'}`
-      : 'nicio sursă scrisă')}</span>
+    bifa(areSursaR(r), 'sursă', eSinaxar(r.autor)
+      ? 'viață de sfânt — sursa e Sinaxarul'
+      : areSursaR(r)
+        ? `${r.sursa_nume || r.sursa_text}${adresaVie(r) ? ' — cu legătură' : r.sursa_url ? ' — adresa nu mai trăiește' : ' — fără adresă'}`
+        : 'nicio sursă scrisă')}</span>
 </li>`
 
 /** Anul citirii, singurul fapt după care se filtrează lista mare. */
@@ -409,8 +429,10 @@ export function paginaStare(
     {
       cheie: 'link-mort',
       nume: 'Cu adresa sursei moartă',
-      spune: 'Adresa a fost întrebată și nu mai trăiește; în pagină rămâne doar numele, fără legătură.',
-      care: (r) => r.link_stare === 'mort' || r.link_stare === 'picat',
+      spune: 'Adresa a fost întrebată și nu mai trăiește; în pagină rămâne doar numele, fără legătură. ' +
+        'Viețile de sfinți nu intră aici: sursa lor e Sinaxarul, nu site-ul de unde s-a adus textul.',
+      // ⚠️ sinaxarele ies din categorie (user, 16.09.2026) — o adresă moartă nu le strică nimic
+      care: (r) => !eSinaxar(r.autor) && (r.link_stare === 'mort' || r.link_stare === 'picat'),
       pricina: (r) => (r.link_stare === 'mort' ? 'răspunde 404 — pagina a fost ștearsă' : 'nu mai răspunde nimeni la adresă'),
     },
     {

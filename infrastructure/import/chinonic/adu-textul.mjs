@@ -367,6 +367,14 @@ async function adu(rand) {
   // potriveste, se pastreaza — dar ca „nesigur", iar pagina arata tot fragmentul.
   if (!par.potrivit) {
     if (adresaPoartaTitlul(u, rand.titlu)) return { stare: 'gata', text, de_ce: `${semne} semne, ${par.length} paragrafe (adresa poartă titlul)` }
+    /*
+     * ⚠️⚠️ VIEȚILE DE SFINȚI SE VALIDEAZĂ (user, 16.09.2026: „viețile de sfinți — să le validezi").
+     * O viață de sfânt e aceeași povestire în orice sinaxar, dar REPOVESTITĂ: buletinul o scurtează,
+     * un site o scrie cu alte cuvinte decât altul. Proba „textul adus începe ca fragmentul" cade
+     * atunci pe nedrept — nu fiindcă textul ar fi altul, ci fiindcă e altă punere în cuvinte a
+     * aceleiași vieți. La un cuvânt sau la o predică proba rămâne: acolo textul CHIAR e al cuiva.
+     */
+    if (rand.autor === 'Sinaxar') return { stare: 'gata', text, de_ce: `${semne} semne (sinaxar — validat, vezi regula)` }
     return { stare: 'nesigur', text, de_ce: `${semne} semne, DAR nu incepe ca fragmentul` }
   }
   return { stare: 'gata', text, de_ce: `${semne} semne, ${par.length} paragrafe` }
@@ -379,7 +387,8 @@ const REFA = process.argv.includes('--refa')
 // mai buna merita reincercate toate; `--refa` le ia si pe cele bune
 const unde = REFA ? `('netras','eroare','gata','fara-text','nesigur')` : RELUA ? `('netras','eroare','nesigur','fara-text')` : `('netras')`
 const [{ results: randuri }] = await sql(
-  `SELECT slug, titlu, fragment, sursa_url, sursa_fel FROM texte_chinonic
+  // `autor` vine odată cu rândul fiindcă de el atârnă proba: la „Sinaxar" textul adus se validează
+  `SELECT slug, titlu, autor, fragment, sursa_url, sursa_fel FROM texte_chinonic
    WHERE stare_text IN ${unde} AND sursa_url <> '' ORDER BY citit_la DESC`,
 )
 // `--doar=<slug>` — o singura fisa, pentru cand se incearca o regula noua de curatare

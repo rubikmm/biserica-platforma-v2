@@ -58,28 +58,77 @@ describe('cele cinci lucruri ale unei fișe', () => {
   })
 })
 
+/**
+ * ⚠️ Sursa cu două părți (mențiune + site) e a textelor CUIVA — cuvinte, predici, tâlcuiri. Viețile
+ * de sfinți au regula lor, mai jos: la ele scrie doar „Sinaxar". De aceea probele de aici merg pe un
+ * text cu autor om, nu pe sinaxarul de mai sus.
+ */
+const alCuiva: Text = {
+  ...deBaza,
+  slug: 'despre-rugaciunea-neincetata',
+  titlu: 'Despre rugăciunea neîncetată',
+  autor: 'Sfântul Ioan Gură de Aur',
+}
+
 describe('⚠️ legătura spre sursă se scrie numai cât timp adresa trăiește', () => {
   it('adresă vie → legătura e pusă efectiv', () => {
-    const h = lista(deBaza)
-    expect(h).toContain(`href="${deBaza.sursa_url}"`)
+    const h = lista(alCuiva)
+    expect(h).toContain(`href="${alCuiva.sursa_url}"`)
     expect(h).toContain('doxologia.ro')
   })
 
   it('404 → numele rămâne, adresa NU se mai pune', () => {
-    const h = lista({ ...deBaza, link_stare: 'mort' })
-    expect(h).not.toContain(deBaza.sursa_url)
+    const h = lista({ ...alCuiva, link_stare: 'mort' })
+    expect(h).not.toContain(alCuiva.sursa_url)
     expect(h).toContain('doxologia.ro') // numele se scrie mai departe, pentru cinstirea sursei
     expect(h).toContain('Proloagele, vol. I, Editura Bunavestire')
   })
 
   it('adresa care n-a răspuns deloc se poartă ca una moartă', () => {
-    expect(lista({ ...deBaza, link_stare: 'picat' })).not.toContain(deBaza.sursa_url)
+    expect(lista({ ...alCuiva, link_stare: 'picat' })).not.toContain(alCuiva.sursa_url)
   })
 
   it('cartea se scrie și când nu există niciun site', () => {
-    const h = lista({ ...deBaza, sursa_nume: '', sursa_url: '', link_stare: '' })
+    const h = lista({ ...alCuiva, sursa_nume: '', sursa_url: '', link_stare: '' })
     expect(h).toContain('Proloagele, vol. I, Editura Bunavestire')
     expect(h).not.toContain('ch-drum')
+  })
+})
+
+/**
+ * ⚠️⚠️ VIEȚILE DE SFINȚI: SURSA E SINAXARUL, ATÂT (user, 16.09.2026: „viețile de sfinți — să le
+ * validezi, lasă doar Sinaxar la sursă și atât — mută-le la valide"). Ce se poate strica în tăcere:
+ * să rămână site-ul lângă „Sinaxar", ori o viață cu adresa moartă să fie mai departe numărată ca
+ * problemă, deși sursa ei n-a fost niciodată site-ul.
+ */
+describe('viețile de sfinți au o singură sursă', () => {
+  it('la sursă scrie doar „Sinaxar" — fără carte, fără site, fără legătură', () => {
+    const h = lista(deBaza)
+    expect(h).toContain('Sinaxar')
+    expect(h).not.toContain(deBaza.sursa_url)
+    expect(h).not.toContain('doxologia.ro')
+    expect(h).not.toContain('Proloagele')
+    expect(h).not.toContain('ch-drum')
+  })
+
+  it('nici în fișă nu se scrie site-ul', () => {
+    const h = paginaText({ ...deBaza, link_stare: 'viu' }, '')
+    expect(h).toContain('<span>Sursa:</span> Sinaxar')
+    expect(h).not.toContain('doxologia.ro')
+  })
+
+  it('o adresă moartă nu mai e o problemă a lor', () => {
+    const sinaxarMort: Rezumat = { ...rez, link_stare: 'mort' }
+    const h = paginaStare([sinaxarMort], new Map(), '', 'link-mort')
+    expect(h).toContain('Niciunul — categoria e goală.')
+    // dar la un text al cuiva, aceeași adresă moartă rămâne de investigat
+    const alCuivaMort: Rezumat = { ...rez, autor: 'Sfântul Ioan Gură de Aur', link_stare: 'mort' }
+    expect(paginaStare([alCuivaMort], new Map(), '', 'link-mort')).toContain('Viața Sfintei Cuvioase Parascheva')
+  })
+
+  it('bifa „sursă" e bifată chiar dacă în buletin n-a scris nimic', () => {
+    const gol: Rezumat = { ...rez, sursa_text: '', sursa_nume: '', sursa_url: '' }
+    expect(paginaToate([gol])).toContain('✓ sursă')
   })
 })
 
@@ -152,7 +201,8 @@ describe('lista mare e compactă', () => {
   })
 
   it('lipsurile se văd ca bife stinse, nu prin absență', () => {
-    const h = paginaToate([{ ...rez, stare_text: 'fara-text', n_text: 0, sursa_text: '', sursa_nume: '', sursa_url: '' }])
+    // ⚠️ autor om, nu „Sinaxar": la vieți de sfinți sursa e bifată prin definiție (vezi regula lor)
+    const h = paginaToate([{ ...rez, autor: 'Sfântul Ioan Gură de Aur', stare_text: 'fara-text', n_text: 0, sursa_text: '', sursa_nume: '', sursa_url: '' }])
     expect(h).toContain('— text')
     expect(h).toContain('— sursă')
   })

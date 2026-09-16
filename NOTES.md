@@ -699,10 +699,29 @@ propunerea automată, ca în V1.
       `text-232-1` — de acolo venea plângerea userului („nu știu din ce număr sunt"). Reparat la
       16.09.2026 rulând `asocieri.mjs --chiar`; verificat 0 sluguri nepereche în ambele sensuri.
       **După orice import care atinge slugurile, rulează unealta din nou.**
-    - **CÂT E BUN, CIFRELE ZILEI** (16.09.2026, D1 `xc-home-production`): **245 din 448 sunt complete**
-      — titlu + autor + textul întreg preluat —, și **toate 245 au și legătura spre sursă vie**. Restul:
-      448 cu sursă scrisă (niciunul fără), 445 cu titlu, 354 cu autor (64 „Sinaxar"), 295 cu text
-      întreg. **Toate 448 își știu numărul de buletin** după reparația asocierilor.
+    - ⚠️⚠️ **VIEȚILE DE SFINȚI, HOTĂRÂRE A USERULUI** (16.09.2026, 15:06: „viețile de sfinți — să le
+      validezi, lasă doar Sinaxar la sursă și atât — mută-le la valide"). Website **0.6.4**. Trei
+      urmări, toate REGULI ÎN COD (nu îndreptări în bază, ca să țină la reimport):
+      **(1)** la „Sursa" scrie **doar «Sinaxar»** — fără mențiunea din buletin, fără numele site-ului,
+      fără legătură. `sursa_url` **rămâne în bază**: de acolo se aduce textul, doar că nu se mai scrie.
+      **(2)** o adresă moartă **nu mai e problema lor** (ies din categoria „adresă moartă": 16 → 12) —
+      sursa unei vieți de sfânt n-a fost niciodată site-ul.
+      **(3)** textul adus se **validează** chiar dacă nu începe ca fragmentul (`adu-textul.mjs`, la
+      `!par.potrivit`): o viață de sfânt e aceeași povestire REPOVESTITĂ de fiecare sinaxar, deci proba
+      fragmentului cade pe nedrept. ⚠️ **La textele CUIVA proba rămâne întreagă** — acolo textul chiar
+      e al unui om, iar o nepotrivire înseamnă alt text.
+      Urmarea în cifre: 3 vieți „nesigure" au trecut pe `gata` (aveau fragment de 28, 17 și 0 semne —
+      n-a existat niciodată cu ce fi verificate), deci **38 din 64 de sinaxare sunt gata**.
+      ⚠️ **Rămân 26 de vieți fără NICIUN text adus**: 9 n-au deloc adresă în buletin, 13 au adresă vie
+      dar pagina/PDF-ul n-a dat text (scanări), 4 au adresa moartă. Ele nu se pot „muta la valide" —
+      n-au ce arăta. **Deschis**: le căutăm textul într-un sinaxar oarecare, după numele sfântului?
+      Hotărârea userului tocmai a deschis drumul (sursa nu mai contează), dar e muncă de pornit anume.
+    - **CÂT E BUN, CIFRELE ZILEI** (16.09.2026, D1 `xc-home-production`): **248 din 448 sunt complete**
+      — titlu + autor + textul întreg preluat. Restul: 448 cu sursă scrisă (niciunul fără), 445 cu
+      titlu, 354 cu autor (64 „Sinaxar", din care 38 gata), 298 cu text întreg. **Toate 448 își știu
+      numărul de buletin** după reparația asocierilor. Categoriile de pe `/stare` după runda vieților
+      de sfinți: fără text 150 · fără autor 94 · fără sursă 0 · adresă moartă 12 · fără titlu 3 ·
+      bucată prea scurtă 36 · fără număr 0.
 
 ## Aplicațiile de pe staging
 
@@ -2087,6 +2106,21 @@ forța antetul `Host`**.
   **toate 245 au și legătura spre sursă vie**. 448 cu sursă scrisă, 445 cu titlu, 354 cu autor (64
   „Sinaxar"), 295 cu text întreg, 448 cu numărul știut.
   **Probe**: încă 7 în `tests/chinonic-fisa.test.ts` (27 cu totul); **380 trec**.
+
+- ✅ **CHINONIC — VIEȚILE DE SFINȚI, REGULA LOR** (user, 15:06: „viețile de sfinți — să le validezi,
+  lasă doar Sinaxar la sursă și atât — mută-le la valide"). Website **0.6.4**, publicat.
+  Trei urmări, toate **reguli în cod** (nu îndreptări în bază — altfel se pierd la reimport):
+  la „Sursa" scrie **doar «Sinaxar»** (fără carte, fără site, fără legătură — dar `sursa_url` rămâne
+  în bază, de acolo se aduce textul); **adresa moartă nu mai e problema lor** (categoria a scăzut
+  16 → 12); **textul adus se validează** chiar dacă nu începe ca fragmentul, fiindcă o viață de sfânt
+  e aceeași povestire repovestită de fiecare sinaxar. ⚠️ **La textele CUIVA proba rămâne** — acolo o
+  nepotrivire chiar înseamnă alt text.
+  Cifre: 3 vieți „nesigure" → `gata` (fragmentele lor aveau 28, 17 și 0 semne, deci proba n-a avut
+  niciodată cu ce lucra), **38 din 64 de sinaxare gata**, complete **245 → 248**.
+  ⚠️ **26 de vieți rămân fără niciun text**: 9 fără adresă în buletin, 13 cu pagină/PDF care n-au dat
+  text, 4 cu adresa moartă. De întrebat dacă le căutăm textul într-un sinaxar oarecare, după numele
+  sfântului — hotărârea de azi deschide drumul, fiindcă sursa nu mai contează.
+  **Probe**: încă 4 în `tests/chinonic-fisa.test.ts` (31 cu totul); **384 trec**.
 
 ### 2026-09-15
 
