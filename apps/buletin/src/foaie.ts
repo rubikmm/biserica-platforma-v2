@@ -4,7 +4,7 @@
  *
  * Forma e a Word-ului parohiei, măsurată pe numerele din arhivă (vezi `masuri.ts`):
  *
- *   pagina 1 | antet fix (cruce, „BULETINUL PAROHIEI", parohia) peste toată lățimea,
+ *   pagina 1 | antet fix (cruce, „BULETINUL BISERICII", parohia) peste toată lățimea,
  *            | apoi motto-ul și pastila „Nr. … / …" — ele sunt START-ul numărului;
  *            | dedesubt două coloane: în stânga poza mare și zona neagră cu autorul,
  *            | în dreapta titlul articolului principal și începutul textului.
@@ -22,11 +22,11 @@
  */
 import { esc } from '@xc/ui'
 import { type ArticolCerut, type NumarCerut, PAGINI } from './masuri.js'
-// Trajan Pro 3: Regular e fontul Adobe original (v1.012, cu kerning); Bold vine din familia trimisă de
-// user pe 17.09.2026 (abonament Adobe, liber din Adobe Fonts). Până atunci aveam doar un Regular extras
-// dintr-un PDF, fără kerning, iar aldinul titlurilor era sintetic (text-stroke).
+// Trajan Pro 3 Regular: fontul Adobe original (v1.012, cu kerning), din familia trimisă de user pe
+// 17.09.2026 (abonament Adobe, liber din Adobe Fonts). Până atunci aveam un Regular extras dintr-un PDF,
+// fără kerning. `resurse/TrajanPro3-Bold.otf` există, dar NU se încorporează: din 22:38 niciun titlu nu
+// mai e aldin (ar fi 216 KB de base64 degeaba în fiecare foaie).
 import trajanOtf from '../resurse/TrajanPro3-Regular.otf'
-import trajanBoldOtf from '../resurse/TrajanPro3-Bold.otf'
 import caladeaRegular from '../resurse/Caladea-Regular.ttf'
 import caladeaBold from '../resurse/Caladea-Bold.ttf'
 import caladeaItalic from '../resurse/Caladea-Italic.ttf'
@@ -65,7 +65,6 @@ function dataUri(cheie: string, octeti: ArrayBuffer, tip: string): string {
 
 const fonturi = (): string => `
 @font-face { font-family: "Trajan"; src: url(${dataUri('trajan', trajanOtf, 'font/otf')}) format("opentype"); font-weight: 400; }
-@font-face { font-family: "Trajan"; src: url(${dataUri('trajan-b', trajanBoldOtf, 'font/otf')}) format("opentype"); font-weight: 700; }
 @font-face { font-family: "Caladea"; src: url(${dataUri('cal-r', caladeaRegular, 'font/ttf')}) format("truetype"); font-weight: 400; }
 @font-face { font-family: "Caladea"; src: url(${dataUri('cal-b', caladeaBold, 'font/ttf')}) format("truetype"); font-weight: 700; }
 @font-face { font-family: "Caladea"; src: url(${dataUri('cal-i', caladeaItalic, 'font/ttf')}) format("truetype"); font-style: italic; }
@@ -100,13 +99,22 @@ body { font-family: "Caladea", Cambria, Georgia, serif; color: #000; font-size: 
 
 /* Capul paginii întâi stă peste amândouă coloanele, deci le scurtează pe amândouă. */
 .cap { position: absolute; left: 15.03mm; right: 15.03mm; top: 13mm; z-index: 1; text-align: center; }
-.cruce { width: 36.5mm; display: block; margin: 0 auto 1mm; }
-/* Titlul foii: MAJUSCULE, Trajan Pro 3 Regular, FARA aldin (user, 17.09.2026 seara: „scoate bold";
-   numele foii urmeaza sa se schimbe). Parohia, sub el, putin mai mare ca la programul liturgic. */
+/* Crucea (36.5 x 17.8 mm) NU e centrata pe pagina: stalpul ei cade pe stalpul L-ului din „BULETINUL"
+   (user, 17.09.2026, 22:37: „crucea trebuie sa fie mai la stanga, sa pice fix pe linia de la L").
+   De aceea sta absolut, ancorata de span.l din jurul L-ului: left = stalpul literei (masurat pe
+   randare), top = inaltimea crucii + 2 mm aer (era 1 mm; „dubleaza distanta"). Titlul primeste
+   padding-top cat crucea, ca sa ramana loc pentru ea in capul paginii. */
+.l { position: relative; }
+.cruce { position: absolute; width: 36.5mm; left: 2.45mm; top: -19.6mm; transform: translateX(-50%); }
+/* Titlul foii: MAJUSCULE, Trajan Pro 3 Regular, FARA aldin (user, 17.09.2026 seara: „scoate bold").
+   „BULETINUL BISERICII" din 17.09.2026, 22:37 (era „BULETINUL PAROHIEI"). Parohia, sub el, putin mai
+   mare ca la programul liturgic. */
 .titlu-foaie { font-family: "Trajan", serif; font-size: 35pt; line-height: 1; margin: 0; font-weight: 400;
-               text-transform: uppercase; letter-spacing: .4pt; }
+               padding-top: 19.8mm; text-transform: uppercase; letter-spacing: .4pt; }
 .parohia { font-family: "Trajan", serif; font-size: 11pt; white-space: pre; margin: 1.6mm 0 0; }
-.motto { font-style: italic; font-size: 14pt; line-height: 1.32; margin: 2.6mm 0 0; }
+/* Motto-ul la jumatate din departarea de dinainte fata de titlu + parohie (user, 17.09.2026, 22:37):
+   golul vazut era ~5.3 mm cu margin 2.6 mm, deci fara margin ramane ~2.7 mm. */
+.motto { font-style: italic; font-size: 14pt; line-height: 1.32; margin: 0; }
 .motto-autor { font-family: "Carlito", Calibri, sans-serif; font-size: 13.5pt; color: #7e7e7e; margin: .6mm 0 0; }
 /* Pastila numărului atârnă de o linie pe toată lățimea — ca la foaia programului, aceeași mână. */
 .linie { border-top: .75pt solid #333; margin: 3mm 0 0; height: 0; font-size: 0; line-height: 0; }
@@ -122,7 +130,8 @@ body { font-family: "Caladea", Cambria, Georgia, serif; color: #000; font-size: 
    desenat (chenar punctat), ca sa se vada pe ciorna ce lipseste. */
 .pagina[data-pagina="1"] .col.a { display: flex; flex-direction: column; }
 .poza { display: block; width: 100%; margin: 0; }
-.poza.mare { flex: 1 1 auto; min-height: 0; object-fit: cover; border: .6pt solid #000; box-sizing: border-box; }
+/* Poza principala are chenar negru de 3 px (user, 17.09.2026, 22:38: „margine neagra 3 sau 4 px"). */
+.poza.mare { flex: 1 1 auto; min-height: 0; object-fit: cover; border: 3px solid #000; box-sizing: border-box; }
 .poza-loc { flex: 1 1 auto; min-height: 0; border: .6pt dashed #888; box-sizing: border-box;
             display: flex; align-items: center; justify-content: center;
             font-family: "Carlito", Calibri, sans-serif; font-size: 11pt; color: #888; }
@@ -134,11 +143,17 @@ body { font-family: "Caladea", Cambria, Georgia, serif; color: #000; font-size: 
 .zona-neagra .pomenire { font-family: "Trajan", serif; font-size: 12pt; margin-top: .8mm; }
 .zona-neagra.mica { padding: 2mm 2mm 2.2mm; }
 .zona-neagra.mica .nume { font-size: 13pt; }
-/* Titlul articolului: Trajan Pro 3 Bold adevărat la secundari (din 17.09.2026 seara; înainte era Regular
-   îngroșat sintetic cu text-stroke); cel al primului text, pe pagina intai, e Regular — user, 17.09.2026
-   seara: „scoate bold de la titlul primului text". */
+/* Titlul articolului: Trajan Pro 3 Regular, FARA aldin, la toate — principal si secundari (user,
+   17.09.2026, 22:38: „titlurile celorlalte articole secundare sa nu fie bold si sa Trajan"; mai
+   devreme, 22:15, scosese aldinul de la primul text). Pana atunci secundarii aveau aldin sintetic,
+   apoi, cateva minute, Trajan Bold adevarat — fisierul resurse/TrajanPro3-Bold.otf ramane, nu se
+   mai incorporeaza. */
 .titlu-articol { font-family: "Trajan", serif; font-size: 17pt; line-height: 1.22; text-align: center;
-                 margin: 0 0 1.4mm; font-weight: 700; }
+                 margin: 0 0 1.4mm; font-weight: 400; }
+/* Intre articole, cel putin 1 cm (user, 17.09.2026, 22:39): il poarta prima bucata a fiecarui secundar,
+   dar nu si cand ea deschide o coloana — acolo golul il da hotarul paginii. */
+.incepe-articol { margin-top: 10mm; }
+.col > .incepe-articol:first-child { margin-top: 0; }
 .titlu-articol + .rigla { border-top: .5pt solid #000; margin: 0 0 1.6mm; height: 0; }
 p.t { margin: 0; text-align: justify; text-indent: 10mm; hyphens: none; }
 .sursa { font-family: "Carlito", Calibri, sans-serif; font-size: 10.5pt; border-top: .5pt solid #000;
@@ -176,11 +191,11 @@ const paragrafe = (text: string): string[] =>
   text.split(/\n\s*\n|\r\n\r\n/).map((p) => p.replace(/\s+/g, ' ').trim()).filter(Boolean)
 
 /** Zona neagră cu numele autorului — la principal sub poză, la secundar în capul articolului. */
-function zonaNeagra(a: ArticolCerut, mica: boolean): string {
+function zonaNeagra(a: ArticolCerut, mica: boolean, incepeArticol = false): string {
   const randuri = [`<div class="nume">${esc(a.autor)}</div>`]
   if (a.ani) randuri.push(`<div class="ani">${esc(a.ani)}</div>`)
   if (a.pomenire) randuri.push(`<div class="pomenire">${esc(a.pomenire)}</div>`)
-  return `<div class="zona-neagra${mica ? ' mica' : ''}">${randuri.join('')}</div>`
+  return `<div class="zona-neagra${mica ? ' mica' : ''}${incepeArticol ? ' incepe-articol' : ''}">${randuri.join('')}</div>`
 }
 
 const titluArticol = (a: ArticolCerut): string =>
@@ -200,8 +215,9 @@ function bucati(cerut: NumarCerut, poze: Record<string, string>): string[] {
   const b: string[] = []
   const articol = (a: ArticolCerut, principal: boolean, i: number): void => {
     if (!principal) {
-      if (a.poza && poze[`s${i}`]) b.push(`<img class="poza mica" src="${poze[`s${i}`]}" alt="">`)
-      b.push(zonaNeagra(a, true))
+      // prima bucată a secundarului poartă aerul de 1 cm de după articolul dinainte
+      if (a.poza && poze[`s${i}`]) b.push(`<img class="poza mica incepe-articol" src="${poze[`s${i}`]}" alt="">`)
+      b.push(zonaNeagra(a, true, !(a.poza && poze[`s${i}`])))
     }
     b.push(titluArticol(a))
     paragrafe(a.text).forEach((p, k) => b.push(`<p class="t${k === 0 ? ' prim' : ''}">${cursiv(esc(p))}</p>`))
@@ -361,8 +377,7 @@ export function foaieHtml(o: OptiuniFoaie): string {
   for (let p = 1; p <= PAGINI; p++) {
     const capul = p === 1
       ? `<div class="cap">
-      <img class="cruce" src="${dataUri('cruce', crucePng, 'image/png')}" alt="">
-      <h1 class="titlu-foaie">BULETINUL PAROHIEI</h1>
+      <h1 class="titlu-foaie">BULETINU<span class="l">L<img class="cruce" src="${dataUri('cruce', crucePng, 'image/png')}" alt=""></span> BISERICII</h1>
       <p class="parohia">${PAROHIA}</p>
       <p class="motto">${esc(cerut.motto)}</p>
       ${cerut.motoAutor ? `<p class="motto-autor">– ${esc(cerut.motoAutor)}</p>` : ''}

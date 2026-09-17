@@ -2001,6 +2001,19 @@ forța antetul `Host`**.
 
 ### 2026-09-17
 
+- **CAPUL PAGINII 1 ȘI ARTICOLELE, ȘASE RETUȘURI — buletin 0.5.2 (publicat)**. Userul, 22:37–22:39:
+  (1) motto-ul la **jumătate** din depărtarea față de titlu + parohie (`.motto` fără margin-top; golul
+  văzut 5.3 → 2.7 mm); (2) titlul foii e **„BULETINUL BISERICII"**; (3) aerul dintre cruce și titlu
+  **dublat** (1 → 2 mm); (4) **crucea nu mai e centrată pe pagină: stâlpul ei cade pe stâlpul L-ului
+  din BULETINUL** — stă absolut, ancorată de `<span class="l">` din jurul literei (`left: 2.45mm`,
+  `top: -19.6mm`, măsurate pe randare la 200 dpi; titlul are `padding-top` cât crucea); (5) poza
+  principală cu **chenar negru 3 px**; (6) **titlurile secundarilor Trajan Regular, fără aldin** — Bold-ul
+  a stat în foaie câteva minute; `resurse/TrajanPro3-Bold.otf` rămâne, dar nu se mai încorporează;
+  (7) **cel puțin 1 cm între articole**: clasa `incepe-articol` pe prima bucată a fiecărui secundar
+  (`margin-top: 10mm`, zero când deschide o coloană — `.col > .incepe-articol:first-child`), iar în
+  socoteală `INALTIMI.aerIntreArticole = 1.7` rânduri pe secundar; `antet` 6.4 → 6.6, `motto` 3.6 → 3.2.
+  ⚠️ Capcană: **fără backtick-uri în comentariile din `STIL`** — e un template literal, un backtick în
+  comentariu îl închide și tsc dă erori fără sens două-trei linii mai jos.
 - **TRAJAN PRO 3 ADEVĂRAT — buletin 0.5.1, program 0.7.8 (publicate seara, la „Deploy")**. Userul a trimis
   familia Trajan Pro 3 (are abonament Adobe, „e liber din Adobe Fonts"). Constatare: Regular-ul folosit
   până acum era **extras dintr-un PDF** (PdfGrabber, fără kerning); în zip erau 6 tăieturi la fel

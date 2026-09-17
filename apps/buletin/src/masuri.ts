@@ -80,10 +80,10 @@ export const RANDURI_PE_COLOANA = Math.floor((BANDA.jos - BANDA.sus) / RAND)
  * întrebarea la care răspundem e „câte rânduri mi-au mai rămas", iar rândul e moneda paginii.
  */
 export const INALTIMI = {
-  /** antetul paginii întâi: crucea + „BULETINUL PAROHIEI" + parohia */
-  antet: 6.4,
-  /** motto-ul, pe două rânduri de cursive, cu numele celui citat dedesubt */
-  motto: 3.6,
+  /** antetul paginii întâi: crucea (+2 mm aer sub ea, din 17.09.2026 seara) + „BULETINUL BISERICII" + parohia */
+  antet: 6.6,
+  /** motto-ul, pe două rânduri de cursive, lipit de antet (fără cei 2.6 mm de aer), cu numele celui citat dedesubt */
+  motto: 3.2,
   /** linia cu pastila „Nr. 615 / 6 septembrie 2026" */
   numar: 3.2,
   /** poza mare a articolului principal: o coloană întreagă pe înălțime de 448 pt */
@@ -98,6 +98,8 @@ export const INALTIMI = {
   titlu: 4.4,
   /** rândul „Sursa: …", cu linia de deasupra */
   sursa: 2.4,
+  /** aerul de cel puțin 1 cm dinaintea fiecărui secundar (user, 17.09.2026 seara) — 10 mm / 5.84 mm pe rând */
+  aerIntreArticole: 1.7,
   /** capul „PROGRAMUL LITURGIC" de pe pagina a patra */
   titluCalendar: 2.6,
   /** floarea decorativă de deasupra calendarului — cade prima când nu e loc */
@@ -247,7 +249,7 @@ export function socoteste(cerut: NumarCerut): Socoteala {
   // --- cât mănâncă capetele articolelor -----------------------------------
   // Principalul și-a plătit deja titlul și zona neagră mai sus; secundarii și le plătesc aici.
   const costSecundar = (a: ArticolCerut): number =>
-    INALTIMI.zonaNeagraMica + INALTIMI.titlu + (a.poza ? INALTIMI.pozaMica : 0) + (a.sursa ? INALTIMI.sursa : 0)
+    INALTIMI.aerIntreArticole + INALTIMI.zonaNeagraMica + INALTIMI.titlu + (a.poza ? INALTIMI.pozaMica : 0) + (a.sursa ? INALTIMI.sursa : 0)
   const costPrincipal = cerut.principal.sursa ? INALTIMI.sursa : 0
   const capete = costPrincipal + secundari.reduce((n, a) => n + costSecundar(a), 0)
 
