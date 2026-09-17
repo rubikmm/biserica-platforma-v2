@@ -115,6 +115,9 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^5.20260826.1
         version: 5.20260908.1
+      pdf-lib:
+        specifier: ^1.17.1
+        version: 1.17.1
       turbo:
         specifier: ^2.5.0
         version: 2.10.12
@@ -235,6 +238,9 @@ importers:
       '@xc/abonare':
         specifier: workspace:*
         version: link:../../packages/abonare
+      '@xc/actiuni':
+        specifier: workspace:*
+        version: link:../../packages/actiuni
       '@xc/auth':
         specifier: workspace:*
         version: link:../../packages/auth

@@ -59,6 +59,33 @@ export async function pdfDin(legatura: Fetcher, html: string): Promise<ArrayBuff
   })
 }
 
+/**
+ * PDF-ul și, pe lângă el, ce a avut de spus pagina despre ea însăși (`data-raport`).
+ *
+ * Cine își așază singur textul în cutii — foaia buletinului — e singurul care ȘTIE, la sfârșitul
+ * curgerii, cât a intrat și cât a rămas pe dinafară. Cifra aceea trebuie să iasă din browser
+ * odată cu hârtia: altfel am tipări un număr din care lipsește un paragraf și n-am afla decât de
+ * la om. Raportul e JSON scris de pagină; ce nu se poate citi se întoarce ca `undefined`, nu ca
+ * eroare — hârtia rămâne bună chiar dacă raportul lipsește.
+ */
+export async function pdfCuRaport<T = unknown>(legatura: Fetcher, html: string): Promise<{ pdf: ArrayBuffer; raport?: T }> {
+  return cuBrowser(legatura, async (browser) => {
+    const page = await incarca(browser, html)
+    const pdf = await page.pdf({ format: 'a4', printBackground: true, preferCSSPageSize: true, timeout: 20000 })
+    const scris = await page
+      .evaluate("document.documentElement.getAttribute('data-raport')")
+      .catch(() => null)
+    await page.close()
+    let raport: T | undefined
+    try {
+      raport = typeof scris === 'string' ? (JSON.parse(scris) as T) : undefined
+    } catch {
+      raport = undefined
+    }
+    return { pdf: new Uint8Array(pdf).buffer as ArrayBuffer, raport }
+  })
+}
+
 export async function jpgDin(legatura: Fetcher, html: string): Promise<ArrayBuffer> {
   return cuBrowser(legatura, async (browser) => {
     const page = await incarca(browser, html)

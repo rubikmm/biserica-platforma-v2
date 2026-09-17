@@ -29,8 +29,8 @@
  * ⚠️ SAGEATA NU E O NAVIGARE, E O FAPTA (aceeasi regula ca la A8): duce la `/nou`, ecranul
  * buletinului care URMEAZA sa apara. Fiind o fapta de admin, se scrie NUMAI pentru admini —
  * enoriasul ramane cu bulina, scrisul, Arhiva si lupa.
- * ⚠️ Sagetile „◀ numărul dinainte / numărul următor ▶" de sub un numar au RAMAS: la buletin ele
- * rasfoiesc arhiva de hartie, nu tin loc de meniu. Ce a iesit e randul vechi de unelte.
+ * ⚠️ Sagetile „◀ numărul dinainte / numărul următor ▶" de sub un numar AU IESIT si ele (user,
+ * 17.09.2026, seara) — inapoi se merge prin Arhiva, ca la A8. Ce a iesit inainte e randul vechi de unelte.
  */
 import type { Navigatie } from '@xc/config'
 import { ICOANE, LUNI, LUNI_SCURT, dataCuZi, dataLunga, esc, pagina } from '@xc/ui'
@@ -359,6 +359,33 @@ function vesteaAbonarii(m: Meniu): string {
   return ''
 }
 
+/**
+ * INTRERUPATORUL „Revers" de langa Tipărește: aprins, adresa brosurii capata `?revers=1`; stins, o
+ * pierde. Alegerea ramane in localStorage (`buletin_revers`) — e a imprimantei omului, nu a numarului,
+ * deci trebuie sa-l astepte si saptamana viitoare. Porneste STINS; fara JS butonul nu face nimic, iar
+ * brosura iese cea obisnuita. ES5 dinadins, ca tot JS-ul de aici.
+ */
+const JS_REVERS = `
+(function(){
+  var CHEIE = "buletin_revers";
+  var b = document.getElementById("b-revers"), t = document.getElementById("b-tipareste");
+  if (!b || !t) return;
+  var baza = t.getAttribute("href").replace(/\\?revers=1$/, "");
+  function pune(pornit){
+    b.setAttribute("aria-pressed", pornit ? "true" : "false");
+    t.setAttribute("href", pornit ? baza + "?revers=1" : baza);
+  }
+  var pornit = false;
+  try { pornit = localStorage.getItem(CHEIE) === "1"; } catch (e) {}
+  pune(pornit);
+  b.addEventListener("click", function(){
+    pornit = !pornit;
+    pune(pornit);
+    try { localStorage.setItem(CHEIE, pornit ? "1" : "0"); } catch (e) {}
+  });
+})();
+`
+
 /** JS-ul paginilor: rasfoitul. Cele doua bare care coboara din pastila — anii si cautarea — sunt in
  *  `JS_BARE`, langa ele. Scris fara sageti si fara let/const, ca JS-ul carcasei — telefoanele vechi
  *  ale enoriasilor il citesc si pe acela. */
@@ -507,7 +534,7 @@ function sablon(ctx: Ctx, m: Meniu, titluPagina: string | undefined, corp: strin
     // numai sa fie scrisa o data. Barele, insa, trebuie sa stea CHIAR sub randul de unelte.
     subantet: `${baraAnilor(ctx, m)}\n    ${baraCautarii(ctx, m)}\n    ${fereastraBuletinului(ctx)}`,
     corp: `${vesteaAbonarii(m)}${corp}`,
-    scripturi: JS_BARE + JS_PAGINI + JS_ABONARE,
+    scripturi: JS_BARE + JS_REVERS + JS_PAGINI + JS_ABONARE,
   })
 }
 
@@ -535,9 +562,17 @@ const fisa = (ctx: Ctx, b: BuletinScurt): string =>
  * numai in browserele de birou si numai pe acelasi domeniu, iar pe iPhone ar fi deschis foaia in
  * locul descarcarii. Parametrul schimba `content-disposition` pe server, deci tine peste tot; `download`
  * ramane scris pe langa, pentru numele fisierului.
+ * ⚠️ **Descarcă e FĂRĂ CUVÂNT** (user, 17.09.2026, 22:00: „fără text, doar dimensiunea fișierului și
+ * iconița specifică — se înțelege ce face"): sageata in jos si marimea fisierului. Cuvantul a ramas
+ * numai pentru cititorul de ecran (`aria-label`) si in `title`.
  * ⚠️ **Tipărește** duce la brosura (`/tipar/…`), nu la PDF-ul obisnuit — vezi `tipar.ts`. Se deschide
  * INLINE, in vizualizatorul browserului, de unde omul apasa tiparirea; o descarcare l-ar fi pus sa
  * caute fisierul prin dosare inainte sa ajunga la imprimanta.
+ * ⚠️ **Revers**, in dreapta lui Tipărește — un INTRERUPATOR, nu o destinatie (user, 17.09.2026, 22:00:
+ * „există imprimante care au nevoie de opțiunea specială ca interiorul să fie întors ca să iasă cu un
+ * booklet… dacă apăs tipărește și am revers ON foaia a doua este întoarsă 180 de grade"). Aprins, pune
+ * `?revers=1` pe adresa brosurii — versoul iese rotit cu 180° (`tipar.ts`). Alegerea tine de
+ * IMPRIMANTA omului, nu de numar, deci se tine minte in localStorage (`JS_REVERS`) si porneste STINSA.
  *
  * Fara PDF (doua numere vechi au ramas doar cu poza), butoanele se sting in loc sa duca in gol.
  */
@@ -548,16 +583,19 @@ function butoaneleNumarului(ctx: Ctx, b: Buletin): string {
       `${IC_PDF} Fără PDF</span>`
     )
   }
-  const marime = b.marime_pdf ? ` <small>· ${(b.marime_pdf / 1048576).toFixed(1)} MB</small>` : ''
+  const marime = b.marime_pdf ? `<small>${(b.marime_pdf / 1048576).toFixed(1)} MB</small>` : ''
   const nume = b.cheie_pdf.slice(b.cheie_pdf.lastIndexOf('/') + 1)
   return (
     `<a class="btn intreg" id="b-descarca" href="${fisier(ctx, b.cheie_pdf)}?descarca=1"` +
-    ` download="${esc(nume)}" title="Descarcă foaia numărului ${b.nr}">` +
-    `${IC_DESCARCA} Descarcă${marime}</a>` +
+    ` download="${esc(nume)}" title="Descarcă foaia numărului ${b.nr}" aria-label="Descarcă foaia numărului ${b.nr}">` +
+    `${IC_DESCARCA}${marime}</a>` +
     `<a class="btn intreg" id="b-tipareste" href="${esc(ctx.prefix)}/tipar/${b.nr}-${b.data}.pdf"` +
     ` target="_blank" rel="noopener"` +
     ` title="Broșură pentru tipar: două pagini pe o coală A4, în ordinea îndoirii">` +
-    `${IC_TIPAR} Tipărește</a>`
+    `${IC_TIPAR} Tipărește</a>` +
+    `<button type="button" class="btn intreg com-revers" id="b-revers" aria-pressed="false"` +
+    ` title="Întoarce coala a doua cu 180°, pentru imprimantele care întorc pe latura scurtă">` +
+    `Revers<span class="bec" aria-hidden="true"></span></button>`
   )
 }
 
@@ -606,7 +644,7 @@ function coperta(ctx: Ctx, b: Buletin): string {
  * numerelor dinainte. Ce cauta omul care intra aici e buletinul de duminica asta; arhiva e la un buton
  * distanta, in antet.
  */
-export function paginaAcasa(ctx: Ctx, m: Meniu, b: Buletin | null, dinainte: BuletinScurt[], cate: number): string {
+export function paginaAcasa(ctx: Ctx, m: Meniu, b: Buletin | null, dinainte: BuletinScurt[]): string {
   if (!b) {
     return sablon(
       ctx,
@@ -632,20 +670,16 @@ ${
     ? `<h3 class="titlu-fasie">Numerele dinainte</h3>
 <div class="raft fasie">${dinainte.map((x) => fisa(ctx, x)).join('')}</div>`
     : ''
-}
-<p class="marunt sub-fasie"><a href="${esc(ctx.prefix)}/arhiva">Arhiva întreagă</a> — ${cate} numere, din 2012 până azi.</p>`,
+}`,
   )
 }
 
-/** Pagina unui numar din arhiva: aceeasi asezare ca prima pagina, plus sagetile spre vecini. */
-export function paginaBuletin(
-  ctx: Ctx,
-  m: Meniu,
-  b: Buletin,
-  v: { inainte: BuletinScurt | null; dupa: BuletinScurt | null },
-): string {
-  const sageata = (x: BuletinScurt | null, text: string) =>
-    x ? `<a class="btn" href="${adresa(ctx, x)}">${text}</a>` : `<span class="btn gol">${text}</span>`
+/**
+ * Pagina unui numar din arhiva: aceeasi asezare ca prima pagina.
+ * ⚠️ Sagetile „◀ numărul dinainte / numărul următor ▶" de jos AU IESIT (user, 17.09.2026, seara:
+ * „jos de tot este o navigare — scoate-o"). Vecinii se mai cer doar ca sa se stie daca e numarul curent.
+ */
+export function paginaBuletin(ctx: Ctx, m: Meniu, b: Buletin): string {
   return sablon(
     ctx,
     m,
@@ -656,11 +690,7 @@ export function paginaBuletin(
   <p class="cand">${dataCuZi(b.data)}${b.pagini ? ` · ${b.pagini} pagini` : ''}</p>
 </div>
 ${coperta(ctx, b)}
-<nav class="btns hartii">${butoaneleNumarului(ctx, b)}</nav>${fereastraRasfoit(ctx, b)}
-<nav class="btns vecini">${sageata(v.inainte, `◀ <span class="cuv">numărul dinainte</span>`)}${sageata(
-      v.dupa,
-      `<span class="cuv">numărul următor</span> ▶`,
-    )}</nav>`,
+<nav class="btns hartii">${butoaneleNumarului(ctx, b)}</nav>${fereastraRasfoit(ctx, b)}`,
   )
 }
 
@@ -720,30 +750,179 @@ export function buletinulNou(
  * ⚠️ PAGINA NU COMPUNE INCA NIMIC: dedesubt sta un chenar gol, cat pagina intai a unui numar, locul
  * in care va intra cuprinsul („ce punem în pagină mai vedem" — user).
  */
+export interface StareaCompunerii {
+  /** câte semne încap în fiecare variantă — cifrele din `masuri.ts`, pentru socoteala din pagină */
+  variante: Array<{ varianta: string; semne: number; zone: Array<{ cine: string; semne: number }> }>
+  /** ce a răspuns ultima compunere, dacă s-a cerut una */
+  raspuns?: {
+    facut: boolean
+    cheie?: string | null
+    plangeri: string[]
+    zone?: Array<{ cine: string; semne: number; scrise: number; ramase: number }>
+  }
+  /** ce scrisese omul, ca să nu se piardă la reîncărcare */
+  scris?: Record<string, string>
+  /** programul săptămânii tipărite — ce a spus aplicația `program` */
+  calendar?: { titlu: string; slujbe: number } | null
+}
+
+/** Un câmp de formular, cu eticheta lui. */
+const camp = (nume: string, eticheta: string, val: string, o: { lung?: boolean; ajutor?: string; tip?: string } = {}): string =>
+  `<p class="camp${o.lung ? ' lung' : ''}">
+  <label for="c-${nume}">${esc(eticheta)}</label>
+  ${o.lung
+    ? `<textarea id="c-${nume}" name="${nume}" rows="8" data-numara>${esc(val)}</textarea>`
+    : `<input id="c-${nume}" name="${nume}" type="${o.tip ?? 'text'}" value="${esc(val)}">`}
+  ${o.ajutor ? `<span class="ajutor">${o.ajutor}</span>` : ''}
+</p>`
+
+/** Blocul unui articol din formular: autorul (zona neagră), titlul, textul, sursa. */
+function campuriArticol(prefix: string, titlu: string, scris: Record<string, string>, cuPoza: string): string {
+  const v = (c: string): string => scris[`${prefix}_${c}`] ?? ''
+  return `<fieldset class="articol" data-articol="${prefix}">
+  <legend>${esc(titlu)}</legend>
+  ${camp(`${prefix}_autor`, 'Autorul (scrisul alb din zona neagră)', v('autor'), { ajutor: 'Dacă nu se știe: „Fără autor".' })}
+  <div class="doua">
+    ${camp(`${prefix}_ani`, 'Anii vieții', v('ani'), { ajutor: 'ex. 1661-1729' })}
+    ${camp(`${prefix}_pomenire`, 'Pomenirea', v('pomenire'), { ajutor: 'ex. † 16 august' })}
+  </div>
+  ${camp(`${prefix}_titlu`, 'Titlul', v('titlu'))}
+  ${camp(`${prefix}_poza`, cuPoza, v('poza'), { ajutor: 'adresa pozei; gol = fără poză' })}
+  ${camp(`${prefix}_text`, 'Textul', v('text'), { lung: true })}
+  ${camp(`${prefix}_sursa`, 'Sursa', v('sursa'), { ajutor: 'ex. ziarullumina.ro' })}
+  <p class="socoteala" data-pentru="${prefix}"></p>
+</fieldset>`
+}
+
+/**
+ * ECRANUL NUMĂRULUI CARE URMEAZĂ — capul lui și, din 17.09.2026, formularul din care se compune
+ * foaia tipărită.
+ *
+ * Capul e cel de la orice număr, doar că eticheta măruntă scrie „Numărul următor" cu VERDE (user,
+ * 17.09.2026), numărul mare e ROȘU (ultimul din arhivă + 1), iar sub el stă duminica lui.
+ * ⚠️ Numărul de după cel nou (617) NU se scrie: a ieșit la cererea userului. Nu-l readu.
+ * ⚠️ NUMĂRUL ROȘU E CEL NOU, NU CEL DIN ARHIVĂ: el numără de la buletinul la care LUCREAZĂ.
+ * ⚠️ Numerele nu se scriu în cod: ies din arhivă, deci se mișcă singure când intră un număr nou.
+ *
+ * ⚠️ SOCOTEALA SE VEDE ÎN TIMP CE SCRII, nu după ce apeși. Sub fiecare text stă câte semne încap
+ * și câte au mai rămas, socotite în pagină din aceleași cifre ca la server (`masuri.ts`, trimise
+ * o dată, ca JSON). Un om care află abia la compunere că a scris cu 2 000 de semne prea mult a
+ * pierdut o oră degeaba — iar textul buletinului se scrie o dată pe săptămână, seara.
+ * ⚠️ Cifra din pagină e o PREVESTIRE, nu adevărul: adevărul îl spune curgerea la randare, iar
+ * răspunsul compunerii îl arată. De aceea scrie „încap ~", cu tilda.
+ */
 export function paginaNou(
   ctx: Ctx,
   m: Meniu,
   curent: BuletinScurt | null,
   nou: { nr: number | null; data: string },
+  stare: StareaCompunerii,
 ): string {
+  const scris = stare.scris ?? {}
   const capul = `<div class="cap-numar cap-nou">
   <p class="eticheta urmator">Numărul următor</p>
   <h2>${nou.nr ? `Nr. ${nou.nr}` : 'Buletin nou'}</h2>
   <p class="cand">${dataCuZi(nou.data)}</p>
 </div>`
+
+  const veste = stare.raspuns
+    ? stare.raspuns.facut
+      ? `<p class="veste bine">Numărul e compus. <a href="${ctx.prefix}/fisier/${esc(stare.raspuns.cheie ?? '')}">Deschide PDF-ul</a>.</p>`
+      : `<div class="veste rau"><p>Nu s-a compus:</p><ul>${stare.raspuns.plangeri.map((p) => `<li>${esc(p)}</li>`).join('')}</ul></div>`
+    : ''
+
+  const cati = Number(scris.secundari ?? '0')
+  const secundare = [1, 2]
+    .map((i) => `<div class="secundar" data-nr="${i}"${i > cati ? ' hidden' : ''}>${campuriArticol(`s${i}`, `Articolul secundar ${i}`, scris, 'Poza mică (adresă)')}</div>`)
+    .join('')
+
+  const formular = `<form method="post" action="${ctx.prefix}/nou" class="compunere">
+  <div class="doua">
+    ${camp('nr', 'Numărul', scris.nr ?? (nou.nr ? String(nou.nr) : ''), { tip: 'number' })}
+    ${camp('data', 'Duminica numărului', scris.data ?? nou.data, { tip: 'date', ajutor: 'programul tipărit e al săptămânii care începe a doua zi' })}
+  </div>
+  ${camp('motto', 'Motto', scris.motto ?? '', { lung: true, ajutor: 'citatul de sub antet, pe cel mult două rânduri' })}
+  ${camp('moto_autor', 'Cine a spus-o', scris.moto_autor ?? '')}
+  ${campuriArticol('p', 'Articolul principal', scris, 'Poza mare (adresă)')}
+  <p class="cati-secundari">
+    <label for="c-secundari">Articole secundare</label>
+    <select id="c-secundari" name="secundari">
+      ${[0, 1, 2].map((i) => `<option value="${i}"${i === cati ? ' selected' : ''}>${i === 0 ? 'niciunul' : i === 1 ? 'unul' : 'două'}</option>`).join('')}
+    </select>
+  </p>
+  ${secundare}
+  <p class="total" data-total></p>
+  <p class="butoane">
+    <button type="submit" name="fapta" value="compune" class="btn mare">Compune numărul</button>
+  </p>
+</form>`
+
+  const calendar = stare.calendar
+    ? `<p class="marunt">Pe pagina a patra intră programul liturgic pentru <b>${esc(stare.calendar.titlu)}</b> — ${stare.calendar.slujbe} ${stare.calendar.slujbe === 1 ? 'slujbă' : 'de slujbe'}, cerute de la aplicația Programul.</p>`
+    : `<p class="marunt rau">Programul săptămânii nu e încă validat, deci pagina a patra n-are ce tipări. Validează-l întâi în aplicația Programul.</p>`
+
   return sablon(
     ctx,
     m,
     'Buletin nou',
     `${capul}
-<div class="chenar-nou" aria-hidden="true"></div>
-<p class="marunt sub-nou">Deocamdată pagina e goală: numărul nu se compune încă de aici.${
+${veste}
+${calendar}
+${formular}
+<p class="marunt sub-nou">${
       curent
-        ? ` Ultimul apărut: <a href="${adresa(ctx, curent)}">nr. ${curent.nr}</a>, ${dataLunga(curent.data)}.`
+        ? `Ultimul apărut: <a href="${adresa(ctx, curent)}">nr. ${curent.nr}</a>, ${dataLunga(curent.data)}.`
         : ''
-    }</p>`,
+    }</p>
+<script>window.XC_MASURI = ${JSON.stringify(stare.variante)};</script>
+<script>${SOCOTESTE_IN_PAGINA}</script>`,
   )
 }
+
+/**
+ * Socoteala care merge odată cu scrisul: alege varianta după câți secundari sunt și după poză,
+ * apoi scrie sub fiecare text câte semne încap și câte au rămas.
+ *
+ * ES5 dinadins, ca tot ce trimitem în pagină (regula aplicației, 13.09.2026).
+ */
+const SOCOTESTE_IN_PAGINA = `
+(function(){
+  var masuri = window.XC_MASURI || [];
+  var form = document.querySelector('form.compunere');
+  if (!form || !masuri.length) return;
+  function cati(){ var s = form.querySelector('[name=secundari]'); return s ? Number(s.value) : 0; }
+  // trei variante, dupa cati secundari sunt: [0] un autor, [1] +1, [2] +2 — poza nu schimba socoteala,
+  // coloana intai a paginii intai e a ei oricum (regula generala a userului)
+  function varianta(){ return masuri[Math.min(cati(), masuri.length - 1)]; }
+  function semne(t){ return t.replace(/\\s+/g, ' ').replace(/^ | $/g, '').length; }
+  function arata(){
+    var v = varianta(); if (!v) return;
+    var n = cati(), total = 0;
+    for (var i = 1; i <= 2; i++) {
+      var bloc = form.querySelector('.secundar[data-nr="' + i + '"]');
+      if (bloc) { if (i <= n) bloc.removeAttribute('hidden'); else bloc.setAttribute('hidden', ''); }
+    }
+    var zone = [['p', v.zone[0]]];
+    for (var k = 1; k <= n && k < v.zone.length; k++) zone.push(['s' + k, v.zone[k]]);
+    for (var z = 0; z < zone.length; z++) {
+      var prefix = zone[z][0], masura = zone[z][1];
+      var camp = form.querySelector('[name=' + prefix + '_text]');
+      var unde = form.querySelector('.socoteala[data-pentru=' + prefix + ']');
+      if (!camp || !unde || !masura) continue;
+      var scrise = semne(camp.value); total += scrise;
+      var ramase = masura.semne - scrise;
+      unde.textContent = 'Încap ~' + masura.semne + ' de semne. Scrise: ' + scrise + '. ' +
+        (ramase >= 0 ? 'Mai ai loc pentru ' + ramase + '.' : 'Ai trecut cu ' + (-ramase) + ' peste măsură.');
+      unde.className = 'socoteala' + (ramase < 0 ? ' peste' : '');
+      unde.setAttribute('data-pentru', prefix);
+    }
+    var t = form.querySelector('[data-total]');
+    if (t) t.textContent = 'Cu totul: ' + total + ' din ~' + v.semne + ' de semne (' + v.varianta + ').';
+  }
+  form.addEventListener('input', arata);
+  form.addEventListener('change', arata);
+  arata();
+})();`
 
 /**
  * ARHIVA: **un singur an pe ecran**, ca la A2 — 619 de numere intr-un teanc nu se rasfoiesc. Anul

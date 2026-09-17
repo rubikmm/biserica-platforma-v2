@@ -312,6 +312,37 @@ propunerea automată, ca în V1.
 
 ## NEXT
 
+0a. **COMPUNEREA BULETINULUI — făcută pe 17.09.2026, seara; ce a rămas de probat și de făcut.**
+
+   API-ul care creează foaia tipărită (cerere user: antet fix + motto/nr/dată, două coloane pe
+   toate patru paginile, un principal și cel mult doi secundari, calendarul ca la tipar pe pagina a
+   patra, plus socoteala lungimii). Amănuntele de formă și măsurile: „BULETINUL — foaia tipărită".
+
+   **PROBAT**: foaia randată local cu Chromium (`apps/buletin/unelte/proba-foaie.mjs`), măsurată
+   față de numerele 610–615 — coloana 241.1 pt, rândul 16.5 pt, 45 de rânduri, 36.9 semne pe rând
+   (arhiva: 36.67); socoteala prezice 9028 de semne și intră 9053, pe toate patru variantele, cu 0
+   pe dinafară. Refactorul programului e **neutru la pixel** (probă: HTML identic, randare identică).
+   472 de probe trec, typecheck curat.
+
+   **NEPROBAT, în ordinea în care trebuie luat**:
+   1. **cap-coadă pe local**: `pnpm dev` nu răspundea la `https://rubik:8474` în timpul lucrului, deci
+      ruta `/nou` (GET și POST) și legătura de serviciu spre program **nu s-au încercat vii**;
+   2. **Browser Rendering**: PDF-ul s-a făcut până acum numai cu Chromium-ul containerului. Pe
+      Cloudflare se cheamă `pdfCuRaport` (nou în `@xc/ui`) — de văzut că `data-raport` chiar ajunge
+      înapoi, fiindcă pe el stă toată siguranța „n-a rămas text pe dinafară";
+   3. **fonturile din Chromium-ul de laborator**: săgeata `→` din tabelul programului iese strâmbă
+      local — **și la foaia programului, care e cod netins de runda asta**, deci e lipsa fonturilor
+      din container, nu un defect nou. De verificat totuși cum iese pe producție.
+   4. **pozele se dau azi ca ADRESE** (URL), nu se încarcă din ecran: `p_poza`, `s1_poza`, `s2_poza`.
+      Încărcarea în R2 și tăierea la măsura coloanei sunt pasul următor firesc.
+   5. ~~floarea decorativă~~ **✓ venită de la user 17.09.2026, 21:49** (`resurse/floare.png`).
+   6. **densitatea**: foaia noastră ține cu ~15 rânduri mai mult text decât Word-ul pe același număr
+      (615). Nu e greșit — încape mai mult —, dar dacă userul vrea foaia „ca în Word" la rând, de
+      strâns pagina 1 (titlul mai jos / mai mare) și de dat 44 de rânduri pe coloană în loc de 45.
+   7. **diacriticele**: refacerea lui 615 a cerut punerea lor la loc din sursă, fiindcă PDF-urile din
+      Word n-au hartă Unicode pe Cambria. Dacă se vor reface și alte numere vechi din API, e nevoie de
+      o unealtă a lor (azi e un script de laborator în `tmp/diacritice-615.py`, în spațiul agentului).
+
 0. **⚠️ CUTOVER — pornit 14.09.2026, seara. Unde s-a ajuns și ce urmează.**
 
    **Descoperirea care schimbă tot**: producția V2 **nu exista deloc** (zero `xc-*-production`),
@@ -1664,6 +1695,111 @@ modelului: **obiceiul nu e programare** — dacă „următoarea" lipsește, spu
 cu sfinții de duminică" → PDF 54 KB prin Browser Rendering, în R2, descărcabil prin
 `/program/chat/fisier/<cheie>`. **Neprobate**: bula pe calendar și tipic (au acțiuni, n-au bulă).
 
+## BULETINUL — foaia tipărită, compusă din API (17.09.2026)
+
+Până acum buletinul se făcea în **Word** și se urca gata făcut; de aici înainte se poate **compune**:
+`apps/buletin/src/{masuri,foaie,compune,actiuni}.ts`. Arhiva rămâne neatinsă — cele 619 numere vechi
+sunt fișiere, nu se recompun.
+
+**Forma cerută de user**, măsurată pe numerele 610–615 (`pdftotext -bbox-layout`, unealta de
+calibrare a rămas la `tmp/calibrare-buletin.py` în spațiul agentului):
+
+| ce | cât |
+|---|---|
+| pagina | A4, 595.32 × 841.92 pt |
+| coloana | **241.1 pt** (măsurat 240.93–241.22 pe 24 de coloane), șanț 21.12 pt, marginea stângă 42.6 pt |
+| rândul | **16.56 pt**; banda ține **45 de rânduri** de coloană |
+| corpul de literă | **15 pt** Cambria → **Caladea** la noi (Calibri → Carlito) |
+| semne pe rândul plin | **36.67** (media a 915 de rânduri pline din arhivă) |
+| un număr întreg | 8 970–10 485 de semne cu tot cu antet, titluri și calendar |
+
+⚠️ **CORPUL E 15 pt, NU 12.** Interlinia de 16.5 pt ademenește spre „12 pt cu 1.38" — și atunci
+socoteala dă 45 de semne pe rând în loc de 37, adică **un articol întreg în plus** față de ce încape.
+Mărimea s-a citit din PDF (`pdftohtml -xml`: 23 px la scara 1.5) și s-a probat numărând semnele pe
+randare. Dacă cineva „îndreaptă" cifra asta, probele din `tests/buletin-socoteala.test.ts` cad.
+
+**Anatomia foii** (din numerele 613–615, unde se vede și varianta cu secundar):
+- **pagina 1**: crucea + „BULETINUL PAROHIEI" + parohia (antet fix, Trajan), **motto** pe două
+  rânduri cursive cu cel citat dedesubt, linia cu pastila **„Nr. 615 / 6 septembrie 2026"**. Apoi
+  coloana întâi: **poza mare** (o coloană pe 448 pt) și **zona neagră** cu numele autorului, anii și
+  pomenirea, scris alb, centrat; coloana a doua: **titlul** articolului și începutul textului;
+- **paginile 2–3**: patru coloane de text justificat;
+- **pagina 4**: textul se termină, „Sursa: …" cu linie deasupra, apoi **PROGRAMUL LITURGIC** cu
+  tabelul programului și **subsolul fix** (abonarea + adresa parohiei).
+
+**Trei lucruri care se încalcă ușor:**
+
+⚠️ **CURGEREA O FACEM NOI, ÎN PAGINĂ** (scriptul din `foaie.ts`), nu CSS-ul: cutiile au înălțimi
+diferite (coloana întâi a paginii întâi e plină de poză, cele de pe pagina a patra sunt scurtate de
+calendar), iar `column-count` nu curge între pagini separate. Câștigul al doilea e mai important
+decât primul: **știm câte semne au intrat cu adevărat** și le scriem în `data-raport`, de unde le ia
+`pdfCuRaport` (nou în `@xc/ui`). Dacă a rămas text pe dinafară, numărul **nu se dă drept bun**.
+Două capcane măsurate: `scrollHeight` nu coboară niciodată sub `clientHeight` (deci o coloană goală
+pare plină), iar `offsetTop/offsetHeight` se rotunjesc la pixel și peste 45 de rânduri sfertul adunat
+**taie ultimul rând pe hârtie** — de aceea se măsoară cu `getBoundingClientRect`.
+
+⚠️ **CALENDARUL SE CERE DE LA PROGRAM, nu se desenează în buletin**: `GET /v1/tabel-tipar?data=…`
+(Service Binding `PROGRAM`), care întoarce `{ tabel, stil, slujbe, detalii }`. În program s-au scos
+din `foaieHtml` două piese refolosibile — `tabelProgram()` și `stilTabel(cuVariabile)` — fără nicio
+schimbare de randare (probat: HTML identic, 0 pixeli diferență). **Poarta foii de pe ușă ține și
+aici**: o săptămână nevalidată nu dă tabel, deci nu se tipărește un program neconfirmat.
+⚠️ `stilTabel(true)` **numai pentru cine pune tabelul în pagina lui**: variabilele scrise pe tabel ar
+bate `--f`-ul coborât de scriptul de potrivire al foii programului.
+⚠️ **Se cere ziua de A DOUA ZI după numărul buletinului**: nr. 615, datat 6 septembrie, poartă
+programul pentru 7–13 septembrie. Greșeala se vede abia pe hârtie, în 60 de exemplare.
+
+⚠️ **SOCOTEALA REFUZĂ, NU TAIE** (hotărârea userului, 17.09.2026): `masuri.ts` spune câte semne
+încap pe fiecare articol și cu cât s-a trecut peste; compunerea se oprește cu cifrele alea. Socoteala
+e **aritmetică, fără browser** (un model care întreabă „cât scriu?" trebuie să afle în milisecunde),
+iar adevărul îl dă tot randarea. Prezice puțin **mai puțin** decât încape — 9028 față de 9053 —, ceea
+ce e direcția bună de greșit.
+
+**Pentru modelul de limbaj** (cerere user: „un sistem care poate lucra cu un AI la final, nu foarte
+deștept, dar cu rezultate foarte bune, cum am făcut la Programul liturgic") — `apps/buletin/src/actiuni.ts`:
+- **`buletin.masura`** e cunoștință de **FUNDAL**: modelul știe câte semne încap înainte să scrie,
+  fără să ceară. Un model mic nu întreabă „cât să scriu?" — scrie;
+- **`buletin.socoteala`** răspunde în cifre („mai ai loc pentru 812 semne"), nu în vorbe;
+- **`buletin.compune`** (`bulletin.write`) refuză cu cifra exactă cu care trebuie scurtat, deci
+  modelul are ce corecta la a doua încercare.
+
+**Hotărârile din a doua rundă (17.09.2026, 21:38–22:00)**, toate ale userului:
+- **REGULA COLOANEI ÎNTÂI**: pe pagina 1, coloana din stânga ține **doar poza și zona neagră** —
+  niciodată text („asta e regula generală"). Poza umple ce rămâne; fără poză stă un **placeholder**
+  desenat. De aceea socoteala are **trei** variante (1 autor / +1 / +2), nu patru: „fără poză" nu
+  există ca variantă.
+- **Titlul foii: MAJUSCULE, Trajan Pro 3 Regular** (fără aldin, user 17.09.2026 seara). Parohia sub el
+  a crescut la 11 pt. **Titlul secundarilor: Trajan Pro 3 Bold adevărat** (din 17.09.2026 seara — până
+  atunci aldin sintetic + contur, fiindcă aveam doar un Regular extras dintr-un PDF); cel al
+  principalului, pe pagina 1, e Regular, mai mare (21 pt) și stă cu 9 mm sub pastilă, cum e pe hârtie.
+  Fonturile: `resurse/TrajanPro3-Regular.otf` = Adobe original v1.012 (cu kerning), `TrajanPro3-Bold.otf`
+  din familia trimisă de user (abonament Adobe). Restul familiei (Black…SemiBold) nu e în repo.
+- **Calendarul strâns, treaptă cu treaptă**: `/v1/tabel-tipar?strans=1` fără sfinții duminicii,
+  `strans=2` și fără pericopă („în extremis"). `compune` încearcă 0 → 1 → 2 și se oprește la prima
+  care încape; răspunsul spune ce treaptă a folosit. Sărbătoarea zilei rămâne la orice treaptă.
+  ⚠️ Pericopa vine din program **pe UN rând** („Ap. …; Ev. …; glas 6, voscr. 4") — rândurile
+  separate erau doar în datele mele de probă. `PERICOPA` prinde acum și rândul care începe cu „glas".
+- **Golul de deasupra calendarului: 6 mm normal, 3 mm la nevoie** („minim cum e acum și dublu în
+  mod normal") — scriptul curge o dată cu 6, și numai dacă a rămas text pe dinafară reia cu 3.
+- **Floarea** a venit de la user (poză pe Slack) → `resurse/floare.png`, 44 mm lată, cade prima când
+  nu e loc.
+- `nota` (mențiunea de deasupra sursei) și `*cursiv*` (singurul marcaj din text, aplicat după escapare).
+- **`buletin.reguli`** — acțiune de fundal cu regulile foii în cuvinte, pentru „un AI simplu care să
+  înlocuiască un text, să ceară ceva, să citească niște reguli" (componentele numărului, ce nu are
+  voie, ce face când nu încape).
+
+**Proba de fidelitate — nr. 615 refăcut numai prin API** (`proba-foaie.mjs --cerere cerere.json
+--original 615.pdf`, cererea păstrată la `tmp/cerere-615.json` în spațiul agentului): textul scos din
+PDF **n-avea diacritice** (fontul Cambria din PDF n-are hartă Unicode) — puse la loc după articolul-sursă
+(basilica.ro, doxologia.ro), cuvânt cu cuvânt, cu 2 negăsite din ~1 400. Rezultatul: 8 886 de semne,
+0 pe dinafară, 7 coloane, gol 6 mm; pagină cu pagină aproape identic cu originalul. **Rămâne mai
+dens** decât Word-ul: al nostru termină textul cu vreo 15 rânduri mai sus pe pagina 4 (pagina 1 ține
+mai mult text sub titlu). Comparațiile sunt în `outputs/615-comparatie-pagina-*.png`.
+
+**Ecranul `/nou`** are acum formularul (motto, număr, dată, principalul, până la doi secundari) și
+**socoteala care merge odată cu scrisul**, sub fiecare câmp de text, din aceleași cifre ca la server.
+⚠️ **Chenarul gol a ieșit** — locul lui l-a luat formularul. Capul paginii rămâne neatins (eticheta
+verde „Numărul următor", numărul roșu = ultimul din arhivă + 1, duminica lui).
+
 ## Aplicațiile portate — amănunte
 
 - **`calendar`** (A1): D1 `xc-calendar-staging`, 730 de zile (2025+2026) + sinaxare, `/v1` în forma
@@ -1864,6 +2000,46 @@ forța antetul `Host`**.
 ## Jurnal
 
 ### 2026-09-17
+
+- **TRAJAN PRO 3 ADEVĂRAT — buletin 0.5.1, program 0.7.8 (publicate seara, la „Deploy")**. Userul a trimis
+  familia Trajan Pro 3 (are abonament Adobe, „e liber din Adobe Fonts"). Constatare: Regular-ul folosit
+  până acum era **extras dintr-un PDF** (PdfGrabber, fără kerning); în zip erau 6 tăieturi la fel
+  (Black…SemiBold, 931 glife, cu diacritice) și un **Regular Adobe original** (v1.012, 1401 glife, GPOS).
+  Făcut: Regular-ul original în `resurse/` la buletin și program; `TrajanPro3-Bold.otf` la buletin,
+  `@font-face` 400/700, `.titlu-articol` fără `-webkit-text-stroke`. Curgerea pe nr. 615 neschimbată
+  (8 886 semne, 0 afară, 7 coloane, gol 6 mm). Întrebarea lui despre **Cambria/Calibri**: sunt fonturi
+  Microsoft, nu Adobe — Caladea/Carlito au aceleași lățimi, dacă vrea desenul întocmai le trimite din
+  Windows. ⚠️ Colateral, de văzut: în PDF apare și `LiberationSerif-Italic` — Caladea Italic n-are un
+  semn din motto. Publicarea a dus online și tot lucrul de mai jos (API-ul buletinului).
+- **API-UL CARE COMPUNE BULETINUL — buletin 0.5.0, program 0.x (NEPUBLICATE)**. Cerere a userului,
+  seara: antetul fix + `.motto`/`.nr`/`.data` ca start, două coloane pe toate patru paginile, un
+  autor principal (poză mare + zonă neagră + titlu + text + sursă) și cel mult doi secundari,
+  calendarul de pe pagina a patra „rândat exact ca la tipar", și **lungimea textului calculată
+  pentru toate variantele**. Trei hotărâri ale lui pe parcurs: socoteala **spune cât încape, nu
+  taie**; livrăm **API + ecranul `/nou`**; grafica fixă se **scoate din PDF-ul ultimului număr**
+  (apoi: „ai la dispoziție toate buletinele din urmă"); iar sistemul să poată fi condus de **un AI
+  mic**, „cum am făcut la Programul liturgic".
+  **Ce s-a făcut**: `masuri.ts` (geometria + socoteala), `foaie.ts` (cele 4 pagini, curgerea în
+  pagină), `compune.ts` (calendar → randare → depozit), `actiuni.ts` (`buletin.masura` ca fundal,
+  `buletin.socoteala`, `buletin.compune`), formularul din `/nou` cu socoteală vie, `pdfCuRaport` în
+  `@xc/ui`, iar în program `tabelProgram()` + `stilTabel()` + ruta `/v1/tabel-tipar`.
+  **Măsurătoarea care a schimbat totul**: corpul de literă al foii e **15 pt, nu 12** — interlinia de
+  16.5 pt m-a dus întâi la 12, iar socoteala ieșea cu 45 de semne pe rând în loc de 37 (un articol
+  întreg în plus). S-a prins numărând semnele pe propria randare și comparând cu arhiva.
+  **Probele**: socoteala prezice 9028 de semne, intră 9053, 0 pe dinafară, pe toate cele patru
+  variante; refactorul programului e neutru la pixel; 472 de probe trec.
+  **Neprobat**: ruta vie (`pnpm dev` nu răspundea) și Browser Rendering — vezi NEXT 0a.
+- **A DOUA RUNDĂ, 21:38–22:00 — șlefuirea după ochiul userului și proba de fidelitate.** Cerințe
+  venite una după alta: titlul foii caps + aldin, parohia mai mare, titlul articolului aldin; **regula
+  coloanei întâi** („doar imaginea și zona neagră"); placeholder de poză; calendarul strâns pe două
+  trepte (fără sfinți, apoi fără pericopă); golul deasupra calendarului 6 mm / 3 mm la nevoie; floarea
+  (trimisă pe Slack); `buletin.reguli` pentru un model simplu. Apoi: „**să refacem buletinul trecut**
+  … doar cu metodele API" — nr. 615 refăcut din PDF (text fără diacritice → puse la loc din
+  articolul-sursă) și comparat pagină cu pagină: aproape identic, al nostru puțin mai dens.
+  Întrebarea lui de principiu („aș fi preferat o variantă controlată din CSS și calculată JS… cum crezi
+  că un AI s-ar descurca mai bine, ceva de nivelul Sonnet") — răspuns în Slack: asta ȘI este (CSS-ul
+  dă măsurile, JS-ul din pagină curge și numără), iar socoteala aritmetică e stratul de deasupra care
+  scutește modelul de bucla randează-scurtează-randează.
 
 - **CHENARELE DE STARE SE VĂD NUMAI LA ADMIN — website 0.7.3** (seara, „voiam doar admin";
   **NEPUBLICAT**). `corp(nav, eAdmin)` în `apps/home/src/index.ts`: butoanele, numele și adresele

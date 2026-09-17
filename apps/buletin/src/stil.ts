@@ -286,6 +286,31 @@ export const LOCAL = `
               border:1px dashed var(--rule); border-radius:6px; background:var(--tinta) }
 .sub-nou { text-align:center; margin:14px 0 0 }
 
+/* ── FORMULARUL DE COMPUNERE (17.09.2026). Un singur șir de câmpuri, larg cât coloana de citit:
+   textul buletinului se scrie seara, dintr-o bucată, nu se completează ca o cerere la ghișeu.
+   ⚠️ Socoteala de sub fiecare text e piesa importantă a ecranului — de aceea stă LIPITĂ de câmp,
+   nu la piciorul paginii, și se înroșește când s-a trecut peste măsură. */
+.compunere { max-width:760px; margin:18px auto 0 }
+.compunere .articol { border:1px solid var(--rule); border-radius:8px; padding:14px 16px 6px; margin:0 0 18px }
+.compunere legend { font:600 15px ui-sans-serif,system-ui; padding:0 6px; color:var(--faint) }
+.camp { margin:0 0 12px }
+.camp label { display:block; font:600 13px ui-sans-serif,system-ui; margin:0 0 4px }
+.camp input, .camp textarea, .cati-secundari select {
+  width:100%; box-sizing:border-box; font:15px/1.45 ui-sans-serif,system-ui;
+  padding:8px 10px; border:1px solid var(--rule); border-radius:6px;
+  background:var(--paper); color:var(--ink) }
+.camp textarea { font-family:Georgia,"Times New Roman",serif; resize:vertical; min-height:160px }
+.camp .ajutor { display:block; font-size:13px; color:var(--faint); margin:3px 0 0 }
+.doua { display:grid; grid-template-columns:1fr 1fr; gap:0 14px }
+.socoteala { font:13px ui-sans-serif,system-ui; color:var(--faint); margin:0 0 10px }
+.socoteala.peste { color:var(--rosu); font-weight:600 }
+.total { font:600 14px ui-sans-serif,system-ui; text-align:center; margin:4px 0 14px }
+.cati-secundari { margin:0 0 16px }
+.cati-secundari label { display:block; font:600 13px ui-sans-serif,system-ui; margin:0 0 4px }
+.butoane { text-align:center; margin:0 0 8px }
+.btn.mare { font-size:16px; padding:10px 22px }
+@media (max-width:640px) { .doua { grid-template-columns:1fr } }
+
 /* ── COPERTA: pagina intai, mare, care duce in PDF. Chenar subtire si o umbra abia simtita,
    ca sa se vada ca e o hartie, nu o poza lipita pe fundal. */
 .coperta { display:block; max-width:460px; margin:0 auto; line-height:0 }
@@ -296,7 +321,15 @@ a.coperta:hover img { border-color:var(--rosu) }
 .btns.hartii { justify-content:center; flex-wrap:wrap; margin:18px 0 0 }
 .btns.hartii .btn { display:inline-flex; align-items:center; gap:8px }
 .btns.hartii .btn small { color:var(--faint); font-weight:400 }
-.btns.vecini { margin:22px 0 0 }
+/* „Revers", intrerupatorul de langa Tipărește — becul e cel de la Program (com-cal): pista palida si
+   bila cenusie stins; aprins, pista se umple cu cerneala si bila se face alba si aluneca in dreapta. */
+.btns.hartii .com-revers { cursor:pointer; font:inherit; color:inherit }
+.btns.hartii .com-revers .bec { flex:none; position:relative; width:30px; height:16px; border-radius:999px;
+                                border:1px solid var(--rule); background:var(--tinta) }
+.btns.hartii .com-revers .bec::after { content:""; position:absolute; top:1px; left:1px; width:12px; height:12px;
+                                       border-radius:50%; background:var(--soft) }
+.btns.hartii .com-revers[aria-pressed="true"] .bec { border-color:var(--soft); background:var(--soft) }
+.btns.hartii .com-revers[aria-pressed="true"] .bec::after { left:auto; right:1px; background:var(--paper) }
 
 /* ── RAFTUL: fisele numerelor, cu pagina intai deasupra. Cate incap pe rand — patru pe ecran de
    birou, doua pe telefon — le hotaraste latimea minima a fisei, nu un numar de coloane scris de noi. */
@@ -318,7 +351,6 @@ a.coperta:hover img { border-color:var(--rosu) }
                text-transform:uppercase; color:var(--soft) }
 .raft.fasie { grid-auto-flow:column; grid-auto-columns:104px; grid-template-columns:none;
               overflow-x:auto; padding-bottom:6px; scrollbar-width:thin }
-.sub-fasie { margin-top:0 }
 
 /* ── ARHIVA */
 /* ⚠️ Patratelele cu ani (.capitole) au iesit din corpul paginii la 17.09.2026: anii se aleg din

@@ -6,6 +6,8 @@
 import type { IntrareVocabular, Slujba } from '@xc/contracts'
 import { type SursaSfinti, pomeniriNoi } from './tipic.js'
 import { LUNI, ZILE_SAPTAMANA, esc, dataLunga, intervalLizibil, adaugaZile, ziuaSaptamanii } from '@xc/ui'
+// Trajan Pro 3 Regular: din 17.09.2026 e fontul Adobe original (v1.012, cu kerning), de la user (abonament
+// Adobe). Înainte era un Regular extras dintr-un PDF, fără kerning — de aceea titlul se poate strânge puțin.
 import trajanOtf from '../resurse/TrajanPro3-Regular.otf'
 import caladeaRegular from '../resurse/Caladea-Regular.ttf'
 import caladeaBold from '../resurse/Caladea-Bold.ttf'
@@ -52,7 +54,8 @@ function fonturi(): string {
 // Randurile „→" de sub o slujba
 // ---------------------------------------------------------------------------
 
-export const PERICOPA = /^(Ap\.|Ev\.|Apostol|Evanghelia)/
+/** Rândul pericopei: apostolul, evanghelia, glasul și voscreasna — pe UN rând, cu „;" între ele. */
+export const PERICOPA = /^(Ap\.|Ev\.|Apostol|Evanghelia|glas )/
 
 export interface RandDetaliu {
   text: string
@@ -129,9 +132,87 @@ export interface OptiuniFoaie {
   /** Randurile duminicii vin din calendar (saptamanile scrise in V2), nu din `detalii`. */
   dinCalendar: boolean
   ciorna?: boolean
+  /**
+   * VARIANTA STRÂNSĂ a tabelului, pentru pagina a patra a buletinului când textul nu mai încape
+   * (user, 17.09.2026: „varianta simplificată trebuie să fie fără sfinții de duminică și, în
+   * extremis, și fără evanghelie și apostol, glas, voscr."):
+   *   0 — tabelul întreg, cum se pune pe ușă;
+   *   1 — fără sfinții mărunți ai duminicii;
+   *   2 — și fără rândul pericopei (apostol, evanghelie, glas, voscreasnă).
+   * Sărbătoarea zilei („→ Nașterea Maicii Domnului") rămâne la orice treaptă: fără ea tabelul
+   * n-ar mai spune de ce e slujbă marți dimineață.
+   */
+  strans?: 0 | 1 | 2
 }
 
-export function foaieHtml(o: OptiuniFoaie): string {
+/**
+ * STILUL TABELULUI, singur. Merge la pachet cu `tabelProgram`.
+ *
+ * ⚠️ Selectorii sunt legați de `table.program`, nu lăsați generici (`td`, `tr.lipsa`): în foaia
+ * programului tabelul e singurul din pagină, dar în buletin stă lângă alt conținut, iar un `td`
+ * fără stăpân ar vopsi orice tabel s-ar nimeri acolo.
+ *
+ * ⚠️ `cuVariabile` NUMAI pentru cine pune tabelul în pagina lui. În foaia programului variabilele
+ * stau pe `:root` și pe `.pagina`, iar `--f` se micșorează de scriptul de potrivire — scrise aici,
+ * pe tabel, ar bate valoarea coborâtă de script și potrivirea n-ar mai strânge nimic.
+ */
+export function stilTabel(cuVariabile = false): string {
+  return `${cuVariabile ? 'table.program { --f: 1; --rosu: #c00000; --gri: #7f7f7f; --gri-deschis: #f2f2f2; --gri-banda: #d9d9d9; }' : ''}
+/* Tabelul n-are chenar la stanga si nici jos: bara groasa din stanga o poarta celulele zilei (si se
+   opreste la duminica, unde coltul ramane deschis), iar linia de jos o pune ultimul rand, doar peste
+   coloanele orei si slujbei. Sus e subtire, dreapta groasa cat stanga (V1, dupa Wordul parohiei). */
+table.program { width: 175mm; margin: 0 auto; border-collapse: collapse; table-layout: fixed; border-top: .5pt solid #000; border-right: 3pt solid #000; }
+table.program col.c-zi { width: 32.5mm; } table.program col.c-ora { width: 20mm; } table.program col.c-slujba { width: 122.5mm; }
+/* Fara linie intre randuri: ziua e o caseta, iar liniile se pun doar la piciorul ei (jos-plin /
+   jos-lipit, mai jos) — ca in foaia V1. Continutul sta SUS in celula: ora trebuie sa fie in dreptul
+   numelui slujbei, nu la mijlocul detaliilor. */
+table.program td { vertical-align: top; padding: calc(1mm * var(--f)) calc(2mm * var(--f)); text-align: left; }
+table.program td.zi { text-align: center; vertical-align: middle; background: #fff; border-left: 3pt solid #000; border-right: .5pt solid #000; border-bottom: .5pt solid #000; }
+table.program td.zi .numezi { font-size: calc(18pt * var(--f)); font-weight: 700; line-height: 1.1; }
+table.program td.zi.rosie .numezi { color: var(--rosu); }
+table.program td.zi .datazi { font-style: italic; font-size: calc(11pt * var(--f)); color: var(--gri); }
+table.program td.ora { background: var(--gri-deschis); font-size: calc(14pt * var(--f)); font-weight: 700; text-align: center; border-right: .5pt solid #000; }
+table.program td.slujba .nume { font-size: calc(18pt * var(--f)); font-weight: 700; line-height: 1.15; }
+table.program td.slujba .nume.dimineata { color: var(--rosu); }
+table.program .det { font-size: calc(13pt * var(--f)); line-height: 1.2; padding-left: 1.2em; text-indent: -1.2em; }
+table.program .det::before { content: "→ "; }
+table.program .det.per { font-family: "Carlito", Calibri, sans-serif; padding-left: 0; text-indent: 0; text-align: justify; }
+table.program .det.per::before { content: ""; }
+table.program .det.bold { font-weight: 700; }
+table.program .det.rosu { color: var(--rosu); font-weight: 700; }
+/* jumatatea de zi fara slujba: o banda de 5 mm, NETAIATA — linia dintre ora si slujba se opreste aici
+   (V1). Ramane doar linia groasa dinspre slujba de care se lipeste. */
+table.program tr.banda td.goala { height: calc(5mm * var(--f) * var(--f)); background: var(--gri-deschis); padding: 0; }
+table.program tr.banda td.ora.goala { border-right: 0; }
+table.program tr.banda.sus td.slujba.goala { border-bottom: 1.5pt solid #000; }
+table.program tr.banda.jos td.slujba.goala { border-top: 1.5pt solid #000; }
+/* piciorul zilei: punctat cand slujbele se tin lant peste noapte, plin in rest (V1) */
+table.program tr.jos-lipit > td.ora, table.program tr.jos-lipit > td.slujba { border-bottom: .5pt dashed #000; }
+table.program tr.jos-plin > td.ora, table.program tr.jos-plin > td.slujba { border-bottom: .5pt solid #000; }
+/* Sirul rupt de zile fara slujbe: o singura banda, gri mai inchis, cu o linie subtire sus si jos.
+   Chenarele groase din stanga si din dreapta se INTRERUP aici — asa se vede ca s-a rupt sirul zilelor
+   (preferinta userului in V1, peste Word); hidden bate orice alta bordura la border-collapse. */
+table.program tr.lipsa td { height: calc(5mm * var(--f) * var(--f)); background: var(--gri-banda); padding: 0;
+              border: 0; border-left: hidden; border-right: hidden;
+              border-top: .5pt solid #000; border-bottom: .5pt solid #000; }
+/* Duminica: celula zilei n-are nici bara groasa la stanga, nici linie jos — coltul din stanga-jos al
+   tabelului ramane DESCHIS (V1). Deasupra ei, linia groasa o desparte de sambata. */
+table.program tr.dum td.zi { vertical-align: top; border-left: 0; border-bottom: 0; border-top: 1.5pt solid #000; }
+.gol { font-style: italic; color: var(--gri); }`
+}
+
+/**
+ * TABELUL PROGRAMULUI, singur — fără foaie, fără chenar, fără antet.
+ *
+ * Îl cere BULETINUL pentru pagina lui a patra (user, 17.09.2026: calendarul „rândat exact ca la
+ * tipar Program liturgic — varianta de tipar"). Programul e proprietarul formei, deci tabelul se
+ * CERE de aici, nu se copiază acolo: o schimbare de rânduri, de culori sau de borduri ajunge
+ * singură și în foaia de pe ușă, și în buletin.
+ *
+ * ⚠️ Stilul lui e în `stilTabel()`, nu aici — cine pune tabelul în altă pagină trebuie să ia și
+ * stilul, altfel iese un tabel gol de formatare.
+ */
+export function tabelProgram(o: OptiuniFoaie): string {
   const zile: ZiFoaie[] = []
   for (let i = 0; i < 7; i++) {
     const data = adaugaZile(o.luni, i)
@@ -164,7 +245,9 @@ export function foaieHtml(o: OptiuniFoaie): string {
   }
 
   const randSlujba = (s: Slujba, zi: ZiPeProgram | undefined, maine: ZiPeProgram | undefined, dimineata: boolean): string => {
+    const strans = o.strans ?? 0
     const randuri = randurileSlujbei(s, dimineata ? 'dimineata' : 'seara', zi, maine, o.dinCalendar, o.duminica)
+      .filter((r) => !(strans >= 1 && r.sfant) && !(strans >= 2 && r.pericopa))
     const det = randuri
       .map((r) => `<div class="det${r.pericopa ? ' per' : ''}${r.rosu ? ' rosu' : ''}${r.bold ? ' bold' : ''}${r.sfant ? ' sfant' : ''}">${esc(r.text)}</div>`)
       .join('')
@@ -226,9 +309,13 @@ export function foaieHtml(o: OptiuniFoaie): string {
     corp.push(randuri.join(''))
   }
 
-  const tabel = o.slujbe.length
+  return o.slujbe.length
     ? `<table class="program"><colgroup><col class="c-zi"><col class="c-ora"><col class="c-slujba"></colgroup><tbody>${corp.join('')}</tbody></table>`
     : `<p class="gol">Săptămână fără slujbe înregistrate.</p>`
+}
+
+export function foaieHtml(o: OptiuniFoaie): string {
+  const tabel = tabelProgram(o)
 
   return `<!doctype html><html lang="ro"><head><meta charset="utf-8"><title>Programul liturgic · ${esc(o.titlu)}</title>
 <style>
@@ -251,48 +338,7 @@ body { font-family: "Caladea", Cambria, Georgia, serif; color: #000; }
           border-radius: 0 0 2mm 2mm; box-shadow: .8mm .8mm 0 #999;
           padding: 1.6mm 9mm; font-size: calc(14pt * var(--f)); font-weight: 700; line-height: 1.2;
           margin-bottom: 4mm; }
-/* Tabelul n-are chenar la stanga si nici jos: bara groasa din stanga o poarta celulele zilei (si se
-   opreste la duminica, unde coltul ramane deschis), iar linia de jos o pune ultimul rand, doar peste
-   coloanele orei si slujbei. Sus e subtire, dreapta groasa cat stanga (V1, dupa Wordul parohiei). */
-table.program { width: 175mm; margin: 0 auto; border-collapse: collapse; table-layout: fixed; border-top: .5pt solid #000; border-right: 3pt solid #000; }
-col.c-zi { width: 32.5mm; } col.c-ora { width: 20mm; } col.c-slujba { width: 122.5mm; }
-/* Fara linie intre randuri: ziua e o caseta, iar liniile se pun doar la piciorul ei (jos-plin /
-   jos-lipit, mai jos) — ca in foaia V1. Continutul sta SUS in celula: ora trebuie sa fie in dreptul
-   numelui slujbei, nu la mijlocul detaliilor. */
-td { vertical-align: top; padding: calc(1mm * var(--f)) calc(2mm * var(--f)); text-align: left; }
-td.zi { text-align: center; vertical-align: middle; background: #fff; border-left: 3pt solid #000; border-right: .5pt solid #000; border-bottom: .5pt solid #000; }
-td.zi .numezi { font-size: calc(18pt * var(--f)); font-weight: 700; line-height: 1.1; }
-td.zi.rosie .numezi { color: var(--rosu); }
-td.zi .datazi { font-style: italic; font-size: calc(11pt * var(--f)); color: var(--gri); }
-td.ora { background: var(--gri-deschis); font-size: calc(14pt * var(--f)); font-weight: 700; text-align: center; border-right: .5pt solid #000; }
-td.slujba .nume { font-size: calc(18pt * var(--f)); font-weight: 700; line-height: 1.15; }
-td.slujba .nume.dimineata { color: var(--rosu); }
-.det { font-size: calc(13pt * var(--f)); line-height: 1.2; padding-left: 1.2em; text-indent: -1.2em; }
-.det::before { content: "→ "; }
-.det.per { font-family: "Carlito", Calibri, sans-serif; padding-left: 0; text-indent: 0; text-align: justify; }
-.det.per::before { content: ""; }
-.det.bold { font-weight: 700; }
-.det.rosu { color: var(--rosu); font-weight: 700; }
-/* jumatatea de zi fara slujba: o banda de 5 mm, NETAIATA — linia dintre ora si slujba se opreste aici
-   (V1). Ramane doar linia groasa dinspre slujba de care se lipeste. */
-tr.banda td.goala { height: calc(5mm * var(--f) * var(--f)); background: var(--gri-deschis); padding: 0; }
-tr.banda td.ora.goala { border-right: 0; }
-tr.banda.sus td.slujba.goala { border-bottom: 1.5pt solid #000; }
-tr.banda.jos td.slujba.goala { border-top: 1.5pt solid #000; }
-/* piciorul zilei: punctat cand slujbele se tin lant peste noapte, plin in rest (V1) */
-tr.jos-lipit > td.ora, tr.jos-lipit > td.slujba { border-bottom: .5pt dashed #000; }
-tr.jos-plin > td.ora, tr.jos-plin > td.slujba { border-bottom: .5pt solid #000; }
-/* Sirul rupt de zile fara slujbe: o singura banda, gri mai inchis, cu o linie subtire sus si jos.
-   Chenarele groase din stanga si din dreapta se INTRERUP aici — asa se vede ca s-a rupt sirul zilelor
-   (preferinta userului in V1, peste Word); hidden bate orice alta bordura la border-collapse. */
-tr.lipsa td { height: calc(5mm * var(--f) * var(--f)); background: var(--gri-banda); padding: 0;
-              border: 0; border-left: hidden; border-right: hidden;
-              border-top: .5pt solid #000; border-bottom: .5pt solid #000; }
-/* duminica: linia groasa doar peste celula zilei — pe coloanele orei si slujbei ramane legatura
-   punctata cu sambata seara, ca in V1 */
-/* Duminica: celula zilei n-are nici bara groasa la stanga, nici linie jos — coltul din stanga-jos al
-   tabelului ramane DESCHIS (V1). Deasupra ei, linia groasa o desparte de sambata. */
-tr.dum td.zi { vertical-align: top; border-left: 0; border-bottom: 0; border-top: 1.5pt solid #000; }
+${stilTabel()}
 .semnatura { text-align: right; font-size: calc(18pt * var(--f)); margin: 5mm 0 0; line-height: 1.15; }
 .semnatura b { display: block; }
 .nota { position: absolute; left: 17.5mm; right: 17.5mm; bottom: 17.5mm; font-family: "Carlito", Calibri, sans-serif; font-size: 14pt; text-align: left; line-height: 1.25; }

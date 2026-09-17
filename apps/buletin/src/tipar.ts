@@ -26,8 +26,16 @@
  *
  * Tiparul e fata-verso obisnuit; asezarea colilor e tot ce trebuie sa dam noi („nu contează — se
  * tipărește corect când se scanează în jos, doar trebuie booklet" — user, 17.09.2026).
+ *
+ * ⚠️ REVERSUL (user, 17.09.2026, 22:00: „există imprimante care au nevoie de opțiunea specială ca
+ * interiorul să fie întors ca să iasă cu un booklet… dacă apăs tipărește și am revers ON foaia a doua
+ * este întoarsă 180 de grade"). Unele imprimante intorc coala pe latura scurta la fata-verso, si
+ * atunci versoul iese cu capul in jos fata de fata. Cu `revers`, fiecare VERSO din brosura se roteste
+ * cu 180° (atributul de rotire al paginii, pe care il asculta si vizualizatorul, si imprimanta), ca
+ * dupa intoarcerea imprimantei sa cada la loc. Fata nu se atinge. E un comutator al omului, nu al
+ * numarului — de aceea sta in adresa (`?revers=1`) si in cheia din depozit, nu in baza.
  */
-import { PDFDocument } from 'pdf-lib'
+import { PDFDocument, degrees } from 'pdf-lib'
 
 export type Coala = 'a3' | 'a4'
 
@@ -58,7 +66,7 @@ export function ordineaBrosurii(pagini: number): Array<[number, number]> {
  * ⚠️ Paginile se aseaza CENTRAT pe jumatatea lor, fara rotire: plierea e pe verticala, la mijlocul
  * colii, iar o pagina rotita ar iesi culcata in brosura.
  */
-export async function brosura(pdf: ArrayBuffer, coala: Coala = 'a4'): Promise<Uint8Array> {
+export async function brosura(pdf: ArrayBuffer, coala: Coala = 'a4', revers = false): Promise<Uint8Array> {
   const sursa = await PDFDocument.load(pdf)
   const pagini = sursa.getPageCount()
   const intai = sursa.getPage(0).getSize()
@@ -78,8 +86,10 @@ export async function brosura(pdf: ArrayBuffer, coala: Coala = 'a4'): Promise<Ui
   // Se lipesc o singura data toate paginile sursei, apoi se desenează de cate ori e nevoie.
   const lipite = await iesire.embedPages(sursa.getPages())
 
-  for (const [stanga, dreapta] of ordineaBrosurii(pagini)) {
+  ordineaBrosurii(pagini).forEach(([stanga, dreapta], i) => {
     const foaia = iesire.addPage([foaie.latime, foaie.inaltime])
+    // fata e la index par, versoul la impar — versoul se intoarce cu capul in jos cand e cerut reversul
+    if (revers && i % 2 === 1) foaia.setRotation(degrees(180))
     for (const [nr, deLaX] of [
       [stanga, 0],
       [dreapta, jumatate],
@@ -96,14 +106,17 @@ export async function brosura(pdf: ArrayBuffer, coala: Coala = 'a4'): Promise<Ui
         yScale: scara,
       })
     }
-  }
+  })
   return await iesire.save()
 }
 
+/** Coada numelui: felul colii si, cand e cerut, reversul — ca `a4`, `a4-revers` si `a3` sa nu se calce. */
+const coada = (coala: Coala, revers: boolean): string => `brosura-${coala}${revers ? '-revers' : ''}`
+
 /** Numele sub care se serveste brosura — cel al numarului, cu „-brosura" la coada. */
-export const numeBrosura = (cheiePdf: string, coala: Coala): string =>
-  `${cheiePdf.slice(cheiePdf.lastIndexOf('/') + 1).replace(/\.pdf$/i, '')}-brosura-${coala}.pdf`
+export const numeBrosura = (cheiePdf: string, coala: Coala, revers = false): string =>
+  `${cheiePdf.slice(cheiePdf.lastIndexOf('/') + 1).replace(/\.pdf$/i, '')}-${coada(coala, revers)}.pdf`
 
 /** Cheia sub care se tine in depozit, ca sa nu se refaca la fiecare apasare. */
-export const cheiaBrosurii = (cheiePdf: string, coala: Coala): string =>
-  `tipar/${cheiePdf.replace(/\.pdf$/i, '')}-brosura-${coala}.pdf`
+export const cheiaBrosurii = (cheiePdf: string, coala: Coala, revers = false): string =>
+  `tipar/${cheiePdf.replace(/\.pdf$/i, '')}-${coada(coala, revers)}.pdf`

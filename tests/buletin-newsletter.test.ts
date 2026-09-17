@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { prefixSiCale } from '../packages/config/src/index.js'
 import { type Buletin, type BuletinScurt, plat } from '../apps/buletin/src/depozit.js'
-import { cheiaBrosurii, numeBrosura, ordineaBrosurii } from '../apps/buletin/src/tipar.js'
+import { PDFDocument } from 'pdf-lib'
+import { brosura, cheiaBrosurii, numeBrosura, ordineaBrosurii } from '../apps/buletin/src/tipar.js'
 import {
   type Ctx as CtxBuletin,
   buletinulNou,
@@ -123,7 +124,7 @@ describe('buletin · meniul din antet', () => {
   const pastilaDin = (h: string) => h.slice(h.indexOf('<span class="pastila">'), h.indexOf('id="b-abonare"'))
 
   it('pastila tine cele cinci segmente, in ordinea ceruta', () => {
-    const h = paginaAcasaB(ctxB(true), { ani: ANI, peEcran: acum, acum: true }, acum, [], 619)
+    const h = paginaAcasaB(ctxB(true), { ani: ANI, peEcran: acum, acum: true }, acum, [])
     const pastila = pastilaDin(h)
     const locuri = ['punct', 'acum', 'viit', 'arh', 'cheie'].map((c) => pastila.indexOf(c))
     expect(locuri.every((i) => i >= 0)).toBe(true)
@@ -131,7 +132,7 @@ describe('buletin · meniul din antet', () => {
   })
 
   it('abonarea a iesit din pastila si a ramas singura la dreapta', () => {
-    const h = paginaAcasaB(ctxB(false), { ani: ANI, peEcran: acum, acum: true }, acum, [], 619)
+    const h = paginaAcasaB(ctxB(false), { ani: ANI, peEcran: acum, acum: true }, acum, [])
     const pastila = pastilaDin(h)
     expect(pastila).not.toContain('b-abonare')
     expect(pastila).toContain('class="btn cheie"')
@@ -142,7 +143,7 @@ describe('buletin · meniul din antet', () => {
   })
 
   it('pe numarul curent bulina ramane apasata, iar scrisul spune chiar numarul lui', () => {
-    const h = paginaAcasaB(ctxB(false), { ani: ANI, peEcran: acum, acum: true }, acum, [], 619)
+    const h = paginaAcasaB(ctxB(false), { ani: ANI, peEcran: acum, acum: true }, acum, [])
     expect(h).toContain('class="btn punct activ"')
     expect(h).toContain('<b class="lung">Buletinul nr. 615</b>')
     expect(h).toContain('<b class="scurt">Buletinul nr. 615</b>')
@@ -150,7 +151,7 @@ describe('buletin · meniul din antet', () => {
 
   /** Butoanele de sub copertă (user, 17.09.2026): Descarcă și Tipărește; răsfoitul a rămas pe copertă. */
   it('sub copertă stau Descarcă și Tipărește, nu butonul de răsfoit', () => {
-    const h = paginaAcasaB(ctxB(false), { ani: ANI, peEcran: acum, acum: true }, acum, [], 619)
+    const h = paginaAcasaB(ctxB(false), { ani: ANI, peEcran: acum, acum: true }, acum, [])
     expect(h).toContain('id="b-descarca"')
     expect(h).toContain('href="/buletin/fisier/2026/buletin-615.pdf?descarca=1"')
     expect(h).toContain('download="buletin-615.pdf"')
@@ -162,40 +163,66 @@ describe('buletin · meniul din antet', () => {
     expect(h).toContain('id="d-rasfoit"')
   })
 
+  it('Descarcă e fără cuvânt — doar iconița și mărimea; cuvântul rămâne cititorului de ecran', () => {
+    const h = paginaAcasaB(ctxB(false), { ani: ANI, peEcran: acum, acum: true }, acum, [])
+    const buton = /<a class="btn intreg" id="b-descarca"[^>]*>([\s\S]*?)<\/a>/.exec(h)
+    expect(buton).not.toBeNull()
+    expect(buton![1]).not.toContain('Descarcă')
+    expect(buton![1]).toContain('<svg')
+    expect(buton![1]).toContain('MB</small>')
+    expect(buton![0]).toContain('aria-label="Descarcă foaia numărului 615"')
+  })
+
+  it('„Revers" stă în dreapta lui Tipărește, e întrerupător și pornește stins', () => {
+    const h = paginaAcasaB(ctxB(false), { ani: ANI, peEcran: acum, acum: true }, acum, [])
+    const tipareste = h.indexOf('id="b-tipareste"')
+    const revers = h.indexOf('id="b-revers"')
+    expect(tipareste).toBeGreaterThan(-1)
+    expect(revers).toBeGreaterThan(tipareste)
+    expect(h).toContain('<button type="button" class="btn intreg com-revers" id="b-revers" aria-pressed="false"')
+    expect(h).toContain('buletin_revers')
+    expect(h).toContain('?revers=1')
+  })
+
   it('un numar fara PDF nu capata butoane care duc in gol', () => {
     const faraPdf: Buletin = { ...intreg(600, '2026-01-04'), cheie_pdf: null }
-    const h = paginaAcasaB(ctxB(false), { ani: ANI, peEcran: faraPdf, acum: true }, faraPdf, [], 619)
+    const h = paginaAcasaB(ctxB(false), { ani: ANI, peEcran: faraPdf, acum: true }, faraPdf, [])
     expect(h).toContain('Fără PDF')
     expect(h).not.toContain('id="b-tipareste"')
     expect(h).not.toContain('id="b-descarca"')
+    expect(h).not.toContain('id="b-revers"')
   })
 
   it('pe un numar mai vechi scrie data lui, iar bulina duce la cel curent', () => {
     const vechi = intreg(610, '2026-08-02')
-    const h = paginaBuletinB(ctxB(false), { ani: ANI, peEcran: vechi }, vechi, {
-      inainte: numar(609, '2026-07-26'),
-      dupa: numar(611, '2026-08-09'),
-    })
+    const h = paginaBuletinB(ctxB(false), { ani: ANI, peEcran: vechi }, vechi)
     expect(h).toContain('2 august 2026')
     expect(h).toContain('2 aug. 2026')
     expect(h).toContain('href="/buletin/" title="Treci la numărul curent"')
-    // sagetile dintre numere raman: la buletin ele rasfoiesc arhiva de hartie, nu tin loc de meniu
-    expect(h).toContain('numărul dinainte')
+    // navigarea de jos („◀ numărul dinainte / numărul următor ▶") a iesit (17.09.2026): inapoi prin Arhiva
+    expect(h).not.toContain('numărul dinainte')
+    expect(h).not.toContain('numărul următor')
+  })
+
+  it('prima pagina nu mai scrie jos randul „Arhiva întreagă — N numere"', () => {
+    const h = paginaAcasaB(ctxB(false), { ani: ANI, peEcran: acum, acum: true }, acum, [])
+    expect(h).not.toContain('Arhiva întreagă')
+    expect(h).not.toContain('din 2012 până azi')
   })
 
   it('sageata e a adminilor si duce la buletinul nou; restul pastilei e a tuturor', () => {
-    const alOmului = paginaAcasaB(ctxB(false), { ani: ANI, peEcran: acum, acum: true }, acum, [], 619)
+    const alOmului = paginaAcasaB(ctxB(false), { ani: ANI, peEcran: acum, acum: true }, acum, [])
     expect(alOmului).not.toContain('/buletin/nou')
     expect(alOmului).toContain('id="ani-cheie"')
     expect(alOmului).toContain('id="cautare-cheie"')
-    const alPreotului = paginaAcasaB(ctxB(true), { ani: ANI, peEcran: acum, acum: true }, acum, [], 619)
+    const alPreotului = paginaAcasaB(ctxB(true), { ani: ANI, peEcran: acum, acum: true }, acum, [])
     expect(alPreotului).toContain('href="/buletin/nou"')
   })
 
   it('bara anilor sta ascunsa pana se apasa cheia Arhivei, si coborata in arhiva', () => {
-    const acasa = paginaAcasaB(ctxB(false), { ani: ANI, peEcran: acum, acum: true }, acum, [], 619)
+    const acasa = paginaAcasaB(ctxB(false), { ani: ANI, peEcran: acum, acum: true }, acum, [])
     expect(acasa).toContain('id="bara-ani" hidden')
-    const arhiva = paginaArhivaB(ctxB(false), { ani: ANI, arhiva: true, anDeschis: '2025' }, '2025', [], 619)
+    const arhiva = paginaArhivaB(ctxB(false), { ani: ANI, arhiva: true, anDeschis: '2025' }, '2025', [])
     expect(arhiva).toContain('id="bara-ani"')
     expect(arhiva).not.toContain('id="bara-ani" hidden')
     // pe pagina Arhivei cheia e inerta: fasia e singurul drum catre ceilalti ani
@@ -206,7 +233,7 @@ describe('buletin · meniul din antet', () => {
   })
 
   it('bara cautarii sta ascunsa pana se apasa lupa, si coborata pe pagina rezultatelor', () => {
-    expect(paginaAcasaB(ctxB(false), { ani: ANI, peEcran: acum, acum: true }, acum, [], 619))
+    expect(paginaAcasaB(ctxB(false), { ani: ANI, peEcran: acum, acum: true }, acum, []))
       .toContain('id="bara-cautare" hidden')
     const rezultate = paginaCautareB(ctxB(false), { ani: ANI, q: 'craciun' }, 'craciun', [])
     expect(rezultate).toContain('id="bara-cautare"')
@@ -261,7 +288,7 @@ describe('buletin · numarul care urmeaza', () => {
       versiune: '0.3.7',
       modificata: '17.09.2026',
     }
-    const h = paginaNouB(ctx, { nou: true, ani: ['2026'] }, b, buletinulNou(b, '2026-09-17'))
+    const h = paginaNouB(ctx, { nou: true, ani: ['2026'] }, b, buletinulNou(b, '2026-09-17'), STARE_PROBA)
     // ⚠️ ROSU e numarul NOU (616 — cel la care se lucra chiar atunci), nu ultimul din arhiva (615)
     // capul e cel de la orice numar; se schimba doar eticheta (verde, „Numărul următor")
     expect(h).toContain('<p class="eticheta urmator">Numărul următor</p>')
@@ -271,12 +298,88 @@ describe('buletin · numarul care urmeaza', () => {
     expect(h).toContain('duminică, 20 septembrie 2026')
     // ultimul aparut ramane scris marunt, cu legatura spre el
     expect(h).toContain('nr. 615</a>, 6 septembrie 2026')
-    expect(h).toContain('<div class="chenar-nou" aria-hidden="true"></div>')
     // sageata ramane aprinsa, iar scrisul din pastila spune unde esti
     expect(h).toContain('class="btn viit activ"')
     expect(h).toContain('<b class="lung">Buletin nou</b>')
   })
+
+  /**
+   * ⚠️ CHENARUL GOL A IEȘIT la 17.09.2026: pagina compune acum numărul, deci locul lui l-a luat
+   * formularul (cerere user: API-ul + ecranul). Probele de mai jos țin forma cerută — motto, număr
+   * și dată ca start, articolul principal, cel mult DOI secundari — și socoteala care merge odată
+   * cu scrisul, fiindcă ea e miezul cererii („trebuie calculată lungimea textului care intră").
+   */
+  it('pagina numarului nou are formularul de compunere, cu socoteala lui', () => {
+    const b: BuletinScurt = {
+      nr: 615, data: '2026-09-06', an: '2026', luna: '09',
+      cheie_pdf: null, cheie_poza_mica: null, pagini: 4,
+    }
+    const h = paginaNouB(CTX_PROBA, { nou: true, ani: ['2026'] }, b, buletinulNou(b, '2026-09-17'), STARE_PROBA)
+    expect(h).not.toContain('<div class="chenar-nou" aria-hidden="true"></div>')
+    expect(h).toContain('<form method="post" action="/buletin/nou" class="compunere">')
+    // startul numarului: motto, numar, data
+    for (const c of ['motto', 'moto_autor', 'nr', 'data']) expect(h).toContain(`name="${c}"`)
+    // articolul principal: zona neagra (autor, ani, pomenire), titlul, poza, textul, sursa
+    for (const c of ['p_autor', 'p_ani', 'p_pomenire', 'p_titlu', 'p_poza', 'p_text', 'p_sursa']) {
+      expect(h).toContain(`name="${c}"`)
+    }
+    // cel mult DOI secundari — al treilea nu există nicăieri în pagină
+    expect(h).toContain('name="s1_text"')
+    expect(h).toContain('name="s2_text"')
+    expect(h).not.toContain('name="s3_text"')
+    // socoteala se face in pagina, din aceleasi cifre ca la server
+    expect(h).toContain('window.XC_MASURI = ')
+    expect(h).toContain('class="socoteala" data-pentru="p"')
+    // pagina a patra spune ce program tipareste
+    expect(h).toContain('21 – 27 septembrie 2026')
+  })
+
+  it('spune limpede cand programul saptamanii nu e validat, in loc sa taca', () => {
+    const b: BuletinScurt = {
+      nr: 615, data: '2026-09-06', an: '2026', luna: '09',
+      cheie_pdf: null, cheie_poza_mica: null, pagini: 4,
+    }
+    const h = paginaNouB(CTX_PROBA, { nou: true }, b, buletinulNou(b, '2026-09-17'), { ...STARE_PROBA, calendar: null })
+    expect(h).toContain('nu e încă validat')
+  })
+
+  it('arata plangerile compunerii, cu cifre, si nu pretinde ca s-a facut', () => {
+    const b: BuletinScurt = {
+      nr: 615, data: '2026-09-06', an: '2026', luna: '09',
+      cheie_pdf: null, cheie_poza_mica: null, pagini: 4,
+    }
+    const h = paginaNouB(CTX_PROBA, { nou: true }, b, buletinulNou(b, '2026-09-17'), {
+      ...STARE_PROBA,
+      raspuns: { facut: false, plangeri: ['principal: 1200 de semne peste măsură (încap 9000, sunt 10200)'] },
+      scris: { motto: 'Un citat care nu trebuie să se piardă', p_text: 'text' },
+    })
+    expect(h).toContain('Nu s-a compus')
+    expect(h).toContain('1200 de semne peste măsură')
+    expect(h).not.toContain('Numărul e compus')
+    // ce scrisese omul nu se pierde cand raspunsul e „nu incape"
+    expect(h).toContain('Un citat care nu trebuie să se piardă')
+  })
 })
+
+const CTX_PROBA: CtxBuletin = {
+  prefix: '/buletin',
+  nav: { home: '', cont: '/cont', admin: '/admin' } as CtxBuletin['nav'],
+  utilizator: 'Părintele',
+  eAdmin: true,
+  versiune: '0.3.7',
+  modificata: '17.09.2026',
+}
+
+/** Cifrele socotelii, ca cele date de `variante()` — proba nu cheamă programul. */
+const STARE_PROBA = {
+  variante: [
+    { varianta: 'un singur autor, cu poză mare', semne: 9028, zone: [{ cine: 'principal', semne: 9028 }] },
+    { varianta: 'un singur autor, fără poză', semne: 9974, zone: [{ cine: 'principal', semne: 9974 }] },
+    { varianta: 'autor principal + 1 secundar', semne: 8206, zone: [{ cine: 'principal', semne: 6100 }, { cine: 'secundar 1', semne: 2106 }] },
+    { varianta: 'autor principal + 2 secundari', semne: 7385, zone: [{ cine: 'principal', semne: 3200 }, { cine: 'secundar 1', semne: 2092 }, { cine: 'secundar 2', semne: 2093 }] },
+  ],
+  calendar: { titlu: '21 – 27 septembrie 2026', slujbe: 6 },
+}
 
 /**
  * BROȘURA DE TIPAR (user, 17.09.2026: „un buton de tip «Tipărește»… ar trebui să tipărească
@@ -322,6 +425,46 @@ describe('buletin · ordinea paginilor în broșură', () => {
     expect(cheiaBrosurii('2026/buletin-615-2026-09-06.pdf', 'a3')).toBe(
       'tipar/2026/buletin-615-2026-09-06-brosura-a3.pdf',
     )
+  })
+
+  it('reversul are cheia lui în depozit, ca să nu se calce cu broșura obișnuită', () => {
+    expect(numeBrosura('2026/buletin-615-2026-09-06.pdf', 'a4', true)).toBe(
+      'buletin-615-2026-09-06-brosura-a4-revers.pdf',
+    )
+    expect(cheiaBrosurii('2026/buletin-615-2026-09-06.pdf', 'a4', true)).toBe(
+      'tipar/2026/buletin-615-2026-09-06-brosura-a4-revers.pdf',
+    )
+    expect(cheiaBrosurii('2026/buletin-615-2026-09-06.pdf', 'a4', false)).toBe(
+      'tipar/2026/buletin-615-2026-09-06-brosura-a4.pdf',
+    )
+  })
+
+  /** Un PDF de probă cu `n` pagini A4; fiecare are ceva desenat — pdf-lib nu lipește pagini fără conținut. */
+  async function foaieDeProba(n: number): Promise<ArrayBuffer> {
+    const sursa = await PDFDocument.create()
+    for (let i = 0; i < n; i++) sursa.addPage([595, 842]).drawRectangle({ x: 50, y: 50, width: 100, height: 100 })
+    return (await sursa.save()).buffer as ArrayBuffer
+  }
+
+  /** Reversul (user, 17.09.2026): „foaia a doua este întoarsă 180 de grade" — versoul, nu fața. */
+  it('cu revers, versoul iese rotit cu 180°, fața rămâne dreaptă', async () => {
+    const octeti = await foaieDeProba(4)
+
+    const drept = await PDFDocument.load(await brosura(octeti, 'a4'))
+    expect(drept.getPageCount()).toBe(2)
+    expect(drept.getPage(0).getRotation().angle).toBe(0)
+    expect(drept.getPage(1).getRotation().angle).toBe(0)
+
+    const intors = await PDFDocument.load(await brosura(octeti, 'a4', true))
+    expect(intors.getPageCount()).toBe(2)
+    expect(intors.getPage(0).getRotation().angle).toBe(0)
+    expect(intors.getPage(1).getRotation().angle).toBe(180)
+  })
+
+  it('la două coli, cu revers, se întorc amândouă versourile', async () => {
+    const octeti = await foaieDeProba(8)
+    const intors = await PDFDocument.load(await brosura(octeti, 'a4', true))
+    expect(intors.getPages().map((p) => p.getRotation().angle)).toEqual([0, 180, 0, 180])
   })
 })
 

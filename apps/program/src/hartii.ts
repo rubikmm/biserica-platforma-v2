@@ -20,7 +20,7 @@ import {
   vecinele,
   vocabularul,
 } from './depozit.js'
-import { foaieHtml, sfintiiHtml, titluSaptamanii } from './foaie.js'
+import { foaieHtml, sfintiiHtml, stilTabel, tabelProgram, titluSaptamanii, type OptiuniFoaie } from './foaie.js'
 import { propune } from './propunere.js'
 import { sfintiiDinCarti } from './tipic.js'
 import { LATIME_POZA, pozaSaptamaniiHtml, type Ctx } from './pagini.js'
@@ -36,7 +36,9 @@ export interface EnvHartii {
 export type Hartie = { corp: string; nume: string; titlu: string }
 
 export type RezultatFoaie =
-  | ({ ok: true } & Hartie)
+  /** `optiuni` e materia din care s-a făcut foaia: de acolo își ia buletinul tabelul, fără să
+   *  mai întrebe încă o dată baza de date. */
+  | ({ ok: true; optiuni: OptiuniFoaie } & Hartie)
   | {
       ok: false
       cod: 'saptamana_inexistenta' | 'saptamana_nevalidata'
@@ -143,20 +145,60 @@ export async function htmlFoaiaSaptamanii(
   // importate din V1 au cratima in loc de linie de dialog, si se vedea in caseta foii.
   const titlu = titluSaptamanii(luni)
   const cal = await calendarulIntervalului(env.CALENDAR, luni, adaugaZile(luni, 7))
+  const optiuni: OptiuniFoaie = {
+    luni,
+    duminica: adaugaZile(luni, 6),
+    titlu,
+    slujbe,
+    vocabular: harta,
+    calendar: cal,
+    dinCalendar,
+    ciorna: fel === 'propunere',
+  }
   return {
     ok: true,
-    corp: foaieHtml({
-      luni,
-      duminica: adaugaZile(luni, 6),
-      titlu,
-      slujbe,
-      vocabular: harta,
-      calendar: cal,
-      dinCalendar,
-      ciorna: fel === 'propunere',
-    }),
+    corp: foaieHtml(optiuni),
+    optiuni,
     nume: fel === 'foaie' ? `program-${luni}` : `propunere-${luni}`,
     titlu: fel === 'foaie' ? `Programul săptămânii — ${titlu}` : `Propunere de program — ${titlu}`,
+  }
+}
+
+/**
+ * TABELUL săptămânii, pentru cine îl pune în pagina LUI — azi buletinul, pe pagina a patra.
+ *
+ * Întoarce tabelul, stilul lui și cifrele din care se socotește cât loc mănâncă (`slujbe`,
+ * `detalii`): cel care compune trebuie să știe înainte de randare dacă mai are loc de text.
+ *
+ * ⚠️ Trece prin ACEEAȘI cale ca foaia de pe ușă (`htmlFoaiaSaptamanii`), deci moștenește și
+ * poarta ei: o săptămână nevalidată nu dă tabel, cum nu dă nici foaie. Buletinul nu tipărește un
+ * program pe care parohia nu l-a confirmat.
+ */
+export async function tabelulSaptamanii(
+  env: EnvHartii,
+  data: string,
+  vocabularDat?: Map<string, IntrareVocabular>,
+  strans: 0 | 1 | 2 = 0,
+): Promise<
+  | { ok: true; tabel: string; stil: string; titlu: string; de_la: string; pana_la: string; slujbe: number; detalii: number; strans: 0 | 1 | 2 }
+  | { ok: false; cod: string; mesaj: string; detalii?: unknown }
+> {
+  const f = await htmlFoaiaSaptamanii(env, data, 'foaie', vocabularDat)
+  if (!f.ok) return f
+  const o: OptiuniFoaie = { ...f.optiuni, strans }
+  const tabel = tabelProgram(o)
+  return {
+    ok: true,
+    tabel,
+    stil: stilTabel(true),
+    titlu: o.titlu,
+    de_la: o.luni,
+    pana_la: o.duminica,
+    slujbe: o.slujbe.length,
+    // detaliile se numără pe tabelul GATA FĂCUT, nu pe date: la treapta strânsă o parte au căzut,
+    // iar cel care socotește locul de pe pagina a patra trebuie să știe câte rânduri se văd
+    detalii: (tabel.match(/class="det/g) ?? []).length,
+    strans,
   }
 }
 

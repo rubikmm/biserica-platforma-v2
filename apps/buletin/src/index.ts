@@ -30,6 +30,8 @@ import { SCOPE_GLOBAL, SESIUNE_ANONIMA } from '@xc/contracts'
 import { principalDin, sesiuneCurenta, verificaCsrf } from '@xc/auth'
 import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
 import { Logger, correlationId } from '@xc/observability'
+import { modulActiuni } from '@xc/actiuni'
+import { actiuniBuletin } from './actiuni.js'
 import { dataVersiunii, eroareApi, html, json, jsonCuEtag } from '@xc/ui'
 import pkg from '../package.json'
 import {
@@ -45,6 +47,8 @@ import {
   vecini,
 } from './depozit.js'
 import { type Coala, brosura, cheiaBrosurii, numeBrosura } from './tipar.js'
+import { calendarulNumarului, cheiaNumarului, compune } from './compune.js'
+import { variante } from './masuri.js'
 import { abonamentul, ruteazaAbonare } from '@xc/abonare'
 import { ruteazaSetari } from '@xc/setari'
 import {
@@ -66,13 +70,25 @@ export interface Env {
   IDENTITATE: Fetcher
   AUDIT: Fetcher
   COMUNICARE: Fetcher
+  /** Programul: de la el se cere tabelul tiparit de pe pagina a patra (`/v1/tabel-tipar`). */
+  PROGRAM: Fetcher
+  /** Browser Rendering: din HTML-ul foii iese PDF-ul de tipar. */
+  BROWSER: Fetcher
   MEDIU: string
   ORIGINE_PUBLICA: string
   DOMENIU_COOKIE: string
   EMAIL_SUPERADMIN: string
+  /** Secretul dintre workerii nostri; fara el `/_actiuni` nu exista. */
+  SECRET_INTERN?: string
   /** Data publicarii, pentru subsol — binding-ul `version_metadata`. */
   VERSIUNE?: { timestamp?: string }
 }
+
+/**
+ * Verbele buletinului, publicate la `/_actiuni`: socoteala lungimii și compunerea unui număr.
+ * Răspund DOAR prin Service Binding, cu secretul platformei — de pe internet calea nu există.
+ */
+const MODUL = modulActiuni<Env>({ aplicatie: 'buletin', versiune: pkg.version, actiuni: actiuniBuletin })
 
 const SERVICIU = 'app-buletin'
 /** Audienta abonatilor — numele ei sta in registrul `ABONAMENTE` din `@xc/abonare`, nu aici. */
@@ -181,16 +197,18 @@ async function fisierul(req: Request, url: URL, env: Env, cheie: string): Promis
  *
  * ⚠️ SE TINE IN DEPOZIT, sub `tipar/…`: asezarea e o socoteala pe tot PDF-ul (700 KB la un numar
  * obisnuit), iar buletinul e tiparit de acelasi om de mai multe ori, saptamana de saptamana. Prima
- * apasare o face, restul o iau gata facuta. Cheia poarta si felul colii, deci `a3` si `a4` nu se
- * calca una pe alta.
+ * apasare o face, restul o iau gata facuta. Cheia poarta si felul colii si reversul, deci `a3`, `a4`
+ * si `a4-revers` nu se calca una pe alta.
  * ⚠️ Cine n-are PDF (doua numere vechi, ramase doar ca poza) primeste 404, nu o brosura goala.
  */
 async function tiparul(req: Request, url: URL, env: Env, nr: number, data: string): Promise<Response> {
   const b = await unul(env.DB, nr, data)
   if (!b?.cheie_pdf) return new Response('Numărul acesta n-are foaie de tipărit.', { status: 404 })
   const coala: Coala = url.searchParams.get('coala') === 'a3' ? 'a3' : 'a4'
-  const cheie = cheiaBrosurii(b.cheie_pdf, coala)
-  const nume = numeBrosura(b.cheie_pdf, coala)
+  // `?revers=1` — versoul intors cu 180°, pentru imprimantele care intorc coala pe latura scurta
+  const revers = url.searchParams.get('revers') === '1'
+  const cheie = cheiaBrosurii(b.cheie_pdf, coala, revers)
+  const nume = numeBrosura(b.cheie_pdf, coala, revers)
 
   const antete = (etag: string) =>
     new Headers({
@@ -209,7 +227,7 @@ async function tiparul(req: Request, url: URL, env: Env, nr: number, data: strin
 
   const foaia = await env.FISIERE.get(b.cheie_pdf)
   if (!foaia) return new Response('Nu există fișierul.', { status: 404 })
-  const facuta = await brosura(await foaia.arrayBuffer(), coala)
+  const facuta = await brosura(await foaia.arrayBuffer(), coala, revers)
   // ⚠️ `slice` pe buffer: `save()` intoarce o vedere peste un buffer mai mare, iar R2 ar urca tot
   // bufferul, cu coada lui cu tot.
   const octeti = facuta.slice().buffer as ArrayBuffer
@@ -328,7 +346,7 @@ async function api(req: Request, env: Env, cale: string, url: URL, radacina: str
 }
 
 export default {
-  async fetch(req: Request, env: Env): Promise<Response> {
+  async fetch(req: Request, env: Env, ctxExec: ExecutionContext): Promise<Response> {
     const cfg = citesteConfig(env)
     const cid = correlationId(req)
     const log = new Logger({ service: SERVICIU, correlationId: cid })
@@ -344,6 +362,10 @@ export default {
     const { prefix, cale } = prefixSiCale(url, env.MEDIU === 'dev' ? '/buletin' : '')
     const nav = navigatieDin(cfg)
     const radacina = new URL(prefix || '/', cfg.ORIGINE_PUBLICA).toString().replace(/\/$/, '')
+
+    // Acțiunile interne (socoteala și compunerea numărului): numai prin Service Binding.
+    const raspunsActiuni = await MODUL.ruteaza(req, env, ctxExec, cale)
+    if (raspunsActiuni) return raspunsActiuni
 
     if (eAdresaDeMasina(cale)) {
       if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -473,11 +495,11 @@ export default {
 
       // ------------------------------------------------------- numarul curent
       if (cale === '/') {
-        const [b, n] = await Promise.all([ultimul(env.DB), numaratoare(env.DB), listaAnilor()])
+        const [b] = await Promise.all([ultimul(env.DB), listaAnilor()])
         const dinainte = b ? (await ultimele(env.DB, 7)).filter((x) => !(x.nr === b.nr && x.data === b.data)) : []
         // prima pagina E numarul curent: bulina ramane apasata, iar scrisul spune chiar numarul lui
         const m = await cuAni({ peEcran: b, acum: !!b, gol: !b })
-        return html(paginaAcasa(ctx, m, b, dinainte, n.buletine), 200, cachePagina)
+        return html(paginaAcasa(ctx, m, b, dinainte), 200, cachePagina)
       }
 
       /*
@@ -501,7 +523,77 @@ export default {
         const b = await ultimul(env.DB)
         const azi = new Date().toISOString().slice(0, 10)
         const m = await cuAni({ nou: true, gol: !b })
-        return html(paginaNou(ctx, m, b, buletinulNou(b, azi)), 200, alLui)
+        const nou = buletinulNou(b, azi)
+        /*
+         * Socoteala se face cu calendarul săptămânii tipărite: el hotărăște cât loc rămâne pe
+         * pagina a patra. Dacă programul nu răspunde (săptămâna nevalidată), pagina o spune
+         * limpede și socotește mai departe fără el — omul poate scrie textul, doar că nu poate
+         * compune până nu se validează programul.
+         */
+        const cal = await calendarulNumarului(env, nou.data)
+        const calendar = 'eroare' in cal ? null : { titlu: cal.titlu, slujbe: cal.slujbe }
+        const masuri = variante('eroare' in cal ? undefined : { slujbe: cal.slujbe, detalii: cal.detalii })
+
+        if (req.method !== 'POST') {
+          return html(paginaNou(ctx, m, b, nou, { variante: masuri, calendar }), 200, alLui)
+        }
+
+        const f = await req.formData()
+        const scris: Record<string, string> = {}
+        for (const [k, v] of f.entries()) if (typeof v === 'string') scris[k] = v
+        const articol = (prefix: string) => ({
+          autor: (scris[`${prefix}_autor`] ?? '').trim(),
+          ani: (scris[`${prefix}_ani`] ?? '').trim() || undefined,
+          pomenire: (scris[`${prefix}_pomenire`] ?? '').trim() || undefined,
+          titlu: (scris[`${prefix}_titlu`] ?? '').trim(),
+          text: scris[`${prefix}_text`] ?? '',
+          sursa: (scris[`${prefix}_sursa`] ?? '').trim() || undefined,
+          poza: !!(scris[`${prefix}_poza`] ?? '').trim(),
+        })
+        const cati = Math.min(2, Math.max(0, Number(scris.secundari ?? '0') || 0))
+        const cerut = {
+          motto: (scris.motto ?? '').trim(),
+          motoAutor: (scris.moto_autor ?? '').trim() || undefined,
+          nr: Number(scris.nr ?? nou.nr ?? 0),
+          data: scris.data ?? nou.data,
+          principal: articol('p'),
+          secundari: Array.from({ length: cati }, (_, i) => articol(`s${i + 1}`)),
+          floare: true,
+        }
+        const poze: Record<string, string> = {}
+        if (scris.p_poza?.trim()) poze.p = scris.p_poza.trim()
+        for (let i = 1; i <= cati; i++) {
+          const u = scris[`s${i}_poza`]?.trim()
+          if (u) poze[`s${i}`] = u
+        }
+
+        const r = await compune(env, { cerut, poze })
+        if (r.ok && r.pdf) {
+          const cheie = cheiaNumarului(cerut)
+          await env.FISIERE.put(cheie, r.pdf, { httpMetadata: { contentType: 'application/pdf' } })
+          ctxExec.waitUntil(
+            scrieAudit(env, {
+              action: 'buletin.compune', target: cheie, outcome: 'success',
+              correlationId: cid, actorId: principal?.userId,
+            }),
+          )
+          return html(
+            paginaNou(ctx, m, b, nou, {
+              variante: masuri, calendar, scris,
+              raspuns: { facut: true, cheie, plangeri: [] },
+            }),
+            200,
+            alLui,
+          )
+        }
+        return html(
+          paginaNou(ctx, m, b, nou, {
+            variante: masuri, calendar, scris,
+            raspuns: { facut: false, plangeri: r.plangeri },
+          }),
+          200,
+          alLui,
+        )
       }
 
       // --------------------------------------------------- un numar din arhiva
@@ -515,7 +607,7 @@ export default {
             // ⚠️ „esti pe numarul curent" se citeste din VECINI, nu dintr-o a doua cerere catre
             // depozit: numarul care n-are niciun urmator ESTE cel curent.
             const meniul = await cuAni({ peEcran: b, acum: !v.dupa })
-            return html(paginaBuletin(ctx, meniul, b, v), 200, cachePagina)
+            return html(paginaBuletin(ctx, meniul, b), 200, cachePagina)
           }
         }
         // numarul singur (`/buletin/615`) e o adresa la indemana, dar nu e cheie: duce la numarul

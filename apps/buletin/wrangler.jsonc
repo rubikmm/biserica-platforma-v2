@@ -37,8 +37,17 @@
     { "binding": "IDENTITATE", "service": "xc-identity" },
     { "binding": "AUTORIZARE", "service": "xc-authz" },
     { "binding": "AUDIT", "service": "xc-audit" },
-    { "binding": "COMUNICARE", "service": "xc-communication" }
+    { "binding": "COMUNICARE", "service": "xc-communication" },
+    // Calendarul de pe pagina a patra a foii tiparite: tabelul se CERE de la program, nu se
+    // copiaza aici (`/v1/tabel-tipar`). Programul ramane proprietarul formei lui.
+    { "binding": "PROGRAM", "service": "xc-program" }
   ],
+
+  // Foaia tiparita se face din HTML cu Browser Rendering, ca la program.
+  "browser": { "binding": "BROWSER" },
+
+  // Chenarul, crucea si fonturile foii intra in worker ca octeti.
+  "rules": [{ "type": "Data", "globs": ["**/*.png", "**/*.otf", "**/*.ttf"], "fallthrough": true }],
 
   "env": {
     "staging": {
@@ -75,8 +84,10 @@
         { "binding": "IDENTITATE", "service": "xc-identity-staging" },
         { "binding": "AUTORIZARE", "service": "xc-authz-staging" },
         { "binding": "AUDIT", "service": "xc-audit-staging" },
-        { "binding": "COMUNICARE", "service": "xc-communication-staging" }
+        { "binding": "COMUNICARE", "service": "xc-communication-staging" },
+        { "binding": "PROGRAM", "service": "xc-program-staging" }
       ],
+      "browser": { "binding": "BROWSER" },
       "routes": [{ "pattern": "buletin.staging.sfantul-ilie.ro", "custom_domain": true }]
     },
     "production": {
@@ -113,8 +124,10 @@
         { "binding": "IDENTITATE", "service": "xc-identity-production" },
         { "binding": "AUTORIZARE", "service": "xc-authz-production" },
         { "binding": "AUDIT", "service": "xc-audit-production" },
-        { "binding": "COMUNICARE", "service": "xc-communication-production" }
-      ]
+        { "binding": "COMUNICARE", "service": "xc-communication-production" },
+        { "binding": "PROGRAM", "service": "xc-program-production" }
+      ],
+      "browser": { "binding": "BROWSER" }
       // Ruta de productie (`buletin.sfantul-ilie.ro`) ramane a lui A3 pana la cutover-ul explicit.
     }
   }

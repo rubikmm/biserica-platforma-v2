@@ -44,7 +44,7 @@ import { hartieDinCache, jpgDin, jpgPozaDin, pdfDin, titluSaptamanii } from './f
 import { modulActiuni } from '@xc/actiuni'
 import { modulChat } from '@xc/chat'
 import { ACTIUNI } from './actiuni.js'
-import { htmlFoaiaSaptamanii, htmlPozaSaptamanii, htmlSfintiiZilei, saptamanaOriPropunere, textSaptamanii } from './hartii.js'
+import { htmlFoaiaSaptamanii, htmlPozaSaptamanii, htmlSfintiiZilei, saptamanaOriPropunere, tabelulSaptamanii, textSaptamanii } from './hartii.js'
 import { ruteazaSetari } from '@xc/setari'
 import { abonamentul, ruteazaAbonare } from '@xc/abonare'
 import { LATIME_POZA, type Ctx, type Meniu, paginaArhiva, paginaCarcasa, paginaMesaj, paginaSaptamana } from './pagini.js'
@@ -428,6 +428,21 @@ async function api(req: Request, env: Env, ctxExec: ExecutionContext, cale: stri
     const slujbe = (await slujbeInterval(env.DB, deLa, panaLa)).map(slujbaDin)
     const saptamani = (await saptamaniInterval(env.DB, deLa, panaLa)).map((s: RandSaptamana) => ({ de_la: s.luni, pana_la: s.duminica, stare: s.stare, validat_de: s.validat_de, validat_la: s.validat_la }))
     return jsonCuEtag(req, { de_la: deLa, pana_la: panaLa, saptamani, slujbe }, cache)
+  }
+
+  /*
+   * Tabelul săptămânii ca bucată de pagină, pentru cine îl așază în hârtia lui — azi buletinul,
+   * pe pagina a patra („rândat exact ca la tipar Program liturgic", user 17.09.2026).
+   * Programul rămâne proprietarul formei: aici se cere, nu se copiază acolo.
+   */
+  if (cale === '/v1/tabel-tipar') {
+    const data = dataCeruta(url.searchParams.get('data') ?? 'azi', azi)
+    if (!data) return eroareApi(400, 'data_invalida', 'Data se scrie AAAA-LL-ZZ (sau azi / viitoare).')
+    // `strans=1` fără sfinții duminicii, `strans=2` și fără pericopă — când buletinul n-are loc
+    const strans = Math.min(2, Math.max(0, Number(url.searchParams.get('strans') ?? '0') || 0)) as 0 | 1 | 2
+    const t = await tabelulSaptamanii(env, data, harta, strans)
+    if (!t.ok) return eroareApi(t.cod === 'saptamana_inexistenta' ? 404 : 409, t.cod, t.mesaj, t.detalii as Record<string, unknown> | undefined)
+    return jsonCuEtag(req, t, cache)
   }
 
   if (cale === '/v1/saptamani') {
