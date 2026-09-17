@@ -324,19 +324,23 @@ propunerea automată, ca în V1.
    pe dinafară. Refactorul programului e **neutru la pixel** (probă: HTML identic, randare identică).
    472 de probe trec, typecheck curat.
 
-   **FĂCUT 17.09.2026, 22:47–23:05 (buletin 0.6.0 + program 0.7.9, NEPUBLICATE, necomise)**: cele
+   **FĂCUT 17.09.2026, 22:47–23:05 (buletin 0.6.0 + program 0.7.9)**: cele
    cinci reguli ale userului — program PROPUS folosit, cu atenția la început; nr./data needitabile;
    motto precompletat de la numărul trecut; articolul gol umplut cu text de probă la vedere; secundarii
    de probă câte 1/4 la programul întreg. Vezi „BULETINUL — foaia tipărită" → „Cele cinci reguli".
-   ⚠️ La publicare: **program ȘI buletin** (buletinul citește `stare` din răspunsul programului).
+   **Publicate pe production în aceeași seară, 23:12–23:13** (program înaintea buletinului —
+   buletinul citește `stare` din răspunsul programului; la orice schimbare care le atinge pe
+   amândouă, aceeași ordine).
 
    **NEPROBAT, în ordinea în care trebuie luat**:
    1. **cap-coadă pe local**: `pnpm dev` nu răspundea la `https://rubik:8474` în timpul lucrului, deci
       ruta `/nou` (GET și POST) și legătura de serviciu spre program **nu s-au încercat vii**;
    2. **Browser Rendering** — VĂZUT 18.09.2026: userul a compus 616 pe live, PDF-ul a ieșit, dar
       textul intra peste floare (scriptul măsura înainte să se decodeze pozele și fonturile — reparat
-      în 0.6.1, `dupaIncarcare()`). Rămâne de confirmat pe live, după publicare, că (a) pagina a patra
-      iese curată la 616 recompus și (b) `data-raport` ajunge înapoi (siguranța „nimic pe dinafară");
+      în 0.6.1, `dupaIncarcare()`). **0.6.1 e pe production din 18.09.2026, 01:53** (numai buletinul;
+      programul era deja 0.7.9 pe live). Rămâne de confirmat, cu 616 **recompus din `/nou`**, că
+      (a) pagina a patra iese curată și (b) `data-raport` ajunge înapoi (siguranța „nimic pe
+      dinafară"). ⚠️ PDF-ul vechi al lui 616 e tot cel defect — nu se repară singur, trebuie refăcut;
    3. **fonturile din Chromium-ul de laborator**: săgeata `→` din tabelul programului iese strâmbă
       local — **și la foaia programului, care e cod netins de runda asta**, deci e lipsa fonturilor
       din container, nu un defect nou. De verificat totuși cum iese pe producție.
@@ -2064,6 +2068,16 @@ forța antetul `Host`**.
   curgerea; `hartie.ts` aștepta oricum `data-potrivit` după `load`, deci hârtia nu iese înainte.
   Probe locale neschimbate (615: 8 886 semne, 0 afară, gol 6 mm; `--verifica` BUN ×3), tsc curat.
   ⚠️ Pe disc era și lucru necomis al altei sesiuni (pastila Tipărește + iconița Revers, 23:14).
+
+- **Comis și publicat (user: „Comite tot și deploy", 01:51).** Un singur commit, `ba31efc`, cu tot
+  ce era pe disc: fixul (`foaie.ts`, buletin 0.6.1) **plus** lucrul celeilalte sesiuni (`pagini.ts`,
+  `stil.ts`, `tests/buletin-newsletter.test.ts` — pastila Tipărește + iconița Revers), la cererea
+  explicită a userului. Înainte: typecheck 36/36, 494 de probe trec. Publicat **numai buletinul** pe
+  production (`xc-buletin-production`, versiunea `1e64e881`, 100%) — programul 0.7.9 era deja pe live
+  din seara de 17.09, 23:12. „No targets deployed" din wrangler = rutele nu s-au schimbat, nu o
+  eroare. **Nevăzut încă**: 616 recompus pe live (NEXT 0a, pct. 2).
+  ⚠️ `npm run typecheck` a picat o dată la @xc/auth și a trecut la reluare, fără nicio schimbare —
+  cursă între `pnpm install`-urile pornite în paralel de turbo, nu un defect al codului.
 
 ### 2026-09-17
 
