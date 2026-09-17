@@ -59,6 +59,11 @@ export interface Env {
  * avansat destul", chenar rosu „aici e urgent de rezolvat". Rastoarna regula veche „toate
  * butoanele arata la fel" (user, 10.09.2026) — de atunci butoanele se deosebeau doar prin nume.
  * Cine n-are `stare` ramane cu chenarul obisnuit.
+ *
+ * ⚠️⚠️ SE VAD NUMAI LA ADMIN (user, 17.09.2026, seara: „voiam doar admin"). Sunt insemnarile
+ * NOASTRE de santier, nu o informatie pentru enorias: pe usa publica, rosul de la Curatenie ori
+ * de la Transmisiune ar citi „aplicatia asta e stricata". Poarta e `eAdmin` din sesiunea
+ * EFECTIVA, deci masca „vezi ca" le stinge singura — super-adminul vede usa exact ca omul.
  */
 const APLICATII: Array<{ cheie: keyof Navigatie; nume: string; stare?: 'bine' | 'urgent' }> = [
   { cheie: 'calendar', nume: 'Calendarul', stare: 'bine' },
@@ -181,9 +186,15 @@ function buton(nume: string, url: string, stare?: 'bine' | 'urgent'): string {
   return `    <a href="${esc(url)}${url.startsWith('/') ? '/' : ''}"${clasa}><b>${esc(nume)}</b><span class="adr">${esc(adresa)}</span></a>`
 }
 
-function corp(nav: Navigatie): string {
+/**
+ * Butoanele aplicatiilor. `eAdmin` hotaraste DOAR semnele de stare (user, 17.09.2026): butoanele,
+ * numele si adresele sunt aceleasi pentru toata lumea — usa nu se schimba dupa cine intra.
+ *
+ * ⚠️ Exportata ca s-o poata proba `tests/usa-website.test.ts` fara sa ridice tot workerul.
+ */
+export function corp(nav: Navigatie, eAdmin = false): string {
   return `<nav class="apps" aria-label="Aplicațiile platformei">
-${APLICATII.map((a) => buton(a.nume, nav[a.cheie] || '/', a.stare)).join('\n')}
+${APLICATII.map((a) => buton(a.nume, nav[a.cheie] || '/', eAdmin ? a.stare : undefined)).join('\n')}
   </nav>`
 }
 
@@ -356,7 +367,7 @@ export default {
     }
 
     if (url.pathname !== '/' && url.pathname !== '') {
-      return html(pagina({ ...comune, titluPagina: 'Pagina nu există', corp: `<h2>Pagina nu există</h2>${corp(nav)}` }), 404)
+      return html(pagina({ ...comune, titluPagina: 'Pagina nu există', corp: `<h2>Pagina nu există</h2>${corp(nav, eAdmin)}` }), 404)
     }
 
     log.info('home')
@@ -377,7 +388,7 @@ export default {
       rezumate(env.DB, 'buletin').catch(() => []),
     ])
     return html(
-      pagina({ ...comune, corp: corp(nav) + bucataDeAcasa(aleChinonicului, aleBuletinului) }),
+      pagina({ ...comune, corp: corp(nav, eAdmin) + bucataDeAcasa(aleChinonicului, aleBuletinului) }),
       200,
       { 'cache-control': cachePagina },
     )

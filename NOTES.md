@@ -1865,13 +1865,24 @@ forța antetul `Host`**.
 
 ### 2026-09-17
 
-- **DOUĂ ÎNTREBĂRI DESCHISE, ÎNCHISE DE USER** (seara, după publicare).
-  - **Chenarele de stare de pe ușa Website-ului rămân pentru TOȚI** („Da"): verde = gata și viu,
-    roșu = încă nu, văzute și de enoriașul neautentificat. **Nu se leagă de rolul de admin, nu se
-    ascund.** Nimic de schimbat în cod — starea de acum e cea cerută.
-  - **Ordinea colilor broșurii e bună** („Este bine ordinea") — probată la imprimantă pe
-    `outputs/buletin-615-brosura-A4.pdf`. Formula colilor și probele din `tests/` rămân neatinse;
-    subiectul e închis, nu-l redeschide „ca să simplifici".
+- **CHENARELE DE STARE SE VĂD NUMAI LA ADMIN — website 0.7.3** (seara, „voiam doar admin";
+  **NEPUBLICAT**). `corp(nav, eAdmin)` în `apps/home/src/index.ts`: butoanele, numele și adresele
+  sunt aceleași pentru toată lumea, se stinge doar culoarea chenarului. Poarta e `eAdmin` din
+  sesiunea EFECTIVĂ, deci masca „vezi ca" le stinge singură — super-adminul previzualizează ușa
+  omului. Probe noi: `tests/usa-website.test.ts` (8; 454 în repo).
+  - ⚠️ **Prima scriere a probelor trecea pe o cauză greșită**: cererea n-avea cookie, deci
+    `sesiuneCurenta` întorcea sesiunea anonimă fără să cheme identitatea, și „adminul" primea tot
+    ușa omului. A doua capcană, tot tăcută: `scope: '*'` **nu e scope valid** (`global`,
+    `parish:<id>`, …), iar o sesiune care nu trece de zod se preface în cea anonimă. Amândouă arată
+    ca o probă verde care nu probează nimic — la orice probă de rol, verifică întâi că sesiunea
+    falsă chiar e citită.
+  - ⚠️ **Cache-ul e curat din întâmplare, nu din grijă**: ușa anonimă poartă `public, max-age=300`,
+    dar adminul e mereu „intrat", deci primește `private, no-store`. Dacă cineva schimbă vreodată
+    regula aia de cache, chenarele pot ajunge în cache-ul public. O probă o păzește.
+
+- **ORDINEA COLILOR BROȘURII E BUNĂ** (seara, „Este bine ordinea") — probată la imprimantă pe
+  `outputs/buletin-615-brosura-A4.pdf`. Formula colilor și probele din `tests/` rămân neatinse;
+  subiectul e închis, nu-l redeschide „ca să simplifici".
 
 - **PUBLICAT: buletin 0.4.1 pe producție** (seara, la cuvântul userului). `npx wrangler deploy --env
   production -c apps/buletin/wrangler.jsonc`, versiunea `480fae96`; `buletin.sfantul-ilie.ro` răspunde
