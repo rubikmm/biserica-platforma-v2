@@ -200,10 +200,65 @@ async function moduleMasuri() {
   return import(`file://${cale}?t=${Date.now()}`)
 }
 
+async function moduleUmplere() {
+  const esbuild = await adunaEsbuild()
+  const r = await esbuild.build({
+    entryPoints: [join(APP, 'src/umplere.ts')], bundle: true, format: 'esm', platform: 'node', write: false,
+  })
+  const cale = join(arg('iesire', '/tmp/proba-buletin'), 'umplere.mjs')
+  mkdirSync(dirname(cale), { recursive: true })
+  writeFileSync(cale, r.outputFiles[0].text)
+  return import(`file://${cale}?t=${Date.now()}`)
+}
+
+/**
+ * NUMĂRUL GOL (user, 17.09.2026, seara): nimic scris — autorul, titlul, textul, sursa se umplu de
+ * probă („NUME AUTOR", „TITLU ARTICOL", Lorem ipsum, „Sursa: -"), exact cât încape la programul
+ * întreg; cu `--secundari 1|2`, și secundarii, câte o pătrime fiecare. Proba e a curgerii: textul de
+ * probă trebuie să intre FIX — nimic pe dinafară, și nici loc gol de un rând.
+ *
+ *   node apps/buletin/unelte/proba-foaie.mjs --gol [--secundari 2] [--iesire /tmp/proba]
+ */
+async function numarGol(iesire) {
+  const { foaieHtml } = await moduleFoaie()
+  const { umpleCuProba } = await moduleUmplere()
+  const cati = Number(arg('secundari', '0'))
+  const t = await tabelulDeProba()
+  const cerutGol = {
+    motto: '„Maica Domnului ne iubește mult. Ea vede în noi prețul morții lui Iisus Hristos. ' +
+      'Maica Domnului ne dorește lucruri mai mari decât ne dorim noi înșine.”',
+    motoAutor: 'Părintele Arsenie Papacioc',
+    nr: 616,
+    data: '2026-09-20',
+    principal: { autor: '', titlu: '', text: '', poza: false },
+    secundari: Array.from({ length: cati }, () => ({ autor: '', titlu: '', text: '', poza: false })),
+    floare: true,
+  }
+  const { cerut, deProba, socoteala } = umpleCuProba(cerutGol, { slujbe: t.slujbe, detalii: t.detalii })
+  const html = foaieHtml({
+    cerut, dataScrisa: '20 septembrie 2026', poze: {},
+    calendar: { tabel: t.tabel, stil: t.stil }, floare: socoteala.floare,
+  })
+  const caleHtml = join(iesire, `gol-${cati}.html`)
+  writeFileSync(caleHtml, html)
+  const raport = await raportulCurgerii(caleHtml)
+  const calePdf = join(iesire, `buletin-gol-${cati}-secundari.pdf`)
+  await ruleaza('chromium', [
+    '--headless', '--no-sandbox', '--disable-gpu', '--virtual-time-budget=9000',
+    '--no-pdf-header-footer', `--print-to-pdf=${calePdf}`, `file://${caleHtml}`,
+  ], { maxBuffer: 1 << 26 })
+  await ruleaza('pdftoppm', ['-r', '70', '-png', calePdf, join(iesire, `gol-${cati}-pag`)])
+  console.log(`de probă: ${deProba.join('; ')}`)
+  console.log(`socoteala: ${JSON.stringify(socoteala.zone.map((z) => [z.cine, z.semne, z.scrise]))}`)
+  console.log(`PDF: ${calePdf}\ncurgerea: ${JSON.stringify(raport)}`)
+  if (raport.peDinafara > 0) process.exitCode = 1
+}
+
 async function main() {
   const iesire = arg('iesire', '/tmp/proba-buletin')
   mkdirSync(iesire, { recursive: true })
   if (process.argv.includes('--verifica')) return verifica(iesire)
+  if (process.argv.includes('--gol')) return numarGol(iesire)
   if (arg('cerere', '')) return dinCerere(iesire, arg('cerere', ''))
   const { foaieHtml } = await moduleFoaie()
   const cati = Number(arg('secundari', '0'))

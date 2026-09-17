@@ -164,6 +164,36 @@ export async function cauta(db: D1Database, q: string, limita = 60): Promise<Gas
   return r.results
 }
 
+/**
+ * MOTTO-UL UNUI NUMAR DIN ARHIVA, citit din textul scos din PDF (user, 17.09.2026: „Motto — trebuie
+ * sa fie precompletat motto-ul trecut, de la numarul trecut").
+ *
+ * Numerele vechi sunt fisiere, nu campuri: motto-ul nu e nicaieri ca atare, dar textul paginii intai
+ * il poarta intre parohie si pastila numarului, in ghilimele romanesti, cu cel citat dupa linie:
+ *   `… HANUL COLȚEI „Maica Domnului ne iubeşte mult. …” – Părintele Arsenie Papacioc Nr. 615 / …`
+ * ⚠️ Textul din Word are diacriticele VECHI, cu sedila (ş, ţ) — se aduc la virgula (ș, ț), ca in
+ * restul platformei; altfel motto-ul precompletat ar duce sedilele mai departe, in numarul nou.
+ * Cand forma nu se potriveste (un numar fara motto, un PDF scanat), se intoarce `null` — nu se
+ * ghiceste.
+ */
+export function mottoDinText(text: string | null | undefined): { motto: string; motoAutor?: string } | null {
+  if (!text) return null
+  const cap = text.slice(0, 1500).replace(/\s+/g, ' ')
+  const m = /(„[^„”]{10,600}”)\s*(?:[–—-]\s*([^„”]{2,120}?))?\s*Nr\.\s*\d/u.exec(cap)
+  if (!m) return null
+  const virgula = (s: string): string => s.replace(/ş/g, 'ș').replace(/ţ/g, 'ț').replace(/Ş/g, 'Ș').replace(/Ţ/g, 'Ț')
+  return { motto: virgula(m[1]!.trim()), motoAutor: m[2] ? virgula(m[2].trim()) : undefined }
+}
+
+/** Textul paginii intai a unui numar — DOAR capul lui, pentru motto; nu se aduce tot textul. */
+export async function capulTextului(db: D1Database, nr: number, data: string): Promise<string | null> {
+  const r = await db
+    .prepare('SELECT substr(text, 1, 1500) AS cap FROM buletine WHERE nr = ?1 AND data = ?2')
+    .bind(nr, data)
+    .first<{ cap: string | null }>()
+  return r?.cap ?? null
+}
+
 export async function numaratoare(db: D1Database): Promise<{ buletine: number; ani: number; ultimul: string | null }> {
   const r = await db
     .prepare('SELECT COUNT(*) AS buletine, COUNT(DISTINCT an) AS ani, MAX(data) AS ultimul FROM buletine')

@@ -324,6 +324,12 @@ propunerea automată, ca în V1.
    pe dinafară. Refactorul programului e **neutru la pixel** (probă: HTML identic, randare identică).
    472 de probe trec, typecheck curat.
 
+   **FĂCUT 17.09.2026, 22:47–23:05 (buletin 0.6.0 + program 0.7.9, NEPUBLICATE, necomise)**: cele
+   cinci reguli ale userului — program PROPUS folosit, cu atenția la început; nr./data needitabile;
+   motto precompletat de la numărul trecut; articolul gol umplut cu text de probă la vedere; secundarii
+   de probă câte 1/4 la programul întreg. Vezi „BULETINUL — foaia tipărită" → „Cele cinci reguli".
+   ⚠️ La publicare: **program ȘI buletin** (buletinul citește `stare` din răspunsul programului).
+
    **NEPROBAT, în ordinea în care trebuie luat**:
    1. **cap-coadă pe local**: `pnpm dev` nu răspundea la `https://rubik:8474` în timpul lucrului, deci
       ruta `/nou` (GET și POST) și legătura de serviciu spre program **nu s-au încercat vii**;
@@ -1741,8 +1747,17 @@ pare plină), iar `offsetTop/offsetHeight` se rotunjesc la pixel și peste 45 de
 ⚠️ **CALENDARUL SE CERE DE LA PROGRAM, nu se desenează în buletin**: `GET /v1/tabel-tipar?data=…`
 (Service Binding `PROGRAM`), care întoarce `{ tabel, stil, slujbe, detalii }`. În program s-au scos
 din `foaieHtml` două piese refolosibile — `tabelProgram()` și `stilTabel(cuVariabile)` — fără nicio
-schimbare de randare (probat: HTML identic, 0 pixeli diferență). **Poarta foii de pe ușă ține și
-aici**: o săptămână nevalidată nu dă tabel, deci nu se tipărește un program neconfirmat.
+schimbare de randare (probat: HTML identic, 0 pixeli diferență).
+⚠️ **POARTA S-A SCHIMBAT la 17.09.2026, 22:47** (user: „să se folosească fără probleme programul propus
+dacă nu este validat — deci ce e disponibil — doar trebuie atrasă atenția la început PROPUS"). Până
+atunci o săptămână nevalidată nu dădea tabel. Acum `tabelulSaptamanii` (program, `hartii.ts`) dă
+săptămâna VALIDATĂ dacă e; altfel **ce e disponibil** — rândurile din bază (stare „propus") ori
+propunerea din istoric, aceeași sursă ca pagina și poza săptămânii (`saptamanaOriPropunere`) — și
+răspunde cu **`stare: 'validat' | 'propus'`**. **Foaia de pe ușă (`/v1/foaie`) NU s-a schimbat**: ea
+rămâne numai a săptămânilor validate. Buletinul poartă starea mai departe: `Calendar.stare`,
+`Compus.atentie[]` (ce nu oprește, dar se spune LA ÎNCEPUT), câmpul `program` din `buletin.compune`,
+chenarul roșu „PROPUS." de deasupra formularului din `/nou`. `null` la calendar înseamnă de acum
+„programul n-a răspuns deloc", nu „nevalidat".
 ⚠️ `stilTabel(true)` **numai pentru cine pune tabelul în pagina lui**: variabilele scrise pe tabel ar
 bate `--f`-ul coborât de scriptul de potrivire al foii programului.
 ⚠️ **Se cere ziua de A DOUA ZI după numărul buletinului**: nr. 615, datat 6 septembrie, poartă
@@ -1795,10 +1810,37 @@ PDF **n-avea diacritice** (fontul Cambria din PDF n-are hartă Unicode) — puse
 dens** decât Word-ul: al nostru termină textul cu vreo 15 rânduri mai sus pe pagina 4 (pagina 1 ține
 mai mult text sub titlu). Comparațiile sunt în `outputs/615-comparatie-pagina-*.png`.
 
-**Ecranul `/nou`** are acum formularul (motto, număr, dată, principalul, până la doi secundari) și
+**Ecranul `/nou`** are acum formularul (motto, principalul, până la doi secundari) și
 **socoteala care merge odată cu scrisul**, sub fiecare câmp de text, din aceleași cifre ca la server.
 ⚠️ **Chenarul gol a ieșit** — locul lui l-a luat formularul. Capul paginii rămâne neatins (eticheta
 verde „Numărul următor", numărul roșu = ultimul din arhivă + 1, duminica lui).
+
+**Cele cinci reguli din 17.09.2026, 22:47** (user, un singur mesaj; buletin 0.6.0 + program 0.7.9):
+- **Nr. și data NU se editează**: nu mai sunt câmpuri în formular — nici ascunse. Serverul le ia din
+  arhivă (`buletinulNou`: ultimul + 1, duminica următoare), nu din ce a trimis browserul.
+- **Motto-ul vine PRECOMPLETAT cu cel al numărului trecut** (`mottoDinainte`, `compune.ts`): întâi din
+  **cererea păstrată** a celui mai nou număr compus aici — la fiecare compunere, cererea (ce a scris
+  omul, NU umplerea de probă) se pune ca JSON sub **`compus/<an>/buletin-<nr>-<data>.json`**, lângă
+  PDF; dacă arhiva e mai nouă decât ce s-a compus, din **textul PDF-ului** numărului din arhivă
+  (`mottoDinText`, `depozit.ts`: citatul stă între parohie și pastilă, în ghilimele românești, cu cel
+  citat după linie; sedilele Word-ului ş/ţ se aduc la ș/ț). Ce a scris omul în câmp bate precompletarea.
+- **Un articol gol NU e greșeală — se umple cu text de probă LA VEDERE** (`umplere.ts`): „NUME AUTOR"
+  (+ „1999-1999" — anii de probă vin NUMAI cu autorul de probă), „TITLU ARTICOL", Lorem ipsum,
+  „Sursa: -"; poza lipsă are locul ei desenat, ca înainte. `plangeriDeForma` nu se mai plânge de
+  câmpuri goale (rămân: nr, data, mai mult de doi secundari); în `buletin.compune` autor/titlu/text
+  sunt opționale. Răspunsul spune în `atentie` ce a fost de probă. Sub câmpul gol, socoteala din
+  pagină scrie „Gol: intră text de probă (Lorem ipsum), ~N de semne".
+- **Cât text de probă: exact cât încape la programul ÎNTREG** (treapta 0, nu strâns): un secundar o
+  pătrime din tot textul, doi secundari 1/4 + 1/4 = jumătate, principalul restul — e chiar împărțeala
+  din `socoteste` (`max(cât cere, ⌊total/4⌋)`), deci un secundar SCRIS mai lung își ține lungimea.
+  Umplerea e în doi pași (capetele întâi, fiindcă „Sursa: -" și zona neagră mănâncă rânduri; textul pe
+  urmă, la socoteala refăcută). „Când e text real și e prea mult, apelăm la variante restrânse de
+  program" — adică strângerea calendarului rămâne pentru textul adevărat, ca până acum.
+- ⚠️ **LOREM IPSUM E MAI LAT DECÂT ROMÂNA**: la măsura socotelii (36,67 semne/rând, măsurată pe text
+  românesc) proba a dat **106 semne pe dinafară** și golul de deasupra calendarului strâns la 3 mm —
+  cuvintele latinești lungi țin mai puțin pe un rând justificat. `LOREM_FATA_DE_ROMANA = 0.975`,
+  probat pe randare: la 0, 1 și 2 secundari intră fix, 0 pe dinafară, gol 6 mm (`proba-foaie.mjs --gol
+  [--secundari n]`, unealta are de acum și proba numărului gol). Probele: `tests/buletin-umplere.test.ts`.
 
 ## Aplicațiile portate — amănunte
 
@@ -2001,6 +2043,35 @@ forța antetul `Host`**.
 
 ### 2026-09-17
 
+- **PATRU RETUȘURI LA FOAIE, MĂSURATE — au intrat în buletin 0.6.0 (publicat împreună cu cele cinci reguli)**.
+  Userul, 23:07: (1) **aerul cruce → titlu = aerul ramă → cruce** (3.7 mm; la 200 dpi rama se termină
+  la 75 px, crucea începe la 104, iar de la talpa crucii la capul literelor sunt acum tot 29 px):
+  `.titlu-foaie` `padding-top: 21.2mm`, `.cruce` `top: -21mm`; (2) **rândurile motto-ului la jumătate
+  de depărtare** (`line-height` 1.32 → 1.1; golul dintre rânduri 17 → 9 px) — el a spus că cererea de
+  la 22:37 („la jumătate distanță") fusese scrisă greșit, deci golul de sub parohie s-a **întors la
+  2.6 mm**; (3) chenarul pozei principale **1.2 mm** (în nr. 615 din Word e 1.0 mm = 8 px la 200 dpi);
+  (4) **sursa, mențiunea de deasupra ei și subsolul la 13 pt** (`pdftohtml -xml` pe 615: Calibri
+  13.3 pt, pas 16.4 pt; erau 10.5 pt — „text scris prea mic"). `INALTIMI`: motto 3.4, sursa 3, subsol
+  3.2. Curgerea pe 615 neschimbată (8 886 semne, 0 afară, 7 coloane, gol 6 mm).
+- **CINCI REGULI ALE COMPUNERII — buletin 0.6.0 + program 0.7.9 (publicate la 23:2x, la „Deploy"-ul
+  cerut pentru retușuri; sesiunea care le-a scris s-a încheiat la 23:07 fără să le comită)**. Userul,
+  22:47, un singur mesaj: (1) **programul PROPUS se folosește** când săptămâna nu e validată, „ce e
+  disponibil", cu **PROPUS spus la început** — `tabelulSaptamanii` din program cade pe
+  `saptamanaOriPropunere` și răspunde cu `stare: 'validat' | 'propus'` (foaia de pe ușă rămâne numai
+  validată); în buletin: `Calendar.stare`, `Compus.atentie[]`, câmpul `program` + `atentie` în
+  `buletin.compune`, chenar roșu „PROPUS." deasupra formularului din `/nou`, „(PROPUS)" pe rândul
+  programului; (2) **nr. și data nu se editează** — au ieșit din formular, serverul le ia din arhivă;
+  (3) **motto-ul precompletat cu al numărului trecut** — `mottoDinainte`: cererea păstrată sub
+  `compus/<an>/buletin-<nr>-<data>.json` (scrisă la fiecare compunere, din `/nou` și din acțiune) sau
+  textul PDF-ului din arhivă (`mottoDinText`, sedile → virgule); (4) **articolul gol se umple cu text
+  de probă la vedere** (`umplere.ts`: NUME AUTOR, 1999-1999, TITLU ARTICOL, Lorem ipsum, Sursa: -),
+  `plangeriDeForma` nu se mai plânge de goluri, acțiunea are autor/titlu/text opționale; (5) **cât
+  încape la programul întreg**, un secundar 1/4, doi 1/2 — împărțeala era deja a socotelii.
+  ⚠️ **Lorem ipsum e mai lat decât româna**: 106 semne pe dinafară la măsura socotelii; calibrat
+  `LOREM_FATA_DE_ROMANA = 0.975`, probat pe randare la 0/1/2 secundari (0 pe dinafară, gol 6 mm) cu
+  `proba-foaie.mjs --gol`, mod nou al uneltei. 494 de probe trec (16 noi: `tests/buletin-umplere.test.ts`
+  + 5 în `buletin-newsletter.test.ts`), tsc curat la buletin și program. Probe vizuale în spațiul
+  agentului: `outputs/buletin-gol-{un-autor,1-secundar,2-secundari}.pdf`.
 - **CAPUL PAGINII 1 ȘI ARTICOLELE, ȘASE RETUȘURI — buletin 0.5.2 (publicat)**. Userul, 22:37–22:39:
   (1) motto-ul la **jumătate** din depărtarea față de titlu + parohie (`.motto` fără margin-top; golul
   văzut 5.3 → 2.7 mm); (2) titlul foii e **„BULETINUL BISERICII"**; (3) aerul dintre cruce și titlu

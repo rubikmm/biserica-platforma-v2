@@ -758,12 +758,19 @@ export interface StareaCompunerii {
     facut: boolean
     cheie?: string | null
     plangeri: string[]
+    /** ce nu oprește, dar se spune la vedere: programul PROPUS, textul de probă */
+    atentie?: string[]
     zone?: Array<{ cine: string; semne: number; scrise: number; ramase: number }>
   }
   /** ce scrisese omul, ca să nu se piardă la reîncărcare */
   scris?: Record<string, string>
-  /** programul săptămânii tipărite — ce a spus aplicația `program` */
-  calendar?: { titlu: string; slujbe: number } | null
+  /**
+   * programul săptămânii tipărite — ce a spus aplicația `program`. `stare: 'propus'` = nevalidat,
+   * s-a luat ce era disponibil; `null` = programul n-a răspuns deloc.
+   */
+  calendar?: { titlu: string; slujbe: number; stare?: 'validat' | 'propus' } | null
+  /** motto-ul numărului trecut, cu care se precompletează câmpul (user, 17.09.2026) */
+  motto?: { motto: string; motoAutor?: string } | null
 }
 
 /** Un câmp de formular, cu eticheta lui. */
@@ -779,17 +786,19 @@ const camp = (nume: string, eticheta: string, val: string, o: { lung?: boolean; 
 /** Blocul unui articol din formular: autorul (zona neagră), titlul, textul, sursa. */
 function campuriArticol(prefix: string, titlu: string, scris: Record<string, string>, cuPoza: string): string {
   const v = (c: string): string => scris[`${prefix}_${c}`] ?? ''
+  // ⚠️ Câmpurile goale NU opresc compunerea (user, 17.09.2026, seara): se umplu cu text de probă, la
+  // vedere — ajutorul de sub fiecare spune cu ce, ca omul să știe ce va ieși pe foaie dacă nu scrie.
   return `<fieldset class="articol" data-articol="${prefix}">
   <legend>${esc(titlu)}</legend>
-  ${camp(`${prefix}_autor`, 'Autorul (scrisul alb din zona neagră)', v('autor'), { ajutor: 'Dacă nu se știe: „Fără autor".' })}
+  ${camp(`${prefix}_autor`, 'Autorul (scrisul alb din zona neagră)', v('autor'), { ajutor: 'Dacă nu se știe: „Fără autor". Gol = „NUME AUTOR", de probă.' })}
   <div class="doua">
     ${camp(`${prefix}_ani`, 'Anii vieții', v('ani'), { ajutor: 'ex. 1661-1729' })}
     ${camp(`${prefix}_pomenire`, 'Pomenirea', v('pomenire'), { ajutor: 'ex. † 16 august' })}
   </div>
-  ${camp(`${prefix}_titlu`, 'Titlul', v('titlu'))}
-  ${camp(`${prefix}_poza`, cuPoza, v('poza'), { ajutor: 'adresa pozei; gol = fără poză' })}
-  ${camp(`${prefix}_text`, 'Textul', v('text'), { lung: true })}
-  ${camp(`${prefix}_sursa`, 'Sursa', v('sursa'), { ajutor: 'ex. ziarullumina.ro' })}
+  ${camp(`${prefix}_titlu`, 'Titlul', v('titlu'), { ajutor: 'Gol = „TITLU ARTICOL", de probă.' })}
+  ${camp(`${prefix}_poza`, cuPoza, v('poza'), { ajutor: 'adresa pozei; gol = locul ei, desenat' })}
+  ${camp(`${prefix}_text`, 'Textul', v('text'), { lung: true, ajutor: 'Gol = Lorem ipsum, exact cât încape.' })}
+  ${camp(`${prefix}_sursa`, 'Sursa', v('sursa'), { ajutor: 'ex. ziarullumina.ro; gol = „-"' })}
   <p class="socoteala" data-pentru="${prefix}"></p>
 </fieldset>`
 }
@@ -825,10 +834,25 @@ export function paginaNou(
   <p class="cand">${dataCuZi(nou.data)}</p>
 </div>`
 
+  /*
+   * ⚠️ PROPUS SE SPUNE LA ÎNCEPUT (user, 17.09.2026, seara: „să se folosească fără probleme programul
+   * propus dacă nu este validat — doar trebuie atrasă atenția la început PROPUS"). Chenarul stă
+   * ÎNAINTE de orice altceva de pe ecran, nu la piciorul paginii, ca să nu se poată compune un număr
+   * fără să-l fi văzut.
+   */
+  const propus = stare.calendar?.stare === 'propus'
+    ? `<div class="veste rau atentie propus"><b>PROPUS.</b> Programul săptămânii <b>${esc(stare.calendar.titlu)}</b> nu e încă validat — ` +
+      'numărul se compune cu ce e disponibil (propunerea). Validează-l în aplicația Programul înainte de tipar.</div>'
+    : ''
+
+  // ce nu oprește compunerea, dar se spune la vedere — înaintea rezultatului, nu după
+  const atentii = stare.raspuns?.atentie?.length
+    ? `<ul class="atentie lista">${stare.raspuns.atentie.map((a) => `<li>${esc(a)}</li>`).join('')}</ul>`
+    : ''
   const veste = stare.raspuns
     ? stare.raspuns.facut
-      ? `<p class="veste bine">Numărul e compus. <a href="${ctx.prefix}/fisier/${esc(stare.raspuns.cheie ?? '')}">Deschide PDF-ul</a>.</p>`
-      : `<div class="veste rau"><p>Nu s-a compus:</p><ul>${stare.raspuns.plangeri.map((p) => `<li>${esc(p)}</li>`).join('')}</ul></div>`
+      ? `${atentii}<p class="veste bine">Numărul e compus. <a href="${ctx.prefix}/fisier/${esc(stare.raspuns.cheie ?? '')}">Deschide PDF-ul</a>.</p>`
+      : `${atentii}<div class="veste rau"><p>Nu s-a compus:</p><ul>${stare.raspuns.plangeri.map((p) => `<li>${esc(p)}</li>`).join('')}</ul></div>`
     : ''
 
   const cati = Number(scris.secundari ?? '0')
@@ -836,13 +860,18 @@ export function paginaNou(
     .map((i) => `<div class="secundar" data-nr="${i}"${i > cati ? ' hidden' : ''}>${campuriArticol(`s${i}`, `Articolul secundar ${i}`, scris, 'Poza mică (adresă)')}</div>`)
     .join('')
 
+  /*
+   * ⚠️ NUMĂRUL ȘI DATA NU SE EDITEAZĂ (user, 17.09.2026, seara: „Nr și data buletin — nu sunt
+   * editabile"): ies din arhivă (ultimul + 1, duminica următoare) și stau scrise în capul paginii.
+   * Nu sunt câmpuri — nici ascunse: serverul le ia tot din arhivă, nu din formular.
+   * ⚠️ MOTTO-UL VINE PRECOMPLETAT cu cel al numărului trecut (aceeași cerere) — omul îl schimbă dacă
+   * vrea altul; ce a scris el (`scris`) bate precompletarea.
+   */
+  const motto = scris.motto ?? stare.motto?.motto ?? ''
+  const motoAutor = scris.moto_autor ?? stare.motto?.motoAutor ?? ''
   const formular = `<form method="post" action="${ctx.prefix}/nou" class="compunere">
-  <div class="doua">
-    ${camp('nr', 'Numărul', scris.nr ?? (nou.nr ? String(nou.nr) : ''), { tip: 'number' })}
-    ${camp('data', 'Duminica numărului', scris.data ?? nou.data, { tip: 'date', ajutor: 'programul tipărit e al săptămânii care începe a doua zi' })}
-  </div>
-  ${camp('motto', 'Motto', scris.motto ?? '', { lung: true, ajutor: 'citatul de sub antet, pe cel mult două rânduri' })}
-  ${camp('moto_autor', 'Cine a spus-o', scris.moto_autor ?? '')}
+  ${camp('motto', 'Motto', motto, { lung: true, ajutor: stare.motto && scris.motto === undefined ? 'precompletat cu motto-ul numărului trecut — schimbă-l dacă e altul' : 'citatul de sub antet, pe cel mult două rânduri' })}
+  ${camp('moto_autor', 'Cine a spus-o', motoAutor)}
   ${campuriArticol('p', 'Articolul principal', scris, 'Poza mare (adresă)')}
   <p class="cati-secundari">
     <label for="c-secundari">Articole secundare</label>
@@ -858,14 +887,15 @@ export function paginaNou(
 </form>`
 
   const calendar = stare.calendar
-    ? `<p class="marunt">Pe pagina a patra intră programul liturgic pentru <b>${esc(stare.calendar.titlu)}</b> — ${stare.calendar.slujbe} ${stare.calendar.slujbe === 1 ? 'slujbă' : 'de slujbe'}, cerute de la aplicația Programul.</p>`
-    : `<p class="marunt rau">Programul săptămânii nu e încă validat, deci pagina a patra n-are ce tipări. Validează-l întâi în aplicația Programul.</p>`
+    ? `<p class="marunt">Pe pagina a patra intră programul liturgic pentru <b>${esc(stare.calendar.titlu)}</b>${stare.calendar.stare === 'propus' ? ' <b>(PROPUS)</b>' : ''} — ${stare.calendar.slujbe} ${stare.calendar.slujbe === 1 ? 'slujbă' : 'de slujbe'}, cerute de la aplicația Programul.</p>`
+    : `<p class="marunt rau">Programul n-a răspuns pentru săptămâna tipărită, deci pagina a patra n-are ce tipări. Vezi aplicația Programul.</p>`
 
   return sablon(
     ctx,
     m,
     'Buletin nou',
     `${capul}
+${propus}
 ${veste}
 ${calendar}
 ${formular}
@@ -911,8 +941,11 @@ const SOCOTESTE_IN_PAGINA = `
       if (!camp || !unde || !masura) continue;
       var scrise = semne(camp.value); total += scrise;
       var ramase = masura.semne - scrise;
-      unde.textContent = 'Încap ~' + masura.semne + ' de semne. Scrise: ' + scrise + '. ' +
-        (ramase >= 0 ? 'Mai ai loc pentru ' + ramase + '.' : 'Ai trecut cu ' + (-ramase) + ' peste măsură.');
+      // gol = text de probă (Lorem ipsum), exact cât încape — nu e o lipsă, e o alegere a foii
+      unde.textContent = scrise === 0
+        ? 'Gol: intră text de probă (Lorem ipsum), ~' + masura.semne + ' de semne.'
+        : 'Încap ~' + masura.semne + ' de semne. Scrise: ' + scrise + '. ' +
+          (ramase >= 0 ? 'Mai ai loc pentru ' + ramase + '.' : 'Ai trecut cu ' + (-ramase) + ' peste măsură.');
       unde.className = 'socoteala' + (ramase < 0 ? ' peste' : '');
       unde.setAttribute('data-pentru', prefix);
     }

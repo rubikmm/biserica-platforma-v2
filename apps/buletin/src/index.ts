@@ -47,7 +47,7 @@ import {
   vecini,
 } from './depozit.js'
 import { type Coala, brosura, cheiaBrosurii, numeBrosura } from './tipar.js'
-import { calendarulNumarului, cheiaNumarului, compune } from './compune.js'
+import { calendarulNumarului, cheiaNumarului, compune, mottoDinainte, pastreazaCererea } from './compune.js'
 import { variante } from './masuri.js'
 import { abonamentul, ruteazaAbonare } from '@xc/abonare'
 import { ruteazaSetari } from '@xc/setari'
@@ -526,16 +526,17 @@ export default {
         const nou = buletinulNou(b, azi)
         /*
          * Socoteala se face cu calendarul săptămânii tipărite: el hotărăște cât loc rămâne pe
-         * pagina a patra. Dacă programul nu răspunde (săptămâna nevalidată), pagina o spune
-         * limpede și socotește mai departe fără el — omul poate scrie textul, doar că nu poate
-         * compune până nu se validează programul.
+         * pagina a patra. ⚠️ Din 17.09.2026, seara, programul NEVALIDAT nu mai oprește nimic: se ia
+         * ce e disponibil (propunerea), iar pagina scrie PROPUS la început (`stare`). Doar dacă
+         * programul nu răspunde deloc pagina o spune și socotește fără el.
+         * Motto-ul numărului trecut se aduce odată cu calendarul: câmpul vine precompletat cu el.
          */
-        const cal = await calendarulNumarului(env, nou.data)
-        const calendar = 'eroare' in cal ? null : { titlu: cal.titlu, slujbe: cal.slujbe }
+        const [cal, motto] = await Promise.all([calendarulNumarului(env, nou.data), mottoDinainte(env, b)])
+        const calendar = 'eroare' in cal ? null : { titlu: cal.titlu, slujbe: cal.slujbe, stare: cal.stare }
         const masuri = variante('eroare' in cal ? undefined : { slujbe: cal.slujbe, detalii: cal.detalii })
 
         if (req.method !== 'POST') {
-          return html(paginaNou(ctx, m, b, nou, { variante: masuri, calendar }), 200, alLui)
+          return html(paginaNou(ctx, m, b, nou, { variante: masuri, calendar, motto }), 200, alLui)
         }
 
         const f = await req.formData()
@@ -551,11 +552,12 @@ export default {
           poza: !!(scris[`${prefix}_poza`] ?? '').trim(),
         })
         const cati = Math.min(2, Math.max(0, Number(scris.secundari ?? '0') || 0))
+        // ⚠️ Numărul și data NU vin din formular (user: „nu sunt editabile"): sunt ale arhivei.
         const cerut = {
           motto: (scris.motto ?? '').trim(),
           motoAutor: (scris.moto_autor ?? '').trim() || undefined,
-          nr: Number(scris.nr ?? nou.nr ?? 0),
-          data: scris.data ?? nou.data,
+          nr: nou.nr ?? 0,
+          data: nou.data,
           principal: articol('p'),
           secundari: Array.from({ length: cati }, (_, i) => articol(`s${i + 1}`)),
           floare: true,
@@ -571,6 +573,8 @@ export default {
         if (r.ok && r.pdf) {
           const cheie = cheiaNumarului(cerut)
           await env.FISIERE.put(cheie, r.pdf, { httpMetadata: { contentType: 'application/pdf' } })
+          // cererea, ca date, lângă PDF — de aici ia numărul următor motto-ul (ce a scris omul, nu proba)
+          await pastreazaCererea(env, cerut)
           ctxExec.waitUntil(
             scrieAudit(env, {
               action: 'buletin.compune', target: cheie, outcome: 'success',
@@ -579,8 +583,8 @@ export default {
           )
           return html(
             paginaNou(ctx, m, b, nou, {
-              variante: masuri, calendar, scris,
-              raspuns: { facut: true, cheie, plangeri: [] },
+              variante: masuri, calendar, scris, motto,
+              raspuns: { facut: true, cheie, plangeri: [], atentie: r.atentie },
             }),
             200,
             alLui,
@@ -588,8 +592,8 @@ export default {
         }
         return html(
           paginaNou(ctx, m, b, nou, {
-            variante: masuri, calendar, scris,
-            raspuns: { facut: false, plangeri: r.plangeri },
+            variante: masuri, calendar, scris, motto,
+            raspuns: { facut: false, plangeri: r.plangeri, atentie: r.atentie },
           }),
           200,
           alLui,

@@ -105,16 +105,21 @@ body { font-family: "Caladea", Cambria, Georgia, serif; color: #000; font-size: 
    randare), top = inaltimea crucii + 2 mm aer (era 1 mm; „dubleaza distanta"). Titlul primeste
    padding-top cat crucea, ca sa ramana loc pentru ea in capul paginii. */
 .l { position: relative; }
-.cruce { position: absolute; width: 36.5mm; left: 2.45mm; top: -19.6mm; transform: translateX(-50%); }
+/* Aerul cruce → titlu = aerul rama → cruce, 3.7 mm (user, 23:07: „la fel ca distanta dintre cruce si rama");
+   masurat la 200 dpi: rama se termina la 75 px, crucea incepe la 104 (29 px = 3.7 mm), deci de la
+   talpa crucii la capul literelor tot 29 px. Top = inaltimea crucii (17.8 mm) + 3.2 mm pana la em-box. */
+.cruce { position: absolute; width: 36.5mm; left: 2.45mm; top: -21mm; transform: translateX(-50%); }
 /* Titlul foii: MAJUSCULE, Trajan Pro 3 Regular, FARA aldin (user, 17.09.2026 seara: „scoate bold").
    „BULETINUL BISERICII" din 17.09.2026, 22:37 (era „BULETINUL PAROHIEI"). Parohia, sub el, putin mai
    mare ca la programul liturgic. */
 .titlu-foaie { font-family: "Trajan", serif; font-size: 35pt; line-height: 1; margin: 0; font-weight: 400;
-               padding-top: 19.8mm; text-transform: uppercase; letter-spacing: .4pt; }
+               padding-top: 21.2mm; text-transform: uppercase; letter-spacing: .4pt; }
 .parohia { font-family: "Trajan", serif; font-size: 11pt; white-space: pre; margin: 1.6mm 0 0; }
-/* Motto-ul la jumatate din departarea de dinainte fata de titlu + parohie (user, 17.09.2026, 22:37):
-   golul vazut era ~5.3 mm cu margin 2.6 mm, deci fara margin ramane ~2.7 mm. */
-.motto { font-style: italic; font-size: 14pt; line-height: 1.32; margin: 0; }
+/* Motto-ul: RANDURILE LUI la jumatate de departare (user, 23:07: „distanta dintre randuri trebuia sa se
+   injumatateasca — cred ca am scris eu gresit"): golul dintre randuri era 2.2 mm la line-height 1.32,
+   la 1.1 e ~1.1 mm. Departarea fata de parohie ramane cea dinainte (2.6 mm) — cererea de la 22:37
+   („la jumatate distanta") era despre randuri, nu despre golul de sub titlu. */
+.motto { font-style: italic; font-size: 14pt; line-height: 1.1; margin: 2.6mm 0 0; }
 .motto-autor { font-family: "Carlito", Calibri, sans-serif; font-size: 13.5pt; color: #7e7e7e; margin: .6mm 0 0; }
 /* Pastila numărului atârnă de o linie pe toată lățimea — ca la foaia programului, aceeași mână. */
 .linie { border-top: .75pt solid #333; margin: 3mm 0 0; height: 0; font-size: 0; line-height: 0; }
@@ -130,8 +135,9 @@ body { font-family: "Caladea", Cambria, Georgia, serif; color: #000; font-size: 
    desenat (chenar punctat), ca sa se vada pe ciorna ce lipseste. */
 .pagina[data-pagina="1"] .col.a { display: flex; flex-direction: column; }
 .poza { display: block; width: 100%; margin: 0; }
-/* Poza principala are chenar negru de 3 px (user, 17.09.2026, 22:38: „margine neagra 3 sau 4 px"). */
-.poza.mare { flex: 1 1 auto; min-height: 0; object-fit: cover; border: 3px solid #000; box-sizing: border-box; }
+/* Poza principala are chenar negru gros: 1.2 mm (user, 22:38: „margine neagra 3 sau 4 px", apoi 23:07:
+   „mai groasa"). In nr. 615 din Word chenarul are 1.0 mm (8 px la 200 dpi), asta e putin peste. */
+.poza.mare { flex: 1 1 auto; min-height: 0; object-fit: cover; border: 1.2mm solid #000; box-sizing: border-box; }
 .poza-loc { flex: 1 1 auto; min-height: 0; border: .6pt dashed #888; box-sizing: border-box;
             display: flex; align-items: center; justify-content: center;
             font-family: "Carlito", Calibri, sans-serif; font-size: 11pt; color: #888; }
@@ -156,7 +162,9 @@ body { font-family: "Caladea", Cambria, Georgia, serif; color: #000; font-size: 
 .col > .incepe-articol:first-child { margin-top: 0; }
 .titlu-articol + .rigla { border-top: .5pt solid #000; margin: 0 0 1.6mm; height: 0; }
 p.t { margin: 0; text-align: justify; text-indent: 10mm; hyphens: none; }
-.sursa { font-family: "Carlito", Calibri, sans-serif; font-size: 10.5pt; border-top: .5pt solid #000;
+/* Sursa si mentiunea de deasupra ei: 13 pt, ca in nr. 615 din Word (Calibri 13.3 pt, pas 16.4 pt) — erau
+   10.5 pt, „text scris prea mic" (user, 23:07). */
+.sursa { font-family: "Carlito", Calibri, sans-serif; font-size: 13pt; line-height: 1.26; border-top: .5pt solid #000;
          margin-top: 1.4mm; padding-top: .8mm; text-align: left; }
 .sursa b { font-weight: 700; }
 .sursa .nota { text-align: justify; margin-bottom: .4mm; }
@@ -171,7 +179,8 @@ p.t { margin: 0; text-align: justify; text-indent: 10mm; hyphens: none; }
    și, spre deosebire de ei, NU e aldin (user, 17.09.2026 seara). */
 .pagina[data-pagina="1"] .col.b > .titlu-articol:first-child { margin-top: 9mm; font-size: 21pt; line-height: 1.3; margin-bottom: 2.4mm;
                                                                font-weight: 400; }
-.subsol { font-family: "Carlito", Calibri, sans-serif; font-size: 10.5pt; line-height: 1.3; margin-top: 2mm; }
+/* Subsolul fix: tot 13 pt, ca sursa (in Word e cu un fir mai mic decat ea, ~12.7 pt). */
+.subsol { font-family: "Carlito", Calibri, sans-serif; font-size: 13pt; line-height: 1.26; margin-top: 2mm; }
 
 /* Ce n-a încăput rămâne aici, nevăzut, și se numără în raport. */
 #rest { position: absolute; left: -9999mm; top: 0; width: 85.06mm; }

@@ -82,8 +82,8 @@ export const RANDURI_PE_COLOANA = Math.floor((BANDA.jos - BANDA.sus) / RAND)
 export const INALTIMI = {
   /** antetul paginii întâi: crucea (+2 mm aer sub ea, din 17.09.2026 seara) + „BULETINUL BISERICII" + parohia */
   antet: 6.6,
-  /** motto-ul, pe două rânduri de cursive, lipit de antet (fără cei 2.6 mm de aer), cu numele celui citat dedesubt */
-  motto: 3.2,
+  /** motto-ul, pe două rânduri de cursive strânse (line-height 1.1), cu 2.6 mm aer deasupra și numele celui citat dedesubt */
+  motto: 3.4,
   /** linia cu pastila „Nr. 615 / 6 septembrie 2026" */
   numar: 3.2,
   /** poza mare a articolului principal: o coloană întreagă pe înălțime de 448 pt */
@@ -96,16 +96,16 @@ export const INALTIMI = {
   zonaNeagraMica: 4.6,
   /** titlul articolului, majuscule mari, de obicei pe două rânduri, cu linia de sub el */
   titlu: 4.4,
-  /** rândul „Sursa: …", cu linia de deasupra */
-  sursa: 2.4,
+  /** rândul „Sursa: …", cu linia de deasupra — la 13 pt din 17.09.2026 seara (era 2.4 la 10.5 pt) */
+  sursa: 3,
   /** aerul de cel puțin 1 cm dinaintea fiecărui secundar (user, 17.09.2026 seara) — 10 mm / 5.84 mm pe rând */
   aerIntreArticole: 1.7,
   /** capul „PROGRAMUL LITURGIC" de pe pagina a patra */
   titluCalendar: 2.6,
   /** floarea decorativă de deasupra calendarului — cade prima când nu e loc */
   floare: 2.2,
-  /** subsolul fix al paginii a patra: abonarea și adresa parohiei */
-  subsol: 2.6,
+  /** subsolul fix al paginii a patra: abonarea și adresa parohiei — la 13 pt (era 2.6 la 10.5 pt) */
+  subsol: 3.2,
 } as const
 
 /**

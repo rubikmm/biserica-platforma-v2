@@ -14,8 +14,10 @@
  * urmă proba randării — e singura care nu minte nici pe repede, nici pe încet.
  */
 import { dataLunga, pdfCuRaport } from '@xc/ui'
+import { capulTextului, mottoDinText } from './depozit.js'
 import { foaieHtml, textCurat } from './foaie.js'
 import { type NumarCerut, type Socoteala, SECUNDARI_MAXIM, semne, socoteste } from './masuri.js'
+import { umpleCuProba } from './umplere.js'
 
 export interface EnvCompunere {
   BROWSER: Fetcher
@@ -33,6 +35,12 @@ export interface Calendar {
   detalii: number
   /** treapta la care a fost strâns: 0 întreg, 1 fără sfinți, 2 și fără pericopă */
   strans: Strans
+  /**
+   * `validat` = săptămâna confirmată de parohie; `propus` = ce era disponibil, neconfirmat.
+   * ⚠️ Din 17.09.2026, seara, programul PROPUS se folosește „fără probleme" (user) — dar cu
+   * atenția atrasă LA ÎNCEPUT, la vedere: un număr compus pe o propunere nu tace despre asta.
+   */
+  stare: 'validat' | 'propus'
 }
 
 /**
@@ -76,7 +84,15 @@ export interface Compus {
   pdf?: ArrayBuffer
   cheie?: string
   calendar?: Calendar | null
+  /** ce oprește compunerea — cu cifre */
   plangeri: string[]
+  /**
+   * ce NU oprește compunerea, dar trebuie spus la vedere: programul e PROPUS (nevalidat), sau o
+   * parte a numărului e text de probă. Se scriu la începutul răspunsului, nu la coadă.
+   */
+  atentie: string[]
+  /** numărul așa cum s-a compus — cu umplerea de probă, unde omul n-a scris */
+  cerut: NumarCerut
 }
 
 export interface OptiuniCompunere {
@@ -91,26 +107,42 @@ export interface OptiuniCompunere {
   doarHtml?: boolean
 }
 
-/** Numărul de plângeri pe care le poate avea cererea înainte de orice socoteală. */
+/**
+ * Plângerile de formă — ce nu se poate compune deloc.
+ *
+ * ⚠️ Un articol GOL nu mai e plângere (user, 17.09.2026, seara): autorul, titlul, textul și sursa
+ * lipsă se umplu cu text de probă, la vedere (`umplere.ts`). Rămân plângeri doar numărul, data și
+ * mai mult de doi secundari — la ele nu există „de probă".
+ */
 export function plangeriDeForma(cerut: NumarCerut): string[] {
   const p: string[] = []
-  if (!cerut.principal?.text?.trim()) p.push('articolul principal n-are text')
-  if (!cerut.principal?.titlu?.trim()) p.push('articolul principal n-are titlu')
-  if (!cerut.principal?.autor?.trim()) p.push('articolul principal n-are autor — dacă nu se știe, scrie „Fără autor"')
   if ((cerut.secundari ?? []).length > SECUNDARI_MAXIM) p.push(`cel mult ${SECUNDARI_MAXIM} articole secundare`)
-  for (const [i, a] of (cerut.secundari ?? []).entries()) {
-    if (!a.text?.trim()) p.push(`secundarul ${i + 1} n-are text`)
-    if (!a.autor?.trim()) p.push(`secundarul ${i + 1} n-are autor`)
-    if (!a.titlu?.trim()) p.push(`secundarul ${i + 1} n-are titlu`)
-  }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(cerut.data ?? '')) p.push('data se scrie AAAA-LL-ZZ')
   if (!Number.isInteger(cerut.nr) || cerut.nr <= 0) p.push('numărul e un întreg pozitiv')
   return p
 }
 
+/** Ce se spune la vedere despre un calendar propus — aceleași cuvinte în pagină și în API. */
+export const atentiePropus = (c: Pick<Calendar, 'titlu'>): string =>
+  `PROPUS — programul săptămânii ${c.titlu} nu e validat: s-a folosit ce era disponibil (propunerea). ` +
+  'Validează-l în aplicația Programul înainte de tipar.'
+
 export async function compune(env: EnvCompunere, o: OptiuniCompunere): Promise<Compus> {
-  const { cerut } = o
-  const deForma = plangeriDeForma(cerut)
+  const deForma = plangeriDeForma(o.cerut)
+
+  /*
+   * ÎNTÂI CALENDARUL ÎNTREG (treapta 0), fiindcă pe el se face UMPLEREA DE PROBĂ: ce n-a scris omul
+   * se umple cu text de probă cât încape „cu programul complet, nu micșorat" (user, 17.09.2026).
+   * Strângerea calendarului e numai pentru text ADEVĂRAT prea lung, nu pentru probă.
+   */
+  let c0: Calendar | null = null
+  let eroareCalendar: string | null = null
+  if (!o.faraCalendar) {
+    const r = await calendarulNumarului(env, o.cerut.data, 0)
+    if ('eroare' in r) eroareCalendar = `calendarul: ${r.eroare}`
+    else c0 = r
+  }
+  const { cerut, deProba } = umpleCuProba(o.cerut, c0 ? { slujbe: c0.slujbe, detalii: c0.detalii } : undefined)
 
   /*
    * CALENDARUL SE STRÂNGE TREAPTĂ CU TREAPTĂ, numai cât e nevoie (user, 17.09.2026): întâi întreg;
@@ -121,14 +153,16 @@ export async function compune(env: EnvCompunere, o: OptiuniCompunere): Promise<C
   let calendar: Calendar | null = null
   let socoteala: Socoteala | null = null
   let plangeri: string[] = []
-  const trepte: Strans[] = o.faraCalendar ? [0] : [0, 1, 2]
+  const trepte: Strans[] = o.faraCalendar || eroareCalendar ? [0] : [0, 1, 2]
   for (const treapta of trepte) {
     let c: Calendar | null = null
-    let eroareCalendar: string | null = null
-    if (!o.faraCalendar) {
-      const r = await calendarulNumarului(env, cerut.data, treapta)
-      if ('eroare' in r) eroareCalendar = `calendarul: ${r.eroare}`
-      else c = r
+    if (!o.faraCalendar && !eroareCalendar) {
+      if (treapta === 0) c = c0
+      else {
+        const r = await calendarulNumarului(env, cerut.data, treapta)
+        if ('eroare' in r) eroareCalendar = `calendarul: ${r.eroare}`
+        else c = r
+      }
     }
     const s = socoteste({
       ...cerut,
@@ -145,8 +179,13 @@ export async function compune(env: EnvCompunere, o: OptiuniCompunere): Promise<C
     plangeri = plangeri.filter((p) => !p.startsWith('calendarul singur'))
   }
 
+  // ce se spune LA ÎNCEPUT, chiar dacă numărul iese: programul propus și textul de probă
+  const atentie: string[] = []
+  if (calendar?.stare === 'propus') atentie.push(atentiePropus(calendar))
+  if (deProba.length) atentie.push(`text de probă la: ${deProba.join('; ')}`)
+
   if (plangeri.length && !o.chiarDacaNuIncape) {
-    return { ok: false, socoteala, calendar, plangeri }
+    return { ok: false, socoteala, calendar, plangeri, atentie, cerut }
   }
 
   const html = foaieHtml({
@@ -157,7 +196,9 @@ export async function compune(env: EnvCompunere, o: OptiuniCompunere): Promise<C
     dataScrisa: dataLunga(cerut.data),
   })
 
-  if (o.doarHtml) return { ok: plangeri.length === 0, socoteala, calendar, plangeri, cheie: undefined, pdf: undefined, raport: undefined }
+  if (o.doarHtml) {
+    return { ok: plangeri.length === 0, socoteala, calendar, plangeri, atentie, cerut, cheie: undefined, pdf: undefined, raport: undefined }
+  }
 
   const { pdf, raport } = await randeaza(env, html)
   if (raport && raport.peDinafara > 0) {
@@ -174,6 +215,8 @@ export async function compune(env: EnvCompunere, o: OptiuniCompunere): Promise<C
     pdf,
     calendar,
     plangeri,
+    atentie,
+    cerut,
     cheie: cheiaNumarului(cerut),
   }
 }
@@ -181,6 +224,55 @@ export async function compune(env: EnvCompunere, o: OptiuniCompunere): Promise<C
 /** Cheia din depozit: aceeași formă ca la numerele venite din V1. */
 export const cheiaNumarului = (cerut: NumarCerut): string =>
   `${cerut.data.slice(0, 4)}/buletin-${cerut.nr}-${cerut.data}.pdf`
+
+/**
+ * CEREREA PĂSTRATĂ LÂNGĂ PDF — numărul ca date (motto, articole), nu doar ca foaie.
+ *
+ * De ce: numerele vechi sunt fișiere, iar din ele nu se mai poate lua nimic ca atare. Ce se compune
+ * de aici înainte se păstrează și ca JSON, sub `compus/`, ca următorul număr să pornească de la el
+ * (motto-ul „de la numărul trecut", user 17.09.2026) și ca „un AI simplu care înlocuiește un text"
+ * să aibă ce înlocui. Se păstrează CE A SCRIS OMUL, nu umplerea de probă — aceea se reface oricând.
+ */
+export const cheiaCererii = (cerut: Pick<NumarCerut, 'nr' | 'data'>): string =>
+  `compus/${cerut.data.slice(0, 4)}/buletin-${cerut.nr}-${cerut.data}.json`
+
+export async function pastreazaCererea(env: Pick<EnvCompunere, 'FISIERE'>, cerut: NumarCerut): Promise<string> {
+  const cheie = cheiaCererii(cerut)
+  await env.FISIERE.put(cheie, JSON.stringify(cerut), {
+    httpMetadata: { contentType: 'application/json; charset=utf-8' },
+    customMetadata: { nr: String(cerut.nr), data: cerut.data },
+  })
+  return cheie
+}
+
+/**
+ * MOTTO-UL NUMĂRULUI TRECUT, cu care se precompletează numărul nou (user, 17.09.2026: „Motto —
+ * trebuie să fie precompletat motto-ul trecut, de la numărul trecut").
+ *
+ * Două izvoare, în ordinea asta: (1) cel mai nou număr COMPUS aici, a cărui cerere e păstrată sub
+ * `compus/` — dacă e cel puțin la fel de nou ca arhiva; (2) altfel textul scos din PDF-ul celui
+ * mai nou număr din arhivă, unde motto-ul stă între parohie și pastilă (`mottoDinText`). Dacă
+ * niciunul nu dă nimic, `null`: câmpul rămâne gol, nu se inventează un citat.
+ */
+export async function mottoDinainte(
+  env: { FISIERE: R2Bucket; DB: D1Database },
+  curent: { nr: number; data: string } | null,
+): Promise<{ motto: string; motoAutor?: string } | null> {
+  const lista = await env.FISIERE.list({ prefix: 'compus/' })
+  const compuse = lista.objects
+    .map((o) => ({ cheie: o.key, m: /buletin-(\d+)-(\d{4}-\d{2}-\d{2})\.json$/.exec(o.key) }))
+    .filter((x): x is { cheie: string; m: RegExpExecArray } => !!x.m)
+    .map((x) => ({ cheie: x.cheie, nr: Number(x.m[1]), data: x.m[2]! }))
+    .sort((a, b) => (a.data === b.data ? b.nr - a.nr : a.data < b.data ? 1 : -1))
+  const celMaiNou = compuse[0]
+  if (celMaiNou && (!curent || celMaiNou.data >= curent.data)) {
+    const obiect = await env.FISIERE.get(celMaiNou.cheie)
+    const c = obiect ? await obiect.json<Partial<NumarCerut>>().catch(() => null) : null
+    if (c?.motto?.trim()) return { motto: c.motto.trim(), motoAutor: c.motoAutor?.trim() || undefined }
+  }
+  if (!curent) return null
+  return mottoDinText(await capulTextului(env.DB, curent.nr, curent.data))
+}
 
 /**
  * Randarea, cu raportul curgerii.

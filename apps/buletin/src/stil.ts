@@ -304,6 +304,13 @@ export const LOCAL = `
 .doua { display:grid; grid-template-columns:1fr 1fr; gap:0 14px }
 .socoteala { font:13px ui-sans-serif,system-ui; color:var(--faint); margin:0 0 10px }
 .socoteala.peste { color:var(--rosu); font-weight:600 }
+/* ATENȚIA DE LA ÎNCEPUT (17.09.2026, seara): programul propus (nevalidat) și textul de probă se spun
+   ÎNAINTEA formularului și a rezultatului, într-un chenar roșu — nu e o eroare, dar nu se trece pe
+   lângă el. Aceleași culori ale carcasei, deci merge și pe tema întunecată. */
+.atentie.propus { max-width:760px; margin:0 auto 14px; padding:10px 14px; border:1px solid var(--rosu);
+                  border-radius:8px; background:color-mix(in srgb, var(--rosu) 9%, transparent); color:var(--ink) }
+.atentie.propus b:first-child { color:var(--rosu); letter-spacing:.06em }
+ul.atentie.lista { max-width:760px; margin:0 auto 10px; padding:0 0 0 20px; font:14px/1.5 ui-sans-serif,system-ui; color:var(--rosu) }
 .total { font:600 14px ui-sans-serif,system-ui; text-align:center; margin:4px 0 14px }
 .cati-secundari { margin:0 0 16px }
 .cati-secundari label { display:block; font:600 13px ui-sans-serif,system-ui; margin:0 0 4px }

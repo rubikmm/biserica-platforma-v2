@@ -317,8 +317,12 @@ describe('buletin · numarul care urmeaza', () => {
     const h = paginaNouB(CTX_PROBA, { nou: true, ani: ['2026'] }, b, buletinulNou(b, '2026-09-17'), STARE_PROBA)
     expect(h).not.toContain('<div class="chenar-nou" aria-hidden="true"></div>')
     expect(h).toContain('<form method="post" action="/buletin/nou" class="compunere">')
-    // startul numarului: motto, numar, data
-    for (const c of ['motto', 'moto_autor', 'nr', 'data']) expect(h).toContain(`name="${c}"`)
+    // startul numarului: motto (+ cine l-a spus); NUMARUL SI DATA NU SE EDITEAZA (user, 17.09.2026,
+    // seara) — stau scrise in capul paginii si ies din arhiva, nu din formular
+    for (const c of ['motto', 'moto_autor']) expect(h).toContain(`name="${c}"`)
+    expect(h).not.toContain('name="nr"')
+    expect(h).not.toContain('name="data"')
+    expect(h).toContain('Nr. 616')
     // articolul principal: zona neagra (autor, ani, pomenire), titlul, poza, textul, sursa
     for (const c of ['p_autor', 'p_ani', 'p_pomenire', 'p_titlu', 'p_poza', 'p_text', 'p_sursa']) {
       expect(h).toContain(`name="${c}"`)
@@ -334,13 +338,82 @@ describe('buletin · numarul care urmeaza', () => {
     expect(h).toContain('21 – 27 septembrie 2026')
   })
 
-  it('spune limpede cand programul saptamanii nu e validat, in loc sa taca', () => {
+  /**
+   * ⚠️ Din 17.09.2026, seara, programul NEVALIDAT nu mai opreste compunerea (user: „să se folosească
+   * fără probleme programul propus dacă nu este validat — doar trebuie atrasă atenția la început
+   * PROPUS"). Deci: cu `stare: 'propus'` pagina scrie PROPUS INAINTE de formular; `null` inseamna
+   * altceva — programul n-a raspuns deloc.
+   */
+  it('spune PROPUS la inceput cand programul saptamanii nu e validat, si tot compune', () => {
+    const b: BuletinScurt = {
+      nr: 615, data: '2026-09-06', an: '2026', luna: '09',
+      cheie_pdf: null, cheie_poza_mica: null, pagini: 4,
+    }
+    const h = paginaNouB(CTX_PROBA, { nou: true }, b, buletinulNou(b, '2026-09-17'), {
+      ...STARE_PROBA,
+      calendar: { titlu: '21 – 27 septembrie 2026', slujbe: 6, stare: 'propus' },
+    })
+    expect(h).toContain('<b>PROPUS.</b>')
+    expect(h).toContain('nu e încă validat')
+    // atentia sta INAINTEA formularului, nu dupa el
+    expect(h.indexOf('<b>PROPUS.</b>')).toBeLessThan(h.indexOf('<form method="post"'))
+    expect(h).toContain('<form method="post" action="/buletin/nou" class="compunere">')
+    // iar pe randul programului se vede tot
+    expect(h).toContain('<b>(PROPUS)</b>')
+  })
+
+  it('cu programul validat nu scrie PROPUS nicaieri', () => {
+    const b: BuletinScurt = {
+      nr: 615, data: '2026-09-06', an: '2026', luna: '09',
+      cheie_pdf: null, cheie_poza_mica: null, pagini: 4,
+    }
+    const h = paginaNouB(CTX_PROBA, { nou: true }, b, buletinulNou(b, '2026-09-17'), {
+      ...STARE_PROBA,
+      calendar: { titlu: '21 – 27 septembrie 2026', slujbe: 6, stare: 'validat' },
+    })
+    expect(h).not.toContain('<b>PROPUS.</b>')
+    expect(h).not.toContain('(PROPUS)')
+  })
+
+  it('cand programul n-a raspuns deloc, o spune, fara sa pretinda ca e nevalidat', () => {
     const b: BuletinScurt = {
       nr: 615, data: '2026-09-06', an: '2026', luna: '09',
       cheie_pdf: null, cheie_poza_mica: null, pagini: 4,
     }
     const h = paginaNouB(CTX_PROBA, { nou: true }, b, buletinulNou(b, '2026-09-17'), { ...STARE_PROBA, calendar: null })
-    expect(h).toContain('nu e încă validat')
+    expect(h).toContain('n-a răspuns')
+    expect(h).not.toContain('<b>PROPUS.</b>')
+    expect(h).not.toContain('(PROPUS)')
+  })
+
+  it('motto-ul vine precompletat cu cel al numarului trecut, iar ce a scris omul bate precompletarea', () => {
+    const b: BuletinScurt = {
+      nr: 615, data: '2026-09-06', an: '2026', luna: '09',
+      cheie_pdf: null, cheie_poza_mica: null, pagini: 4,
+    }
+    const motto = { motto: '„Maica Domnului ne iubește mult.”', motoAutor: 'Părintele Arsenie Papacioc' }
+    const gol = paginaNouB(CTX_PROBA, { nou: true }, b, buletinulNou(b, '2026-09-17'), { ...STARE_PROBA, motto })
+    expect(gol).toContain('„Maica Domnului ne iubește mult.”</textarea>')
+    expect(gol).toContain('value="Părintele Arsenie Papacioc"')
+    expect(gol).toContain('precompletat cu motto-ul numărului trecut')
+    const scris = paginaNouB(CTX_PROBA, { nou: true }, b, buletinulNou(b, '2026-09-17'), {
+      ...STARE_PROBA, motto, scris: { motto: 'Alt citat', moto_autor: 'Altcineva' },
+    })
+    expect(scris).toContain('Alt citat</textarea>')
+    expect(scris).not.toContain('Maica Domnului')
+  })
+
+  it('atentiile compunerii (program propus, text de proba) se scriu inaintea rezultatului', () => {
+    const b: BuletinScurt = {
+      nr: 615, data: '2026-09-06', an: '2026', luna: '09',
+      cheie_pdf: null, cheie_poza_mica: null, pagini: 4,
+    }
+    const h = paginaNouB(CTX_PROBA, { nou: true }, b, buletinulNou(b, '2026-09-17'), {
+      ...STARE_PROBA,
+      raspuns: { facut: true, cheie: '2026/buletin-616-2026-09-20.pdf', plangeri: [], atentie: ['text de probă la: principal: textul (8 900 de semne)'] },
+    })
+    expect(h).toContain('text de probă la: principal')
+    expect(h.indexOf('text de probă la')).toBeLessThan(h.indexOf('Numărul e compus'))
   })
 
   it('arata plangerile compunerii, cu cifre, si nu pretinde ca s-a facut', () => {

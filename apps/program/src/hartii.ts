@@ -170,9 +170,15 @@ export async function htmlFoaiaSaptamanii(
  * Întoarce tabelul, stilul lui și cifrele din care se socotește cât loc mănâncă (`slujbe`,
  * `detalii`): cel care compune trebuie să știe înainte de randare dacă mai are loc de text.
  *
- * ⚠️ Trece prin ACEEAȘI cale ca foaia de pe ușă (`htmlFoaiaSaptamanii`), deci moștenește și
- * poarta ei: o săptămână nevalidată nu dă tabel, cum nu dă nici foaie. Buletinul nu tipărește un
- * program pe care parohia nu l-a confirmat.
+ * ⚠️ POARTA S-A SCHIMBAT la 17.09.2026, seara (user: „la compunerea buletinului trebuie să se
+ * folosească fără probleme programul propus dacă nu este validat — deci ce e disponibil — doar
+ * trebuie atrasă atenția la început PROPUS"). Până atunci tabelul trecea prin aceeași poartă ca
+ * foaia de pe ușă și o săptămână nevalidată nu dădea nimic. Acum: săptămâna VALIDATĂ dacă e; altfel
+ * CE E DISPONIBIL — rândurile ei din bază (stare „propus" / „modificat după validare") sau, dacă nu
+ * e deloc în bază, propunerea făcută din istoric — aceeași sursă ca pagina și poza săptămânii
+ * (`saptamanaOriPropunere`). Răspunsul spune LIMPEDE cu ce s-a lucrat, în `stare`: cine pune
+ * tabelul în pagina lui trebuie să scrie „PROPUS" la vedere, nu să tacă.
+ * ⚠️ Foaia de pe ușă (`/v1/foaie`) NU s-a schimbat: ea rămâne numai a săptămânilor validate.
  */
 export async function tabelulSaptamanii(
   env: EnvHartii,
@@ -180,12 +186,45 @@ export async function tabelulSaptamanii(
   vocabularDat?: Map<string, IntrareVocabular>,
   strans: 0 | 1 | 2 = 0,
 ): Promise<
-  | { ok: true; tabel: string; stil: string; titlu: string; de_la: string; pana_la: string; slujbe: number; detalii: number; strans: 0 | 1 | 2 }
+  | {
+      ok: true
+      tabel: string
+      stil: string
+      titlu: string
+      de_la: string
+      pana_la: string
+      slujbe: number
+      detalii: number
+      strans: 0 | 1 | 2
+      /** `validat` = săptămâna confirmată; `propus` = ce era disponibil, neconfirmat — de scris la vedere */
+      stare: 'validat' | 'propus'
+    }
   | { ok: false; cod: string; mesaj: string; detalii?: unknown }
 > {
-  const f = await htmlFoaiaSaptamanii(env, data, 'foaie', vocabularDat)
-  if (!f.ok) return f
-  const o: OptiuniFoaie = { ...f.optiuni, strans }
+  const harta = await vocabularulCerut(env, vocabularDat)
+  const f = await htmlFoaiaSaptamanii(env, data, 'foaie', harta)
+  let o: OptiuniFoaie
+  let stare: 'validat' | 'propus'
+  if (f.ok) {
+    o = { ...f.optiuni, strans }
+    stare = 'validat'
+  } else {
+    // nevalidată sau nescrisă: ce e disponibil — rândurile din bază ori propunerea din istoric
+    const luni = luneaSaptamanii(data)
+    const s = await saptamanaOriPropunere(env, luni, harta)
+    o = {
+      luni,
+      duminica: adaugaZile(luni, 6),
+      titlu: titluSaptamanii(luni),
+      slujbe: s.slujbe,
+      vocabular: harta,
+      calendar: s.cal,
+      dinCalendar: s.dinCalendar,
+      ciorna: true,
+      strans,
+    }
+    stare = 'propus'
+  }
   const tabel = tabelProgram(o)
   return {
     ok: true,
@@ -199,6 +238,7 @@ export async function tabelulSaptamanii(
     // iar cel care socotește locul de pe pagina a patra trebuie să știe câte rânduri se văd
     detalii: (tabel.match(/class="det/g) ?? []).length,
     strans,
+    stare,
   }
 }
 
