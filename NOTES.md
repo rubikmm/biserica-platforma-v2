@@ -1922,6 +1922,31 @@ forța antetul `Host`**.
     e din V1, refolosit dinadins, și n-are ce căuta într-o copie de lucru. `--si-grele` îl aduce
     totuși, dacă vreodată chiar se cere.
 
+- **UȘA WEBSITE-ULUI: SEMNE DE STARE PE CĂSUȚE, TITLU NOU, TIPICUL MUTAT** (user, seara).
+  `apps/home` **0.7.2, PUBLICAT pe producție**.
+  - **Titlul din antet e acum `WEBSITE`, nu `PLATFORMA`** (`comune.nume`). ⚠️ Au rămas neschimbate,
+    fiindcă n-a cerut: `titlu: 'Platforma parohiei'` (ce scrie în filă) și eticheta `'Platforma'` a
+    secțiunii de Setări — de întrebat dacă merg și ele pe „Website".
+  - **Chenar verde** („aici stăm bine, am avansat destul") la **Calendar, Program, Radio**; **chenar
+    roșu** („urgent de rezolvat") la **Transmisiunea în direct** și **Curățenie**. Restul căsuțelor
+    rămân cum erau.
+  - ⚠️ **Regula „toate butoanele arată la fel" (user, 10.09.2026) s-a RĂSTURNAT.** Semnul stă în date,
+    nu în stil: `stare?: 'bine' | 'urgent'` pe rândul aplicației din `APLICATII`, clasele
+    `.bine`/`.urgent` pe `<a>`. Se mută de la o căsuță la alta schimbând un cuvânt.
+  - **Chenarul e SUBȚIRE, 1px, ca al celorlalte căsuțe** (a cerut anume, după ce prima variantă avea
+    2px): se deosebește numai culoarea, nu și grosimea. Culorile sunt ale carcasei — `--azi` și
+    `--rosu` —, deci merg și pe tema întunecată. Regulile stau **după** `:hover` și repetă starea și
+    pe hover, altfel hover-ul ar spăla culoarea.
+  - **Ordinea**: **Tipicul a schimbat locul cu Transmisiunea în direct** (poziția 3 ↔ 6). Radioul a
+    rămas lângă Program, de unde vin slujbele care se transmit.
+  - ⚠️ **Semnul e de lucru, dar ușa e PUBLICĂ** — enoriașul vede chenarul roșu fără să știe ce
+    înseamnă. I-am spus înainte de publicare; a cerut publicarea. De scos când starea se schimbă.
+  - ⚠️ **Capcană, a doua oară**: un comentariu CSS scris cu backtick-uri rupe template literal-ul
+    `LOCAL_APP` — `tsc` dă „',' expected" pe rândurile de stil. În stiluri, comentarii fără backtick.
+  - ⚠️ **Prima publicare a dus codul nou cu VERSIUNEA VECHE**: `/health` scria `0.7.1` deși
+    `package.json` era deja `0.7.2` și pagina arăta schimbările. A doua publicare a pus-o la loc.
+    **Deci verifică `/health` după fiecare deploy** — dacă versiunea e în urmă, republică.
+
 ### 2026-09-16
 
 - **TEXTE CITITE LA CHINONIC — secțiune nouă pe Website** (user, în noapte). Website **0.4.0**, publicat.
