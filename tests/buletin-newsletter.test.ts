@@ -173,13 +173,18 @@ describe('buletin · meniul din antet', () => {
     expect(buton![0]).toContain('aria-label="Descarcă foaia numărului 615"')
   })
 
-  it('„Revers" stă în dreapta lui Tipărește, e întrerupător și pornește stins', () => {
+  it('reversul e al doilea segment al pastilei lui Tipărește: doar iconiță, întrerupător, pornește stins', () => {
     const h = paginaAcasaB(ctxB(false), { ani: ANI, peEcran: acum, acum: true }, acum, [])
-    const tipareste = h.indexOf('id="b-tipareste"')
-    const revers = h.indexOf('id="b-revers"')
+    const pastila = /<span class="pastila tipar">([\s\S]*?)<\/span>/.exec(h)
+    expect(pastila).not.toBeNull()
+    const tipareste = pastila![1].indexOf('id="b-tipareste"')
+    const revers = pastila![1].indexOf('id="b-revers"')
     expect(tipareste).toBeGreaterThan(-1)
     expect(revers).toBeGreaterThan(tipareste)
-    expect(h).toContain('<button type="button" class="btn intreg com-revers" id="b-revers" aria-pressed="false"')
+    const buton = /<button[^>]*id="b-revers"[^>]*>([\s\S]*?)<\/button>/.exec(h)
+    expect(buton![0]).toContain('aria-pressed="false"')
+    expect(buton![1]).not.toContain('Revers') // cuvântul e doar în aria-label/title
+    expect(buton![1]).toContain('<svg')
     expect(h).toContain('buletin_revers')
     expect(h).toContain('?revers=1')
   })

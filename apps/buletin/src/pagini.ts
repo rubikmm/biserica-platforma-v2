@@ -93,6 +93,8 @@ const IC_PDF = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stro
 const IC_DESCARCA = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 19h16"/></svg>`
 
 /** Imprimanta: foaia care intra sus, hartia care iese jos. */
+/** Rasturnarea: o foaie deasupra si oglinda ei dedesubt, pe o linie — versoul intors cu capul in jos. */
+const IC_REVERS = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h18"/><path d="M7 9V4h10l-3 5"/><path d="M7 15v5h10l-3-5"/></svg>`
 const IC_TIPAR = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 8V3h10v5"/><path d="M5 8h14a2 2 0 0 1 2 2v6h-4"/><path d="M5 16H3v-6a2 2 0 0 1 2-2"/><rect x="7" y="14" width="10" height="7" rx="1"/></svg>`
 
 /** Cartea deschisa: semnul rasfoitului. */
@@ -568,11 +570,14 @@ const fisa = (ctx: Ctx, b: BuletinScurt): string =>
  * ⚠️ **Tipărește** duce la brosura (`/tipar/…`), nu la PDF-ul obisnuit — vezi `tipar.ts`. Se deschide
  * INLINE, in vizualizatorul browserului, de unde omul apasa tiparirea; o descarcare l-ar fi pus sa
  * caute fisierul prin dosare inainte sa ajunga la imprimanta.
- * ⚠️ **Revers**, in dreapta lui Tipărește — un INTRERUPATOR, nu o destinatie (user, 17.09.2026, 22:00:
- * „există imprimante care au nevoie de opțiunea specială ca interiorul să fie întors ca să iasă cu un
- * booklet… dacă apăs tipărește și am revers ON foaia a doua este întoarsă 180 de grade"). Aprins, pune
- * `?revers=1` pe adresa brosurii — versoul iese rotit cu 180° (`tipar.ts`). Alegerea tine de
- * IMPRIMANTA omului, nu de numar, deci se tine minte in localStorage (`JS_REVERS`) si porneste STINSA.
+ * ⚠️ **Reversul**, al doilea segment al PASTILEI lui Tipărește — un INTRERUPATOR, nu o destinatie
+ * (user, 17.09.2026, 22:00: „există imprimante care au nevoie de opțiunea specială ca interiorul să fie
+ * întors ca să iasă cu un booklet… dacă apăs tipărește și am revers ON foaia a doua este întoarsă 180
+ * de grade"). Aprins, pune `?revers=1` pe adresa brosurii — versoul iese rotit cu 180° (`tipar.ts`).
+ * Alegerea tine de IMPRIMANTA omului, nu de numar, deci se tine minte in localStorage (`JS_REVERS`) si
+ * porneste STINSA. ⚠️ Din 23:14 e NUMAI ICONITA (rasturnarea), fara cuvant, si sta LIPIT de Tipărește,
+ * intr-o pastila cu doua segmente (user: „e legat de ea… ca să includă și funcția asta"). Aprins se
+ * vede ca orice segment activ din platforma: rosu, cu fundal palid — nu bec.
  *
  * Fara PDF (doua numere vechi au ramas doar cu poza), butoanele se sting in loc sa duca in gol.
  */
@@ -589,13 +594,16 @@ function butoaneleNumarului(ctx: Ctx, b: Buletin): string {
     `<a class="btn intreg" id="b-descarca" href="${fisier(ctx, b.cheie_pdf)}?descarca=1"` +
     ` download="${esc(nume)}" title="Descarcă foaia numărului ${b.nr}" aria-label="Descarcă foaia numărului ${b.nr}">` +
     `${IC_DESCARCA}${marime}</a>` +
+    `<span class="pastila tipar">` +
     `<a class="btn intreg" id="b-tipareste" href="${esc(ctx.prefix)}/tipar/${b.nr}-${b.data}.pdf"` +
     ` target="_blank" rel="noopener"` +
     ` title="Broșură pentru tipar: două pagini pe o coală A4, în ordinea îndoirii">` +
     `${IC_TIPAR} Tipărește</a>` +
     `<button type="button" class="btn intreg com-revers" id="b-revers" aria-pressed="false"` +
-    ` title="Întoarce coala a doua cu 180°, pentru imprimantele care întorc pe latura scurtă">` +
-    `Revers<span class="bec" aria-hidden="true"></span></button>`
+    ` aria-label="Revers: întoarce coala a doua cu 180°"` +
+    ` title="Revers: întoarce coala a doua cu 180°, pentru imprimantele care întorc pe latura scurtă">` +
+    `${IC_REVERS}</button>` +
+    `</span>`
   )
 }
 

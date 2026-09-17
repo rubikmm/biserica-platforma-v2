@@ -254,6 +254,29 @@ function bucati(cerut: NumarCerut, poze: Record<string, string>): string[] {
  */
 const CURGE = `
 (function(){
+  /*
+   * ⚠️ NIMIC NU SE MASOARA INAINTE SA FIE TOTUL INCARCAT (18.09.2026, nr. 616 compus pe live:
+   * textul coloanelor de pe pagina a patra intra peste floare si peste capul calendarului).
+   * Scriptul ruleaza la parsare, cand pozele din data-URI (floarea are 13.7 mm) si fonturile din
+   * @font-face inca nu sunt decodate: josul paginii iese mai scund decat va fi, coloanele raman
+   * prea lungi, iar cand sosesc floarea si Caladea, josul creste IN SUS, sub text. Pe local nu s-a
+   * vazut — chromium-ul de acolo le are gata la parsare — de aceea a scapat la probe. Deci: intai
+   * load (pozele), apoi fonturile cerute pe nume si document.fonts.ready, si abia apoi curgerea.
+   * Browser Rendering asteapta oricum data-potrivit dupa load (hartie.ts), deci hartia nu iese
+   * inainte de curgere.
+   */
+  function dupaIncarcare(fn){
+    function fonturi(){
+      if (!document.fonts || !document.fonts.load) return fn();
+      var fete = ['400 16px Caladea', '700 16px Caladea', 'italic 400 16px Caladea', '400 16px Carlito', '700 16px Carlito', '400 16px Trajan'];
+      Promise.all(fete.map(function(f){ return document.fonts.load(f).catch(function(){}); }))
+        .then(function(){ return document.fonts.ready; })
+        .then(fn, fn);
+    }
+    if (document.readyState === 'complete') fonturi();
+    else window.addEventListener('load', fonturi);
+  }
+  dupaIncarcare(function(){
   var rest = document.getElementById('rest');
   // coloana intai a paginii intai NU primeste text: e a pozei si a zonei negre (regula userului)
   var coloane = [].slice.call(document.querySelectorAll('.col')).filter(function(c){ return c.getAttribute('data-cutie') !== '1a'; });
@@ -359,6 +382,7 @@ const CURGE = `
     document.documentElement.setAttribute('data-raport', JSON.stringify(raport));
     document.documentElement.setAttribute('data-potrivit', 'da');
   }
+  });
 })();`
 
 // ---------------------------------------------------------------------------

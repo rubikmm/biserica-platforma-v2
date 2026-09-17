@@ -333,9 +333,10 @@ propunerea automată, ca în V1.
    **NEPROBAT, în ordinea în care trebuie luat**:
    1. **cap-coadă pe local**: `pnpm dev` nu răspundea la `https://rubik:8474` în timpul lucrului, deci
       ruta `/nou` (GET și POST) și legătura de serviciu spre program **nu s-au încercat vii**;
-   2. **Browser Rendering**: PDF-ul s-a făcut până acum numai cu Chromium-ul containerului. Pe
-      Cloudflare se cheamă `pdfCuRaport` (nou în `@xc/ui`) — de văzut că `data-raport` chiar ajunge
-      înapoi, fiindcă pe el stă toată siguranța „n-a rămas text pe dinafară";
+   2. **Browser Rendering** — VĂZUT 18.09.2026: userul a compus 616 pe live, PDF-ul a ieșit, dar
+      textul intra peste floare (scriptul măsura înainte să se decodeze pozele și fonturile — reparat
+      în 0.6.1, `dupaIncarcare()`). Rămâne de confirmat pe live, după publicare, că (a) pagina a patra
+      iese curată la 616 recompus și (b) `data-raport` ajunge înapoi (siguranța „nimic pe dinafară");
    3. **fonturile din Chromium-ul de laborator**: săgeata `→` din tabelul programului iese strâmbă
       local — **și la foaia programului, care e cod netins de runda asta**, deci e lipsa fonturilor
       din container, nu un defect nou. De verificat totuși cum iese pe producție.
@@ -958,6 +959,14 @@ politicos, dar **nu mai scrie indicele**: de când muzica stă în depozit, adev
 aparat.
 
 ## Capcane de ținut minte
+
+- **⚠️ O PAGINĂ CARE SE MĂSOARĂ SINGURĂ (script inline) NU VEDE POZELE ȘI FONTURILE ÎN BROWSER
+  RENDERING.** Găsit 18.09.2026 la buletin (floarea de 13.7 mm lipsea din măsurătoare, textul intra
+  peste ea). Chromium-ul din container decodează data-URI-urile la parsare, Cloudflare nu — deci
+  proba locală TACE. Regula: orice script care așază text după înălțimi măsurate pornește după
+  `load` + `document.fonts.load(...)` + `fonts.ready` (vezi `dupaIncarcare` în `apps/buletin/src/foaie.ts`);
+  iar proba locală a unei astfel de pagini se face și cu resursele ca FIȘIERE (încărcare asincronă),
+  nu doar ca data-URI.
 
 - **⚠️ UN WORKER PUBLICAT FĂRĂ RUTĂ NU E INOFENSIV — cronurile nu au nevoie de rută.**
   Descoperit 14.09.2026: `xc-curatenie-production`, publicat fără rută, rulează `0 * * * *` de la
@@ -2040,6 +2049,21 @@ forța antetul `Host`**.
   copiere în fiecare aplicație** — de aici costul oricărei schimbări transversale (antetul în 12 locuri).
 
 ## Jurnal
+
+### 2026-09-18
+
+- **„CALENDARUL E TĂIAT" (user, 01:37) — buletin 0.6.1: curgerea așteaptă pozele și fonturile.**
+  Nr. 616 compus de user pe live la 01:40 (`fisier/2026/buletin-616-2026-09-20.pdf`): pe pagina a
+  patra textul coloanelor intră peste floare și peste „PROGRAMUL LITURGIC" — cam 13 mm. Pe proba
+  locală (615, `--gol`, `--verifica`) nu se vedea. Cauza: scriptul `CURGE` rula la parsare, când
+  floarea (data-URI, 1400×435 px = **13.7 mm la 44 mm lățime**) și fonturile nu erau decodate în
+  Browser Rendering; `.jos` se măsura mai scund, coloanele rămâneau prea lungi, iar când sosea
+  floarea josul creștea în sus, sub text. **Reprodus local** dând floarea ca fișier (`src="floare.png"`,
+  încărcare asincronă): scriptul vechi — text peste floare, ca pe live; cel nou — curat. Fixul:
+  `dupaIncarcare()` — `load`, apoi `document.fonts.load()` pe cele șase fețe + `fonts.ready`, abia apoi
+  curgerea; `hartie.ts` aștepta oricum `data-potrivit` după `load`, deci hârtia nu iese înainte.
+  Probe locale neschimbate (615: 8 886 semne, 0 afară, gol 6 mm; `--verifica` BUN ×3), tsc curat.
+  ⚠️ Pe disc era și lucru necomis al altei sesiuni (pastila Tipărește + iconița Revers, 23:14).
 
 ### 2026-09-17
 

@@ -328,15 +328,15 @@ a.coperta:hover img { border-color:var(--rosu) }
 .btns.hartii { justify-content:center; flex-wrap:wrap; margin:18px 0 0 }
 .btns.hartii .btn { display:inline-flex; align-items:center; gap:8px }
 .btns.hartii .btn small { color:var(--faint); font-weight:400 }
-/* „Revers", intrerupatorul de langa Tipărește — becul e cel de la Program (com-cal): pista palida si
-   bila cenusie stins; aprins, pista se umple cu cerneala si bila se face alba si aluneca in dreapta. */
-.btns.hartii .com-revers { cursor:pointer; font:inherit; color:inherit }
-.btns.hartii .com-revers .bec { flex:none; position:relative; width:30px; height:16px; border-radius:999px;
-                                border:1px solid var(--rule); background:var(--tinta) }
-.btns.hartii .com-revers .bec::after { content:""; position:absolute; top:1px; left:1px; width:12px; height:12px;
-                                       border-radius:50%; background:var(--soft) }
-.btns.hartii .com-revers[aria-pressed="true"] .bec { border-color:var(--soft); background:var(--soft) }
-.btns.hartii .com-revers[aria-pressed="true"] .bec::after { left:auto; right:1px; background:var(--paper) }
+/* PASTILA lui Tipărește (23:14, 17.09.2026): doua segmente lipite — Tipărește si reversul, o iconita
+   de rasturnare fara cuvant. Aceeasi pastila ca in antet, doar ca aici nu se intinde pe tot randul.
+   Reversul e intrerupator: aprins (aria-pressed) se scrie ca un segment activ — rosu, fundal palid. */
+.btns.hartii .pastila { flex:0 0 auto; display:inline-flex }
+.btns.hartii .pastila .btn { display:inline-flex }
+.btns.hartii .com-revers { cursor:pointer; font:inherit; color:inherit; padding-left:14px; padding-right:14px }
+.btns.hartii .com-revers:hover { color:var(--rosu); background:var(--paper) }
+.btns.hartii .com-revers[aria-pressed="true"] { color:var(--rosu);
+                 background:color-mix(in srgb, var(--rosu) 11%, transparent) }
 
 /* ── RAFTUL: fisele numerelor, cu pagina intai deasupra. Cate incap pe rand — patru pe ecran de
    birou, doua pe telefon — le hotaraste latimea minima a fisei, nu un numar de coloane scris de noi. */
