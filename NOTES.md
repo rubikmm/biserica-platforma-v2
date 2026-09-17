@@ -1865,6 +1865,14 @@ forța antetul `Host`**.
 
 ### 2026-09-17
 
+- **DOUĂ ÎNTREBĂRI DESCHISE, ÎNCHISE DE USER** (seara, după publicare).
+  - **Chenarele de stare de pe ușa Website-ului rămân pentru TOȚI** („Da"): verde = gata și viu,
+    roșu = încă nu, văzute și de enoriașul neautentificat. **Nu se leagă de rolul de admin, nu se
+    ascund.** Nimic de schimbat în cod — starea de acum e cea cerută.
+  - **Ordinea colilor broșurii e bună** („Este bine ordinea") — probată la imprimantă pe
+    `outputs/buletin-615-brosura-A4.pdf`. Formula colilor și probele din `tests/` rămân neatinse;
+    subiectul e închis, nu-l redeschide „ca să simplifici".
+
 - **PUBLICAT: buletin 0.4.1 pe producție** (seara, la cuvântul userului). `npx wrangler deploy --env
   production -c apps/buletin/wrangler.jsonc`, versiunea `480fae96`; `buletin.sfantul-ilie.ro` răspunde
   200 și arată 0.4.1. Intră pe live „Descarcă" + „Tipărește" (broșura A4→A5) și capul paginii `/nou`.
