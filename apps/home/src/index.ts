@@ -87,12 +87,12 @@ const LOCAL_APP = `
           text-decoration:none; font:15px/1.2 ui-sans-serif,system-ui }
 .apps a:hover { border-color:var(--rosu); color:var(--rosu) }
 /* Semnele de stare (user, 17.09.2026). Culorile sunt cele ale carcasei, deci se schimba singure la
-   tema intunecata: --azi e verdele ei, --rosu rosul ei. Chenar de 2px, ca sa se vada de la prima
-   privire; box-sizing:border-box e global, deci casuta nu creste. Regulile stau DUPA :hover si
-   repeta starea si pe hover — altfel hover-ul ar spala culoarea.
+   tema intunecata: --azi e verdele ei, --rosu rosul ei. Chenar SUBTIRE, de 1px, ca al celorlalte
+   casute (user, 17.09.2026) — se deosebeste numai culoarea, nu si grosimea. Regulile stau DUPA
+   :hover si repeta starea si pe hover — altfel hover-ul ar spala culoarea.
    ⚠️ Fara backtick-uri in comentariu: stilul e un template literal, un backtick il taie in doua. */
-.apps a.bine, .apps a.bine:hover { border:2px solid var(--azi) }
-.apps a.urgent, .apps a.urgent:hover { border:2px solid var(--rosu) }
+.apps a.bine, .apps a.bine:hover { border-color:var(--azi) }
+.apps a.urgent, .apps a.urgent:hover { border-color:var(--rosu) }
 .apps b { display:block; font-weight:400 }
 .apps .adr { display:block; margin-top:4px; font:11.5px/1.2 ui-sans-serif,system-ui;
              color:var(--faint); letter-spacing:.01em }
