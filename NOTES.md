@@ -1865,6 +1865,12 @@ forța antetul `Host`**.
 
 ### 2026-09-17
 
+- **PUBLICAT: buletin 0.4.1 pe producție** (seara, la cuvântul userului). `npx wrangler deploy --env
+  production -c apps/buletin/wrangler.jsonc`, versiunea `480fae96`; `buletin.sfantul-ilie.ro` răspunde
+  200 și arată 0.4.1. Intră pe live „Descarcă" + „Tipărește" (broșura A4→A5) și capul paginii `/nou`.
+  ⚠️ Wrangler scrie la final **„No targets deployed"** — nu e eroare: domeniul custom e deja legat,
+  deci n-are rută nouă de făcut. Uită-te la versiunea servită, nu la rândul ăla.
+
 - **BULETINUL (A3): MENIUL DIN ANTET, REFĂCUT CA LA CALENDAR ȘI PROGRAM** (user, după-amiaza).
   Buletin **0.4.0**, deocamdată **numai local** — nepublicat pe producție.
   Cererea, în trei puncte: Abonarea singură la dreapta; pastila la stânga, care începe cu **bulina
