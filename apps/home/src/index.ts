@@ -53,18 +53,23 @@ export interface Env {
 
 /**
  * Aplicatiile platformei. Se adauga aici pe masura ce se poarta — dar NUMAI dupa ce adresa
- * lor raspunde: toate butoanele arata la fel (cerere user, 10.09.2026), deci un buton care
- * n-ar duce nicaieri n-are cum sa se deosebeasca de unul bun.
+ * lor raspunde: un buton care n-ar duce nicaieri n-are cum sa se deosebeasca de unul bun.
+ *
+ * ⚠️ `stare` e SEMNUL DE LUCRU cerut de user (17.09.2026): chenar verde „aici stam bine, am
+ * avansat destul", chenar rosu „aici e urgent de rezolvat". Rastoarna regula veche „toate
+ * butoanele arata la fel" (user, 10.09.2026) — de atunci butoanele se deosebeau doar prin nume.
+ * Cine n-are `stare` ramane cu chenarul obisnuit.
  */
-const APLICATII: Array<{ cheie: keyof Navigatie; nume: string }> = [
-  { cheie: 'calendar', nume: 'Calendarul' },
-  { cheie: 'program', nume: 'Programul liturgic' },
-  // Emisia parohiei, doua butoane fiindca sunt doua aplicatii (user, 14.09.2026): directul slujbei
-  // si radioul. Stau langa program, fiindca de acolo vin slujbele care se transmit.
-  { cheie: 'live', nume: 'Transmisiunea în direct' },
-  { cheie: 'radio', nume: 'Radioul parohiei' },
-  { cheie: 'curatenie', nume: 'Curățenia bisericii' },
+const APLICATII: Array<{ cheie: keyof Navigatie; nume: string; stare?: 'bine' | 'urgent' }> = [
+  { cheie: 'calendar', nume: 'Calendarul', stare: 'bine' },
+  { cheie: 'program', nume: 'Programul liturgic', stare: 'bine' },
+  // Tipicul a luat locul transmisiunii in direct (user, 17.09.2026); directul a coborat in locul lui.
   { cheie: 'tipic', nume: 'Tipicul' },
+  // Emisia parohiei, doua butoane fiindca sunt doua aplicatii (user, 14.09.2026): radioul si
+  // directul slujbei. Radioul a ramas langa program, de unde vin slujbele care se transmit.
+  { cheie: 'radio', nume: 'Radioul parohiei', stare: 'bine' },
+  { cheie: 'curatenie', nume: 'Curățenia bisericii', stare: 'urgent' },
+  { cheie: 'live', nume: 'Transmisiunea în direct', stare: 'urgent' },
   { cheie: 'biblia', nume: 'Biblia' },
   { cheie: 'biblioteca', nume: 'Biblioteca' },
   { cheie: 'buletin', nume: 'Buletinul parohial' },
@@ -81,6 +86,13 @@ const LOCAL_APP = `
           border:1px solid var(--rule); border-radius:10px; color:var(--ink);
           text-decoration:none; font:15px/1.2 ui-sans-serif,system-ui }
 .apps a:hover { border-color:var(--rosu); color:var(--rosu) }
+/* Semnele de stare (user, 17.09.2026). Culorile sunt cele ale carcasei, deci se schimba singure la
+   tema intunecata: --azi e verdele ei, --rosu rosul ei. Chenar de 2px, ca sa se vada de la prima
+   privire; box-sizing:border-box e global, deci casuta nu creste. Regulile stau DUPA :hover si
+   repeta starea si pe hover — altfel hover-ul ar spala culoarea.
+   ⚠️ Fara backtick-uri in comentariu: stilul e un template literal, un backtick il taie in doua. */
+.apps a.bine, .apps a.bine:hover { border:2px solid var(--azi) }
+.apps a.urgent, .apps a.urgent:hover { border:2px solid var(--rosu) }
 .apps b { display:block; font-weight:400 }
 .apps .adr { display:block; margin-top:4px; font:11.5px/1.2 ui-sans-serif,system-ui;
              color:var(--faint); letter-spacing:.01em }
@@ -163,14 +175,15 @@ scrieți-ne și le ștergem, fără să vă cerem o pricină.</p>
 <p>Dacă schimbăm ceva aici, scriem data de mai sus. Nu schimbăm în tăcere la ce folosim datele.</p>
 </div>`
 
-function buton(nume: string, url: string): string {
+function buton(nume: string, url: string, stare?: 'bine' | 'urgent'): string {
   const adresa = url.replace(/^https:\/\/|\/$/g, '') || 'aici'
-  return `    <a href="${esc(url)}${url.startsWith('/') ? '/' : ''}"><b>${esc(nume)}</b><span class="adr">${esc(adresa)}</span></a>`
+  const clasa = stare ? ` class="${stare}"` : ''
+  return `    <a href="${esc(url)}${url.startsWith('/') ? '/' : ''}"${clasa}><b>${esc(nume)}</b><span class="adr">${esc(adresa)}</span></a>`
 }
 
 function corp(nav: Navigatie): string {
   return `<nav class="apps" aria-label="Aplicațiile platformei">
-${APLICATII.map((a) => buton(a.nume, nav[a.cheie] || '/')).join('\n')}
+${APLICATII.map((a) => buton(a.nume, nav[a.cheie] || '/', a.stare)).join('\n')}
   </nav>`
 }
 
@@ -203,7 +216,8 @@ export default {
     const utilizator = sesiune.user?.displayName ?? sesiune.user?.email ?? null
     const eAdmin = sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin')
     const comune = {
-      nume: 'PLATFORMA',
+      // Titlul din antet: WEBSITE, nu PLATFORMA (user, 17.09.2026) — `home` E website-ul parohiei.
+      nume: 'WEBSITE',
       titlu: 'Platforma parohiei',
       acasa: '/',
       urlPlatforma: nav.home || '/',

@@ -1399,12 +1399,12 @@ export function paginaSaptamana(o: OptiuniSaptamana): string {
   const aAzi = luneaSaptamanii(o.azi)
   const cuCalendar = areCalendarulSaptamanii(o.cal, o.luni)
   const zile = zileleSaptamanii({ ...o, cuCalendar })
-  // Eticheta de langa titlu spune doar ce NU e gata: „propunere" (si, daca s-ar ivi, „propus" ori
-  // „modificat după validare"). Pe programul validat nu se mai scrie nimic — user, 10.09.2026:
-  // „scoate eticheta Validat… lasă doar Propunere la săptămâna următoare. Este util."
+  // Eticheta de langa titlu spune STAREA saptamanii, oricare ar fi ea: „propunere" (albastru, ca
+  // „propus"), „modificat după validare" si — din 15.09.2026, cerut de user — iar „validat", verde.
+  // ⚠️ Rasturnare curata a cererii din 10.09.2026 („scoate eticheta Validat… lasă doar Propunere").
+  // Nu o scoate inapoi fara o cerere care sa-i spuna pe nume.
   const clasaStare = o.stare === 'propunere' ? 'propus' : o.stare
-  const eticheta = o.stare === 'validat' ? ''
-    : `<span class="stare ${esc(clasaStare)}">${esc(STARE[o.stare] ?? o.stare)}</span>`
+  const eticheta = `<span class="stare ${esc(clasaStare)}">${esc(STARE[o.stare] ?? o.stare)}</span>`
   // ⚠️ PROBA (11.09.2026) — MOMENTUL, scris in pagina deasupra datelor: „săptămâna trecută / aceasta /
   // viitoare". Paginile arata acelasi lucru in momente diferite, iar pana acum singurul semn al
   // momentului era in antet, pe butonul rosu. Se scrie doar pe cele trei saptamani de langa azi; pe
