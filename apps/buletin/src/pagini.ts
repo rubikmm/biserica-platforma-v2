@@ -11,6 +11,26 @@
  *    deci are aceeasi infatisare in toate aplicatiile. Butonul il vad TOTI, si adminii;
  *  - zilele scurte din raft se scriu cu `LUNI_SCURT` din `@xc/ui` (platforma scrie „mart.",
  *    „noiem."; V1 scria „mar.", „noi.") — restul textelor sunt cuvant cu cuvant din V1.
+ *
+ * ⚠️ MENIUL DIN ANTET, REFACUT LA 17.09.2026 DUPA CHIPUL CALENDARULUI, AL PROGRAMULUI SI AL
+ * NEWSLETTERULUI (user: „să aranjăm meniul principal cum am făcut la Calendar și Programul
+ * liturgic"). Randul de unelte are acum O PASTILA cat tot randul si, singura afara la DREAPTA,
+ * ABONAREA. Asezarea V1 — abonarea intai, o liniuta despartitoare, apoi Arhiva si lupa — a cazut
+ * toata, cu tot cu formularul de cautare scris sub antet.
+ *
+ *   PASTILA, in ordinea ceruta:
+ *     1. BULINA numarului curent, prima — duce mereu la numarul de duminica asta;
+ *     2. ZONA DE SCRIS: „Buletinul nr. 615" pe cel curent, data lui pe unul din arhiva, iar pe
+ *        paginile care nu tin de un numar anume — „Arhiva", „Căutare", „Buletin nou";
+ *     3. SAGEATA-DREAPTA — BULETINUL NOU (vezi mai jos);
+ *     4. ARHIVA — cheie care coboara fasia anilor, ca la Program;
+ *     5. LUPA — cheie care coboara bara cautarii, ca la Calendar.
+ *
+ * ⚠️ SAGEATA NU E O NAVIGARE, E O FAPTA (aceeasi regula ca la A8): duce la `/nou`, ecranul
+ * buletinului care URMEAZA sa apara. Fiind o fapta de admin, se scrie NUMAI pentru admini —
+ * enoriasul ramane cu bulina, scrisul, Arhiva si lupa.
+ * ⚠️ Sagetile „◀ numărul dinainte / numărul următor ▶" de sub un numar au RAMAS: la buletin ele
+ * rasfoiesc arhiva de hartie, nu tin loc de meniu. Ce a iesit e randul vechi de unelte.
  */
 import type { Navigatie } from '@xc/config'
 import { ICOANE, LUNI, LUNI_SCURT, dataCuZi, dataLunga, esc, pagina } from '@xc/ui'
@@ -34,16 +54,37 @@ export interface Ctx {
 
 /** Ce-i trebuie antetului ca sa se aseze. Il umple index.ts. */
 export interface Meniu {
+  /** pagina deschisa e „Buletin nou" (sageata ramane aprinsa) */
+  nou?: boolean
+  /** numarul de pe ecran, pentru zona de scris; `null` pe paginile care nu tin de unul (arhiva, cautarea) */
+  peEcran?: { nr: number; data: string } | null
+  /** numarul de pe ecran e chiar cel curent — bulina ramane apasata si scrisul spune numarul lui */
+  acum?: boolean
+  /** arhiva n-are niciun numar: bulina se stinge, nu dispare (randul nu joaca de la o pagina la alta) */
+  gol?: boolean
   /** pagina deschisa e Arhiva (butonul ei ramane aprins) */
   arhiva?: boolean
-  /** `null` = cautarea sta inchisa; sir (chiar gol) = formularul e deschis, cu ce s-a cautat in el */
+  /** `null` = bara cautarii sta inchisa; sir (chiar gol) = e coborata de la server, cu ce s-a cautat in ea */
   q?: string | null
+  /**
+   * ANII ARHIVEI, descrescator — fasia care coboara din cheia Arhivei, ca la Program si la A8.
+   * ⚠️ GOL INSEAMNA „fara bara": atunci segmentul Arhivei ramane LINKUL catre /arhiva — o cheie care
+   * ar cobori o fasie goala n-ar face nimic la apasare.
+   */
+  ani?: string[]
+  /** anul deschis in arhiva, marcat rosu in fasie */
+  anDeschis?: string
   /** vestea de dupa `POST /abonare` (`?abonat=1|2|0`) */
   veste?: 'inscris' | 'scos' | 'eroare' | null
 }
 
 /** Iconita Arhivei: cutie cu capac — aceeasi ca in V1 (venita acolo din A2). */
 const IC_ARHIVA = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></svg>`
+
+/* Sageata sta SINGURA in buton, fara niciun invelis — lectia platita la Program pe 15.09.2026: un
+   invelis e copil flexibil, deci cutia lui e o linie de scris, iar desenul ramane pe linia de baza
+   si iese cu vreo doi pixeli mai sus decat vecinii. */
+const IC_INAINTE = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12h14"/><path d="m12.5 6 6 6-6 6"/></svg>`
 
 /** Iconita hartiei de tipar: foaie cu coltul indoit — din V1; a ramas la numerele fara PDF. */
 const IC_PDF = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>`
@@ -105,27 +146,204 @@ function fereastraBuletinului(ctx: Ctx): string {
   })
 }
 
-/** Randul din antet: abonarea, o liniuta verticala, apoi Arhiva si lupa (asezarea din V1). */
-function unelte(ctx: Ctx, m: Meniu): string {
-  const p = esc(ctx.prefix)
-  return (
-    butonAbonare(ABONAMENT) +
-    `<span class="desparte" aria-hidden="true"></span>` +
-    `<a class="btn mic${m.arhiva ? ' activ' : ''}" href="${p}/arhiva" title="Arhiva buletinelor"` +
-    ` aria-label="Arhiva buletinelor">${IC_ARHIVA}</a>` +
-    `<a class="btn mic" href="${p}/cauta" id="cauta-buton" aria-expanded="${m.q === null || m.q === undefined ? 'false' : 'true'}"` +
-    ` title="Căutare în buletine" aria-label="Căutare în buletine">${ICOANE.lupa}</a>`
-  )
+/** „6 sept. 2026" — scrisul din pastila pe numerele care nu sunt cel curent, la ecrane mici. */
+const dataScurta = (data: string): string => `${ziuaScurt(data)} ${data.slice(0, 4)}`
+
+/**
+ * ZONA DE SCRIS din pastila — pe ce numar esti, in cuvinte. Ca la Calendar, la Program si la A8, ea
+ * ia tot spatiul ramas, iar butoanele de langa stau la masura lor fixa: scrisul e lucrul dupa care se
+ * uita omul intai, deci nu se strange el primul.
+ *
+ * Cinci feluri, dupa ce arata pagina:
+ *   - numarul curent (si prima pagina) → „Buletinul nr. 615";
+ *   - un numar din arhiva             → data lui („6 septembrie 2026");
+ *   - pagina Arhivei                  → „Arhiva";
+ *   - ecranul buletinului nou         → „Buletin nou";
+ *   - pagina cautarii                 → „Căutare".
+ *
+ * ⚠️ NU SE PRESCURTEAZA CE INCAPE (regula lui A8, 15.09.2026): „Buletin nou" ramane intreg la orice
+ * latime, iar pe numarul curent scrie CHIAR numarul lui, nu un generic „Curent". Forma scurta se
+ * scrie ALATURI de cea lunga si se alege din CSS; cand cele doua sunt la fel, scrisul nu se schimba.
+ * ⚠️ NU e un buton: nu duce nicaieri si nu se apasa (vezi `.acum` din `stil.ts`, fundal de hartie).
+ */
+function scrisulNumarului(m: Meniu): string {
+  const zona = (lung: string, scurt: string, titlu: string) =>
+    `<span class="acum" title="${esc(titlu)}"><b class="lung">${esc(lung)}</b><b class="scurt">${esc(scurt)}</b></span>`
+  if (m.nou) return zona('Buletin nou', 'Buletin nou', 'Buletinul care urmează să apară')
+  if (m.arhiva) return zona('Arhiva', 'Arhiva', 'Arhiva buletinelor')
+  if (!m.peEcran) return zona('Căutare', 'Căutare', 'Căutare în buletine')
+  const b = m.peEcran
+  if (m.acum) {
+    return zona(`Buletinul nr. ${b.nr}`, `Buletinul nr. ${b.nr}`, `Numărul curent — ${dataLunga(b.data)}`)
+  }
+  return zona(dataLunga(b.data), dataScurta(b.data), `Numărul ${b.nr}`)
 }
 
-/** Formularul de cautare, sub linia antetului. Ascuns cat lupa n-a fost apasata; pe `/cauta` e deschis. */
-function formularCautare(ctx: Ctx, m: Meniu): string {
-  const deschis = m.q !== null && m.q !== undefined
-  return `<form action="${esc(ctx.prefix)}/cauta" method="get" id="cautare"${deschis ? '' : ' hidden'}>
-      <input type="search" name="q" value="${esc(m.q ?? '')}" placeholder="un cuvânt din buletin, sau numărul lui">
-      <button type="submit">Caută</button>
-    </form>`
+/**
+ * PASTILA NAVIGARII — cele cinci segmente, in ordinea ceruta de user (17.09.2026): bulina · zona de
+ * scris · sageata („buletin nou") · Arhiva · lupa. Segmentele stau lipite intr-un singur corp, ca sa
+ * se citeasca drept UN obiect cu o pozitie, nu cinci destinatii deosebite.
+ *
+ * ⚠️ BULINA n-are text si duce INTOTDEAUNA la numarul curent, de oriunde ai fi — adica la prima
+ * pagina, care chiar el este; ramane apasata (rosie, inerta) cand esti pe el. Numele ei se citeste
+ * din `title` si `aria-label`.
+ * ⚠️ SAGEATA E O FAPTA, NU O NAVIGARE: duce la ecranul buletinului nou. Numai pentru admini.
+ */
+function pastilaNumarului(ctx: Ctx, m: Meniu): string {
+  const p = esc(ctx.prefix)
+  const bulina = m.gol
+    ? `<span class="btn punct gol" title="Arhiva e goală" aria-label="numărul curent"></span>`
+    : m.acum
+      ? `<button type="button" class="btn punct activ" aria-disabled="true" aria-current="page"`
+        + ` title="Ești pe numărul curent" aria-label="numărul curent"></button>`
+      : `<a class="btn punct" href="${p}/" title="Treci la numărul curent"`
+        + ` aria-label="numărul curent"></a>`
+  const sageata = !ctx.eAdmin
+    ? ''
+    : m.nou
+      ? `<button type="button" class="btn viit activ" aria-disabled="true" aria-current="page"`
+        + ` title="Ești pe buletinul nou" aria-label="buletin nou">${IC_INAINTE}</button>`
+      : `<a class="btn viit" href="${p}/nou" title="Buletin nou — numărul care urmează"`
+        + ` aria-label="Buletin nou — numărul care urmează">${IC_INAINTE}</a>`
+  /*
+   * ⚠️ CHEIA ARHIVEI, ca la Program si la A8: iconita nu mai duce dintr-o apasare la /arhiva, ci
+   * COBOARA FASIA ANILOR de sub rand (`baraAnilor`). Drumul la arhiva a ramas intreg — trece
+   * printr-un an.
+   * ⚠️ PE PAGINA ARHIVEI cheia nu mai e cheie, ci semn al locului: fasia e coborata permanent, deci
+   * segmentul se scrie INERT, iar JS-ul nu-i mai pune ascultatorul. Altfel omul ar putea strange
+   * singurul drum ramas catre ceilalti ani.
+   * ⚠️ Fara ani (pagini care n-au lista) ramane LINKUL de pana acum: butonul nu se ascunde niciodata.
+   */
+  const arhiva = !m.ani?.length
+    ? `<a class="btn arh${m.arhiva ? ' activ' : ''}" href="${p}/arhiva"`
+      + ` title="Arhiva pe ani și luni" aria-label="Arhiva buletinelor">${IC_ARHIVA}</a>`
+    : `<button type="button" class="btn arh${m.arhiva ? ' activ' : ''}" id="ani-cheie"`
+      + ` aria-expanded="${m.arhiva ? 'true' : 'false'}" aria-controls="bara-ani"`
+      + (m.arhiva ? ' aria-disabled="true" aria-current="page"' : '')
+      + ` title="${m.arhiva ? 'Ești în arhivă — alege anul din bara de dedesubt' : 'Arhiva buletinelor — alege anul'}"`
+      + ` aria-label="Arhiva buletinelor — alege anul">${IC_ARHIVA}</button>`
+  /* LUPA e o CHEIE, ca la Calendar: coboara bara cautarii de sub antet, nu duce nicaieri singura.
+     Fara JavaScript ramane butonul care e — atunci bara se deschide de la server, pe /cauta. */
+  const lupa = `<button type="button" class="btn cheie" id="cautare-cheie" aria-controls="bara-cautare"`
+    + ` aria-expanded="${m.q === null || m.q === undefined ? 'false' : 'true'}" title="Caută în buletine"`
+    + ` aria-label="Caută în buletine">${ICOANE.lupa}</button>`
+  return `<span class="pastila">${bulina}${scrisulNumarului(m)}${sageata}${arhiva}${lupa}</span>`
 }
+
+/** Randul de unelte: pastila cat tot randul si, singura afara la dreapta, abonarea. */
+function unelte(ctx: Ctx, m: Meniu): string {
+  return pastilaNumarului(ctx, m) + butonAbonare(ABONAMENT)
+}
+
+/**
+ * BARA ANILOR — sub randul de unelte, ascunsa pana se apasa cheia Arhivei, coborata din capul
+ * locului pe pagina Arhivei. Aceeasi unealta ca `baraAnilor` din Program si ca fasia lunilor din
+ * Calendar: aceeasi fasie derulabila, aceleasi sageti ‹ › scrise de JS numai daca e ceva de derulat,
+ * acelasi chenar de pastila, ca aplicatiile sa se recunoasca intre ele.
+ *
+ * ⚠️ ANII VIN DIN ARHIVA, descrescator — nu se scrie niciun an in cod.
+ * ⚠️ `hidden` il scrie SERVERUL, la fiecare pagina: fasia se strange singura dupa ce omul alege un an,
+ * fara nicio linie de JS — alegerea e o navigare, iar pagina urmatoare se naste cu bara sus.
+ */
+function baraAnilor(ctx: Ctx, m: Meniu): string {
+  if (!m.ani?.length) return ''
+  const p = esc(ctx.prefix)
+  const butoane = m.ani
+    .map((a) => {
+      const activ = m.arhiva && m.anDeschis === a ? ' activ' : ''
+      return `<a class="an-buton${activ}" href="${p}/arhiva?an=${esc(a)}" data-an="${esc(a)}"`
+        + `${activ ? ' aria-current="page"' : ''}>${esc(a)}</a>`
+    })
+    .join('')
+  return `<div class="bara-ani" id="bara-ani"${m.arhiva ? '' : ' hidden'}><div class="fasie">`
+    + `<nav class="ani" aria-label="Anii arhivei">${butoane}</nav></div></div>`
+}
+
+/**
+ * BARA CAUTARII — sora fasiei anilor, sub randul de unelte, ascunsa pana se apasa lupa din pastila.
+ *
+ * ⚠️ E un FORMULAR adevarat, `method="get"`: cautarea merge si fara JavaScript, iar rezultatul are
+ * adresa (`/cauta?q=…`), deci se poate da mai departe. JS-ul adauga doar coborarea barei si focusul.
+ * ⚠️ Pe pagina rezultatelor bara se naste DESCHISA, cu intrebarea scrisa in camp — altfel omul n-ar
+ * mai vedea ce a cautat. Textul din camp e cel din V1.
+ */
+function baraCautarii(ctx: Ctx, m: Meniu): string {
+  const p = esc(ctx.prefix)
+  const inchisa = m.q === null || m.q === undefined
+  return `<div class="bara-cautare" id="bara-cautare"${inchisa ? ' hidden' : ''}>
+      <form class="cauta" role="search" method="get" action="${p}/cauta">
+        <input class="cauta-camp" type="search" name="q" value="${esc(m.q ?? '')}"
+          placeholder="un cuvânt din buletin, sau numărul lui" aria-label="Caută în buletine" autocomplete="off">
+        <button class="cauta-du" type="submit" title="Caută" aria-label="Caută">${ICOANE.lupa}</button>
+      </form>
+    </div>`
+}
+
+/**
+ * CELE DOUA BARE care coboara din pastila — anii si cautarea — si care SE EXCLUD (regula
+ * Calendarului): doua bare deschise una peste alta ar impinge pagina cu vreo 100 px si n-ar spune
+ * nimic in plus, deci fiecare cheie o coboara pe a ei si o ridica pe cealalta.
+ *
+ * Anul deschis vine la MIJLOCUL fasiei, dar numai DUPA ce bara e la vedere (cat timp e ascunsa,
+ * offsetLeft si clientWidth sunt 0 si fasia s-ar deschide derulata la cap), iar sagetile ‹ › se scriu
+ * doar daca anii chiar nu incap.
+ *
+ * ⚠️ Fara accent grav in comentariile de aici: scripturile sunt template literals.
+ */
+const JS_BARE = `
+(function(){
+  var bCauta=document.getElementById("bara-cautare"),cCauta=document.getElementById("cautare-cheie");
+  var bAni=document.getElementById("bara-ani"),cAni=document.getElementById("ani-cheie");
+  var fasie=bAni?bAni.querySelector(".fasie"):null;
+
+  function ridica(b,c){ if(!b||b.hidden) return; b.hidden=true; if(c) c.setAttribute("aria-expanded","false"); }
+
+  function aseaza(){
+    if(!fasie) return;
+    var deschis=fasie.querySelector(".an-buton.activ");
+    if(deschis) fasie.scrollLeft=deschis.offsetLeft-(fasie.clientWidth-deschis.offsetWidth)/2;
+  }
+  var capete=function(){};
+  if(bAni&&fasie){
+    var sageti=["\\u2039","\\u203a"].map(function(semn,i){
+      var b=document.createElement("button");
+      b.type="button"; b.className="sageata"; b.textContent=semn;
+      b.setAttribute("aria-label", i?"anii următori":"anii dinainte");
+      b.addEventListener("click",function(){
+        fasie.scrollBy({left:(i?1:-1)*Math.max(120,fasie.clientWidth*0.6),behavior:"smooth"});
+      });
+      return b;
+    });
+    capete=function(){
+      var incap=fasie.scrollWidth<=fasie.clientWidth+2;
+      sageti[0].hidden=incap; sageti[1].hidden=incap;
+      sageti[0].disabled=fasie.scrollLeft<2;
+      sageti[1].disabled=fasie.scrollLeft>fasie.scrollWidth-fasie.clientWidth-2;
+    };
+    bAni.insertBefore(sageti[0],fasie);
+    fasie.insertAdjacentElement("afterend",sageti[1]);
+    fasie.addEventListener("scroll",capete,{passive:true});
+    window.addEventListener("resize",capete);
+    // pe pagina Arhivei bara vine coborata de la server: latimile sunt reale, deci se aseaza acum
+    if(!bAni.hidden) aseaza();
+    capete();
+  }
+
+  if(cCauta&&bCauta) cCauta.addEventListener("click",function(){
+    var deschisa=!bCauta.hidden;
+    bCauta.hidden=deschisa;
+    cCauta.setAttribute("aria-expanded",deschisa?"false":"true");
+    if(!deschisa){ ridica(bAni,cAni); var c=bCauta.querySelector("input"); if(c) c.focus(); }
+  });
+
+  // ⚠️ pe pagina Arhivei cheia e scrisa inerta: n-are ce inchide, fasia e coborata de-a binelea
+  if(cAni&&bAni&&cAni.getAttribute("aria-disabled")!=="true") cAni.addEventListener("click",function(){
+    var deschisa=!bAni.hidden;
+    bAni.hidden=deschisa;
+    cAni.setAttribute("aria-expanded",deschisa?"false":"true");
+    if(!deschisa){ ridica(bCauta,cCauta); aseaza(); capete(); }
+  });
+})();`
 
 /** Vestea de dupa abonare, sub antet — ruta exista, fereastra inca nu trimite nimic spre ea. */
 function vesteaAbonarii(m: Meniu): string {
@@ -135,21 +353,10 @@ function vesteaAbonarii(m: Meniu): string {
   return ''
 }
 
-/** JS-ul paginilor: lupa care deschide formularul si butonul care deschide fereastra de abonare.
- *  Scris fara sageti si fara let/const, ca JS-ul carcasei — telefoanele vechi ale enoriasilor
- *  il citesc si pe acela. */
+/** JS-ul paginilor: rasfoitul. Cele doua bare care coboara din pastila — anii si cautarea — sunt in
+ *  `JS_BARE`, langa ele. Scris fara sageti si fara let/const, ca JS-ul carcasei — telefoanele vechi
+ *  ale enoriasilor il citesc si pe acela. */
 const JS_PAGINI = `
-(function(){
-  var f = document.getElementById("cautare"), b = document.getElementById("cauta-buton");
-  if (!f || !b) return;
-  b.addEventListener("click", function(e){
-    e.preventDefault();
-    var era = f.hidden;
-    f.hidden = !era;
-    b.setAttribute("aria-expanded", era ? "true" : "false");
-    if (era) { var c = f.querySelector("input"); if (c) c.focus(); }
-  });
-})();
 (function(){
   // RĂSFOITUL, cu modulul Real3D FlipBook — acelasi de la jurnaluldeafaceri (cerere user,
   // 13.09.2026). Tot ce urmeaza e ES5 DINADINS: pe un telefon vechi, o singura sintaxa noua ar face
@@ -290,9 +497,11 @@ function sablon(ctx: Ctx, m: Meniu, titluPagina: string | undefined, corp: strin
     modificata: ctx.modificata,
     indexabil: true,
     unelte: unelte(ctx, m),
-    subantet: `${fereastraBuletinului(ctx)}${formularCautare(ctx, m)}`,
+    // Fereastra de abonare e un <dialog>: se deschide peste pagina, deci locul ei aici nu conteaza,
+    // numai sa fie scrisa o data. Barele, insa, trebuie sa stea CHIAR sub randul de unelte.
+    subantet: `${baraAnilor(ctx, m)}\n    ${baraCautarii(ctx, m)}\n    ${fereastraBuletinului(ctx)}`,
     corp: `${vesteaAbonarii(m)}${corp}`,
-    scripturi: JS_PAGINI + JS_ABONARE,
+    scripturi: JS_BARE + JS_PAGINI + JS_ABONARE,
   })
 }
 
@@ -435,10 +644,96 @@ ${coperta(ctx, b)}
   )
 }
 
+/* ─────────────────────────── BULETINUL NOU ─────────────────────────── */
+
+const ziua = (d: string) => new Date(`${d}T00:00:00Z`)
+const scrieZiua = (d: Date) => d.toISOString().slice(0, 10)
+const plusZile = (d: string, zile: number) => scrieZiua(new Date(ziua(d).getTime() + zile * 86400000))
+
 /**
- * ARHIVA: **un singur an pe ecran**, ca la A2 — 619 de numere intr-un teanc nu se rasfoiesc. Bara de
- * sus (patratelele `.capitole` din carcasa) schimba anul, iar anul vine din adresa („?an=2019"), nu
- * dintr-o stare din pagina: linkul se poate da mai departe si merge butonul „înapoi" al browserului.
+ * DUMINICA NUMARULUI NOU — „data buletinului, adică următoarea duminică" (user, 17.09.2026).
+ *
+ * Buletinul parohiei e datat duminica dinaintea saptamanii pe care o vesteste (nr. 615 / 6.09 →
+ * programul 7–13.09), deci ziua numarului care urmeaza e prima duminica de azi inainte.
+ *
+ * ⚠️ Doua praguri, nu unul: duminica se ia de la ZIUA DE AZI (daca azi e chiar duminica, e azi), dar
+ * niciodata una deja aparuta — daca numarul curent poarta chiar ziua aceea, se trece la urmatoarea.
+ * Fara al doilea prag, in dimineata in care se urca numarul de duminica, ecranul ar cere inca o data
+ * numarul tocmai aparut.
+ * ⚠️ Socoteala e pe UTC, ca toate datele aplicatiei: ele sunt zile calendaristice („2026-09-20"), nu
+ * clipe, iar un fus ar muta ziua cu una intr-o parte.
+ */
+export function duminicaNoua(curent: string | null, azi: string): string {
+  const pana = (7 - ziua(azi).getUTCDay()) % 7
+  const d = plusZile(azi, pana)
+  return curent && d <= curent ? plusZile(d, 7) : d
+}
+
+/** Numarul si ziua buletinului care urmeaza: unul peste cel curent, in duminica de mai sus. */
+export function buletinulNou(
+  curent: { nr: number; data: string } | null,
+  azi: string,
+): { nr: number | null; data: string } {
+  return { nr: curent ? curent.nr + 1 : null, data: duminicaNoua(curent?.data ?? null, azi) }
+}
+
+/**
+ * ECRANUL BULETINULUI NOU — tinta sagetii din pastila (user, 17.09.2026: „când apăsăm aici, intrăm
+ * într-o pagină în care scriem numărul 616, dar cu roșu. Sub scriem data buletinului, adică
+ * următoarea duminică, și deasupra scriem numărul următor cu verde").
+ *
+ * Capul paginii tine trei randuri, in ordinea ceruta:
+ *   VERDE, deasupra — numarul de DUPA cel nou (nou + 1), cel care abia se vede la orizont;
+ *   ROȘU,  sub el   — numarul NOU, cel la care se lucreaza; rosul e culoarea bulinei din pastila,
+ *                     adica a numarului de care ne ocupam acum;
+ *   ziua            — duminica numarului nou (a celui rosu).
+ *
+ * ⚠️ NUMARUL ROSU E CEL NOU, NU CEL DIN ARHIVA. Cand a cerut ecranul, userul lucra tocmai la
+ * **616 / 20.09** (schita tiparita, 16.09.2026, seara), iar in arhiva cel mai nou e **615 / 6.09** —
+ * deci „616 cu rosu" e numarul care URMEAZA sa apara, nu ultimul aparut. De aici si socoteala:
+ * rosu = ultimul din arhiva + 1, verde = inca unul peste.
+ * ⚠️ Numerele nu se scriu in cod: ies din arhiva, deci se misca singure cand intra un numar nou.
+ * ⚠️ PAGINA NU COMPUNE INCA NIMIC: dedesubt sta un chenar gol, cat pagina intai a unui numar, locul
+ * in care va intra cuprinsul („ce punem în pagină mai vedem" — user).
+ */
+export function paginaNou(
+  ctx: Ctx,
+  m: Meniu,
+  curent: BuletinScurt | null,
+  nou: { nr: number | null; data: string },
+): string {
+  const capul = `<div class="cap-nou">
+  ${nou.nr ? `<p class="nr-dupa" title="Numărul următor">Nr. ${nou.nr + 1}</p>` : ''}
+  ${
+    nou.nr
+      ? `<p class="nr-nou" title="Buletinul nou">Nr. ${nou.nr}</p>`
+      : `<p class="nr-nou" title="Arhiva e goală">Buletin nou</p>`
+  }
+  <p class="cand-nou">${dataCuZi(nou.data)}</p>
+</div>`
+  return sablon(
+    ctx,
+    m,
+    'Buletin nou',
+    `${capul}
+<div class="chenar-nou" aria-hidden="true"></div>
+<p class="marunt sub-nou">Deocamdată pagina e goală: numărul nu se compune încă de aici.${
+      curent
+        ? ` Ultimul apărut: <a href="${adresa(ctx, curent)}">nr. ${curent.nr}</a>, ${dataLunga(curent.data)}.`
+        : ''
+    }</p>`,
+  )
+}
+
+/**
+ * ARHIVA: **un singur an pe ecran**, ca la A2 — 619 de numere intr-un teanc nu se rasfoiesc. Anul
+ * vine din adresa („?an=2019"), nu dintr-o stare din pagina: linkul se poate da mai departe si merge
+ * butonul „înapoi" al browserului.
+ *
+ * ⚠️ PATRATELELE CU ANI AU IESIT DIN CORPUL PAGINII la 17.09.2026, odata cu fasia de sub antet (ca la
+ * Program si la A8): anii se aleg acum dintr-un singur loc, iar doua randuri de ani, unul sub altul,
+ * ar fi spus acelasi lucru de doua ori. De aceea, pe pagina asta, fasia se scrie COBORATA si cheia de
+ * deasupra devine inerta.
  *
  * In anul deschis, numerele stau grupate PE LUNI, in rafturi de fise cu pagina intai — la un buletin
  * coperta spune mai mult decat orice titlu, fiindca titlul lui e chiar ce scrie pe ea.
@@ -446,19 +741,10 @@ ${coperta(ctx, b)}
 export function paginaArhiva(
   ctx: Ctx,
   m: Meniu,
-  ani: { an: string; cate: number }[],
   ales: string,
   buletine: BuletinScurt[],
   total: number,
 ): string {
-  const butoane = ani.length
-    ? `<nav class="capitole">${ani
-        .map(
-          (a) =>
-            `<a${a.an === ales ? ` class="acum"` : ''} href="${esc(ctx.prefix)}/arhiva?an=${a.an}" title="${a.cate} numere">${a.an}</a>`,
-        )
-        .join('')}</nav>`
-    : ''
   const peLuna = new Map<string, BuletinScurt[]>()
   for (const b of buletine) peLuna.set(b.luna, [...(peLuna.get(b.luna) ?? []), b])
   const luni = [...peLuna]
@@ -478,7 +764,6 @@ export function paginaArhiva(
     'Arhiva',
     `<h2>Arhiva buletinelor</h2>
 <p class="marunt">${total} numere, din 2012 până azi. Aduse din arhiva parohiei și de pe sfantul-ilie.ro.</p>
-${butoane}
 ${ales ? `<section class="an"><h3>${ales} <small>· ${buletine.length} numere</small></h3>\n${luni}</section>` : ''}`,
   )
 }

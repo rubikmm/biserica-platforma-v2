@@ -46,7 +46,18 @@ import {
 } from './depozit.js'
 import { abonamentul, ruteazaAbonare } from '@xc/abonare'
 import { ruteazaSetari } from '@xc/setari'
-import { type Ctx, type Meniu, paginaAcasa, paginaArhiva, paginaBuletin, paginaCarcasa, paginaCautare, paginaMesaj } from './pagini.js'
+import {
+  type Ctx,
+  type Meniu,
+  buletinulNou,
+  paginaAcasa,
+  paginaArhiva,
+  paginaBuletin,
+  paginaCarcasa,
+  paginaCautare,
+  paginaMesaj,
+  paginaNou,
+} from './pagini.js'
 
 export interface Env {
   DB: D1Database
@@ -354,10 +365,21 @@ export default {
         ctx.utilizator || ctx.veziCa ? 'private, no-store' : env.MEDIU === 'dev' ? 'no-store' : CACHE_PAGINI,
     }
     const raspuns = url.searchParams.get('abonat')
+    /**
+     * ⚠️ ANII SE CER O DATA, LA FIECARE PAGINA: din ei se naste fasia care coboara din cheia Arhivei
+     * (`Meniu.ani`), iar fasia trebuie sa fie aceeasi peste tot, nu doar in arhiva. E o singura
+     * numaratoare pe an (`GROUP BY`), pe o tabela de 619 randuri.
+     * ⚠️ O pagina care nu-i poate da (eroarea depozitului) ramane cu segmentul-LINK catre /arhiva:
+     * `ani` gol inseamna „fara bara", nu „cheie moarta" — vezi `pastilaNumarului`.
+     */
     const meniu = (rest: Partial<Meniu> = {}): Meniu => ({
       veste: raspuns === '1' ? 'inscris' : raspuns === '2' ? 'scos' : raspuns === '0' ? 'eroare' : null,
       ...rest,
     })
+    let ceruti: Promise<{ an: string; cate: number }[]> | null = null
+    const listaAnilor = () => (ceruti ??= anii(env.DB).catch(() => []))
+    const cuAni = async (rest: Partial<Meniu> = {}): Promise<Meniu> =>
+      meniu({ ani: (await listaAnilor()).map((a) => a.an), ...rest })
 
     try {
       /*
@@ -392,9 +414,35 @@ export default {
 
       // ------------------------------------------------------- numarul curent
       if (cale === '/') {
-        const [b, n] = await Promise.all([ultimul(env.DB), numaratoare(env.DB)])
+        const [b, n] = await Promise.all([ultimul(env.DB), numaratoare(env.DB), listaAnilor()])
         const dinainte = b ? (await ultimele(env.DB, 7)).filter((x) => !(x.nr === b.nr && x.data === b.data)) : []
-        return html(paginaAcasa(ctx, meniu(), b, dinainte, n.buletine), 200, cachePagina)
+        // prima pagina E numarul curent: bulina ramane apasata, iar scrisul spune chiar numarul lui
+        const m = await cuAni({ peEcran: b, acum: !!b, gol: !b })
+        return html(paginaAcasa(ctx, m, b, dinainte, n.buletine), 200, cachePagina)
+      }
+
+      /*
+       * BULETIN NOU — ecranul numarului care urmeaza, tinta sagetii din pastila (user, 17.09.2026).
+       *
+       * ⚠️ NUMAI ADMINII, si poarta e ROLUL, nu o cheie noua de permisiune: una noua ar fi cerut si
+       * republicarea lui `xc-authz` (aceeasi socoteala ca la `/nou` din newsletter). Cand ecranul va
+       * compune chiar un numar, aici se pune cheia potrivita — atunci rolul nu mai e destul.
+       * ⚠️ Pagina e personala (se vede altfel dupa rol si sub masca „vezi ca"), deci NU se tine in
+       * cache-ul de muchie, oricat ar fi mediul.
+       */
+      if (cale === '/nou') {
+        const alLui = { 'cache-control': 'private, no-store' }
+        if (!ctx.eAdmin) {
+          return html(
+            paginaMesaj(ctx, await cuAni(), 'Nu ai voie', '<p>Buletinul nou e al administratorilor.</p>'),
+            403,
+            alLui,
+          )
+        }
+        const b = await ultimul(env.DB)
+        const azi = new Date().toISOString().slice(0, 10)
+        const m = await cuAni({ nou: true, gol: !b })
+        return html(paginaNou(ctx, m, b, buletinulNou(b, azi)), 200, alLui)
       }
 
       // --------------------------------------------------- un numar din arhiva
@@ -403,7 +451,13 @@ export default {
         const m = /^(\d{1,4})-(\d{4}-\d{2}-\d{2})$/.exec(cerut)
         if (m) {
           const b = await unul(env.DB, Number(m[1]), m[2]!)
-          if (b) return html(paginaBuletin(ctx, meniu(), b, await vecini(env.DB, b.nr, b.data)), 200, cachePagina)
+          if (b) {
+            const v = await vecini(env.DB, b.nr, b.data)
+            // ⚠️ „esti pe numarul curent" se citeste din VECINI, nu dintr-o a doua cerere catre
+            // depozit: numarul care n-are niciun urmator ESTE cel curent.
+            const meniul = await cuAni({ peEcran: b, acum: !v.dupa })
+            return html(paginaBuletin(ctx, meniul, b, v), 200, cachePagina)
+          }
         }
         // numarul singur (`/buletin/615`) e o adresa la indemana, dar nu e cheie: duce la numarul
         // acela — cel mai nou, daca parohia l-a filat de doua ori
@@ -414,7 +468,7 @@ export default {
         return html(
           paginaMesaj(
             ctx,
-            meniu(),
+            await cuAni(),
             'Nu există numărul',
             `<p>Adresa unui buletin e <code>/buletin/615-2026-09-06</code> — numărul și ziua în care a apărut.</p>
 <p><a href="${prefix}/arhiva">Arhiva</a> le are pe toate.</p>`,
@@ -426,14 +480,16 @@ export default {
 
       // ------------------------------------------------------ arhiva, pe ani
       if (cale === '/arhiva') {
-        const lista = await anii(env.DB)
+        const lista = await listaAnilor()
         const cerut = url.searchParams.get('an')
+        // un an cerut care nu exista cade pe cel mai NOU, nu pe cel mai vechi
         const ales = lista.find((a) => a.an === cerut)?.an ?? lista[0]?.an ?? ''
         const [buletine, n] = await Promise.all([
           ales ? dintrUnAn(env.DB, ales) : Promise.resolve([]),
           numaratoare(env.DB),
         ])
-        return html(paginaArhiva(ctx, meniu({ arhiva: true }), lista, ales, buletine, n.buletine), 200, cachePagina)
+        const m = await cuAni({ arhiva: true, anDeschis: ales })
+        return html(paginaArhiva(ctx, m, ales, buletine, n.buletine), 200, cachePagina)
       }
 
       // ---------------------------------------------------------- cautarea
@@ -444,13 +500,13 @@ export default {
         if (gasite.length === 1 && /^\d{1,4}$/.test(q.trim()) && gasite[0]!.nr === Number(q.trim())) {
           return redirect(`${prefix}/buletin/${gasite[0]!.nr}-${gasite[0]!.data}`, 302)
         }
-        return html(paginaCautare(ctx, meniu({ q }), q, gasite), 200, cachePagina)
+        return html(paginaCautare(ctx, await cuAni({ q }), q, gasite), 200, cachePagina)
       }
 
       return html(
         paginaMesaj(
           ctx,
-          meniu(),
+          await cuAni(),
           'Nu există pagina',
           `<p><a href="${prefix}/">Numărul curent</a> · <a href="${prefix}/arhiva">Arhiva</a> · <a href="${prefix}/cauta">Căutare</a></p>`,
         ),

@@ -25,26 +25,173 @@ export const LOCAL = `
 .veste.bine { color:var(--albastru) }
 .veste.rau { color:var(--rosu) }
 
-/* ── ANTETUL: abonarea, o liniuta verticala, Arhiva si lupa (asezarea din V1) */
+/* ── MENIUL DIN ANTET, REFACUT LA 17.09.2026 DUPA CHIPUL CALENDARULUI, AL PROGRAMULUI SI AL
+   NEWSLETTERULUI (user: "sa aranjam meniul principal cum am facut la Calendar si Programul
+   liturgic"): o PASTILA cat tot randul — bulina · zona de scris · sageata · Arhiva · lupa — si,
+   singura afara la dreapta, ABONAREA. Asezarea V1 (abonarea intai, o liniuta despartitoare, doua
+   butoane mici si un formular de cautare sub antet) a cazut toata.
+   Ce a ramas neschimbat: butonul fara tinta se scrie estompat (.gol), pe loc, ca randul sa nu joace
+   de la o pagina la alta. */
+/* Carcasa comuna lasa .btns sa se rupa (flex-wrap:wrap); aici randul nu se rupe pe desktop —
+   butoanele se string, nu sar pe randul urmator. */
+.btns { flex-wrap:nowrap }
 .btns .gol { opacity:.35; pointer-events:none }
-/* bara verticala dintre abonare si butoanele aplicatiei */
-.btns .desparte { flex:0 0 1px; align-self:stretch; background:var(--rule); margin:0 3px }
-/* butoanele mici (abonarea, Arhiva, lupa): stau cat le tine iconita, nu cresc sa umple randul */
+.btns .btn { min-width:0 }
+/* treapta pe care CHIAR esti (aria-disabled): nu duce nicaieri, dar se apasa — atunci ia focusul si
+   ramane ea marcata, ca sa se vada unde ne aflam. */
+.btns .btn[aria-disabled="true"] { cursor:default }
+.btns .btn[aria-disabled="true"]:focus { outline:none;
+                 background:color-mix(in srgb, var(--rosu) 18%, transparent) }
+
+/* PASTILA: segmentele lipite intr-un singur corp, ca sa se citeasca drept UN obiect cu o pozitie,
+   nu cinci destinatii deosebite. Chenarul si rotunjirea stau pe pastila, nu pe butoane; intre
+   segmente ramane o linie de 1 px.
+   ⚠️ MASURA DE PORNIRE E 0 (flex:1 1 0), NU auto — regula platita la Calendar pe 15.09.2026: randul
+   are flex-wrap, iar ruperea lui se hotaraste dupa marimea IPOTETICA a copiilor, inainte de orice
+   strangere. Cu "auto", pastila ar cere cat scrisul intreg plus cele patru butoane si ar cobori
+   abonarea pe al doilea rand pe ecranele de 400-460 px.
+   ⚠️ Fara overflow:hidden: rotunjirea colturilor o duc segmentele de la capete, fiecare al lui. */
+.btns .pastila { display:flex; flex:1 1 0; min-width:0; align-items:stretch;
+                 border:1px solid var(--rule); border-radius:10px; background:var(--tinta) }
+.btns .pastila .btn { flex:0 0 auto; border:0; border-radius:0; background:transparent }
+.btns .pastila > :first-child { border-radius:9px 0 0 9px }
+.btns .pastila > :last-child { border-radius:0 9px 9px 0 }
+.btns .pastila .btn + .btn { border-left:1px solid var(--rule) }
+.btns .pastila a.btn:hover { color:var(--rosu); background:var(--paper) }
+.btns .pastila .btn.activ { color:var(--rosu); font-weight:600;
+                 background:color-mix(in srgb, var(--rosu) 11%, transparent) }
+/* cele PATRU butoane-iconita: aceeasi masura, ca pastila sa arate la fel pe orice pagina */
+.btns .pastila .punct, .btns .pastila .viit, .btns .pastila .arh, .btns .pastila .cheie {
+                 flex:0 0 46px; width:46px; padding-left:0; padding-right:0;
+                 display:flex; align-items:center; justify-content:center }
+.btns .pastila .viit svg, .btns .pastila .arh svg, .btns .pastila .cheie svg { vertical-align:0 }
+/* bulina: un punct, fara text, la fel de inalt ca segmentele de langa el; duce mereu la numarul
+   curent si ramane apasata cand chiar pe el esti */
+.btns .punct::before { content:""; width:9px; height:9px; border-radius:50%; background:currentColor }
+.btns .punct:hover { color:var(--rosu) }
+/* cheile sunt <button>, nu linkuri: le trebuie spuse cursorul si hoverul, fiindca regula de mai sus
+   prinde numai a.btn */
+.btns .pastila button.cheie { cursor:pointer; color:inherit }
+.btns .pastila button.cheie:hover { color:var(--rosu); background:var(--paper) }
+/* cat timp bara ei e coborata, cheia sta aprinsa — ca omul sa stie de unde a iesit ce vede sub antet */
+.btns .pastila .cheie[aria-expanded="true"] { color:var(--rosu);
+                 background:color-mix(in srgb, var(--rosu) 11%, transparent) }
+.btns .pastila button.arh:not([aria-disabled="true"]) { cursor:pointer }
+.btns .pastila button.arh:not([aria-disabled="true"]):hover { color:var(--rosu); background:var(--paper) }
+.btns .pastila .arh[aria-expanded="true"] { color:var(--rosu);
+                 background:color-mix(in srgb, var(--rosu) 11%, transparent) }
+/* ZONA DE SCRIS — pe ce numar esti. Ia tot prisosul, iar butoanele stau la masura lor fixa.
+   ⚠️ NU E UN BUTON, E O ZONA DE SEMNALIZARE (regula Calendarului): fundalul ei e hartia paginii
+   (--paper), nu umplutura butoanelor (--tinta), deci se vede ca o fereastra taiata in pastila.
+   Nu-i pune :hover si nu-i da cursor:pointer — nu se apasa. Scrisul e rosu: rosul spune "aici esti". */
+.btns .pastila .acum { display:flex; align-items:center; justify-content:center;
+                 flex:1 1 auto; min-width:0; padding:11px 13px;
+                 white-space:nowrap; overflow:hidden;
+                 border-left:1px solid var(--rule); border-right:1px solid var(--rule);
+                 background:var(--paper);
+                 font:600 14px/1 ui-sans-serif,system-ui; color:var(--rosu) }
+.btns .pastila .acum .scurt { display:none }
+/* Plasa: daca zona ajunge totusi mai stramta decat scrisul (scris marit din setarile telefonului),
+   se taie CU TREI PUNCTE, nu la mijlocul literelor. */
+.btns .pastila .acum b { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+/* Abonarea, singura afara: ramane lipita de marginea din dreapta */
+.btns .abon { margin-left:auto }
+/* butoanele mici: nu cresc, stau cat le tine continutul — aici numai abonarea */
 .btns .mic { flex:0 0 auto; display:flex; align-items:center; justify-content:center; gap:6px;
-             padding-left:14px; padding-right:14px }
+             padding-left:14px; padding-right:14px; font:600 12.5px/1 ui-sans-serif,system-ui;
+             letter-spacing:.06em; background:none; color:var(--ink); cursor:pointer }
 .btns .mic svg { vertical-align:0 }
-.btns .abon { font:600 12.5px/1 ui-sans-serif,system-ui; letter-spacing:.06em;
-              background:none; color:var(--ink); cursor:pointer }
-/* formularul de cautare, sub linia antetului (slotul subantet) */
-#cautare { margin:2px 0 8px }
-#cautare button { flex:0 0 auto; padding:9px 18px; border:1px solid var(--rule);
-                  border-radius:10px; background:none; color:var(--ink);
-                  font:15px ui-sans-serif,system-ui; cursor:pointer }
-#cautare button:hover { border-color:var(--rosu); color:var(--rosu) }
+
+/* BARA ANILOR — sub randul de unelte, ascunsa pana se apasa cheia Arhivei, coborata din capul
+   locului pe pagina Arhivei (unde a luat locul patratelelor cu ani din corpul paginii).
+   ⚠️ Aici overflow:hidden E BUN (spre deosebire de pastila): din bara nu atarna nimic, iar taierea e
+   tocmai ce tine colturile rotunde peste fasia derulata. */
+.bara-ani { display:flex; align-items:stretch; margin:0 0 6px;
+            border:1px solid var(--rule); border-radius:10px; background:var(--tinta);
+            overflow:hidden }
+.bara-ani[hidden] { display:none }
+/* ⚠️ position:relative NU e de podoaba: JS-ul aduce anul deschis la mijloc cu offsetLeft, iar acela se
+   masoara fata de cel mai apropiat stramos asezat. Fara el, offsetParent ajunge pagina si fasia se
+   deschide derulata la capat (capcana platita la Calendar). */
+.bara-ani .fasie { flex:1 1 auto; min-width:0; position:relative;
+                   overflow-x:auto; overscroll-behavior-x:contain;
+                   -webkit-overflow-scrolling:touch; scrollbar-width:none }
+.bara-ani .fasie::-webkit-scrollbar { display:none }
+.bara-ani .ani { display:flex; align-items:stretch; gap:0; width:max-content; padding:0 }
+/* ANII: text simplu in capsula — fara chenar, fara fundal, fara rotunjire a lor; despartitura e o
+   linie de 1 px, ca intre segmentele pastilei. Arhiva buletinului tine 15 ani (2012 incoace), deci
+   fasia chiar se deruleaza, si pe desktop. */
+.an-buton { flex:none; display:flex; align-items:center; justify-content:center;
+            color:var(--soft); text-decoration:none; background:transparent;
+            border:0; border-radius:0; padding:11px 13px;
+            font:600 12.5px/1 ui-sans-serif,system-ui; letter-spacing:.03em; white-space:nowrap }
+.an-buton + .an-buton { border-left:1px solid var(--rule) }
+.an-buton:hover { color:var(--rosu); background:var(--paper) }
+/* anul deschis: rosu si plin, ca segmentul pe care esti din pastila */
+.an-buton.activ { color:var(--rosu); font-weight:700;
+                  background:color-mix(in srgb, var(--rosu) 11%, transparent) }
+/* Sagetile — segmentele de la capetele barei, pentru cine n-are deget. JS-ul le ascunde cu totul cand
+   anii incap, ca sa nu stea doua segmente moarte in bara. */
+.bara-ani .sageata { flex:none; border:0; background:transparent; color:var(--faint); cursor:pointer;
+                     font:300 19px/1 ui-sans-serif,system-ui; padding:0 6px; border-radius:0 }
+.bara-ani .sageata + .fasie, .bara-ani .fasie + .sageata { border-left:1px solid var(--rule) }
+.bara-ani .sageata:hover:not([disabled]) { color:var(--rosu); background:var(--paper) }
+.bara-ani .sageata[disabled] { opacity:.25; cursor:default }
+.bara-ani .sageata[hidden] { display:none }
+
+/* BARA CAUTARII — sub randul de unelte, ascunsa pana se apasa lupa din pastila. Are chenarul si
+   rotunjirea pastilei de deasupra, ca sa se recunoasca: e acelasi lucru, mutat cu un rand mai jos.
+   ⚠️ appearance:none e pentru iOS, care altfel deseneaza campul de cautare cu chenarul si rotunjirea
+   lui, inauntrul chenarului nostru — chiar "buton in buton". */
+.bara-cautare { display:flex; align-items:stretch; margin:0 0 6px;
+                border:1px solid var(--rule); border-radius:10px; background:var(--tinta);
+                overflow:hidden }
+.bara-cautare[hidden] { display:none }
+.bara-cautare .cauta { display:flex; align-items:stretch; flex:1 1 auto; min-width:0; margin:0 }
+.cauta-camp { flex:1 1 auto; min-width:0; appearance:none; -webkit-appearance:none;
+              border:0; border-radius:0; background:transparent; color:var(--ink);
+              padding:11px 14px; outline:none; font:400 14px/1.2 ui-sans-serif,system-ui }
+.cauta-camp::placeholder { color:var(--faint) }
+.cauta-camp::-webkit-search-cancel-button { -webkit-appearance:none }
+/* butonul de trimis: un segment la capat. Lupa lui e aceeasi cu a cheii de sus. */
+.cauta-du { flex:0 0 46px; display:flex; align-items:center; justify-content:center;
+            border:0; border-left:1px solid var(--rule); border-radius:0;
+            background:transparent; color:var(--soft); cursor:pointer }
+.cauta-du:hover { color:var(--rosu); background:var(--paper) }
+
+/* ⚠️ PE TELEFON TOT RANDUL STA PE O SINGURA LINIE (regula Programului si a lui A8, 15.09.2026). Ce
+   cade e cuvantul ABONARII, al carui plic se citeste singur; zona de scris NU se ascunde niciodata
+   (regula Calendarului: "pe mobil, neaparat sa se vada scrisul"), si nici nu se prescurteaza cat
+   incape: "Buletinul nr. 615" cere ~121 px, iar zona are ~120 la un telefon de 390 — de aceea banda
+   381-411 px isi ia butoanele la 36, iar sub 380 la 34.
+   ⚠️ DACA MAI ADAUGI UN SEGMENT IN PASTILA, SOCOTEALA ASTA SE REFACE. */
 @media (max-width:600px) {
-  .btns { gap:7px; flex-wrap:wrap }
+  .btns { gap:5px; flex-wrap:wrap }
+  .btns .btn { flex:0 0 auto; white-space:nowrap }
+  .btns .pastila { flex:1 1 0 }
+  /* butoanele-iconita sunt PATRATE: padingul de sus e cel al carcasei (9px, din .btn), deci se
+     scrie 9px si in laturi — o tinta de ~36x36, mai usoara de nimerit cu degetul. */
+  .btns .mic { padding:9px }
+  .btns .pastila .punct, .btns .pastila .viit, .btns .pastila .arh, .btns .pastila .cheie {
+                 flex:0 0 42px; width:42px }
   .btns .cuv { display:none }
-  .btns .mic { padding-left:10px; padding-right:10px }
+  .btns .pastila .acum { padding:11px 10px; font-size:13px }
+  .btns .pastila .acum .lung { display:none }
+  .btns .pastila .acum .scurt { display:inline }
+}
+/* ⚠️ PRAGUL E 411, nu 400: telefoanele din banda nu sunt rare — 390 (iPhone 14/15), 393 (Pixel 7),
+   400 (Galaxy). De la 412 in sus scrisul incape si cu butoane de 42. */
+@media (max-width:411px) {
+  .btns .pastila .punct, .btns .pastila .viit, .btns .pastila .arh, .btns .pastila .cheie {
+                 flex:0 0 36px; width:36px }
+  .btns .pastila .acum { padding:11px 6px }
+}
+@media (max-width:380px) {
+  .btns { gap:4px }
+  .btns .mic { padding-left:7px; padding-right:7px }
+  .btns .pastila .punct, .btns .pastila .viit, .btns .pastila .arh, .btns .pastila .cheie {
+                 flex:0 0 34px; width:34px }
+  .btns .pastila .acum { padding:11px 5px; font-size:12.5px }
 }
 
 /* ── FEREASTRA DE ABONARE, adusa intocmai de la Program prin Tipic — dialog nativ: fundalul
@@ -115,6 +262,29 @@ export const LOCAL = `
 .cap-numar .eticheta a:hover { color:var(--rosu) }
 .cap-numar .cand { margin:6px 0 0; color:var(--soft); font-size:15px }
 
+/* ── BULETINUL NOU: numarul de dupa el (VERDE, deasupra), numarul NOU (ROSU) si ziua lui — duminica
+   urmatoare (cerere user, 17.09.2026: "scriem numarul 616, dar cu rosu... deasupra scriem numarul
+   urmator cu verde. Tot asa, ca sa iasa in evidenta, ca si numarul").
+   ⚠️ Rosul e chiar rosul platformei (--rosu), al bulinei din pastila: culoarea numarului de care ne
+   ocupam acum.
+   ⚠️ Verdele nu poate fi --azi asa cum e: verdele "zilei de azi" (#12D96A) e facut pentru un fundal
+   colorat sau pentru o dunga, nu pentru scris mare pe hartie alba, unde se citeste palid. De aceea
+   ziua are un verde inchis al ei, iar noaptea se intoarce la --azi, care acolo e chiar bun. */
+.cap-nou { --verde:#0B8F4C; text-align:center; margin:26px 0 20px }
+@media (prefers-color-scheme: dark) { :root:not([data-tema="light"]) .cap-nou { --verde:var(--azi) } }
+:root[data-tema="dark"] .cap-nou { --verde:var(--azi) }
+.cap-nou .nr-dupa, .cap-nou .nr-nou { margin:0; font:700 42px/1.15 ui-sans-serif,system-ui;
+                                      letter-spacing:.01em }
+.cap-nou .nr-dupa { color:var(--verde) }
+.cap-nou .nr-nou { color:var(--rosu) }
+.cap-nou .cand-nou { margin:8px 0 0; color:var(--soft); font-size:16px }
+/* CHENARUL GOL, cat pagina intai a unui numar (user: "un chenar mare gol - cam cat este poza
+   buletinului curent"). Aceeasi masura si acelasi raport ca .coperta, ca pagina sa se aseze de pe
+   acum asa cum va arata cu numarul in ea. */
+.chenar-nou { max-width:460px; margin:0 auto; aspect-ratio:460/650;
+              border:1px dashed var(--rule); border-radius:6px; background:var(--tinta) }
+.sub-nou { text-align:center; margin:14px 0 0 }
+
 /* ── COPERTA: pagina intai, mare, care duce in PDF. Chenar subtire si o umbra abia simtita,
    ca sa se vada ca e o hartie, nu o poza lipita pe fundal. */
 .coperta { display:block; max-width:460px; margin:0 auto; line-height:0 }
@@ -150,8 +320,8 @@ a.coperta:hover img { border-color:var(--rosu) }
 .sub-fasie { margin-top:0 }
 
 /* ── ARHIVA */
-/* anul ALES ramane link (a.acum), ca in V1: se poate apasa si cand e selectat. */
-.capitole a.acum { border-color:var(--rosu); color:var(--rosu); font-weight:600 }
+/* ⚠️ Patratelele cu ani (.capitole) au iesit din corpul paginii la 17.09.2026: anii se aleg din
+   fasia de sub antet, un singur loc. Stilul lor local a plecat odata cu ele. */
 .an h3 { margin:26px 0 6px }
 .an h4 { margin:18px 0 4px; font:600 11px/1 ui-sans-serif,system-ui;
          letter-spacing:.14em; text-transform:uppercase; color:var(--soft) }

@@ -12,3 +12,7 @@ dist/
 
 # cache-ul local pnpm (aparut la o instalare din container) — nu are ce cauta in repo
 .pnpm-store/
+
+# workerul EFEMER al aducerii online → local: il scrie `infrastructure/import/adu-local.mjs` la
+# fiecare rulare, din constanta lui. In repo ar fi o a doua copie, care s-ar rataci de prima.
+infrastructure/import/adu-local/

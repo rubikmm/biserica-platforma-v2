@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { prefixSiCale } from '../packages/config/src/index.js'
-import { plat } from '../apps/buletin/src/depozit.js'
+import { type Buletin, type BuletinScurt, plat } from '../apps/buletin/src/depozit.js'
+import {
+  type Ctx as CtxBuletin,
+  buletinulNou,
+  duminicaNoua,
+  paginaAcasa as paginaAcasaB,
+  paginaArhiva as paginaArhivaB,
+  paginaBuletin as paginaBuletinB,
+  paginaCautare as paginaCautareB,
+  paginaNou as paginaNouB,
+} from '../apps/buletin/src/pagini.js'
 import {
   ANII,
   type Ctx,
@@ -74,6 +84,171 @@ describe('buletin · adresa unui numar nu se taie singura', () => {
   it('radacina aplicatiei ramane „/" in amandoua', () => {
     expect(prefixSiCale(new URL('https://buletin.staging.sfantul-ilie.ro/'), '').cale).toBe('/')
     expect(prefixSiCale(new URL('https://rubik:8474/buletin'), '/buletin').cale).toBe('/')
+  })
+})
+
+/**
+ * MENIUL BULETINULUI, refacut la 17.09.2026 dupa chipul Calendarului si al Programului (user: „să
+ * aranjăm meniul principal cum am făcut la Calendar și Programul liturgic"): o pastila cat tot
+ * randul — bulina · zona de scris · sageata · Arhiva · lupa — si, singura afara la dreapta, abonarea.
+ */
+describe('buletin · meniul din antet', () => {
+  const numar = (nr: number, data: string): BuletinScurt => ({
+    nr,
+    data,
+    an: data.slice(0, 4),
+    luna: data.slice(5, 7),
+    cheie_pdf: `2026/buletin-${nr}.pdf`,
+    cheie_poza_mica: `2026/buletin-${nr}-mic.jpg`,
+    pagini: 4,
+  })
+  const intreg = (nr: number, data: string): Buletin => ({
+    ...numar(nr, data),
+    cheie_poza: `2026/buletin-${nr}.jpg`,
+    marime_pdf: 1048576,
+    sursa: 'arhiva',
+  })
+  const ctxB = (eAdmin: boolean): CtxBuletin => ({
+    prefix: '/buletin',
+    nav: { home: 'https://website.sfantul-ilie.ro', cont: '/cont', admin: '/admin' } as CtxBuletin['nav'],
+    utilizator: eAdmin ? 'Părintele' : null,
+    eAdmin,
+    versiune: '0.3.7',
+    modificata: '17.09.2026',
+  })
+  const ANI = ['2026', '2025', '2024']
+  const acum = intreg(615, '2026-09-06')
+  /** Randul de unelte, de la pastila pana la abonare — care sta AFARA, indata dupa ea. */
+  const pastilaDin = (h: string) => h.slice(h.indexOf('<span class="pastila">'), h.indexOf('id="b-abonare"'))
+
+  it('pastila tine cele cinci segmente, in ordinea ceruta', () => {
+    const h = paginaAcasaB(ctxB(true), { ani: ANI, peEcran: acum, acum: true }, acum, [], 619)
+    const pastila = pastilaDin(h)
+    const locuri = ['punct', 'acum', 'viit', 'arh', 'cheie'].map((c) => pastila.indexOf(c))
+    expect(locuri.every((i) => i >= 0)).toBe(true)
+    expect([...locuri].sort((a, b) => a - b)).toEqual(locuri)
+  })
+
+  it('abonarea a iesit din pastila si a ramas singura la dreapta', () => {
+    const h = paginaAcasaB(ctxB(false), { ani: ANI, peEcran: acum, acum: true }, acum, [], 619)
+    const pastila = pastilaDin(h)
+    expect(pastila).not.toContain('b-abonare')
+    expect(pastila).toContain('class="btn cheie"')
+    expect(h).toContain('id="b-abonare"')
+    // randul vechi din V1 — liniuta despartitoare si butoanele mici — a cazut cu totul
+    expect(h).not.toContain('class="desparte"')
+    expect(h).not.toContain('id="cauta-buton"')
+  })
+
+  it('pe numarul curent bulina ramane apasata, iar scrisul spune chiar numarul lui', () => {
+    const h = paginaAcasaB(ctxB(false), { ani: ANI, peEcran: acum, acum: true }, acum, [], 619)
+    expect(h).toContain('class="btn punct activ"')
+    expect(h).toContain('<b class="lung">Buletinul nr. 615</b>')
+    expect(h).toContain('<b class="scurt">Buletinul nr. 615</b>')
+  })
+
+  it('pe un numar mai vechi scrie data lui, iar bulina duce la cel curent', () => {
+    const vechi = intreg(610, '2026-08-02')
+    const h = paginaBuletinB(ctxB(false), { ani: ANI, peEcran: vechi }, vechi, {
+      inainte: numar(609, '2026-07-26'),
+      dupa: numar(611, '2026-08-09'),
+    })
+    expect(h).toContain('2 august 2026')
+    expect(h).toContain('2 aug. 2026')
+    expect(h).toContain('href="/buletin/" title="Treci la numărul curent"')
+    // sagetile dintre numere raman: la buletin ele rasfoiesc arhiva de hartie, nu tin loc de meniu
+    expect(h).toContain('numărul dinainte')
+  })
+
+  it('sageata e a adminilor si duce la buletinul nou; restul pastilei e a tuturor', () => {
+    const alOmului = paginaAcasaB(ctxB(false), { ani: ANI, peEcran: acum, acum: true }, acum, [], 619)
+    expect(alOmului).not.toContain('/buletin/nou')
+    expect(alOmului).toContain('id="ani-cheie"')
+    expect(alOmului).toContain('id="cautare-cheie"')
+    const alPreotului = paginaAcasaB(ctxB(true), { ani: ANI, peEcran: acum, acum: true }, acum, [], 619)
+    expect(alPreotului).toContain('href="/buletin/nou"')
+  })
+
+  it('bara anilor sta ascunsa pana se apasa cheia Arhivei, si coborata in arhiva', () => {
+    const acasa = paginaAcasaB(ctxB(false), { ani: ANI, peEcran: acum, acum: true }, acum, [], 619)
+    expect(acasa).toContain('id="bara-ani" hidden')
+    const arhiva = paginaArhivaB(ctxB(false), { ani: ANI, arhiva: true, anDeschis: '2025' }, '2025', [], 619)
+    expect(arhiva).toContain('id="bara-ani"')
+    expect(arhiva).not.toContain('id="bara-ani" hidden')
+    // pe pagina Arhivei cheia e inerta: fasia e singurul drum catre ceilalti ani
+    expect(arhiva).toContain('aria-disabled="true" aria-current="page"')
+    expect(arhiva).toContain('<a class="an-buton activ" href="/buletin/arhiva?an=2025"')
+    // patratelele cu ani au iesit din corpul paginii — anii se aleg dintr-un singur loc
+    expect(arhiva).not.toContain('class="capitole"')
+  })
+
+  it('bara cautarii sta ascunsa pana se apasa lupa, si coborata pe pagina rezultatelor', () => {
+    expect(paginaAcasaB(ctxB(false), { ani: ANI, peEcran: acum, acum: true }, acum, [], 619))
+      .toContain('id="bara-cautare" hidden')
+    const rezultate = paginaCautareB(ctxB(false), { ani: ANI, q: 'craciun' }, 'craciun', [])
+    expect(rezultate).toContain('id="bara-cautare"')
+    expect(rezultate).not.toContain('id="bara-cautare" hidden')
+    expect(rezultate).toContain('Căutare')
+  })
+
+  it('arhiva goala nu strica randul: bulina se stinge, nu dispare', () => {
+    const h = paginaAcasaB(ctxB(false), { gol: true }, null, [], 0)
+    expect(h).toContain('class="btn punct gol"')
+    // fara ani n-are ce cobori: segmentul ramane LINKUL cinstit, nu o cheie moarta
+    expect(h).toContain('href="/buletin/arhiva"')
+    expect(h).not.toContain('id="bara-ani"')
+  })
+})
+
+/**
+ * BULETINUL NOU (user, 17.09.2026): „scriem numărul 616, dar cu roșu. Sub scriem data buletinului,
+ * adică următoarea duminică, și deasupra scriem numărul următor cu verde."
+ */
+describe('buletin · numarul care urmeaza', () => {
+  it('ziua e prima duminica de azi inainte', () => {
+    // 17.09.2026 e joi
+    expect(duminicaNoua('2026-09-06', '2026-09-17')).toBe('2026-09-20')
+    expect(duminicaNoua('2026-09-06', '2026-09-19')).toBe('2026-09-20')
+  })
+
+  it('daca azi E duminica si numarul zilei n-a aparut inca, tot azi e ziua lui', () => {
+    expect(duminicaNoua('2026-09-13', '2026-09-20')).toBe('2026-09-20')
+  })
+
+  it('⚠️ o duminica deja aparuta nu se cere a doua oara', () => {
+    // numarul de azi e urcat: ecranul trece la duminica urmatoare, nu repeta numarul aparut
+    expect(duminicaNoua('2026-09-20', '2026-09-20')).toBe('2026-09-27')
+  })
+
+  it('numarul nou e cel de dupa ultimul din arhiva; fara arhiva nu se inventeaza niciunul', () => {
+    expect(buletinulNou({ nr: 615, data: '2026-09-06' }, '2026-09-17')).toEqual({ nr: 616, data: '2026-09-20' })
+    expect(buletinulNou(null, '2026-09-17')).toEqual({ nr: null, data: '2026-09-20' })
+  })
+
+  it('pagina scrie numarul NOU cu rosu, pe cel de dupa el cu verde deasupra, ziua, si lasa chenarul gol', () => {
+    const b: BuletinScurt = {
+      nr: 615, data: '2026-09-06', an: '2026', luna: '09',
+      cheie_pdf: null, cheie_poza_mica: null, pagini: 4,
+    }
+    const ctx: CtxBuletin = {
+      prefix: '/buletin',
+      nav: { home: '', cont: '/cont', admin: '/admin' } as CtxBuletin['nav'],
+      utilizator: 'Părintele',
+      eAdmin: true,
+      versiune: '0.3.7',
+      modificata: '17.09.2026',
+    }
+    const h = paginaNouB(ctx, { nou: true, ani: ['2026'] }, b, buletinulNou(b, '2026-09-17'))
+    // ⚠️ ROSU e numarul NOU (616 — cel la care se lucra chiar atunci), nu ultimul din arhiva (615)
+    expect(h).toContain('<p class="nr-nou" title="Buletinul nou">Nr. 616</p>')
+    expect(h).toContain('<p class="nr-dupa" title="Numărul următor">Nr. 617</p>')
+    expect(h).toContain('duminică, 20 septembrie 2026')
+    // ultimul aparut ramane scris marunt, cu legatura spre el
+    expect(h).toContain('nr. 615</a>, 6 septembrie 2026')
+    expect(h).toContain('<div class="chenar-nou" aria-hidden="true"></div>')
+    // sageata ramane aprinsa, iar scrisul din pastila spune unde esti
+    expect(h).toContain('class="btn viit activ"')
+    expect(h).toContain('<b class="lung">Buletin nou</b>')
   })
 })
 

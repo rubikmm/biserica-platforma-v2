@@ -1725,6 +1725,22 @@ cu sfinții de duminică" → PDF 54 KB prin Browser Rendering, în R2, descărc
 
 ## Rețete de lucru
 
+### Cum aduci local tot ce e online (17.09.2026)
+
+```
+docker exec biserica-platforma-v2 sh -lc 'cd /workspace && node infrastructure/import/adu-local.mjs'
+# socoteală: câte obiecte și câți octeți are fiecare bază/depozit online. Nu scrie nimic.
+pkill -f "wrangler.js dev"                       # ⚠️ dev-ul ține aceleași fișiere de stare
+node infrastructure/import/adu-local.mjs --chiar  # (--doar buletin | --fara-r2 | --si-grele)
+set -a; . /backup/_setup/cloudflare.env; set +a; pnpm dev &   # abia repornit vede datele noi
+```
+
+Bazele D1 se **rescriu întregi** (baza locală se golește întâi), depozitele R2 se completează
+obiect cu obiect — ce e deja local cu aceeași mărime se sare, deci o rulare întreruptă se reia
+fără să coste de două ori. Unealta **nu scrie niciodată în producție**: spre Cloudflare pleacă
+numai GET-uri. Capcanele (SQLITE_TOOBIG, cheile străine, cele 3 s/obiect ale lui `wrangler r2
+object put`, `biserica-transmisiuni` de 33 GB) sunt scrise în jurnal, la 17.09.2026.
+
 ### Cum vezi o pagină de admin la lățime de telefon (drum bătut 11.09.2026 — a luat jumătate de oră)
 
 Trei pași, fără sesiune și fără browser:
@@ -1846,6 +1862,65 @@ forța antetul `Host`**.
   copiere în fiecare aplicație** — de aici costul oricărei schimbări transversale (antetul în 12 locuri).
 
 ## Jurnal
+
+### 2026-09-17
+
+- **BULETINUL (A3): MENIUL DIN ANTET, REFĂCUT CA LA CALENDAR ȘI PROGRAM** (user, după-amiaza).
+  Buletin **0.4.0**, deocamdată **numai local** — nepublicat pe producție.
+  Cererea, în trei puncte: Abonarea singură la dreapta; pastila la stânga, care începe cu **bulina
+  roșie** a numărului curent, apoi **scrisul** („buletinul curent sau buletinul nou, depinzând de
+  secțiunea în care intrăm"), apoi **Arhiva și căutarea**; iar **înaintea Arhivei, o săgeată** care
+  duce la buletinul nou.
+  - **Același tipar ca la A8 pe 15.09**: pastilă cât tot rândul — bulină · zona de scris · săgeată ·
+    Arhiva · lupa —, abonarea afară la dreapta. A căzut rândul din V1 (abonarea întâi, liniuța
+    despărțitoare, două butoane mici) și **formularul de căutare de sub antet**: lupa e acum **cheie**
+    care coboară o bară, iar cheia Arhivei coboară **fâșia anilor**, ca la Program.
+  - ⚠️ **Pătrățelele cu ani au ieșit din corpul paginii Arhivei** (ca la A8): anii se aleg dintr-un
+    singur loc, fâșia. Pe `/arhiva` fâșia stă coborâtă și cheia e inertă — altfel omul ar putea
+    strânge singurul drum către ceilalți ani.
+  - **Bulina duce la `/`**, care CHIAR e numărul curent — deci nu mai e nevoie de o a doua întrebare
+    la depozit ca să știm unde duce. Pe pagina unui număr, „ești pe cel curent" se citește din
+    **vecini** (cel fără urmaș e cel curent), nu dintr-o cerere în plus.
+  - ⚠️ **Săgețile „◀ numărul dinainte / numărul următor ▶" de sub un număr RĂMÂN** — la buletin ele
+    răsfoiesc arhiva de hârtie, nu țin loc de meniu (spre deosebire de A8, unde au ieșit).
+  - **`/nou` — ecranul buletinului care urmează**, numai pentru admini (poarta e rolul, ca la A8):
+    **numărul NOU cu ROȘU, numărul de după el cu VERDE deasupra, iar dedesubt ziua numărului nou** —
+    prima duminică de azi înainte — și un **chenar gol cât pagina întâi a unui număr** („ce punem în
+    pagină mai vedem"). Roșul e roșul bulinei: culoarea numărului de care ne ocupăm acum. ⚠️ Verdele
+    nu poate fi `--azi` ca atare (#12D96A se citește palid pe hârtie albă): ziua are un verde închis
+    al ei, iar noaptea se întoarce la `--azi`.
+    ⚠️ **ROȘUL E NUMĂRUL NOU, NU ULTIMUL DIN ARHIVĂ.** Când a cerut ecranul („scriem numărul 616, dar
+    cu roșu"), userul lucra tocmai la **616 / 20.09** — schița tipărită de aseară —, iar în arhivă cel
+    mai nou e **615 / 6.09**. Deci roșu = ultimul din arhivă **+ 1**, verde = încă unul peste (617),
+    iar ziua e duminica celui roșu. Numerele nu se scriu în cod: ies din arhivă și se mișcă singure
+    când intră un număr nou.
+  - **Probe**: 12 noi în `tests/buletin-newsletter.test.ts` (50 în fișier, toate trec) — ordinea
+    segmentelor, abonarea afară, scrisul pe fiecare fel de pagină, barele care coboară, arhiva goală
+    și socoteala duminicii (inclusiv „o duminică deja apărută nu se cere a doua oară").
+
+- **TOT CE E ONLINE E ȘI LOCAL** (cerere a userului: „preia baza de date fișiere… ca să văd exact ce
+  e online și local"). Unealtă nouă, reluabilă: **`infrastructure/import/adu-local.mjs`**
+  (`--chiar`, `--doar`, `--fara-r2`, `--si-grele`; fără argumente doar socotește).
+  - ⚠️ **`pnpm dev` trebuie OPRIT cât ține aducerea**: ține aceleași fișiere de stare deschise și
+    oricum nu vede datele noi decât repornit. Unealta se oprește singură dacă îl găsește pornit.
+  - ⚠️ **D1 nu se importă cu `wrangler d1 execute --file`**: exportul scrie INSERT-uri cu mii de
+    rânduri într-o singură instrucțiune, iar motorul local le refuză cu **`statement too long:
+    SQLITE_TOOBIG`** (pățit la calendar) — baza rămâne pe jumătate, fără ca ceva să pară stricat.
+    Importul se face acum pe fișierul sqlite, prin `node:sqlite`. Fișierul bazei nu se poate ghici
+    (Miniflare îl numește cu un hash), deci se pune un **martor** printr-o comandă wrangler și se
+    caută fișierul care-l are — prin sqlite, nu cu grep pe octeți: cu WAL, martorul proaspăt încă nu
+    e în fișierul mare.
+  - ⚠️ **Importul merge cu CHEILE STRĂINE STINSE**: exportul scrie tabelele în ordinea lui, nu în
+    ordinea legăturilor (la curățenie `assignments` vine înaintea lui `volunteers`), iar `PRAGMA
+    defer_foreign_keys` din capul exportului nu ajunge — el amână verificarea până la capătul unei
+    tranzacții, și nu e niciuna.
+  - ⚠️ **R2 nu se scrie cu `wrangler r2 object put`**: pornește un proces de fiecare obiect (**3 s**
+    bucata, adică ore la 1.891 de fișiere). Se scrie printr-un **worker efemer** pornit cu
+    `wrangler dev` pe aceeași stare — aceleași căi ca la `pnpm dev`, fără să ținem noi minte formatul
+    lăuntric al Miniflare.
+  - ⚠️ **`biserica-transmisiuni` (33 GB) NU se aduce local** — regula e pe **prefix**: ce n-are `xc-`
+    e din V1, refolosit dinadins, și n-are ce căuta într-o copie de lucru. `--si-grele` îl aduce
+    totuși, dacă vreodată chiar se cere.
 
 ### 2026-09-16
 
