@@ -262,22 +262,23 @@ export const LOCAL = `
 .cap-numar .eticheta a:hover { color:var(--rosu) }
 .cap-numar .cand { margin:6px 0 0; color:var(--soft); font-size:15px }
 
-/* ── BULETINUL NOU: numarul de dupa el (VERDE, deasupra), numarul NOU (ROSU) si ziua lui — duminica
-   urmatoare (cerere user, 17.09.2026: "scriem numarul 616, dar cu rosu... deasupra scriem numarul
-   urmator cu verde. Tot asa, ca sa iasa in evidenta, ca si numarul").
-   ⚠️ Rosul e chiar rosul platformei (--rosu), al bulinei din pastila: culoarea numarului de care ne
-   ocupam acum.
-   ⚠️ Verdele nu poate fi --azi asa cum e: verdele "zilei de azi" (#12D96A) e facut pentru un fundal
-   colorat sau pentru o dunga, nu pentru scris mare pe hartie alba, unde se citeste palid. De aceea
-   ziua are un verde inchis al ei, iar noaptea se intoarce la --azi, care acolo e chiar bun. */
-.cap-nou { --verde:#0B8F4C; text-align:center; margin:26px 0 20px }
-@media (prefers-color-scheme: dark) { :root:not([data-tema="light"]) .cap-nou { --verde:var(--azi) } }
-:root[data-tema="dark"] .cap-nou { --verde:var(--azi) }
-.cap-nou .nr-dupa, .cap-nou .nr-nou { margin:0; font:700 42px/1.15 ui-sans-serif,system-ui;
-                                      letter-spacing:.01em }
-.cap-nou .nr-dupa { color:var(--verde) }
-.cap-nou .nr-nou { color:var(--rosu) }
-.cap-nou .cand-nou { margin:8px 0 0; color:var(--soft); font-size:16px }
+/* ── BULETINUL NOU. Capul e cel de la ORICE numar (.cap-numar): eticheta marunta, numarul mare,
+   ziua. Se schimba doua lucruri, cerute de user (17.09.2026: "textul cu verde de deasupra vroiam sa
+   fie la fel ca la oricare buletin, un text mic unde scrie numarul curent. Aici vroiam sa scrie
+   numarul urmator. Doar culoarea vroiam sa fie putin mai evidentiata"):
+   eticheta scrie "Numărul următor" si e VERDE, iar numarul mare e ROSU — culoarea bulinei din
+   pastila, adica a numarului de care ne ocupam acum.
+   ⚠️ Verdele NU e --azi: verdele "zilei de azi" (#12D96A) e facut pentru o dunga sau un fundal, nu
+   pentru scris — pe hartie alba iese aprins si tipa (reclamat de user: "mi se pare ca verdele asta e
+   prea aprins"). Aici e un verde SOBRU, de cerneala, iar noaptea se deschide doar cat sa ramana
+   citet pe fundal inchis. */
+.cap-nou { --verde:#0A6B41 }
+@media (prefers-color-scheme: dark) { :root:not([data-tema="light"]) .cap-nou { --verde:#5FBF8D } }
+:root[data-tema="dark"] .cap-nou { --verde:#5FBF8D }
+/* eticheta pastreaza masura si spatierea celei obisnuite (vine din .cap-numar .eticheta); se schimba
+   doar culoarea si greutatea, cat sa se vada ca nu e un numar aparut */
+.cap-nou .eticheta.urmator { color:var(--verde); font-weight:700 }
+.cap-nou h2 { color:var(--rosu) }
 /* CHENARUL GOL, cat pagina intai a unui numar (user: "un chenar mare gol - cam cat este poza
    buletinului curent"). Aceeasi masura si acelasi raport ca .coperta, ca pagina sa se aseze de pe
    acum asa cum va arata cu numarul in ea. */

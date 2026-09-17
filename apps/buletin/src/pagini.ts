@@ -89,6 +89,12 @@ const IC_INAINTE = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" 
 /** Iconita hartiei de tipar: foaie cu coltul indoit — din V1; a ramas la numerele fara PDF. */
 const IC_PDF = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>`
 
+/** Săgeata in jos spre o talpa: semnul descarcarii, acelasi desen ca peste tot pe internet. */
+const IC_DESCARCA = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 19h16"/></svg>`
+
+/** Imprimanta: foaia care intra sus, hartia care iese jos. */
+const IC_TIPAR = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 8V3h10v5"/><path d="M5 8h14a2 2 0 0 1 2 2v6h-4"/><path d="M5 16H3v-6a2 2 0 0 1 2-2"/><rect x="7" y="14" width="10" height="7" rx="1"/></svg>`
+
 /** Cartea deschisa: semnul rasfoitului. */
 const IC_CARTE = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 6.5S10 4.8 6.8 4.8c-1.4 0-2.3.3-2.8.5v13c.5-.2 1.4-.5 2.8-.5C10 17.8 12 19.5 12 19.5"/><path d="M12 6.5S14 4.8 17.2 4.8c1.4 0 2.3.3 2.8.5v13c-.5-.2-1.4-.5-2.8-.5C14 17.8 12 19.5 12 19.5"/><path d="M12 6.5v13"/></svg>`
 
@@ -517,17 +523,25 @@ const fisa = (ctx: Ctx, b: BuletinScurt): string =>
   `<a class="fisa" href="${adresa(ctx, b)}">${poza(ctx, b, 'cop')}<b>Nr. ${b.nr}</b><span>${ziuaScurt(b.data)}</span></a>`
 
 /**
- * Butonul unui numar: RĂSFOIEȘTE. Din 13.09.2026 a luat locul celor doua butoane de PDF ale V1
- * („Deschide PDF-ul" și „Descarcă") — cerere user: „în loc să deschidem pdf-ul"; „iese de tot".
+ * BUTOANELE de sub coperta: **Descarcă** și **Tipărește** (cerere user, 17.09.2026: „butonul
+ * răsfoiește… să se transforme în «Descarcă» cu iconiță de descărcare și să descarce fișierul. Tot
+ * lângă să fie un buton de tip «Tipărește»").
  *
- * ⚠️ E un LINK adevarat catre PDF, nu un buton gol: JS-ul ii ia clicul si deschide rasfoitul peste
- * pagina. Asa, pe un telefon prea vechi pentru rasfoit (fara `<dialog>` ori fara module ES), omul
- * tot ajunge la foaie in loc sa apese in gol. Adresa `/fisier/…` ramane oricum vie — o citeaza
- * newsletterul.
+ * ⚠️ RĂSFOITUL N-A IEȘIT, a iesit BUTONUL lui: coperta de deasupra deschide mai departe fereastra cu
+ * FlipBook (`data-rasfoit`), care e drumul obisnuit al omului prin numar. Butonul lui ar fi fost al
+ * treilea intr-un rand unde primele doua sunt fapte limpezi.
  *
- * Fara PDF (doua numere vechi au ramas doar cu poza), butonul se stinge in loc sa duca in gol.
+ * ⚠️ **Descarcă** duce la `/fisier/…?descarca=1`, nu doar la `download` din HTML: atributul merge
+ * numai in browserele de birou si numai pe acelasi domeniu, iar pe iPhone ar fi deschis foaia in
+ * locul descarcarii. Parametrul schimba `content-disposition` pe server, deci tine peste tot; `download`
+ * ramane scris pe langa, pentru numele fisierului.
+ * ⚠️ **Tipărește** duce la brosura (`/tipar/…`), nu la PDF-ul obisnuit — vezi `tipar.ts`. Se deschide
+ * INLINE, in vizualizatorul browserului, de unde omul apasa tiparirea; o descarcare l-ar fi pus sa
+ * caute fisierul prin dosare inainte sa ajunga la imprimanta.
+ *
+ * Fara PDF (doua numere vechi au ramas doar cu poza), butoanele se sting in loc sa duca in gol.
  */
-function butonRasfoit(ctx: Ctx, b: Buletin): string {
+function butoaneleNumarului(ctx: Ctx, b: Buletin): string {
   if (!b.cheie_pdf) {
     return (
       `<span class="btn intreg gol" title="Numărul acesta a rămas în arhivă doar ca poză">` +
@@ -535,9 +549,15 @@ function butonRasfoit(ctx: Ctx, b: Buletin): string {
     )
   }
   const marime = b.marime_pdf ? ` <small>· ${(b.marime_pdf / 1048576).toFixed(1)} MB</small>` : ''
+  const nume = b.cheie_pdf.slice(b.cheie_pdf.lastIndexOf('/') + 1)
   return (
-    `<a class="btn intreg" id="b-rasfoit" data-rasfoit href="${fisier(ctx, b.cheie_pdf)}"` +
-    ` target="_blank" rel="noopener">${IC_CARTE} Răsfoiește${marime}</a>`
+    `<a class="btn intreg" id="b-descarca" href="${fisier(ctx, b.cheie_pdf)}?descarca=1"` +
+    ` download="${esc(nume)}" title="Descarcă foaia numărului ${b.nr}">` +
+    `${IC_DESCARCA} Descarcă${marime}</a>` +
+    `<a class="btn intreg" id="b-tipareste" href="${esc(ctx.prefix)}/tipar/${b.nr}-${b.data}.pdf"` +
+    ` target="_blank" rel="noopener"` +
+    ` title="Broșură pentru tipar: două pagini pe o coală A4, în ordinea îndoirii">` +
+    `${IC_TIPAR} Tipărește</a>`
   )
 }
 
@@ -606,7 +626,7 @@ export function paginaAcasa(ctx: Ctx, m: Meniu, b: Buletin | null, dinainte: Bul
   <p class="cand">${dataCuZi(b.data)}</p>
 </div>
 ${coperta(ctx, b)}
-<nav class="btns hartii">${butonRasfoit(ctx, b)}</nav>${fereastraRasfoit(ctx, b)}
+<nav class="btns hartii">${butoaneleNumarului(ctx, b)}</nav>${fereastraRasfoit(ctx, b)}
 ${
   dinainte.length
     ? `<h3 class="titlu-fasie">Numerele dinainte</h3>
@@ -636,7 +656,7 @@ export function paginaBuletin(
   <p class="cand">${dataCuZi(b.data)}${b.pagini ? ` · ${b.pagini} pagini` : ''}</p>
 </div>
 ${coperta(ctx, b)}
-<nav class="btns hartii">${butonRasfoit(ctx, b)}</nav>${fereastraRasfoit(ctx, b)}
+<nav class="btns hartii">${butoaneleNumarului(ctx, b)}</nav>${fereastraRasfoit(ctx, b)}
 <nav class="btns vecini">${sageata(v.inainte, `◀ <span class="cuv">numărul dinainte</span>`)}${sageata(
       v.dupa,
       `<span class="cuv">numărul următor</span> ▶`,
@@ -682,11 +702,15 @@ export function buletinulNou(
  * într-o pagină în care scriem numărul 616, dar cu roșu. Sub scriem data buletinului, adică
  * următoarea duminică, și deasupra scriem numărul următor cu verde").
  *
- * Capul paginii tine trei randuri, in ordinea ceruta:
- *   VERDE, deasupra — numarul de DUPA cel nou (nou + 1), cel care abia se vede la orizont;
- *   ROȘU,  sub el   — numarul NOU, cel la care se lucreaza; rosul e culoarea bulinei din pastila,
- *                     adica a numarului de care ne ocupam acum;
- *   ziua            — duminica numarului nou (a celui rosu).
+ * Capul paginii e ACELASI ca la orice numar — eticheta marunta, numarul mare, ziua —, numai ca
+ * eticheta scrie „Numărul următor" si e VERDE (user, 17.09.2026: „textul cu verde de deasupra
+ * vroiam să fie la fel ca la oricare buletin, un text mic unde scrie numărul curent. Aici vroiam să
+ * scrie numărul următor. Doar culoarea vroiam să fie puțin mai evidențiată").
+ *   eticheta verde — „Numărul următor", la masura celei care scrie „Numărul curent" pe prima pagina;
+ *   numarul, mare  — cel NOU, scris rosu, ca sa se deosebeasca de numerele aparute;
+ *   ziua           — duminica lui.
+ * ⚠️ Numarul de dupa cel nou (617) NU se mai scrie: era un al doilea numar mare pe ecran, iar userul
+ * l-a schimbat pe eticheta de mai sus. Nu-l readu.
  *
  * ⚠️ NUMARUL ROSU E CEL NOU, NU CEL DIN ARHIVA. Cand a cerut ecranul, userul lucra tocmai la
  * **616 / 20.09** (schita tiparita, 16.09.2026, seara), iar in arhiva cel mai nou e **615 / 6.09** —
@@ -702,14 +726,10 @@ export function paginaNou(
   curent: BuletinScurt | null,
   nou: { nr: number | null; data: string },
 ): string {
-  const capul = `<div class="cap-nou">
-  ${nou.nr ? `<p class="nr-dupa" title="Numărul următor">Nr. ${nou.nr + 1}</p>` : ''}
-  ${
-    nou.nr
-      ? `<p class="nr-nou" title="Buletinul nou">Nr. ${nou.nr}</p>`
-      : `<p class="nr-nou" title="Arhiva e goală">Buletin nou</p>`
-  }
-  <p class="cand-nou">${dataCuZi(nou.data)}</p>
+  const capul = `<div class="cap-numar cap-nou">
+  <p class="eticheta urmator">Numărul următor</p>
+  <h2>${nou.nr ? `Nr. ${nou.nr}` : 'Buletin nou'}</h2>
+  <p class="cand">${dataCuZi(nou.data)}</p>
 </div>`
   return sablon(
     ctx,

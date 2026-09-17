@@ -44,6 +44,7 @@ import {
   unul,
   vecini,
 } from './depozit.js'
+import { type Coala, brosura, cheiaBrosurii, numeBrosura } from './tipar.js'
 import { abonamentul, ruteazaAbonare } from '@xc/abonare'
 import { ruteazaSetari } from '@xc/setari'
 import {
@@ -171,6 +172,51 @@ async function fisierul(req: Request, url: URL, env: Env, cheie: string): Promis
   // `onlyIf` a raspuns cu obiectul FARA continut: browserul are deja versiunea buna
   if (!('body' in obiect) || !obiect.body) return new Response(null, { status: 304, headers: h })
   return new Response(obiect.body, { headers: h })
+}
+
+/**
+ * BROȘURA unui numar — PDF-ul lui, asezat doua pagini pe o coala A4, in ordinea indoirii (user,
+ * 17.09.2026). Socoteala e in `tipar.ts`; aici e doar drumul: numarul → PDF-ul din depozit →
+ * brosura → depozit, ca a doua apasare sa n-o mai faca.
+ *
+ * ⚠️ SE TINE IN DEPOZIT, sub `tipar/…`: asezarea e o socoteala pe tot PDF-ul (700 KB la un numar
+ * obisnuit), iar buletinul e tiparit de acelasi om de mai multe ori, saptamana de saptamana. Prima
+ * apasare o face, restul o iau gata facuta. Cheia poarta si felul colii, deci `a3` si `a4` nu se
+ * calca una pe alta.
+ * ⚠️ Cine n-are PDF (doua numere vechi, ramase doar ca poza) primeste 404, nu o brosura goala.
+ */
+async function tiparul(req: Request, url: URL, env: Env, nr: number, data: string): Promise<Response> {
+  const b = await unul(env.DB, nr, data)
+  if (!b?.cheie_pdf) return new Response('Numărul acesta n-are foaie de tipărit.', { status: 404 })
+  const coala: Coala = url.searchParams.get('coala') === 'a3' ? 'a3' : 'a4'
+  const cheie = cheiaBrosurii(b.cheie_pdf, coala)
+  const nume = numeBrosura(b.cheie_pdf, coala)
+
+  const antete = (etag: string) =>
+    new Headers({
+      'content-type': 'application/pdf',
+      etag,
+      'cache-control': 'public, max-age=31536000, immutable',
+      'content-disposition': `${url.searchParams.has('descarca') ? 'attachment' : 'inline'}; filename="${nume}"`,
+    })
+
+  const gata = await env.FISIERE.get(cheie, { onlyIf: req.headers })
+  if (gata) {
+    const h = antete(gata.httpEtag)
+    if (!('body' in gata) || !gata.body) return new Response(null, { status: 304, headers: h })
+    return new Response(gata.body, { headers: h })
+  }
+
+  const foaia = await env.FISIERE.get(b.cheie_pdf)
+  if (!foaia) return new Response('Nu există fișierul.', { status: 404 })
+  const facuta = await brosura(await foaia.arrayBuffer(), coala)
+  // ⚠️ `slice` pe buffer: `save()` intoarce o vedere peste un buffer mai mare, iar R2 ar urca tot
+  // bufferul, cu coada lui cu tot.
+  const octeti = facuta.slice().buffer as ArrayBuffer
+  const pus = await env.FISIERE.put(cheie, octeti, {
+    httpMetadata: { contentType: 'application/pdf' },
+  })
+  return new Response(octeti, { headers: antete(pus?.httpEtag ?? `"${cheie}"`) })
 }
 
 /**
@@ -315,6 +361,19 @@ export default {
     if (cale.startsWith('/fisier/')) {
       if (req.method !== 'GET' && req.method !== 'HEAD') return new Response('Metoda nu e permisă.', { status: 405 })
       return await fisierul(req, url, env, decodeURIComponent(cale.slice(8)))
+    }
+
+    // Broșura de tipar. Deschisă ca și foaia: buletinul se împarte în biserică, tipărirea lui la fel.
+    if (cale.startsWith('/tipar/')) {
+      if (req.method !== 'GET' && req.method !== 'HEAD') return new Response('Metoda nu e permisă.', { status: 405 })
+      const m = /^\/tipar\/(\d{1,4})-(\d{4}-\d{2}-\d{2})\.pdf$/.exec(cale)
+      if (!m) return new Response('Adresa broșurii e /tipar/615-2026-09-06.pdf', { status: 404 })
+      try {
+        return await tiparul(req, url, env, Number(m[1]), m[2]!)
+      } catch (e) {
+        log.error('brosura n-a iesit', { eroare: e instanceof Error ? e.message : String(e) })
+        return new Response('Foaia asta nu s-a putut așeza pentru tipar.', { status: 500 })
+      }
     }
 
     // Asseturile rasfoitului. Tot fara sesiune: sunt fisiere de modul, nu date.

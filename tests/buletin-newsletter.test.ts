@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { prefixSiCale } from '../packages/config/src/index.js'
 import { type Buletin, type BuletinScurt, plat } from '../apps/buletin/src/depozit.js'
+import { cheiaBrosurii, numeBrosura, ordineaBrosurii } from '../apps/buletin/src/tipar.js'
 import {
   type Ctx as CtxBuletin,
   buletinulNou,
@@ -147,6 +148,28 @@ describe('buletin · meniul din antet', () => {
     expect(h).toContain('<b class="scurt">Buletinul nr. 615</b>')
   })
 
+  /** Butoanele de sub copertă (user, 17.09.2026): Descarcă și Tipărește; răsfoitul a rămas pe copertă. */
+  it('sub copertă stau Descarcă și Tipărește, nu butonul de răsfoit', () => {
+    const h = paginaAcasaB(ctxB(false), { ani: ANI, peEcran: acum, acum: true }, acum, [], 619)
+    expect(h).toContain('id="b-descarca"')
+    expect(h).toContain('href="/buletin/fisier/2026/buletin-615.pdf?descarca=1"')
+    expect(h).toContain('download="buletin-615.pdf"')
+    expect(h).toContain('id="b-tipareste"')
+    expect(h).toContain('href="/buletin/tipar/615-2026-09-06.pdf"')
+    // răsfoitul rămâne: coperta îl deschide, fereastra lui e în pagină
+    expect(h).not.toContain('id="b-rasfoit"')
+    expect(h).toContain('data-rasfoit')
+    expect(h).toContain('id="d-rasfoit"')
+  })
+
+  it('un numar fara PDF nu capata butoane care duc in gol', () => {
+    const faraPdf: Buletin = { ...intreg(600, '2026-01-04'), cheie_pdf: null }
+    const h = paginaAcasaB(ctxB(false), { ani: ANI, peEcran: faraPdf, acum: true }, faraPdf, [], 619)
+    expect(h).toContain('Fără PDF')
+    expect(h).not.toContain('id="b-tipareste"')
+    expect(h).not.toContain('id="b-descarca"')
+  })
+
   it('pe un numar mai vechi scrie data lui, iar bulina duce la cel curent', () => {
     const vechi = intreg(610, '2026-08-02')
     const h = paginaBuletinB(ctxB(false), { ani: ANI, peEcran: vechi }, vechi, {
@@ -225,7 +248,7 @@ describe('buletin · numarul care urmeaza', () => {
     expect(buletinulNou(null, '2026-09-17')).toEqual({ nr: null, data: '2026-09-20' })
   })
 
-  it('pagina scrie numarul NOU cu rosu, pe cel de dupa el cu verde deasupra, ziua, si lasa chenarul gol', () => {
+  it('pagina are capul unui numar obisnuit: eticheta verde „Numărul următor", numarul si ziua', () => {
     const b: BuletinScurt = {
       nr: 615, data: '2026-09-06', an: '2026', luna: '09',
       cheie_pdf: null, cheie_poza_mica: null, pagini: 4,
@@ -240,8 +263,11 @@ describe('buletin · numarul care urmeaza', () => {
     }
     const h = paginaNouB(ctx, { nou: true, ani: ['2026'] }, b, buletinulNou(b, '2026-09-17'))
     // ⚠️ ROSU e numarul NOU (616 — cel la care se lucra chiar atunci), nu ultimul din arhiva (615)
-    expect(h).toContain('<p class="nr-nou" title="Buletinul nou">Nr. 616</p>')
-    expect(h).toContain('<p class="nr-dupa" title="Numărul următor">Nr. 617</p>')
+    // capul e cel de la orice numar; se schimba doar eticheta (verde, „Numărul următor")
+    expect(h).toContain('<p class="eticheta urmator">Numărul următor</p>')
+    expect(h).toContain('<h2>Nr. 616</h2>')
+    // ⚠️ al doilea numar mare (617) a iesit — userul l-a schimbat pe eticheta de deasupra
+    expect(h).not.toContain('617')
     expect(h).toContain('duminică, 20 septembrie 2026')
     // ultimul aparut ramane scris marunt, cu legatura spre el
     expect(h).toContain('nr. 615</a>, 6 septembrie 2026')
@@ -249,6 +275,53 @@ describe('buletin · numarul care urmeaza', () => {
     // sageata ramane aprinsa, iar scrisul din pastila spune unde esti
     expect(h).toContain('class="btn viit activ"')
     expect(h).toContain('<b class="lung">Buletin nou</b>')
+  })
+})
+
+/**
+ * BROȘURA DE TIPAR (user, 17.09.2026: „un buton de tip «Tipărește»… ar trebui să tipărească
+ * «booklet»"; „A4 imprimanta / booklet și îndoit, în final e un A5 îndoit").
+ *
+ * Se probează ORDINEA, fiindcă ea e tot ce poate ieși prost fără să se vadă pe ecran: o coală
+ * așezată greșit se descoperă abia după ce s-au tipărit 60 de exemplare.
+ */
+describe('buletin · ordinea paginilor în broșură', () => {
+  it('patru pagini intră pe o coală: fața [4|1], versoul [2|3]', () => {
+    expect(ordineaBrosurii(4)).toEqual([
+      [4, 1],
+      [2, 3],
+    ])
+  })
+
+  it('opt pagini intră pe două coli, în ordinea îndoirii', () => {
+    expect(ordineaBrosurii(8)).toEqual([
+      [8, 1],
+      [2, 7],
+      [6, 3],
+      [4, 5],
+    ])
+  })
+
+  it('⚠️ ce nu e multiplu de patru se completează cu pagini albe (0), nu se taie', () => {
+    // șase pagini → tot două coli; locurile 7 și 8 rămân albe
+    expect(ordineaBrosurii(6)).toEqual([
+      [0, 1],
+      [2, 0],
+      [6, 3],
+      [4, 5],
+    ])
+    // un număr de două pagini rămâne o coală, cu două fețe albe
+    expect(ordineaBrosurii(2)).toEqual([
+      [0, 1],
+      [2, 0],
+    ])
+  })
+
+  it('numele și cheia poartă felul colii, ca a3 și a4 să nu se calce', () => {
+    expect(numeBrosura('2026/buletin-615-2026-09-06.pdf', 'a4')).toBe('buletin-615-2026-09-06-brosura-a4.pdf')
+    expect(cheiaBrosurii('2026/buletin-615-2026-09-06.pdf', 'a3')).toBe(
+      'tipar/2026/buletin-615-2026-09-06-brosura-a3.pdf',
+    )
   })
 })
 

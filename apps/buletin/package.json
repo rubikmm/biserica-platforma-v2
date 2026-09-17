@@ -1,6 +1,6 @@
 {
   "name": "@xc/app-buletin",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -17,6 +17,7 @@
     "@xc/observability": "workspace:*",
     "@xc/setari": "workspace:*",
     "@xc/ui": "workspace:*",
+    "pdf-lib": "^1.17.1",
     "zod": "^4.1.5"
   }
 }

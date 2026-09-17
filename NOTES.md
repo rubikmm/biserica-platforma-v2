@@ -1898,6 +1898,28 @@ forța antetul `Host`**.
     segmentelor, abonarea afară, scrisul pe fiecare fel de pagină, barele care coboară, arhiva goală
     și socoteala duminicii (inclusiv „o duminică deja apărută nu se cere a doua oară").
 
+- **BULETINUL 0.4.1: DESCARCĂ, TIPĂREȘTE (broșură) și capul paginii „buletin nou"** (user, seara).
+  - **Butonul „Răsfoiește" a devenit „Descarcă"**, cu iconiță de descărcare, iar lângă el a intrat
+    **„Tipărește"**. ⚠️ **Răsfoitul n-a ieșit, a ieșit BUTONUL lui**: coperta deschide mai departe
+    fereastra cu FlipBook (`data-rasfoit`). Descărcarea merge prin **`?descarca=1`**, nu doar prin
+    atributul `download` — acela e numai pentru browserele de birou, pe iPhone ar fi deschis foaia.
+  - **BROȘURA: `/tipar/<nr>-<data>.pdf`**, făcută cu **pdf-lib** din PDF-ul numărului (`src/tipar.ts`).
+    Patru pagini A4 → **două coli A4 culcate**: fața `[4|1]`, versoul `[2|3]`; se tipărește față-verso
+    și se îndoaie — **iese o broșură A5** (cerut anume: „A4 imprimanta / booklet și îndoit, în final e
+    un A5 îndoit"). `?coala=a3` păstrează mărimea naturală (A4 → A3) pentru un copiator mare.
+    ⚠️ **Ordinea nu e la nimereală**, e formula broșurii: coala `s` → fața `[n-2s, 1+2s]`, versoul
+    `[2+2s, n-1-2s]`; ce nu e multiplu de patru se completează cu **pagini albe**, nu se taie. Probele
+    o păzesc — o coală așezată greșit se vede abia după ce s-au tipărit 60 de exemplare.
+    ⚠️ **Se ține în R2 sub `tipar/…`**, cu felul colii în cheie: prima apăsare o face, restul o iau
+    gata. Un număr fără PDF (două vechi) dă 404, nu o broșură goală.
+  - **Capul paginii `/nou` e acum cel de la orice număr** (user: „textul cu verde de deasupra vroiam
+    să fie la fel ca la oricare buletin, un text mic… aici vroiam să scrie numărul următor"): eticheta
+    măruntă **„NUMĂRUL URMĂTOR", verde**, numărul mare **roșu**, ziua sub el. **Al doilea număr mare
+    (617) a ieșit — nu-l readu.** ⚠️ Verdele nu mai e `--azi` (#12D96A, „prea aprins"): e un verde de
+    cerneală, `#0A6B41`, iar noaptea `#5FBF8D`.
+  - **Probe**: 56 în `tests/buletin-newsletter.test.ts` (ordinea broșurii, numele cheilor, butoanele,
+    numărul fără PDF); **446 în tot repo-ul**.
+
 - **TOT CE E ONLINE E ȘI LOCAL** (cerere a userului: „preia baza de date fișiere… ca să văd exact ce
   e online și local"). Unealtă nouă, reluabilă: **`infrastructure/import/adu-local.mjs`**
   (`--chiar`, `--doar`, `--fara-r2`, `--si-grele`; fără argumente doar socotește).
