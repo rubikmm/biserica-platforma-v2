@@ -45,7 +45,8 @@ import { hartieDinCache, jpgDin, jpgPozaDin, pdfDin, titluSaptamanii } from './f
 import { modulActiuni } from '@xc/actiuni'
 import { modulChat } from '@xc/chat'
 import { ACTIUNI } from './actiuni.js'
-import { htmlFoaiaSaptamanii, htmlPozaSaptamanii, htmlSfintiiZilei, saptamanaOriPropunere, tabelulSaptamanii, textSaptamanii } from './hartii.js'
+import { htmlFoaiaSaptamanii, htmlPozaSaptamanii, htmlSfintiiZilei, materiaSaptamanii, saptamanaOriPropunere, tabelulSaptamanii, textSaptamanii } from './hartii.js'
+import { listaPrimeiPagini } from './site.js'
 import { ruteazaSetari } from '@xc/setari'
 import { abonamentul, ruteazaAbonare } from '@xc/abonare'
 import { LATIME_POZA, type Ctx, type Meniu, paginaArhiva, paginaCarcasa, paginaMesaj, paginaSaptamana } from './pagini.js'
@@ -352,6 +353,7 @@ async function api(req: Request, env: Env, ctxExec: ExecutionContext, cale: stri
         { adresa: '/v1/foaie/<data>.pdf|.jpg|.html', ce_da: 'foaia A4 de pe ușă — numai săptămâni validate' },
         { adresa: '/v1/propunere/<data>.pdf|.jpg|.html', ce_da: 'aceeași foaie, din propunerea săptămânii' },
         { adresa: '/v1/tabel-tipar?data=&strans=0|1|2', ce_da: 'tabelul săptămânii ca bucată de pagină (buletinul, pagina a patra): validat dacă e, altfel ce e disponibil — `stare` spune „validat" sau „propus"' },
+        { adresa: '/v1/bucata-site?data=', ce_da: 'lista săptămânii în formatul primei pagini a site-ului parohiei (temporar, până trece apexul pe V2)' },
         { adresa: '/v1/poza/saptamana/<data>.jpg|.html?coloane=1|2', ce_da: 'poza paginii: programul singur (coloane=1) sau programul și calendarul, în două coloane (implicit)' },
         { adresa: '/v1/sfintii-zilei/<data>.pdf|.html', ce_da: 'sfinții zilei, din datele calendarului' },
       ],
@@ -460,6 +462,26 @@ async function api(req: Request, env: Env, ctxExec: ExecutionContext, cale: stri
     const t = await tabelulSaptamanii(env, data, harta, strans)
     if (!t.ok) return eroareApi(t.cod === 'saptamana_inexistenta' ? 404 : 409, t.cod, t.mesaj, t.detalii as Record<string, unknown> | undefined)
     return jsonCuEtag(req, t, cache)
+  }
+
+  /*
+   * BUCATA PRIMEI PAGINI A SITE-ULUI PAROHIEI — TEMPORARĂ (user, 18.09.2026: „legătura cu site-ul
+   * actual este o legătură temporară"). WordPress-ul de pe apex o cere de aici și o tipărește în
+   * locul listei pe care preotul o tasta a doua oară în ACF. Se șterge odată cu trecerea apexului
+   * pe V2, împreună cu `site.ts`.
+   *
+   * ⚠️ `stare` spune dacă săptămâna e validată sau doar propusă; cine o pune într-o pagină publică
+   * fără loc de scris „PROPUS" ar trebui să ia numai `validat` (vezi bucata de PHP din `docs/`).
+   */
+  if (cale === '/v1/bucata-site') {
+    const data = dataCeruta(url.searchParams.get('data') ?? 'azi', azi)
+    if (!data) return eroareApi(400, 'data_invalida', 'Data se scrie AAAA-LL-ZZ (sau azi / viitoare).')
+    const { o, stare } = await materiaSaptamanii(env, data, harta)
+    return jsonCuEtag(
+      req,
+      { ok: true, bucata: listaPrimeiPagini(o), titlu: o.titlu, de_la: o.luni, pana_la: o.duminica, slujbe: o.slujbe.length, stare },
+      cache,
+    )
   }
 
   if (cale === '/v1/saptamani') {

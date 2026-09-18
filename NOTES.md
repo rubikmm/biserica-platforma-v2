@@ -1234,6 +1234,41 @@ aparat.
 - **Tokenul Cloudflare nu citește Email Routing / certificate** (API răspunde „Authentication
   error"), dar deploy-ul cu `send_email` merge — verificarea e pe Workers API.
 
+## Programul pe prima pagină a site-ului WP — legătură TEMPORARĂ (18.09.2026)
+
+Până acum programul stătea în **două locuri**: aplicația Program (A2) și, tastat a doua oară de mână,
+WordPress-ul de pe apex (`sfantul-ilie.ro`) — tipul de articol `program` cu câmpuri ACF
+(`zi_liturgică` → `programul_zilei`), randat de `content-single-program.php` din tema `sfantulilie`.
+Cererea userului: „să nu ținem în două locuri programul", cu **formatul actual al site-ului păstrat
+neatins** („să creăm acel format după calendarul nostru din aplicația Program și să-l afișăm acolo").
+
+- **Ruta: `/v1/bucata-site?data=azi`** → `{ ok, bucata, titlu, de_la, pana_la, slujbe, stare }`.
+  `bucata` e HTML-ul TEMEI, rând cu rând (`<ul>`/`<li>`, „⁞ 07:00 – ", `<strong class="rosu">` la
+  slujba de dimineață, detaliile `<em>→ …</em><br/>` în `div.program-detalii`) — pe prima pagină nu
+  se schimbă nimic vizual, doar sursa datelor. Codul: `apps/program/src/site.ts`, probe:
+  `tests/program-bucata-site.test.ts`. Materia se ia din **`materiaSaptamanii()`** (scoasă din
+  `tabelulSaptamanii`, în `hartii.ts`), deci regula „validat / altfel ce e disponibil" se scrie o
+  singură dată, pentru buletin și pentru site deodată.
+- ⚠️ **E TEMPORARĂ, spus anume de user**: „când vom schimba site-ul, va dispărea și această
+  necesitate". De aceea stă într-un fișier singur și atârnă de o rută: la trecerea apexului pe V2 se
+  șterg `site.ts`, ruta, rândul din indexul `/v1`, proba și runbook-ul — un commit, fără urme în
+  hârtiile care trăiesc mai departe. **Nu o împleti cu foaia sau cu tabelul de tipar.**
+- **Partea de WordPress e a canalului `#proj-biserica-website`** (containerul `biserica-site`, FTP,
+  niciodată automat): bucata de PHP gata scrisă, cu transient de 10 minute, **ultima copie bună** în
+  `wp_options` (ca prima pagină să nu rămână cu gol când workerul tace) și poarta pe `stare` —
+  `docs/runbooks/wp-program-prima-pagina.md`.
+- ⚠️ **Pe pagina publică se pune numai `stare: "validat"`.** Pagina n-are unde scrie „PROPUS", iar un
+  program propus dat drept al parohiei ar minți. (La buletin regula e alta, cerută anume: propusul se
+  folosește, dar se spune la început.)
+- ⚠️ **Al doilea consumator al acelorași câmpuri ACF a rămas nelegat**: widgetul „Transmisiune audio"
+  (`widget_display`, widgetul `custom_html-5` din `functions.php`) scrie „Slujba următoare" /
+  „Conectare…" / „LIVE" din aceleași rânduri. Dacă articolul `program` nu mai e completat, el rămâne
+  pe „Actualizare program …". Corespondentul în V2 există: `/v1/urmatoarea`, `/v1/curenta` și starea
+  emisiei de la `live.`. De legat la o rundă anume.
+- **Deosebire de conținut, nu de formă**: textele duminicii vin acum din calendarul nostru, deci sunt
+  cele din foaia de pe ușă („Duminica după Înălțarea Sfintei Cruci", „Sf. Mari Mc. Eustație…"), nu
+  forma lungă tastată în WP. Se schimbă din calendar, și atunci peste tot deodată.
+
 ## Programul (A2) — interfața, așa cum a cerut-o utilizatorul
 
 Baza afișării e **V1 verbatim** (10.09.2026: „identice ca program.sfantul-ilie.ro"): stilul, markup-ul
@@ -2263,6 +2298,28 @@ forța antetul `Host`**.
 
 ### 2026-09-18
 
+- **„Să nu ținem în două locuri programul"** (15:25–16:00): programul liturgic era tastat a doua oară
+  în WordPress-ul de pe apex (articol `program` + ACF, tema `sfantulilie`, `content-single-program.php`).
+  Userul a ales: bucata se cere de la noi **la server, din PHP**, în **formatul actual al site-ului**
+  (nimic vizual nu se schimbă), iar partea de WP o aplică **#proj-biserica-website**. Făcut:
+  `/v1/bucata-site` + `apps/program/src/site.ts` + `tests/program-bucata-site.test.ts` (9 probe, 582
+  total), `materiaSaptamanii()` scoasă din `tabelulSaptamanii` (regula validat/propus, un singur loc),
+  program 0.8.2. Runbook cu PHP-ul gata: `docs/runbooks/wp-program-prima-pagina.md`. Probat local pe
+  datele adevărate: iese exact lista de pe prima pagină pentru 14–20.09.
+  **Trei hotărâri ale userului, pe rând**: (1) „doar săptămâna în curs, apare la ora 00.00 luni" —
+  `data=azi` pe ora Bucureștiului, luni→duminică; (2) **forma scurtă a calendarului rămâne** („dacă e
+  să scrie pe larg păstrăm asta ca să nu mai tragem altceva"); (3) „cu ocazia asta se rupe de tot
+  legătura cu site-ul curent — tick-ul care declanșa începerea transmisiunii — ne vom baza doar pe
+  programul scris în aplicația Program". **Verificat pe trei fronturi** (Pi, V2, WP): aparatul cheamă
+  numai `program.sfantul-ilie.ro/v1/interval` (jurnal: „programul e neschimbat (304), 6 slujbe până la
+  2026-10-02"), sistemul vechi din `/home/pi/Music/script` e disabled+inactive din mai 2026; `live`
+  ia `/v1/urmatoarea` prin Service Binding, `radio` prin `live`, zero fetch-uri spre apex; în WP
+  tick-ul (`functions.php:1115`, `file_put_contents('/home/sfantuliliero/public_html/audio/live.php','1')`)
+  scrie într-o cale care nu mai există — `$live` e mereu 0, a rămas doar afișare. **Legătura e deja
+  ruptă în practică; codul mort din WP se scoate odată cu bucla ACF.**
+  ⚠️ **Validarea săptămânii e NUMAI gest de om** (chat, `program.valideaza_saptamana`, `program.publish`,
+  Da/Nu) — nu există cron. Deci „apare luni la 00:00" înseamnă: dacă săptămâna nu e validată până
+  atunci, prima pagină ține copia bună de dinainte (cea veche), nu propunerea.
 - **„Nu am putut trimite mesajul" în bula buletinului — `SECRET_INTERN` lipsea pe
   `xc-buletin-production`** (12:31–12:36). Secretul dintre workeri se pusese la cutover doar pe cei
   patru cu acțiuni (calendar, program, tipic, chat-worker); buletinul a intrat în familia chatului pe

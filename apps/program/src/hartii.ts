@@ -180,6 +180,39 @@ export async function htmlFoaiaSaptamanii(
  * tabelul în pagina lui trebuie să scrie „PROPUS" la vedere, nu să tacă.
  * ⚠️ Foaia de pe ușă (`/v1/foaie`) NU s-a schimbat: ea rămâne numai a săptămânilor validate.
  */
+/**
+ * MATERIA unei săptămâni, fără nicio formă: săptămâna VALIDATĂ dacă e, altfel ce e disponibil.
+ * De aici își iau materia toți cei care pun programul în pagina lor — tabelul de tipar (buletinul)
+ * și bucata primei pagini a site-ului. Regula „validat / propus" se scrie o singură dată, aici.
+ */
+export async function materiaSaptamanii(
+  env: EnvHartii,
+  data: string,
+  vocabularDat?: Map<string, IntrareVocabular>,
+  strans: 0 | 1 | 2 = 0,
+): Promise<{ o: OptiuniFoaie; stare: 'validat' | 'propus' }> {
+  const harta = await vocabularulCerut(env, vocabularDat)
+  const f = await htmlFoaiaSaptamanii(env, data, 'foaie', harta)
+  if (f.ok) return { o: { ...f.optiuni, strans }, stare: 'validat' }
+  // nevalidată sau nescrisă: ce e disponibil — rândurile din bază ori propunerea din istoric
+  const luni = luneaSaptamanii(data)
+  const s = await saptamanaOriPropunere(env, luni, harta)
+  return {
+    o: {
+      luni,
+      duminica: adaugaZile(luni, 6),
+      titlu: titluSaptamanii(luni),
+      slujbe: s.slujbe,
+      vocabular: harta,
+      calendar: s.cal,
+      dinCalendar: s.dinCalendar,
+      ciorna: true,
+      strans,
+    },
+    stare: 'propus',
+  }
+}
+
 export async function tabelulSaptamanii(
   env: EnvHartii,
   data: string,
@@ -201,30 +234,7 @@ export async function tabelulSaptamanii(
     }
   | { ok: false; cod: string; mesaj: string; detalii?: unknown }
 > {
-  const harta = await vocabularulCerut(env, vocabularDat)
-  const f = await htmlFoaiaSaptamanii(env, data, 'foaie', harta)
-  let o: OptiuniFoaie
-  let stare: 'validat' | 'propus'
-  if (f.ok) {
-    o = { ...f.optiuni, strans }
-    stare = 'validat'
-  } else {
-    // nevalidată sau nescrisă: ce e disponibil — rândurile din bază ori propunerea din istoric
-    const luni = luneaSaptamanii(data)
-    const s = await saptamanaOriPropunere(env, luni, harta)
-    o = {
-      luni,
-      duminica: adaugaZile(luni, 6),
-      titlu: titluSaptamanii(luni),
-      slujbe: s.slujbe,
-      vocabular: harta,
-      calendar: s.cal,
-      dinCalendar: s.dinCalendar,
-      ciorna: true,
-      strans,
-    }
-    stare = 'propus'
-  }
+  const { o, stare } = await materiaSaptamanii(env, data, vocabularDat, strans)
   const tabel = tabelProgram(o)
   return {
     ok: true,
