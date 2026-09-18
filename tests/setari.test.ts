@@ -284,7 +284,7 @@ describe('rubricile aplicației în Setări', () => {
     // ⚠️ TREI trepte din 18.09.2026: `eAdminApp` (administratorul APLICAȚIEI, cheia ei din registru)
     // s-a adăugat lângă `eAdmin` (cheia abonaților, a platformei) și `eSuper`. Rubricile care țin de
     // treaba aplicației — șablonul newsletterului — atârnă de a treia, nu de prima.
-    let vazut: { eAdmin: boolean; eSuper: boolean; eAdminApp: boolean } | null = null
+    let vazut: { eAdmin: boolean; eSuper: boolean; eAdminApp: boolean; csrf: string } | null = null
     await ruteazaSetari(new Request('https://calendar.test/setari'), '/setari', mediu([], { poate: true }), {
       ...unelte(OM),
       rubrici: (t) => {
@@ -292,7 +292,27 @@ describe('rubricile aplicației în Setări', () => {
         return ''
       },
     })
-    expect(vazut).toEqual({ eAdmin: true, eSuper: true, eAdminApp: true })
+    expect(vazut).toMatchObject({ eAdmin: true, eSuper: true, eAdminApp: true })
+  })
+
+  /*
+   * ⚠️ JETONUL PAGINII, nu altul (18.09.2026, odată cu rubrica „Chat AI"): rubricile cu formular
+   * trebuie să primească exact jetonul pentru care pleacă și cookie-ul, altfel prima salvare ar fi
+   * respinsă ca „token nepotrivit" — și omul ar da vina pe ce a scris, nu pe noi.
+   */
+  it('rubricile primesc jetonul CSRF AL PAGINII', async () => {
+    let jetonulRubricii = ''
+    const r = await ruteazaSetari(new Request('https://calendar.test/setari'), '/setari', mediu([], { poate: true }), {
+      ...unelte(OM),
+      rubrici: ({ csrf }) => {
+        jetonulRubricii = csrf
+        return `<form><input name="csrf" value="${csrf}"></form>`
+      },
+    })
+    const h = await r!.text()
+    expect(jetonulRubricii).not.toBe('')
+    // același jeton în formularul comun al paginii și în bucata aplicației
+    expect(h.split(jetonulRubricii).length).toBeGreaterThan(2)
   })
 
   it('aplicația care nu dă nimic are pagina neschimbată', async () => {

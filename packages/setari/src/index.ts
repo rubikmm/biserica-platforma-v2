@@ -86,7 +86,17 @@ export interface UneltleSetarilor {
    * rubricile care țin de treaba aplicației — șablonul newsletterului, de pildă. `eAdmin` a rămas
    * ce era: cheia abonaților, care e a platformei și e comună tuturor aplicațiilor.
    */
-  rubrici?: (t: { eAdmin: boolean; eSuper: boolean; eAdminApp: boolean }) => Promise<string> | string
+  rubrici?: (t: {
+    eAdmin: boolean
+    eSuper: boolean
+    eAdminApp: boolean
+    /**
+     * Jetonul CSRF AL PAGINII, pentru rubricile cu formular (prima: „Chat AI", 18.09.2026).
+     * ⚠️ Rubrica să NU-și facă altul: `asiguraCsrf` ar scoate un jeton nou, iar cookie-ul care
+     * pleacă odată cu pagina e al acestuia — prima salvare ar fi respinsă ca „token nepotrivit".
+     */
+    csrf: string
+  }) => Promise<string> | string
 }
 
 /** Un abonat, așa cum îl întoarce comunicarea. */
@@ -912,7 +922,7 @@ export async function ruteazaSetari(
 
   const csrf = asiguraCsrf(req, o.cfg.DOMENIU_COOKIE)
   // rubricile aplicației: se cer DUPĂ ce se știu treptele, ca să nu întrebe și ele autorizarea
-  const rubriciApp = o.rubrici ? await o.rubrici({ eAdmin, eSuper, eAdminApp }) : ''
+  const rubriciApp = o.rubrici ? await o.rubrici({ eAdmin, eSuper, eAdminApp, csrf: csrf.jeton }) : ''
   const felul = new URL(req.url).searchParams.get('f') ?? ''
   const vorbe: Record<string, [bun: boolean, text: string]> = {
     abonat: [true, 'Gata — ești abonat.'],
@@ -927,6 +937,9 @@ export async function ruteazaSetari(
     'admin-numit': [true, 'Gata — e administrator al acestei aplicații. Dreptul se vede la următoarea pagină pe care o deschide.'],
     'admin-scos': [true, 'I-am luat dreptul de administrator al acestei aplicații.'],
     'fara-drept-admin': [false, 'Numai un administrator al acestei aplicații poate numi altul.'],
+    // rubrica „Chat AI" (18.09.2026): se scrie din `@xc/chat`, dar vestea o dă pagina asta
+    'chat-salvat': [true, 'Am salvat îndrumările chatului. Se văd în bulă în cel mult un minut.'],
+    'chat-rau': [false, 'Nu am putut salva îndrumările chatului. Reîncarcă pagina și încearcă din nou.'],
     rau: [false, 'Nu a mers. Încearcă din nou.'],
   }
   const vorba = vorbe[felul]

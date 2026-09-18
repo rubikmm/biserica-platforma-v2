@@ -186,18 +186,26 @@ export function instructiuni(
     '   NU pune întrebări de lămurire înainte de a chema unealta: cheam-o cu ce ai (ziua se poate da',
     '   și ca „luni", „marți"; numele slujbei se poate lăsa gol) — dacă lipsește ceva, unealta îți',
     '   spune exact ce, și abia atunci întrebi omul.',
-    '8. Cum alegi unealta: o ZI anume → slujbele_zilei; o SĂPTĂMÂNĂ → slujbele_saptamanii; „următoarea"',
-    '   sau „acum" → slujba_urmatoare / slujba_curenta; „când se face X" (o slujbă după nume) →',
-    '   cauta_slujba; „ce sărbătoare / ce zi e" → calendar.ziua; „cine sunt sfinții" → tipic.sfintii_zilei;',
-    '   „foaia / PDF / poză" → foaia_* / poza_paginii. Fiecare unealtă are exemple cu argumentele',
-    '   gata scrise — potrivește fraza omului cu cel mai apropiat exemplu și copiază-i forma.',
+    /*
+     * ⚠️ REGULA 8 A FOST, PÂNĂ PE 18.09.2026, O HARTĂ SCRISĂ DE MÂNĂ a uneltelor Programului
+     * (slujbe, calendar, sfinți). Cu ea, bula Buletinului primea la fiecare mesaj îndrumări despre
+     * slujbe — context plătit degeaba și model trimis pe drum greșit. Azi regula spune CUM se alege
+     * o unealtă, iar CARE sunt uneltele scrie în lista lor, adusă din manifestul fiecărei aplicații.
+     */
+    '8. Cum alegi unealta: fiecare are scris la ce e bună și exemple cu argumentele gata scrise.',
+    '   Potrivește fraza omului cu exemplul cel mai apropiat și copiază-i forma. Alege UNA, nu le',
+    '   încerca pe rând ca să vezi care merge; dacă niciuna nu se potrivește, nu chema nimic.',
     ...(unelteDisponibile.length
       ? [
-          `9. AICI POȚI FACE DOAR ATÂT: ${unelteDisponibile.join(', ')}. Pentru orice altceva (rapoarte,`,
-          '   liste, întrebări despre arhivă, alte aplicații) spune într-o frază că nu e de aici și ce',
-          '   POȚI face — nu încerca să răspunzi din memorie și nu inventa o unealtă.',
+          `9. AICI POȚI FACE DOAR ATÂT: ${unelteDisponibile.join(', ')}. Orice altceva — alte aplicații,`,
+          '   rapoarte, liste, întrebări despre arhivă, sfaturi din capul tău — NU e de aici. Atunci',
+          '   spune într-o frază „asta nu pot face aici", arată ce POȚI face, și oprește-te: nu răspunde',
+          '   din memorie, nu inventa unelte, nu căuta ocoluri.',
         ]
-      : []),
+      : [
+          '9. AICI NU AI NICIO UNEALTĂ: poți doar să stai de vorbă și să spui unde se poate uita omul.',
+          '   La orice cerere de fapte sau de schimbare, spune limpede că asta nu poți face aici.',
+        ]),
     ...(indrumari.trim()
       ? [
           '',

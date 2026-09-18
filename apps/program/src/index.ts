@@ -296,6 +296,9 @@ export default {
         urlCont: nav.cont,
         urlTermeni: `${nav.home || ''}/termeni`,
         carcasa: (p) => paginaCarcasa(ctx, p),
+        // Rubrica „Chat AI" — îndrumările și uneltele PROGRAMULUI, scrise de adminul lui
+        // (user, 18.09.2026). Bucata vine din modul, la fel pentru toate aplicațiile.
+        rubrici: ({ csrf }) => CHAT.rubricaSetari(env, ctxChat, { csrf }),
       })
       if (raspunsSetari) return raspunsSetari
 

@@ -589,9 +589,15 @@ importers:
       '@xc/actiuni':
         specifier: workspace:*
         version: link:../actiuni
+      '@xc/auth':
+        specifier: workspace:*
+        version: link:../auth
       '@xc/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@xc/ui':
+        specifier: workspace:*
+        version: link:../ui
 
   packages/comanda:
     dependencies:

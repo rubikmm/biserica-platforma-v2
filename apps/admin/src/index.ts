@@ -2,7 +2,7 @@ import { APLICATII_ADMINISTRABILE, ROLURI, Rol, SCOPE_GLOBAL, SESIUNE_ANONIMA, t
 import { ClientAutorizare } from '@xc/authorization'
 import { asiguraCsrf, principalDin, sesiuneCurenta, verificaCsrf, verificaTokenCsrf } from '@xc/auth'
 import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
-import { configChat, MODELE, normalizeaza, scrieConfigChat, type ConfigChat, type ModelDeAles } from '@xc/chat'
+import { APLICATII_CU_BULA, configChat, MODELE, normalizeaza, scrieConfigChat, type ConfigChat, type ModelDeAles } from '@xc/chat'
 import { Logger, correlationId } from '@xc/observability'
 import { alerta, dataVersiunii, esc, faraDiacritice, html, pagina } from '@xc/ui'
 import { SCHEMA_CITITA_LA, SCHEMA_CORP, SCHEMA_STIL } from './schema-generata.js'
@@ -105,9 +105,18 @@ function tabelLivrari(livrari: LivrareRand[]): string {
   return `<table><thead><tr><th>Canal</th><th>Destinatar</th><th>Stare</th><th>Adaptor</th></tr></thead><tbody>${randuri}</tbody></table>`
 }
 
-/** Aplicatiile in care poate sta bula. Bifa nu face nimic acolo unde modulul nu e montat in cod
- *  (trei linii in `src/index.ts` al aplicatiei) — de aceea scrie sub tabel. */
-const APLICATII_CU_CHAT = ['program', 'buletin', 'calendar', 'tipic', 'home', 'cont'] as const
+/**
+ * Aplicatiile in care poate sta bula. Lista NU mai e scrisa aici (18.09.2026): vine din `@xc/chat`,
+ * de langa modul, si cuprinde exact aplicatiile care il cheama. Se adauga si numele deja bifate in
+ * KV care n-au (ori n-au mai) modulul montat — altfel o bifa veche ar ramane aprinsa si nevazuta.
+ */
+function aplicatiileDeBifat(c: ConfigChat): Array<{ cod: string; unde: string | null }> {
+  const montate = APLICATII_CU_BULA.map((a) => ({ cod: a.cod, unde: a.unde }))
+  const inPlus = Object.keys(c.aplicatii)
+    .filter((cod) => !montate.some((m) => m.cod === cod))
+    .map((cod) => ({ cod, unde: null }))
+  return [...montate, ...inPlus]
+}
 
 function paginaModule(o: {
   comune: ReturnType<typeof comune>
@@ -116,8 +125,9 @@ function paginaModule(o: {
   salvat?: boolean
   prefix: string
 }): string {
-  const rand = (nume: string) => `<tr>
-      <td><label class="bifa"><input type="checkbox" name="app-${nume}" ${o.c.aplicatii[nume] ? 'checked' : ''}> ${esc(nume)}</label></td>
+  const rand = (a: { cod: string; unde: string | null }) => `<tr>
+      <td><label class="bifa"><input type="checkbox" name="app-${a.cod}" ${o.c.aplicatii[a.cod] ? 'checked' : ''}>
+        <span>${esc(a.cod)} <small>${a.unde ? esc(a.unde) : '⚠️ modulul nu e montat în aplicația asta — bifa nu aprinde nimic'}</small></span></label></td>
     </tr>`
   const treapta = (valoare: string, scris: string, lamurire: string) => `<label class="bifa">
       <input type="radio" name="cineVede" value="${valoare}" ${o.c.cineVede === valoare ? 'checked' : ''}>
@@ -142,12 +152,12 @@ ${o.salvat ? alerta('buna', 'Am salvat. Schimbarea se vede în cel mult un minut
   <label class="bifa mare"><input type="checkbox" name="activ" ${o.c.activ ? 'checked' : ''}> <b>Pornit</b></label>
 
   <h4>În care aplicații</h4>
-  <table><tbody>${APLICATII_CU_CHAT.map(rand).join('')}</tbody></table>
-  <p class="ajutor">Bifa are efect numai acolo unde modulul e montat în cod. Azi: <code>program</code> (pe toate paginile)
-  și <code>buletin</code> (numai pe <code>/nou</code>, ecranul numărului care urmează).</p>
-  <p class="ajutor">⚠️ <strong>Uneltele se cer pe aplicație</strong>: bula fiecărei aplicații vede numai acțiunile ei
-  (programul le vede și pe cele ale calendarului și tipicului). Dacă lista de mai jos e scrisă, trebuie să
-  cuprindă și numele acțiunilor aplicației nou-bifate — altfel bula ei n-are ce chema.</p>
+  <table><tbody>${aplicatiileDeBifat(o.c).map(rand).join('')}</tbody></table>
+  <p class="ajutor">Lista e a aplicațiilor care au bula montată în cod. O aplicație nouă apare aici de îndată ce
+  cheamă modulul (trei linii în aplicația ei) — nu e nimic de scris pe ecranul ăsta.</p>
+  <p class="ajutor">⚠️ Bula fiecărei aplicații vede numai acțiunile ei (programul le vede și pe cele ale calendarului
+  și tipicului). După ce bifezi una nouă, uneltele ei se aleg din <strong>Setările aplicației → Chat AI</strong>;
+  până atunci bula are voie la toate câte le publică.</p>
 
   <h4>Modelul</h4>
   <p class="ajutor">Oricare ar fi, cererile trec prin <strong>AI Gateway</strong> (poarta <code>xc-chat</code>), pe factura Cloudflare.
@@ -162,16 +172,11 @@ ${o.salvat ? alerta('buna', 'Am salvat. Schimbarea se vede în cel mult un minut
     </optgroup>
   </select>
 
-  <h4>Îndrumări pentru model</h4>
-  <p class="ajutor">Text liber, încărcat în instrucțiunile modelului la fiecare mesaj, sub regulile fixe: obiceiurile parohiei,
-  cum să vorbească, ce să nu facă. Scurt și concret merge cel mai bine („Sfântul Maslu se face marți la 18:00; nu propune altă zi").</p>
-  <textarea name="indrumari" class="indrumari" rows="8" maxlength="8000" placeholder="Ex.: Vorbește la persoana a doua, scurt. Programul se validează doar joi. Liturghia de duminică e mereu la 08:00.">${esc(o.c.indrumari)}</textarea>
-
-  <h4>Uneltele permise</h4>
-  <p class="ajutor">Ce poate face modelul în chat, un nume pe rând (<code>aplicatie.actiune</code>). Gol = toate acțiunile
-  publicate. Cu cât lista e mai scurtă, cu atât un model mic nimerește mai bine: pentru „adaug și modific slujbe" ajung două rânduri.</p>
-  <textarea name="unelte" class="indrumari" rows="4" spellcheck="false" placeholder="program.modifica_slujba
-program.adauga_slujba">${esc(o.c.unelte.join('\n'))}</textarea>
+  <h4>Îndrumările și uneltele — în fiecare aplicație</h4>
+  <p class="ajutor">Nu mai stau aici. Ce ȘTIE și ce POATE face bula se scrie acolo unde se vede: în
+  <strong>Setările aplicației → Chat AI</strong>, de către administratorul ei. Așa, obiceiurile Programului nu mai intră
+  (și nu se mai plătesc) în fiecare mesaj al Buletinului, iar o aplicație nouă se cuplează fără să se umble aici.
+  De pe ecranul ăsta rămân lucrurile platformei: pornit, unde, cu ce model, cine-l vede.</p>
 
   <h4>Cine îl vede</h4>
   <div class="trepte">
@@ -613,13 +618,20 @@ ${SCHEMA_CORP}`,
         for (const [cheie, valoare] of formular.entries()) {
           if (cheie.startsWith('app-') && valoare) aplicatii[cheie.slice(4)] = true
         }
+        /*
+         * ⚠️ ÎNDRUMĂRILE ȘI UNELTELE NU MAI SUNT AICI (user, 18.09.2026, 12:53): se scriu în Setările
+         * fiecărei aplicații, la „Chat AI". Ce era scris se DUCE MAI DEPARTE neatins — rămâne
+         * moștenirea din care se servesc aplicațiile care nu și-au scris încă rândul lor. Dacă s-ar
+         * lăsa să cadă, bulele aprinse azi ar rămâne fără reguli exact în ziua mutării.
+         */
+        const dinainte = await configChat(env)
         const nou = normalizeaza({
           activ: formular.get('activ') === 'on',
           aplicatii,
           cineVede: String(formular.get('cineVede') ?? 'admini'),
           model: String(formular.get('model') ?? ''),
-          indrumari: String(formular.get('indrumari') ?? ''),
-          unelte: String(formular.get('unelte') ?? ''),
+          indrumari: dinainte.indrumari,
+          unelte: dinainte.unelte,
         })
         await scrieConfigChat(env, nou)
         log.info('module: comutator schimbat', { activ: nou.activ, cineVede: nou.cineVede, model: nou.model, aplicatii: Object.keys(nou.aplicatii) })

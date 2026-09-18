@@ -28,7 +28,7 @@ import { Obiect } from '@xc/contracts'
 import { aziBucuresti, ZILE_SAPTAMANA, ziuaSaptamanii } from '@xc/ui'
 import { egaleInTimpConstant } from '@xc/auth'
 import { Logger, correlationId } from '@xc/observability'
-import { configChat, type ConfigChat } from '@xc/chat'
+import { configAplicatie, configChat, type ConfigAplicatie, type ConfigChat } from '@xc/chat'
 import { intreabaModelul, instructiuni, type EnvCreier, type MesajModel } from './creier.js'
 import {
   conversatia,
@@ -137,7 +137,14 @@ const TAIERE_FUNDAL = 8000
 
 async function adunaUneltele(
   env: Env,
-  o: { secret: string; correlationId: string; permise: string[]; pentruAplicatia?: string },
+  o: {
+    secret: string
+    correlationId: string
+    permise: string[]
+    pentruAplicatia?: string
+    /** Fără cunoștințele de fundal: ecranul de Setări vrea doar NUMELE uneltelor, nu și ce știu ele. */
+    faraFundal?: boolean
+  },
 ): Promise<{ unelte: UnealtaDescrisa[]; harta: Map<string, UndeStaActiunea>; fundal: string[] }> {
   // Lista din panou ingusteaza ce vede modelul; goala = tot ce publica aplicatiile.
   const permis = (nume: string) => !o.permise.length || o.permise.includes(nume)
@@ -173,7 +180,7 @@ async function adunaUneltele(
     // Fundalul: actiunile marcate asa se cheama ACUM, ca serviciu, si rezultatul lor intra in
     // instructiuni. Cine tace nu opreste nimic — se raspunde cu ce e.
     for (const descriere of (m as Manifest).actiuni) {
-      if (!descriere.fundal) continue
+      if (!descriere.fundal || o.faraFundal) continue
       const cheie = `${a.nume}:${descriere.nume}`
       const tinut = FUNDAL.get(cheie)
       if (tinut && Date.now() - tinut.la < VIATA_FUNDAL) {
@@ -277,6 +284,29 @@ export default {
         })
       }
 
+      /*
+       * CE POATE FACE BULA UNEI APLICAȚII — pentru rubrica „Chat AI" din Setările ei (18.09.2026).
+       * Ecranul acela arată unelte cu bifă, nu scrise de mână, iar singurul care știe ce publică
+       * fiecare aplicație (și pe care le vede bula care întreabă) e creierul de aici.
+       *
+       * ⚠️ Lista e ÎNTREAGĂ, neîngustată de bifele de acum: altfel, odată salvate trei unelte, în
+       * ecran ar mai fi rămas trei — și nu s-ar mai fi putut adăuga niciodată a patra.
+       */
+      if (req.method === 'GET' && cale === '/unelte') {
+        const pentru = url.searchParams.get('aplicatie') ?? ''
+        const { harta } = await adunaUneltele(env, {
+          secret,
+          correlationId: cid,
+          permise: [],
+          pentruAplicatia: pentru || undefined,
+          faraFundal: true,
+        })
+        const unelte = [...harta.values()]
+          .map((u) => ({ nume: u.nume, aplicatie: u.aplicatie, efect: u.efect, descriere: u.descriere }))
+          .sort((a, b) => a.nume.localeCompare(b.nume, 'ro'))
+        return json({ unelte })
+      }
+
       if (req.method !== 'POST') return json({ ok: false, mesaj: 'doar POST' }, 405)
 
       // -------------------------------------------------------------- ștergerea
@@ -327,13 +357,13 @@ export default {
         // (daca e deja validata, previzualizarea cade si nu se intreaba nimic) si se propune cu Da/Nu.
         let urmare: RaspunsChat['propunere'] = null
         if (r.ok) {
-          const comutator = await configChat(env)
-          // ⚠️ Aceeasi vedere ca la mesaj (`CE_VEDE_BULA`), altfel urmarea s-ar căuta printre uneltele
-          // altei aplicatii — si `buletin.compune` n-are urmare, dar programul are.
+          // ⚠️ Aceeasi vedere ca la mesaj (`CE_VEDE_BULA` + bifele APLICATIEI), altfel urmarea s-ar
+          // căuta printre uneltele altei aplicatii — si `buletin.compune` n-are urmare, dar
+          // programul are. Si: o unealta debifata din Setari nu trebuie sa vina pe usa din dos.
           const { harta } = await adunaUneltele(env, {
             secret,
             correlationId: cid,
-            permise: comutator.unelte,
+            permise: (await configAplicatie(env, p.aplicatie)).unelte,
             pentruAplicatia: p.aplicatie,
           })
           const facuta = harta.get(numeUnealta(p.actiune))
@@ -388,16 +418,22 @@ export default {
         return json({ conversatieId: c.id, text, obiecte: [], propunere: null, unelte: [] } satisfies RaspunsChat)
       }
 
+      /*
+       * ÎNDRUMĂRILE ȘI UNELTELE SUNT ALE APLICAȚIEI (user, 18.09.2026, 12:53), nu ale platformei:
+       * `modul:chat:<aplicatie>`, scris din Setările ei. Din `modul:chat` rămân aici numai lucrurile
+       * platformei — pornit/stins, modelul, cine vede.
+       */
+      const aleAplicatiei: ConfigAplicatie = await configAplicatie(env, cerere.aplicatie ?? '')
       const { unelte, harta, fundal } = await adunaUneltele(env, {
         secret,
         correlationId: cid,
-        permise: comutator.unelte,
+        permise: aleAplicatiei.unelte,
         pentruAplicatia: cerere.aplicatie,
       })
       const istoric = await mesajeleDin(env.DB, c.id)
 
       const mesaje: MesajModel[] = [
-        { rol: 'sistem', text: instructiuni(cerere.aplicatie ?? '', cerere.numeleOmului ?? null, ziuaDeAzi(), fundal, comutator.indrumari, unelte.map((x) => x.name)) },
+        { rol: 'sistem', text: instructiuni(cerere.aplicatie ?? '', cerere.numeleOmului ?? null, ziuaDeAzi(), fundal, aleAplicatiei.indrumari, unelte.map((x) => x.name)) },
         ...istoric.map((m) => ({
           rol: m.rol === 'om' ? ('om' as const) : m.rol === 'agent' ? ('agent' as const) : ('unealta' as const),
           text: m.text,

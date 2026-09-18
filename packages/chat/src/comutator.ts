@@ -13,7 +13,30 @@ import { felDupaId, MODEL_IMPLICIT } from './modele.js'
 
 export const CHEIE_CONFIG = 'modul:chat'
 
+/**
+ * Cheia ÎNDRUMĂRILOR UNEI APLICAȚII: `modul:chat:buletin` (user, 18.09.2026, 12:53 — „vreau mai
+ * întâi să avem instrucțiuni diferite per aplicație… din Setări aplicație pe un tab Chat AI").
+ *
+ * ⚠️ CHEI SEPARATE, nu un câmp în `modul:chat`. Fiecare aplicație își scrie rândul ei din ecranul
+ * ei de Setări, deci ar scrie toate în aceeași cheie: un citește-schimbă-scrie din două aplicații
+ * deodată ar pierde în tăcere ce a scris cealaltă. Așa, fiecare scrie numai la ea.
+ */
+export const cheiaAplicatiei = (aplicatie: string) => `${CHEIE_CONFIG}:${aplicatie}`
+
 export type CineVede = 'admini' | 'conturi' | 'toti'
+
+/**
+ * UNDE E MONTATĂ BULA, în cod. Se scrie AICI, lângă modul, nu în ecranul de administrare: bifa din
+ * Module nu montează nimic, doar aprinde ce e deja montat (trei linii în `src/index.ts`-ul
+ * aplicației). Când lista stătea în `apps/admin`, ecranul oferea spre bifat aplicații în care bula
+ * n-avea cum să apară — bifa se salva, și nu se întâmpla nimic.
+ *
+ * Se adaugă un rând când o aplicație nouă cheamă `modulChat`.
+ */
+export const APLICATII_CU_BULA: readonly { cod: string; unde: string }[] = [
+  { cod: 'program', unde: 'pe toate paginile' },
+  { cod: 'buletin', unde: 'numai pe /nou' },
+]
 
 /**
  * DE UNDE VINE RĂSPUNSUL. Despărțit de „activ" dinadins (user, 11.09.2026: „doar grafica,
@@ -43,20 +66,40 @@ export interface ConfigChat {
   /** Dedus din `model`: pe ce drum merge cererea. Ținut aici ca chat-worker să nu mai deducă. */
   creier: Creier
   /**
-   * ÎNDRUMĂRILE administratorului (user, 11.09.2026, 21:04: „un câmp de instrucțiuni pe care să-l pot
-   * scrie eu și modelul când începe să lucreze să-l încarce"). Text liber, intră în instrucțiunile
-   * modelului la fiecare mesaj, sub regulile fixe — obiceiurile parohiei, cum să vorbească, ce să nu
-   * facă. Se schimbă din panou, fără publicare de cod.
+   * ÎNDRUMĂRILE, cum erau până pe 18.09.2026: UNELE PENTRU TOATE APLICAȚIILE (user, 11.09.2026,
+   * 21:04: „un câmp de instrucțiuni pe care să-l pot scrie eu și modelul când începe să lucreze
+   * să-l încarce").
+   *
+   * ⚠️ NU SE MAI SCRIU DE NICĂIERI. Au rămas aici ca MOȘTENIRE: o aplicație care n-are încă rândul
+   * ei (`modul:chat:<aplicatie>`) le primește pe acestea, ca să nu rămână bula mută în ziua mutării.
+   * Locul lor de azi e ecranul de Setări al fiecărei aplicații (vezi `ConfigAplicatie`) — fiindcă
+   * obiceiurile Programului n-au ce căuta în fiecare mesaj al Buletinului, nici plătite, nici citite.
    */
   indrumari: string
   /**
-   * UNELTELE pe care le vede chatul, cu numele canonic (`program.modifica_slujba`), una pe rând în
-   * panou. Goală = toate. Registrul aplicațiilor rămâne întreg pentru alte aplicații; aici se
-   * îngustează doar ce vede modelul — pentru un model mic, două unelte limpezi bat paisprezece.
-   * Acțiunile de fundal nu sunt unelte și nu trec pe aici.
+   * UNELTELE, tot moștenire, cu aceeași socoteală ca la `indrumari`. Numele canonic
+   * (`program.modifica_slujba`); goală = toate. Azi se aleg pe aplicație, cu bifă, din Setările ei.
    */
   unelte: string[]
 }
+
+/**
+ * ÎNDRUMĂRILE ȘI UNELTELE UNEI SINGURE APLICAȚII — ce scrie administratorul ei la Setări → „Chat AI".
+ *
+ * Despărțirea asta e hotărârea userului din 18.09.2026 (12:53): aplicațiile care primesc chat se
+ * aprind din Administrare (super-admin), iar CE ȘTIE și CE POATE face bula fiecăreia se scrie în
+ * aplicația ei. Tot atunci, la 12:54: „trebuie să construim ceva care merge cu modelul free pus
+ * acum" — de aceea lista de unelte e cu bifă, nu scrisă de mână: cu cât vede mai puține, cu atât
+ * un model mic nimerește mai bine.
+ */
+export interface ConfigAplicatie {
+  /** Text liber, intră în instrucțiuni la fiecare mesaj, sub regulile fixe. */
+  indrumari: string
+  /** Numele canonice bifate (`buletin.compune`). Goală = tot ce publică aplicațiile pe care le vede. */
+  unelte: string[]
+}
+
+export const APLICATIE_FARA_INDRUMARI: ConfigAplicatie = { indrumari: '', unelte: [] }
 
 /**
  * STINS peste tot. Un modul nou nu se aprinde singur nicăieri: fiecare aplicație se deschide
@@ -100,12 +143,67 @@ export async function configChat(env: EnvComutator): Promise<ConfigChat> {
  */
 export function uitaConfigChat(): void {
   tinut = null
+  tinuteApp.clear()
 }
 
 export async function scrieConfigChat(env: EnvComutator, c: ConfigChat): Promise<void> {
   if (!env.CONFIG) throw new Error('nu e legat KV-ul de configurare')
   await env.CONFIG.put(CHEIE_CONFIG, JSON.stringify(c))
   tinut = { la: Date.now(), c }
+}
+
+/** Ținute la fel ca cea globală, dar una pentru fiecare aplicație. */
+const tinuteApp = new Map<string, { la: number; c: ConfigAplicatie }>()
+
+/**
+ * Îndrumările și uneltele aplicației. Când aplicația n-are încă rândul ei, se întorc cele vechi,
+ * comune — dar numai uneltele CARE SUNT ALE EI, ca lista program-ului să nu ajungă la buletin.
+ *
+ * ⚠️ Lipsa rândului nu e o eroare și nu se scrie nimic pe furiș: un chat nou-aprins merge cu
+ * îndrumări goale (regulile fixe sunt destule), iar administratorul îl scrie când are ce spune.
+ */
+export async function configAplicatie(env: EnvComutator, aplicatie: string): Promise<ConfigAplicatie> {
+  const acum = Date.now()
+  const viata = env.MEDIU === 'dev' ? 3_000 : VIATA
+  const tinuta = tinuteApp.get(aplicatie)
+  if (tinuta && acum - tinuta.la < viata) return tinuta.c
+  if (!env.CONFIG) return APLICATIE_FARA_INDRUMARI
+  try {
+    const scris = await env.CONFIG.get(cheiaAplicatiei(aplicatie), 'json')
+    const c = scris ? normalizeazaAplicatie(scris) : mostenireaPentru(await configChat(env), aplicatie)
+    tinuteApp.set(aplicatie, { la: acum, c })
+    return c
+  } catch {
+    return tinuta?.c ?? APLICATIE_FARA_INDRUMARI
+  }
+}
+
+export async function scrieConfigAplicatie(
+  env: EnvComutator,
+  aplicatie: string,
+  c: ConfigAplicatie,
+): Promise<void> {
+  if (!env.CONFIG) throw new Error('nu e legat KV-ul de configurare')
+  await env.CONFIG.put(cheiaAplicatiei(aplicatie), JSON.stringify(c))
+  tinuteApp.set(aplicatie, { la: Date.now(), c })
+}
+
+/** Ce primește o aplicație fără rând al ei: îndrumările comune și doar uneltele ei din lista veche. */
+function mostenireaPentru(global: ConfigChat, aplicatie: string): ConfigAplicatie {
+  return {
+    indrumari: global.indrumari,
+    unelte: global.unelte.filter((u) => u.startsWith(`${aplicatie}.`)),
+  }
+}
+
+export function normalizeazaAplicatie(brut: unknown): ConfigAplicatie {
+  const o = (brut ?? {}) as Partial<ConfigAplicatie>
+  const indrumari = typeof o.indrumari === 'string' ? o.indrumari.trim().slice(0, 8000) : ''
+  const brutUnelte = (o as { unelte?: unknown }).unelte
+  const unelte = (Array.isArray(brutUnelte) ? brutUnelte.map(String) : typeof brutUnelte === 'string' ? brutUnelte.split(/[\n,;]+/) : [])
+    .map((u) => u.trim())
+    .filter((u) => /^[a-z0-9_]+\.[a-z0-9_]+$/.test(u))
+  return { indrumari, unelte: [...new Set(unelte)] }
 }
 
 export function normalizeaza(brut: unknown): ConfigChat {
