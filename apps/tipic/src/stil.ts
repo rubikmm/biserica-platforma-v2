@@ -162,46 +162,77 @@ h3 { font-size:20px; font-weight:600; color:var(--capitol);
    carcasei; aici e singura aplicatie care scrie versete, deci regula sta local). */
 .vers b { color:var(--faint); font:600 12px ui-sans-serif,system-ui; margin-right:4px }
 
-/* RANDUL DE UNELTE din antet, refacut dupa Program si Calendar (user, 13.09.2026: „meniul principal
-   să semene ca la Program și Calendar… să fie abonare și calendar"). Doua grupuri: la stanga pastila
-   navigarii si abonarea, la dreapta — lipit de margine, dupa bara verticala — calendarul.
-   ⚠️ Regulile de mai jos sunt COPIATE din Program (pastila, bulina, segmentul cu scris) si din
-   Calendar (butoanele mici, bara, fereastra). Daca se schimba forma pastilei intr-un loc, se schimba
-   in toate trei: tocmai asemanarea lor a fost ceruta. */
+/* RANDUL DE UNELTE din antet, refacut dupa Calendar (user, 18.09.2026: „totul să fie ca la
+   Calendar"). Un singur grup: pastila locului, care ia tot ce ramane din rand, si abonarea.
+   ⚠️ Regulile de mai jos sunt COPIATE din Calendar (apps/calendar/src/stil.ts), masurile lor cu
+   tot — inclusiv pragurile 600 / 460 / 400 px, masurate acolo pe telefoane adevarate. Daca se
+   schimba forma pastilei intr-un loc, se schimba in amandoua: tocmai asemanarea a fost ceruta. */
 
-/* carcasa comuna lasa randul sa se rupa; aici, ca la Program, butoanele se string in loc sa sara */
+/* carcasa comuna lasa randul sa se rupa; aici, ca la Calendar, butoanele se string in loc sa sara */
 .btns { flex-wrap:nowrap }
 .btns .btn { min-width:0 }
-/* treapta pe care CHIAR esti: nu duce nicaieri, dar se apasa — atunci ia focusul si ramane marcata */
-.btns .btn[aria-disabled="true"] { cursor:default }
-.btns .btn[aria-disabled="true"]:focus { outline:none; background:var(--azi-fund) }
 
-/* PASTILA navigarii: segmentele lipite intr-un singur corp, cu chenarul si rotunjirea pe pastila.
-   Aici e „larga" de la Program — cea cu doua segmente —, fiindca tot doua are si Tipicul: bulina
-   zilei de azi si „Mâine". Creste cat o tine randul; prisosul il ia doar segmentul cu scris. */
-.btns .pastila { display:flex; flex:1 1 auto; min-width:0; border:1px solid var(--rule); border-radius:10px;
-                 background:var(--tinta); overflow:hidden }
-.btns .pastila .btn { flex:0 0 auto; border:0; border-radius:0; background:transparent }
-.btns .pastila .btn + .btn { border-left:1px solid var(--rule) }
-.btns .pastila a.btn:hover { color:var(--rosu); background:var(--paper) }
-.btns .pastila .btn.activ { color:var(--rosu); font-weight:600;
-                            background:color-mix(in srgb, var(--rosu) 11%, transparent) }
-.btns .pastila .btn[aria-disabled="true"]:focus { background:color-mix(in srgb, var(--rosu) 18%, transparent) }
-.btns .pastila .viit { flex:1 1 auto; min-width:0 }
-/* BULINA zilei de azi: un punct, fara text, la fel de inalt ca segmentul de langa el */
-.btns .punct { flex:0 0 auto; display:flex; align-items:center; justify-content:center;
-               padding-left:20px; padding-right:20px }
-.btns .punct::before { content:""; width:9px; height:9px; border-radius:50%; background:currentColor }
-.btns .punct:hover { color:var(--rosu) }
-/* „Mâine" poarta si cuvantul (.cuv), si sageata (.sgt), amandoua scrise in pagina; pe larg se vede
-   cuvantul singur. Alegerea o face CSS-ul, nu JS-ul, deci nu apuca sa se vada forma nepotrivita. */
-.btns .viit .sgt { display:none }
-
-/* GRUPUL DIN DREAPTA: margin-left:auto il impinge in capat, iar pastila ramane cu tot ce prisoseste */
-.btns .unelte-dr { display:flex; align-items:stretch; gap:10px; flex:0 0 auto; margin-left:auto }
-/* bara verticala dintre cele doua grupuri */
-.btns .desparte { flex:0 0 1px; align-self:stretch; background:var(--rule); margin:0 3px }
-/* butoanele mici — abonarea si calendarul: nu cresc, stau cat le tine continutul */
+/* PASTILA LOCULUI: patru segmente lipite intr-un singur corp — bulina zilei de azi, DATA zilei
+   deschise, „Mâine" si cheia calendarului —, cu chenarul si rotunjirea pe PASTILA, nu pe segmente.
+   ⚠️ MASURA DE PORNIRE E 0 (flex:1 1 0), NU auto: randul are flex-wrap, iar ruperea lui se
+   hotaraste dupa marimea IPOTETICA a copiilor, inainte de orice strangere. Cu „auto", pe ecranele
+   inguste pastila ar fi cerut cat data scrisa intreaga plus cele doua butoane si ar fi COBORAT
+   abonarea pe al doilea rand (pataniile masurate la Calendar, 15.09.2026). */
+.btns .pastila { display:flex; flex:1 1 0; min-width:0; align-items:stretch;
+                 border:1px solid var(--rule); border-radius:10px; background:var(--tinta) }
+/* butoanele-iconita: aceeasi masura fixa; numai data creste. („Mâine" intra si el in rand la
+   ecranele mici, cand cuvantul lui cade si ramane sageata — vezi blocurile @media de mai jos.) */
+.pastila .azi-buton, .pastila .cal-cheie { flex:0 0 46px; width:46px; padding-left:0; padding-right:0 }
+.pastila > :first-child { border-radius:9px 0 0 9px }
+.pastila > :last-child { border-radius:0 9px 9px 0 }
+/* BULINA zilei de azi: un punct, fara text — numele lui sta in title si aria-label */
+.pastila .azi-buton { display:flex; align-items:center; justify-content:center;
+                      color:var(--soft); background:transparent; border:0; cursor:pointer;
+                      text-decoration:none }
+.pastila .azi-buton::before { content:""; width:9px; height:9px; border-radius:50%; background:currentColor }
+.pastila .azi-buton:hover { color:var(--rosu); background:var(--paper) }
+.pastila .azi-buton.activ { color:var(--rosu) }
+.pastila .azi-buton[aria-disabled="true"] { cursor:default }
+.pastila .azi-buton:active, .pastila .azi-buton:focus-visible {
+                      outline:none; background:color-mix(in srgb, var(--rosu) 14%, transparent) }
+/* SCRISUL LOCULUI — data zilei deschise. ⚠️ NU E UN BUTON, E O ZONA DE SEMNALIZARE (regula
+   Calendarului, 15.09.2026): fundalul ei e --paper (hartia paginii), nu --tinta, ca sa se vada ca o
+   fereastra taiata in pastila. Nu-i pune :hover si nu-i da cursor:pointer: nu se apasa.
+   Rosul spune „aici esti", si atat — nu atarna de ziua de azi. */
+.pastila .acum { display:flex; align-items:center; justify-content:center;
+                 flex:1 1 auto; min-width:0; padding:11px 13px;
+                 white-space:nowrap; overflow:hidden;
+                 border-left:1px solid var(--rule); border-right:1px solid var(--rule);
+                 background:var(--paper);
+                 font:600 14px/1 ui-sans-serif,system-ui; color:var(--rosu) }
+.pastila .acum .scurt { display:none }
+/* „MÂINE" (user, 18.09.2026: „Mâine e bun") — a treia treapta, intre scris si cheie.
+   ⚠️ NU CRESTE (flex:0 0 auto): prisosul de latime ramane al scrisului .acum, ca la Calendar.
+   Nu-si pune chenar la stanga: linia dintre el si data e deja border-right-ul lui .acum, iar cea
+   dintre el si cheie e border-left-ul cheii. Un singur 1 px intre segmente, oriunde.
+   ⚠️ Cuvantul (.cuv) SI sageata (.sgt) sunt amandoua scrise in pagina; pe larg se vede cuvantul,
+   pe ingust sageata — alegerea o face CSS-ul de mai jos, nu JS-ul. */
+.pastila .maine-buton { flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+                      padding:0 14px; border:0; border-radius:0; background:transparent;
+                      color:var(--soft); cursor:pointer; text-decoration:none; white-space:nowrap;
+                      font:600 13px/1 ui-sans-serif,system-ui }
+.pastila .maine-buton svg { vertical-align:0 }
+.pastila .maine-buton .sgt { display:none }
+.pastila a.maine-buton:hover { color:var(--rosu); background:var(--paper) }
+.pastila .maine-buton.activ { color:var(--rosu);
+                      background:color-mix(in srgb, var(--rosu) 11%, transparent) }
+.pastila .maine-buton[aria-disabled="true"] { cursor:default }
+.pastila .maine-buton:focus-visible { outline:none;
+                      background:color-mix(in srgb, var(--rosu) 18%, transparent) }
+/* CHEIA calendarului: coboara bara de sub antet. Cat timp bara e coborata sta aprinsa, ca omul sa
+   stie de unde a iesit ce vede dedesubt. */
+.pastila .cal-cheie { display:flex; align-items:center; justify-content:center;
+                      border:0; border-left:1px solid var(--rule); border-radius:0;
+                      background:transparent; color:var(--soft); cursor:pointer }
+.pastila .cal-cheie:hover { color:var(--rosu); background:var(--paper) }
+.pastila .cal-cheie[aria-expanded="true"] { color:var(--rosu);
+                      background:color-mix(in srgb, var(--rosu) 11%, transparent) }
+/* butoanele mici — abonarea: nu creste, sta cat ii tine continutul */
 .btns .mic { flex:0 0 auto; display:flex; align-items:center; justify-content:center; gap:6px;
              padding-left:14px; padding-right:14px; font:600 12.5px/1 ui-sans-serif,system-ui;
              letter-spacing:.06em }
@@ -238,32 +269,80 @@ h3 { font-size:20px; font-weight:600; color:var(--capitol);
             color:var(--paper); background:var(--rosu); border:1px solid var(--rosu); border-radius:10px;
             cursor:pointer }
 
-/* PE TELEFON randul are de dus doar trei lucruri — pastila, abonarea si calendarul —, deci cuvantul
-   „Mâine" RAMANE (ca in pastila larga a Programului) si cade numai cuvantul abonarii, al carui plic
-   se citeste singur. Numele intreg sta in title si aria-label, deci nu se pierde. */
+/* PE TELEFON randul are de dus doar doua lucruri — pastila si abonarea —, deci cad cuvintele, nu
+   lucrurile: al abonarii (plicul se citeste singur) si al lui „Mâine" (ii ramane sageata, aceeasi
+   a platformei). Numele intregi stau in title si aria-label, deci nu se pierd. Segmentele pastilei
+   se string, cei 4 px luati fiecaruia se duc toti in data.
+   ⚠️ Blocurile @media stau AICI, dupa regulile pe care le rastoarna: la specificitate egala castiga
+   ce e mai jos. Puse in capul fisierului ar fi stat moarte (patanie masurata la Calendar). */
 @media (max-width:600px) {
   .btns { gap:7px }
   .btns .mic { padding:9px }
-  .btns .unelte-dr { gap:5px }
-  .btns .punct { padding-left:22px; padding-right:22px }
+  .pastila .azi-buton, .pastila .cal-cheie, .pastila .maine-buton { flex:0 0 42px; width:42px }
+  /* „Mâine" trece pe sageata si intra la masura celorlalte butoane: sub 600 px cuvantul s-ar bate
+     cu data pe latimea pastilei, iar data e cea care nu are voie sa se piarda. */
+  .pastila .maine-buton { padding-left:0; padding-right:0 }
+  .pastila .maine-buton .cuv { display:none }
+  .pastila .maine-buton .sgt { display:flex }
 }
-/* Telefoanele inguste: cade bara verticala dintre grupuri — pastila se vede oricum ca un corp. */
-@media (max-width:380px) {
-  .btns .desparte { display:none }
-  .btns .mic { padding-left:7px; padding-right:7px }
+/* DATA PE ECRANE MICI — „22 noiembrie 2026" trece pe „22 noiem. 2026".
+   ⚠️ SCURTATA, NU ASCUNSA: ziua si luna raman scrise (regula userului, 15.09.2026: „pe mobil,
+   neapărat să se vadă scrisul cu data").
+   ⚠️ PRAGUL E 460, nu 400: intre 401 si 460 px data lunga nu incape langa butoane si ar fi taiata
+   de overflow:hidden (masurat la Calendar). */
+@media (max-width:460px) {
+  .pastila .acum { padding:11px 8px; font-size:12.5px }
+  .pastila .acum .lung { display:none }
+  .pastila .acum .scurt { display:inline }
+}
+@media (max-width:400px) {
+  .btns { gap:6px }
+  .btns .mic { padding-left:9px; padding-right:9px }
+  .pastila .azi-buton, .pastila .cal-cheie, .pastila .maine-buton { flex:0 0 36px; width:36px }
+  .pastila .acum { padding:11px 6px; font-size:12px }
 }
 
-/* calendarul de selectie: doar zilele cu randuiala sunt vii */
-.cal td, .cal th { text-align:center; padding:6px 4px }
-.cal td { border-bottom:0 }
-.cal a { text-decoration:none }
-.cal a b { font-weight:600 }
-.cal span[aria-disabled] { color:var(--faint); opacity:.55 }
-.cal a.acum b { color:var(--ink) }
-.cal a.acum { background:var(--azi-fund); outline:1px solid var(--azi); border-radius:8px;
-              display:inline-block; min-width:30px }
-/* panoul calendarului, deschis din butonul din antet, fara reincarcare */
-#cal { padding:10px 2px 6px }
-#cal nav { display:flex; justify-content:space-between; align-items:center; margin:0 0 6px }
-#cal nav button { padding:5px 12px }
+/* BARA CALENDARULUI — sub randul de unelte, ascunsa pana se apasa cheia din pastila. Are chenarul
+   si rotunjirea pastilei, ca sa se recunoasca: e acelasi lucru, coborat cu un rand. Copiata din
+   .bara-luni de la Calendar.
+   ⚠️ Atributul hidden il scrie SERVERUL, la fiecare pagina: alegerea unei zile e o navigare, iar pagina
+   urmatoare se naste cu bara sus, fara nicio linie de JS. */
+.bara-cal { display:block; margin:0 0 6px;
+            border:1px solid var(--rule); border-radius:10px; background:var(--tinta);
+            overflow:hidden; padding:8px 6px 6px }
+.bara-cal[hidden] { display:none }
+.bara-cal[aria-busy="true"] { opacity:.5 }
+/* capul grilei: sagetile lunilor la capete, numele lunii la mijloc */
+.cal-nav { display:flex; justify-content:space-between; align-items:center; margin:0 0 4px }
+.cal-titlu { font:600 12.5px/1 ui-sans-serif,system-ui; letter-spacing:.06em;
+             text-transform:uppercase; color:var(--soft) }
+.cal-sageata { border:0; border-radius:8px; background:transparent; color:var(--faint);
+               font:300 19px/1 ui-sans-serif,system-ui; padding:4px 12px; cursor:pointer }
+.cal-sageata:hover { color:var(--rosu); background:var(--paper) }
+
+/* GRILA LUNII. Culorile (user, 18.09.2026): numarul zilei NEGRU, duminicile si sarbatorile ROSII.
+   --ink si --rosu se intorc singure pe tema intunecata, deci nu se scrie nicio culoare de mana.
+   ⚠️ Zilele fara randuiala proprie raman in aceleasi culori, doar palite (.gol): culoarea spune ce
+   fel de zi e, opacitatea spune daca are unde duce. */
+.cal { width:100%; border-collapse:collapse; margin:0 }
+.cal th { padding:2px 0 6px; text-align:center;
+          font:600 10.5px/1 ui-sans-serif,system-ui; letter-spacing:.06em;
+          text-transform:uppercase; color:var(--faint) }
+.cal td { padding:1px 0; text-align:center; border-bottom:0 }
+.cal .zi { position:relative; display:inline-block; min-width:30px; padding:5px 0 7px;
+           border-radius:8px; text-decoration:none; color:var(--ink) }
+.cal .zi b { font:600 14px/1 ui-sans-serif,system-ui; color:inherit }
+/* ⚠️ Scris anume cu .cal .zi.c-rosu, nu doar .c-rosu: regula de deasupra are doua clase, deci
+   ar fi batut-o pe cea a rosului si duminicile ar fi iesit negre. */
+.cal .zi.c-rosu { color:var(--rosu) }
+.cal a.zi:hover { background:var(--paper) }
+/* ⚠️ .55 e opacitatea de dinainte, pastrata anume. Pana acum zilele inerte erau si palite, SI
+   scrise cu --faint; acum culoarea o da felul zilei (negru / rosu), deci singura deosebire fata de
+   o zi vie a ramas palirea. Daca ies prea tari pe ecran, aici se coboara — nu la culoare. */
+.cal .gol { opacity:.55; cursor:default }
+/* ziua deschisa — fund si chenar, ca in calendarul de pana acum */
+.cal .zi.acum { background:var(--azi-fund); outline:1px solid var(--azi) }
+/* ziua de AZI, cand nu e cea deschisa: o bulina marunta sub numar, in culoarea zilei */
+.cal .zi.e-azi::after { content:""; position:absolute; left:50%; bottom:2px; transform:translateX(-50%);
+                        width:4px; height:4px; border-radius:50%; background:currentColor }
 ` + STIL_ABONARE + STIL_SETARI;

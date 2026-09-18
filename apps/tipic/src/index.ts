@@ -6,6 +6,7 @@
  *
  * Rute:
  *   /health, /v1, /v1/zile, /v1/zi/<data>|azi|maine        API-ul contractului, deschis
+ *   /v1/luna/<AAAA-LL>                                     grila lunii (HTML) pentru bara din antet
  *   /                                                      ziua de azi
  *   /<AAAA-LL-ZZ>                                          ziua cerută (adresa e data, ca în V1)
  *
@@ -20,17 +21,17 @@ import { eAdminulAplicatiei } from '@xc/authorization'
 import { SESIUNE_ANONIMA } from '@xc/contracts'
 import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
 import { Logger, correlationId } from '@xc/observability'
-import { adaugaZile, aziBucuresti, dataCeruta, dataVersiunii, eDataValida, eroareApi, html, json, jsonCuEtag } from '@xc/ui'
+import { aziBucuresti, dataCeruta, dataVersiunii, eDataValida, eroareApi, html, json, jsonCuEtag } from '@xc/ui'
 import { modulActiuni } from '@xc/actiuni'
 import pkg from '../package.json'
 import { ACTIUNI } from './actiuni.js'
 import { sfintiiPeSurse, ziuaIntreaga } from './zi.js'
-import { type Pericopa, textulPericopei, textulVoscresnei, ziuaCalendarului } from './calendar.js'
+import { type Pericopa, sarbatorileLunii, textulPericopei, textulVoscresnei, ziuaCalendarului } from './calendar.js'
 import { acoperire, cartile, mineiZilei, randuialaZilei, tipiconalZilei, zileleCuRanduiala } from './depozit.js'
 import { pomeniriDinAnuar, pomeniriDinMinei } from './sinaxar.js'
 import { abonamentul, ruteazaAbonare } from '@xc/abonare'
 import { ruteazaSetari } from '@xc/setari'
-import { type Ctx, paginaCarcasa, paginaMesaj, paginaZilei } from './pagini.js'
+import { type Ctx, grilaLunii, paginaCarcasa, paginaMesaj, paginaZilei } from './pagini.js'
 import { eAdresaDeCarte, pdfDinR2 } from './carti-pdf.js'
 
 export interface Env {
@@ -65,7 +66,7 @@ const eAdresaDeMasina = (cale: string) => /^\/(v1|intern|\.well-known|health)(\/
 const doarGasite = (lista: ReadonlyArray<Pericopa | null>): Pericopa[] => lista.filter((p): p is Pericopa => p !== null)
 
 
-async function api(req: Request, env: Env, cale: string, azi: string): Promise<Response> {
+async function api(req: Request, env: Env, cale: string, azi: string, prefix: string): Promise<Response> {
   const cache = { 'cache-control': CACHE_API }
 
   if (cale === '/health') {
@@ -90,6 +91,7 @@ async function api(req: Request, env: Env, cale: string, azi: string): Promise<R
           { adresa: '/v1/zile', ce_da: 'zilele cu rânduială proprie' },
           { adresa: '/v1/minei/<luna>/<zi>', ce_da: 'ziua din Minei — cartea nu ține de an' },
           { adresa: '/v1/sfinti/<data>|azi|maine · /v1/sfinti/minei/<luna>/<zi>', ce_da: 'sfinții zilei, pe surse: Mineiul, apoi Anuarul' },
+          { adresa: '/v1/luna/<AAAA-LL>?zi=<AAAA-LL-ZZ>', ce_da: 'grila lunii pentru bara din antet — HTML, nu JSON' },
         ],
       },
       cache,
@@ -99,6 +101,26 @@ async function api(req: Request, env: Env, cale: string, azi: string): Promise<R
   if (cale === '/v1/zile') {
     const zile = await zileleCuRanduiala(env.DB)
     return jsonCuEtag(req, { zile, total: zile.length }, cache)
+  }
+
+  /**
+   * GRILA UNEI LUNI, pentru bara din antet. Raspunde cu HTML gata scris, nu cu JSON: grila se
+   * deseneaza intr-un singur loc (`grilaLunii`), iar sagetile ← → doar o pun in locul celei vechi.
+   * Cu JSON ar fi trebuit scrisa a doua oara, in sirul de JS al paginii — doua desene care se
+   * departeaza unul de altul la prima schimbare.
+   *
+   * `?zi=` e ziua DESCHISA in pagina: ea poarta marcajul `.acum` si in lunile vecine, ca omul sa
+   * vada de unde a plecat. Lipsa ei nu e o eroare — atunci nicio zi nu e marcata.
+   */
+  const mLuna = /^\/v1\/luna\/(\d{4}-(\d{2}))$/.exec(cale)
+  if (mLuna) {
+    const luna = mLuna[1]!
+    const l = Number(mLuna[2])
+    if (l < 1 || l > 12) return eroareApi(400, 'luna_invalida', 'Luna se scrie AAAA-LL.')
+    const cerut = new URL(req.url).searchParams.get('zi') ?? ''
+    const activa = eDataValida(cerut) ? cerut : ''
+    const [zile, sarbatori] = await Promise.all([zileleCuRanduiala(env.DB), sarbatorileLunii(env.CALENDAR, luna)])
+    return html(grilaLunii({ prefix, luna, activa, azi, zile, sarbatori }), 200, cache)
   }
 
   /**
@@ -186,7 +208,7 @@ export default {
       }
       if (req.method !== 'GET' && req.method !== 'HEAD') return eroareApi(405, 'metoda_nepermisa', 'Sub /v1 merg doar GET, HEAD și OPTIONS.')
       try {
-        return await api(req, env, cale, azi)
+        return await api(req, env, cale, azi, prefix)
       } catch (e) {
         log.error('eroare api', { eroare: e instanceof Error ? e.message : String(e) })
         return eroareApi(500, 'eroare_interna', 'A apărut o eroare neașteptată.')
@@ -287,11 +309,13 @@ export default {
       const zi = await ziuaCalendarului(env.CALENDAR, data)
       // Textul pericopelor: referintele de rand vin de la calendar (le are pe toate zilele anului),
       // iar Evanghelia Utreniei din randuiala ROEA — pe amandoua textul il aduce tot calendarul.
-      const [voscreasna, utrenie, apostol, evanghelie] = await Promise.all([
+      const [voscreasna, utrenie, apostol, evanghelie, sarbatori] = await Promise.all([
         zi?.evanghelia_invierii ? textulVoscresnei(env.CALENDAR, zi.evanghelia_invierii) : Promise.resolve(null),
         Promise.all((z.randuiala?.utrenie ?? []).map((r) => textulPericopei(env.CALENDAR, r.ref))),
         zi?.pericope.apostol ? Promise.all([textulPericopei(env.CALENDAR, zi.pericope.apostol)]) : Promise.resolve([]),
         zi?.pericope.evanghelie ? Promise.all([textulPericopei(env.CALENDAR, zi.pericope.evanghelie)]) : Promise.resolve([]),
+        // zilele rosii ale lunii deschise, pentru grila din antet: O SINGURA cerere pe luna
+        sarbatorileLunii(env.CALENDAR, data.slice(0, 7)),
       ])
 
       const zileCuRanduiala = await zileleCuRanduiala(env.DB)
@@ -301,8 +325,8 @@ export default {
           zi,
           pericope: { voscreasna, utrenie: doarGasite(utrenie), apostol: doarGasite(apostol), evanghelie: doarGasite(evanghelie) },
           zileCuRanduiala,
+          sarbatori,
           azi,
-          maine: adaugaZile(azi, 1),
         }),
         200,
         cachePagina,

@@ -14,14 +14,19 @@
  */
 import type { Navigatie } from '@xc/config'
 import type { CarteTipic, RanduialaZi, TipiconalZi, ZiLiturgica, ZiMinei } from '@xc/contracts'
-import { ICOANE, LUNI, ZILE_SAPTAMANA, dataLunga, esc, pagina, ziuaSaptamanii } from '@xc/ui'
-import type { Pericopa } from './calendar.js'
+import { LUNI, LUNI_SCURT, ZILE_SAPTAMANA, adaugaZile, dataLunga, esc, pagina, ziuaSaptamanii } from '@xc/ui'
+import { type Pericopa, eRangRosu } from './calendar.js'
 import { CARTI_PDF } from './carti-pdf.js'
 import { JS_ABONARE, abonamentul, butonAbonare, fereastraAbonare } from '@xc/abonare'
 import { LOCAL } from './stil.js'
 
 /* Plicul abonarii a plecat in `@xc/abonare`, odata cu butonul lui: acolo e acelasi desen pentru
    toate aplicatiile, deci nu se mai poate schimba intr-un loc si in celelalte nu. */
+/* Cheia calendarului din pastila — ACEEASI icoana ca la Calendar (`apps/calendar/src/pagini.ts`),
+   masura ei cu tot: pastila Tipicului e copiata de acolo, deci si cheia trebuie sa cada la fel. */
+const IC_CALENDAR = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>`
+/* Sageata segmentului „Mâine" — se vede in locul cuvantului pe ecranele inguste (vezi `stil.ts`).
+   E aceeasi sageata a platformei ca la Buletin si Newsletter, masura ei cu tot. */
 const IC_INAINTE = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12h14"/><path d="m12.5 6 6 6-6 6"/></svg>`
 
 export interface Ctx {
@@ -224,7 +229,7 @@ function sectiunePericopa(titlu: string, texte: Array<Pericopa | null>, deschis 
  * glasul jos, marunt. In celelalte zile ramane un singur rand cu sfintii, colorati dupa rang.
  */
 function culoareRang(rang: string): string {
-  if (rang === 'praznic_imparatesc' || rang === 'cruce_rosie') return 'c-rosu'
+  if (eRangRosu(rang)) return 'c-rosu'
   if (rang === 'cruce_albastra') return 'c-albastru'
   return ''
 }
@@ -294,37 +299,143 @@ function cardulCartii(carte: CarteTipic | null | undefined, pagini: number[], nu
 // ---------------------------------------------------------------------------
 
 /**
- * PASTILA NAVIGARII (user, 13.09.2026: „meniul principal să semene ca la Program și Calendar").
- * Un singur corp, cu chenarul si rotunjirea pe PASTILA, nu pe segmente — ca la amandoua celelalte
- * aplicatii, ca sa se citeasca drept UN obiect cu o pozitie, nu doua destinatii deosebite.
+ * SCRISUL DIN PASTILA — unde esti, in cuvinte. Copiat de la Calendar (`scrisulLocului`), cu
+ * deosebirea ca acolo pagina e a unei LUNI, iar aici e a unei ZILE: data se scrie intotdeauna cu
+ * zi, si e a zilei DESCHISE, nu a zilei de azi.
  *
- * Inauntru, doua segmente: BULINA zilei de azi (fara text, ca bulina saptamanii de la Program si
- * cea a lunii de la Calendar) si „MÂINE", care ia prisosul de latime fiindca e singurul cu scris.
- * E chiar pastila `larga` a Programului — cea a omului fara drepturi, tot cu doua segmente.
- *
- * ⚠️ „Ieri" NU exista (user, 13.09.2026: „și ieri nu are sens"): tipicul se citeste inaintea
- * slujbei, nu dupa ea. Orice alta zi se alege din calendarul de la capatul randului.
- *
- * Treptele sunt socotite fata de ZIUA DE AZI, nu fata de ziua deschisa — ca la Program, unde cele
- * trei trepte sunt tot destinatii fixe. Pe o zi venita din calendar niciun segment nu e marcat.
- *
- * Segmentul pe care CHIAR esti nu duce nicaieri, dar ramane apasabil (`<button aria-disabled>`):
- * asa primeste focusul si se vede unde te afli.
+ * ⚠️ Forma scurta se scrie ALATURI, nu in locul celei lungi, si se schimba din CSS la ecrane mici:
+ * randul de unelte trebuie sa ramana pe O SINGURA LINIE, iar „22 noiembrie 2026" n-ar mai fi incaput
+ * pe un telefon de 390 px. Scurtarile sunt cele ale platformei (`LUNI_SCURT`): „22 noiem. 2026".
  */
-function navigarea(ctx: Ctx, o: { data: string; azi: string; maine: string }): string {
+function scrisulLocului(data: string): string {
+  const [an, luna, zi] = data.split('-').map(Number) as [number, number, number]
+  return `<span class="acum"><b class="lung">${esc(dataLunga(data))}</b>`
+    + `<b class="scurt">${zi} ${esc(LUNI_SCURT[luna - 1] ?? '')} ${an}</b></span>`
+}
+
+/**
+ * PASTILA LOCULUI (user, 18.09.2026: „după bulina cu AZI să avem un text care spune unde ne aflăm —
+ * de fapt totul să fie ca la Calendar, fără funcția de filtrare cruci").
+ *
+ * Patru segmente: BULINA zilei de azi · DATA zilei deschise, cat tot spatiul ramas · „MÂINE" ·
+ * CHEIA calendarului, care coboara bara de sub antet. Ordinea de la Calendar (bulina · scris ·
+ * cheie) sta neatinsa; „Mâine" se aseaza INTRE scris si cheie.
+ *
+ * ⚠️ „MÂINE" S-A INTORS (user, 18.09.2026: „Mâine e bun"). In dimineata aceleiasi zile iesise,
+ * odata cu mutarea pastilei dupa Calendar; s-a vazut insa ca ziua urmatoare e singura la care se
+ * sare des — tipicul se citeste inaintea slujbei — si nu merita de fiecare data coborata grila.
+ * ⚠️ „Ieri" tot NU exista (user, 13.09.2026: „și ieri nu are sens"). Orice alta zi se alege din
+ * grila lunii, care le are pe toate.
+ *
+ * ⚠️ „Mâine" NU ia prisosul de latime: prisosul ramane al scrisului `.acum`, ca la Calendar.
+ * Segmentul poarta si cuvantul (`.cuv`), si sageata (`.sgt`), amandoua scrise in pagina; care se
+ * vede alege CSS-ul dupa latime, ca sa nu apuce sa se vada infatisarea nepotrivita, cum s-ar
+ * intampla cu JS. Treapta e socotita fata de ZIUA DE AZI, nu fata de ziua deschisa: pe o zi venita
+ * din grila niciun segment nu e marcat.
+ *
+ * ⚠️ NU se adauga aici lupa si crucea de la Calendar: cautarea si filtrul crucii sunt ale
+ * calendarului (user: „fără funcția de filtrare cruci"). Pastila are patru segmente, nu sase.
+ *
+ * ⚠️ „AZI" E O BULINA, nu un cuvant (regula veche a platformei): punctul se deseneaza din CSS
+ * (`.azi-buton::before`), deci butonul ramane gol de text — numele lui se citeste din `title` si
+ * `aria-label`. Segmentul pe care CHIAR esti nu duce nicaieri, dar ramane apasabil
+ * (`<button aria-disabled>`): asa primeste focusul si se vede unde te afli.
+ */
+function pastilaLocului(ctx: Ctx, o: { data: string; azi: string; maine: string }): string {
   const p = esc(ctx.prefix)
-  const bulina =
+  const butonAzi =
     o.data === o.azi
-      ? `<button type="button" class="btn punct activ" aria-disabled="true" aria-current="page" title="Ești pe ziua de azi" aria-label="ziua de azi"></button>`
-      : `<a class="btn punct" href="${p}/${o.azi}" title="Treci la ziua de azi" aria-label="ziua de azi"></a>`
-  // Cuvantul SI sageata se scriu amandoua in pagina; care se vede alege CSS-ul dupa latime, ca la
-  // Program — asa nu apuca sa se vada infatisarea nepotrivita, cum s-ar intampla cu JS.
+      ? `<button type="button" class="azi-buton activ" aria-disabled="true" aria-current="page" title="Astăzi" aria-label="Astăzi"></button>`
+      : `<a class="azi-buton" href="${p}/${o.azi}" title="Astăzi" aria-label="Astăzi"></a>`
   const scris = `<span class="cuv">Mâine</span><span class="sgt">${IC_INAINTE}</span>`
-  const maine =
+  const butonMaine =
     o.data === o.maine
-      ? `<button type="button" class="btn viit activ" aria-disabled="true" aria-current="page" title="Ești pe ziua de mâine" aria-label="ziua de mâine">${scris}</button>`
-      : `<a class="btn viit" href="${p}/${o.maine}" title="Treci la ziua de mâine" aria-label="ziua de mâine">${scris}</a>`
-  return `<span class="pastila larga">${bulina}${maine}</span>`
+      ? `<button type="button" class="maine-buton activ" aria-disabled="true" aria-current="page" title="Ești pe ziua de mâine" aria-label="ziua de mâine">${scris}</button>`
+      : `<a class="maine-buton" href="${p}/${o.maine}" title="Treci la ziua de mâine" aria-label="ziua de mâine">${scris}</a>`
+  const cheia = `<button type="button" class="cal-cheie" id="cal-cheie" aria-expanded="false"`
+    + ` aria-controls="bara-cal" title="Alege altă zi" aria-label="Alege altă zi">${IC_CALENDAR}</button>`
+  return `<span class="pastila">${butonAzi}${scrisulLocului(o.data)}${butonMaine}${cheia}</span>`
+}
+
+/**
+ * GRILA UNEI LUNI — zilele ei, sapte pe rand, de luni pana duminica.
+ *
+ * Se scrie PE SERVER, si la prima incarcare a paginii, si la schimbarea lunii (atunci o cere JS-ul
+ * de la `/v1/luna/<AAAA-LL>` si o pune in locul celei vechi): un singur loc unde se hotaraste cum
+ * arata o zi, deci grila nu se poate desparti in doua infatisari.
+ *
+ * ⚠️ CULORILE (user, 18.09.2026: „Calendarul să fie afișat scrisul zilelor cu negru — doar
+ * duminicile roșii și sărbătorile cu roșu"): numarul zilei e --ink, duminicile si sarbatorile sunt
+ * --rosu. Duminicile se stiu din data; sarbatorile vin de la Calendar (vezi `sarbatorileLunii`).
+ * Amandoua variabilele se intorc singure pe tema intunecata.
+ *
+ * ⚠️ Zilele fara randuiala proprie raman INERTE (`<span aria-disabled>`), in aceleasi culori dar
+ * palite: culoarea spune ce fel de zi e, opacitatea spune daca are unde duce.
+ */
+export function grilaLunii(o: {
+  prefix: string
+  /** Luna desenata, `AAAA-LL`. */
+  luna: string
+  /** Ziua deschisa in pagina — poarta marcajul `.acum`; poate fi din alta luna. */
+  activa: string
+  azi: string
+  /** Zilele cu randuiala proprie (toate, nu doar ale lunii). */
+  zile: string[]
+  /** Zilele rosii ale lunii, de la Calendar. */
+  sarbatori: string[]
+}): string {
+  const p = esc(o.prefix)
+  const an = Number(o.luna.slice(0, 4))
+  const l = Number(o.luna.slice(5, 7))
+  const cuRanduiala = new Set(o.zile)
+  const rosii = new Set(o.sarbatori)
+  const nrZile = new Date(Date.UTC(an, l, 0)).getUTCDate()
+  // saptamana incepe LUNI (cum era si in calendarul de pana acum): duminica pica la capat
+  const decalaj = (new Date(Date.UTC(an, l - 1, 1)).getUTCDay() + 6) % 7
+  const alta = (pas: number) => {
+    const d = new Date(Date.UTC(an, l - 1 + pas, 1))
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+  }
+
+  const celule: string[] = []
+  for (let i = 0; i < decalaj; i++) celule.push('<td></td>')
+  for (let zi = 1; zi <= nrZile; zi++) {
+    const d = `${o.luna}-${String(zi).padStart(2, '0')}`
+    const clase = ['zi']
+    if (ziuaSaptamanii(d) === 0 || rosii.has(d)) clase.push('c-rosu')
+    if (d === o.activa) clase.push('acum')
+    if (d === o.azi) clase.push('e-azi')
+    const c = clase.join(' ')
+    celule.push(
+      cuRanduiala.has(d)
+        ? `<td><a class="${c}" href="${p}/${d}"${d === o.activa ? ' aria-current="page"' : ''}><b>${zi}</b></a></td>`
+        : `<td><span class="${c} gol" aria-disabled="true"><b>${zi}</b></span></td>`,
+    )
+  }
+  const randuri: string[] = []
+  for (let i = 0; i < celule.length; i += 7) randuri.push(`<tr>${celule.slice(i, i + 7).join('')}</tr>`)
+
+  const capete = ['L', 'Ma', 'Mi', 'J', 'V', 'S', 'D'].map((z) => `<th>${z}</th>`).join('')
+  return `<div class="cal-luna" id="cal-luna">
+      <nav class="cal-nav">
+        <button type="button" class="cal-sageata" data-luna="${alta(-1)}" title="Luna dinainte" aria-label="Luna dinainte">&larr;</button>
+        <span class="cal-titlu">${esc(LUNI[l - 1] ?? '')} ${an}</span>
+        <button type="button" class="cal-sageata" data-luna="${alta(1)}" title="Luna următoare" aria-label="Luna următoare">&rarr;</button>
+      </nav>
+      <table class="cal"><thead><tr>${capete}</tr></thead><tbody>${randuri.join('')}</tbody></table>
+    </div>`
+}
+
+/**
+ * BARA CALENDARULUI — sora barei lunilor de la Calendar: sta sub randul de unelte, porneste
+ * ASCUNSA (`hidden` scris de server, deci si fara JS pagina e intreaga) si coboara din cheia
+ * pastilei. Are chenarul si rotunjirea pastilei, ca sa se recunoasca de unde a iesit.
+ *
+ * ⚠️ Nu mai e un POP-UP desenat de JS peste pagina, cum era pana pe 18.09.2026: luna deschisa vine
+ * gata scrisa de la server, deci prima deschidere nu mai asteapta nimic.
+ */
+function baraCalendarului(o: Parameters<typeof grilaLunii>[0]): string {
+  return `<div class="bara-cal" id="bara-cal" hidden>${grilaLunii(o)}</div>`
 }
 
 /**
@@ -370,19 +481,20 @@ export function paginaCarcasa(ctx: Ctx, o: { titluPagina: string; corp: string; 
 }
 
 /**
- * Randul din antet, in doua grupuri, ca la Program si la Calendar (user, 13.09.2026: „meniul
- * principal să semene ca la Program și Calendar… să fie abonare și calendar"). La stanga pastila
- * navigarii, care ia spatiul ramas, si indata dupa ea ABONAREA — acolo sta si acolo, si acolo. La
- * dreapta, lipit de margine, dupa bara verticala: CALENDARUL, care deschide alegerea zilei.
+ * Randul din antet, ca la Calendar (user, 18.09.2026: „totul să fie ca la Calendar"): pastila
+ * locului, care ia tot spatiul ramas, si langa ea ABONAREA.
  *
- * Butonul calendarului si-a pastrat icoana si lucrul; ce s-a schimbat e locul si masura lui — pana
- * pe 13.09.2026 randul era „Astăzi · Mâine · calendar", trei butoane deopotriva de late.
+ * ⚠️ GRUPUL DIN DREAPTA A CAZUT. Pana pe 18.09.2026 calendarul era un buton lipit de marginea din
+ * dreapta, dupa o bara verticala (`.desparte`); acum cheia lui e IN pastila, ca la Calendar, deci
+ * n-a mai ramas nimic in grupul acela — nici butonul, nici bara care il despartea.
+ *
+ * ⚠️ Abonarea ramane AFARA din pastila, cum a fost mereu: o vad toti, si adminii.
+ *
+ * Ziua de maine se socoteste AICI, din ziua de azi: e o zi mai incolo, nimic de cerut de la nimeni,
+ * deci nu are ce cauta in `ContinutZi` — pagina nu se schimba dupa ea, ci dupa `data` si `azi`.
  */
-function unelte(ctx: Ctx, o: { data: string; azi: string; maine: string }): string {
-  return `${navigarea(ctx, o)}${butonAbonare(ABONAMENT)}
-      <span class="unelte-dr"><span class="desparte" aria-hidden="true"></span>
-      <button class="btn mic cal-buton" id="btn-cal" type="button" aria-expanded="false" aria-controls="cal"
-              aria-label="Calendar" title="Alege ziua din calendar">${ICOANE.calendar}</button></span>`
+function unelte(ctx: Ctx, o: { data: string; azi: string }): string {
+  return `${pastilaLocului(ctx, { ...o, maine: adaugaZile(o.azi, 1) })}${butonAbonare(ABONAMENT)}`
 }
 
 // ---------------------------------------------------------------------------
@@ -399,8 +511,9 @@ export interface ContinutZi {
   pericope: { voscreasna: Pericopa | null; utrenie: Pericopa[]; apostol: Pericopa[]; evanghelie: Pericopa[] }
   /** Zilele care se pot alege din calendarul din antet. */
   zileCuRanduiala: string[]
+  /** Zilele rosii ale lunii deschise (praznice si cruci rosii), de la Calendar. */
+  sarbatori: string[]
   azi: string
-  maine: string
 }
 
 export function paginaZilei(ctx: Ctx, o: ContinutZi): string {
@@ -459,10 +572,17 @@ export function paginaZilei(ctx: Ctx, o: ContinutZi): string {
     ...comune(ctx),
     titluPagina: `Tipicul — ${o.data}`,
     indexabil: true,
-    unelte: unelte(ctx, { data: o.data, azi: o.azi, maine: o.maine }),
-    subantet: `${fereastraTipicului(ctx)}<div id="cal" hidden></div>`,
+    unelte: unelte(ctx, { data: o.data, azi: o.azi }),
+    subantet: `${baraCalendarului({
+      prefix: ctx.prefix,
+      luna: o.data.slice(0, 7),
+      activa: o.data,
+      azi: o.azi,
+      zile: o.zileCuRanduiala,
+      sarbatori: o.sarbatori,
+    })}\n    ${fereastraTipicului(ctx)}`,
     corp,
-    scripturi: `${scriptulPaginii(o.zileCuRanduiala, o.data, ctx.prefix)}${JS_ABONARE}`,
+    scripturi: `${scriptulPaginii(ctx.prefix, o.data)}${JS_ABONARE}`,
   })
 }
 
@@ -478,51 +598,35 @@ export function paginaMesaj(ctx: Ctx, titlu: string, mesaj: string): string {
 // Scriptul paginii: calendarul de selectie si taierea textelor lungi (ca in V1)
 // ---------------------------------------------------------------------------
 
-function scriptulPaginii(zile: string[], activa: string, prefix: string): string {
+function scriptulPaginii(prefix: string, activa: string): string {
   return `(function(){
-  // calendarul: numai zilele cu randuiala se pot alege; schimbarea lunii NU reincarca pagina
-  var ZILE=${JSON.stringify(zile)};
-  var ACTIVA=${JSON.stringify(activa)};
   var PREFIX=${JSON.stringify(prefix)};
-  var LUNI=${JSON.stringify(LUNI)};
-  var SET={}; ZILE.forEach(function(x){SET[x]=1});
-  var luna=ACTIVA.slice(0,7);
+  var ACTIVA=${JSON.stringify(activa)};
 
-  function deseneaza(){
-    var an=+luna.slice(0,4), m=+luna.slice(5,7);
-    var nrZile=new Date(Date.UTC(an,m,0)).getUTCDate();
-    var decalaj=(new Date(Date.UTC(an,m-1,1)).getUTCDay()+6)%7;
-    var cate=ZILE.filter(function(x){return x.slice(0,7)===luna}).length;
-    var h='<nav><button type="button" id="cal-inapoi">&larr;</button>'
-      +'<span>'+LUNI[m-1]+' '+an+' · '+cate+(cate===1?' zi':' zile')+'</span>'
-      +'<button type="button" id="cal-inainte">&rarr;</button></nav>'
-      +'<table class="cal"><thead><tr><th>L</th><th>Ma</th><th>Mi</th><th>J</th><th>V</th><th>S</th><th>D</th></tr></thead><tbody><tr>';
-    for(var i=0;i<decalaj;i++) h+='<td></td>';
-    for(var zi=1;zi<=nrZile;zi++){
-      var dz=an+'-'+String(m).padStart(2,'0')+'-'+String(zi).padStart(2,'0');
-      if((decalaj+zi-1)%7===0 && zi>1) h+='</tr><tr>';
-      h+= SET[dz]
-        ? '<td><a href="'+PREFIX+'/'+dz+'"'+(dz===ACTIVA?' class="acum"':'')+'><b>'+zi+'</b></a></td>'
-        : '<td><span aria-disabled="true">'+zi+'</span></td>';
-    }
-    h+='</tr></tbody></table>';
-    cal.innerHTML=h;
-    document.getElementById('cal-inapoi').onclick=function(){muta(-1)};
-    document.getElementById('cal-inainte').onclick=function(){muta(1)};
-  }
-  function muta(pas){
-    var an=+luna.slice(0,4), m=+luna.slice(5,7)+pas;
-    if(m<1){m=12;an--} if(m>12){m=1;an++}
-    luna=an+'-'+String(m).padStart(2,'0');
-    deseneaza();
-  }
+  /* BARA CALENDARULUI — coborata si ridicata din cheia pastilei, ca bara lunilor de la Calendar.
+     Luna deschisa e DEJA scrisa in ea de server, deci prima apasare nu asteapta nimic. */
+  var bara=document.getElementById('bara-cal'), cheie=document.getElementById('cal-cheie');
+  if(bara&&cheie) cheie.addEventListener('click',function(){
+    var deschisa=!bara.hidden;
+    bara.hidden=deschisa;
+    cheie.setAttribute('aria-expanded',deschisa?'false':'true');
+  });
 
-  var cal=document.getElementById('cal'), btn=document.getElementById('btn-cal');
-  if(btn) btn.addEventListener('click',function(){
-    var deschis=cal.hidden;
-    cal.hidden=!deschis;
-    btn.setAttribute('aria-expanded',String(deschis));
-    if(deschis) deseneaza();
+  /* Sagetile ← → aduc luna vecina de la server (o singura adresa, /v1/luna/<AAAA-LL>), ca sa nu
+     fie doua feluri de grila: una scrisa in TypeScript si alta in sirul asta. Ascultarea sta pe
+     BARA, nu pe butoane: butoanele se schimba la fiecare luna adusa, bara nu. */
+  if(bara) bara.addEventListener('click',function(ev){
+    var t=ev.target;
+    var b=t&&t.closest?t.closest('.cal-sageata'):null;
+    if(!b) return;
+    var luna=b.getAttribute('data-luna');
+    if(!luna) return;
+    bara.setAttribute('aria-busy','true');
+    fetch(PREFIX+'/v1/luna/'+luna+'?zi='+ACTIVA,{headers:{accept:'text/html'}})
+      .then(function(r){ if(!r.ok) throw 0; return r.text() })
+      .then(function(t){ bara.innerHTML=t })
+      .catch(function(){})
+      .then(function(){ bara.removeAttribute('aria-busy') });
   });
 
   /**

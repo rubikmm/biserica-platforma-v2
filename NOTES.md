@@ -2611,6 +2611,21 @@ forța antetul `Host`**.
   ⚠️ `npm run typecheck` a picat o dată la @xc/auth și a trecut la reluare, fără nicio schimbare —
   cursă între `pnpm install`-urile pornite în paralel de turbo, nu un defect al codului.
 
+- **Tipic 0.4.0 — antetul ca la Calendar** (user, 09:48/21:29: „după bulina cu AZI să avem un text care spune
+  unde ne aflăm — de fapt totul să fie ca la Calendar, fără funcția de filtrare cruci; Calendarul să fie
+  afișat scrisul zilelor cu negru — doar duminicile roșii și sărbătorile cu roșu"; 21:55: „Mâine e bun").
+  Pastila (`pastilaLocului`, `apps/tipic/src/pagini.ts`): bulina AZI · data zilei deschise (`.acum`, lung/scurt)
+  · **Mâine** (cuvânt pe lat, săgeată sub 600 px) · cheia calendarului, care coboară **bara cu grila lunii**
+  sub antet (`.bara-cal`, ca `.bara-luni` la Calendar) — nu mai e pop-up. Abonarea afară, ca înainte. Fără
+  lupă (n-are ce căuta), fără cruce. Grila (`grilaLunii`, scrisă PE SERVER): zilele `--ink`, duminicile și
+  sărbătorile (`eRangRosu`: praznic împărătesc / cruce roșie, aceeași regulă ca titlul zilei) `--rosu`; zilele
+  fără rânduială inerte, palide; ziua deschisă `.acum`, azi cu bulină mică. Sărbătorile se CER de la Calendar
+  prin Service Binding, `/v1/interval` pe luna întreagă (`sarbatorileLunii`, `calendar.ts`) — **o cerere pe
+  lună**, nimic copiat; Calendarul tăcut → doar duminicile roșii. Lunile vecine vin de la
+  `GET /v1/luna/<AAAA-LL>?zi=<deschisă>` ca HTML gata scris (un singur desen, nu JSON + al doilea desen în JS).
+  Probe: `tests/tipic-antet.test.ts` (16). ⚠️ Capcană: `stil.ts` e template literal — un backtick într-un
+  comentariu CSS dărâmă workerul la încărcare („…".acum is not a function"), tsc nu-l prinde.
+
 ### 2026-09-17
 
 - **PATRU RETUȘURI LA FOAIE, MĂSURATE — au intrat în buletin 0.6.0 (publicat împreună cu cele cinci reguli)**.
