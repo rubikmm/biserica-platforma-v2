@@ -29,7 +29,7 @@ import { Obiect } from '@xc/contracts'
 import { aziBucuresti, ZILE_SAPTAMANA, ziuaSaptamanii } from '@xc/ui'
 import { egaleInTimpConstant } from '@xc/auth'
 import { Logger, correlationId } from '@xc/observability'
-import { configAplicatie, configChat, type ConfigAplicatie, type ConfigChat } from '@xc/chat'
+import { TAIERE_MESAJ_OM, configAplicatie, configChat, type ConfigAplicatie, type ConfigChat } from '@xc/chat'
 import { intreabaModelul, instructiuni, type EnvCreier, type MesajModel } from './creier.js'
 import {
   conversatia,
@@ -86,13 +86,15 @@ const TAIERE_REZULTAT = 2500
  */
 const BUGET_MS = 90_000
 
-/**
- * Cât se ia din mesajul omului. Era 2000 — destul pentru o întrebare, PREA PUȚIN pentru munca de la
- * buletin: articolul de pe pagina întâi are vreo 9000 de semne, iar cine lipea articolul în bulă
- * vedea cum se taie la mijloc, fără niciun semn. 12000 acoperă articolul cu tot cu titlu și autor
- * (user, 18.09.2026).
+/*
+ * Cât se ia din mesajul omului: `TAIERE_MESAJ_OM`, din `@xc/chat`. Era 2000 — destul pentru o
+ * întrebare, PREA PUȚIN pentru munca de la buletin: articolul de pe pagina întâi are vreo 9000 de
+ * semne, iar cine îl lipea în bulă vedea cum se taie la mijloc, fără niciun semn. 12000 acoperă
+ * articolul cu tot cu titlu și autor (user, 18.09.2026).
+ *
+ * ⚠️ Cifra stă în `@xc/chat` fiindcă o știu DOUĂ locuri: aici, la scrierea mesajului, și ruta de
+ * urcare a fișierelor, care spune în card dacă textul s-a tăiat. Scrisă în amândouă, s-ar fi depărtat.
  */
-const TAIERE_MESAJ_OM = 12000
 
 /** Cand `creier` e `fara`: interfata merge intreaga, dar nimeni nu intreaba niciun model. */
 const FARA_CREIER =
@@ -294,7 +296,11 @@ function raspunsulDin(
   conversatieId: string,
   stari?: Map<string, Propunere['stare']>,
 ): RaspunsChat {
-  let d: { obiecte?: Obiect[]; propunere?: { id: string; rezumat: string } | null } = {}
+  let d: {
+    obiecte?: Obiect[]
+    propunere?: { id: string; rezumat: string } | null
+    apeluri?: Array<{ nume?: unknown }>
+  } = {}
   try {
     d = JSON.parse(m.date_json || '{}') as typeof d
   } catch {
@@ -307,7 +313,15 @@ function raspunsulDin(
     text: m.text,
     obiecte: Array.isArray(d.obiecte) ? d.obiecte : [],
     propunere: p && stare === 'asteapta' ? p : null,
-    unelte: [],
+    /*
+     * ⚠️ UNELTELE SE SCOT DIN `apeluri`, nu se lasă goale (18.09.2026). Răspunsul venit prin sondare
+     * trece pe aici, iar bula dă mai departe `unelte` paginii de dedesubt: ecranul „buletin nou" își
+     * reface blocul schiței numai când vede `buletin.raspunde` acolo. Cu lista goală, drumul asincron
+     * — adică singurul de azi — n-ar fi împrospătat niciodată nimic, și fără nicio eroare.
+     */
+    unelte: Array.isArray(d.apeluri)
+      ? d.apeluri.map((a) => String(a?.nume ?? '')).filter(Boolean)
+      : [],
     ...(p && stare !== 'asteapta' ? { propunereTrecuta: { rezumat: p.rezumat, stare } } : {}),
   }
 }

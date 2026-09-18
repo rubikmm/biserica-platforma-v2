@@ -253,6 +253,68 @@ iar drumul vechi (`/mesaj` fără `asincron`) răspunde dintr-o bucată, ca pân
 caute; cu bugetul consumat nu se mai face nici apelul final „fără unelte", nici reîncercarea Workers
 AI cu `max_tokens` dublat. Mai bine un răspuns scurt acum decât unul întreg peste trei minute.
 
+### Fișiere urcate în bulă: Word, text și poze (18.09.2026, seara)
+
+Cerere user: *„chatul trebuie să accepte fișiere Word (.docx) sau .txt, poze și text ca și acum"*.
+Piesele s-au luat din proiectul de chineză (`src/lib/media.js`) — buton care apasă un
+`<input type=file hidden>`, micșorarea pozei în browser (1600 px, JPEG 0.82), `multipart/form-data`
+cu câmpul `fisier`, limita de 12 MB întâi pe `content-length`, listă albă MIME↔extensie și **cheia
+scrisă de server, niciodată primită de la om**. Docx-ul, txt-ul și „vezi tot" sunt scrise aici.
+
+```
+bula ─► POST <prefix>/chat/urca   (multipart: fisier + text)
+          1. content-length → 413;  mărimea → 413;  lista albă → 415
+          2. .docx/.txt: textul se scoate ÎN WORKER (packages/chat/src/fisiere.ts)
+          3. octeții → MEDIA, sub `chat/<app>/<om>/<timp36>-<hex6>.<ext>`
+          4. cârligul aplicației (`laFisier`) — dacă are unul
+       ◄─ { ok, obiect:{cheie,titlu,fel,octeti}, text, semne, taiat }
+bula ─► POST /chat/mesaj cu `text`   ← pleacă SINGUR, omul nu mai apasă o dată
+```
+
+**Octeții nu trec prin model**, ca la orice obiect: prin discuție trece textul (la .docx/.txt) sau
+cheia (la poză). Cardul din fir dă linkul pe `/chat/fisier/<cheie>`, sub aceeași poartă ca restul.
+
+Trei lucruri de ținut minte dacă se umblă la `fisiere.ts`:
+
+- **zip-ul se citește de la DIRECTORUL CENTRAL, mereu**. Când antetul local are steagul „data
+  descriptor" (bit 3) — iar Word scrie des așa — mărimile din el sunt zero: un cititor pornit de
+  acolo ia zero octeți și întoarce text gol, fără nicio eroare. Dezumflarea o face
+  `DecompressionStream('deflate-raw')`, fără nicio bibliotecă nouă;
+- **un .txt se încearcă întâi ca UTF-8 cu `fatal: true`**, apoi ca `windows-1250` (ce scrie Word-ul
+  de pe Windows). Fără `fatal`, fișierul ar trece drept UTF-8 cu diacriticele stricate — adică ar
+  „merge", și s-ar vedea abia pe hârtie;
+- **tăierea la 12000 de semne** (`TAIERE_MESAJ_OM`, în `@xc/chat`) se face la urcare, nu doar la
+  creier: cardul spune „tăiat", și vorba aceea trebuie să fie adevărată.
+
+#### Cârligul aplicației: `modulChat({ …, laFisier })`
+
+Fără el, urcarea e generică (textul devine mesajul omului, poza devine un card). Cu el, aplicația ia
+fișierul în domeniul ei. La **buletin**: un `.docx` urcat în timpul chestionarului devine TEXTUL
+articolului de acum, scris pe loc în schiță prin aceeași funcție de domeniu (`scrieRaspuns`) — deci
+articolul nu mai face drumul prin model și înapoi; o poză intră în depozitul buletinului, sub
+`poze/<nr>-<data>/…`, iar în schiță se scrie **adresa publică**, fiindcă Browser Rendering o ia de pe
+internet, dintr-o sesiune care n-are cookie-urile omului.
+
+### Instrucțiuni punctuale către un obiect al foii (18.09.2026, seara)
+
+Cerere user: *„instrucțiunile sunt precise, către un obiect din lista de obiecte ce formează
+buletinul"*, cu modelul mic păstrat: *„partea grea o duce codul, modelul doar potrivește fraza cu un
+subiect"*. Deci `buletin.raspunde` are un argument în plus, `articol` (`principal`/`s1`/`s2`), iar
+ieșirea se poartă altfel după cum a fost chemată:
+
+| Cum s-a chemat | `intrebare` | `instructiune` |
+|---|---|---|
+| răspuns la întrebarea de acum (fără `articol`) | următoarea, gata scrisă | „pune-o EXACT așa" |
+| instrucțiune punctuală (`articol`, ori alt subiect, ori schița gata) | ce a rămas, sau `null` | „spune ce ai schimbat; dacă e o întrebare, pune-o" |
+
+Fără despărțirea asta, „schimbă motto-ul în X", spus după ce numărul era gata, ducea modelul să reia
+cuminte „Care este textul articolului principal?".
+
+**Ecranul se împrospătează fără reîncărcare**: bula emite `xc-chat:raspuns` la fiecare răspuns (cu
+`unelte` în `detail` — scoase din `apeluri`, ca să fie acolo și pe drumul asincron), iar `/nou` cere
+înapoi doar blocul schiței (`GET /nou?bucata=schita`, aceeași funcție `schitaPeEcran`). Reîncărcarea
+întreagă rămâne unde era: după propunerea confirmată, când se schimbă foaia.
+
 ### Creierul, în spatele unei uși
 
 ```ts

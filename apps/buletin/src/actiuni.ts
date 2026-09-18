@@ -57,7 +57,16 @@ export interface EnvActiuniBuletin extends EnvCompunere {
   CALENDAR?: Fetcher
   /** Comutatoarele și textele editabile — de aici vin întrebările chestionarului. */
   CONFIG?: KVNamespace
+  /**
+   * Adresa publică a buletinului. Din ea se face adresa întreagă a unei poze urcate: Browser
+   * Rendering ia poza de pe internet, dintr-o sesiune care n-are nici cookie-ul, nici sesiunea
+   * omului — deci o cheie de depozit nu i-ar folosi la nimic.
+   */
+  ORIGINE_PUBLICA?: string
 }
+
+/** Cele trei locuri de articol, cum le numește `buletin.raspunde` când se spune anume unde se scrie. */
+const ARTICOLE = ['principal', 's1', 's2'] as const
 
 // ---------------------------------------------------------------------------
 // Forma unui articol, scrisă ca s-o poată umple și un model mic
@@ -134,8 +143,14 @@ async function urmatorul(env: EnvActiuniBuletin): Promise<{ nr: number | null; d
 // CHESTIONARUL: schița numărului care urmează
 // ---------------------------------------------------------------------------
 
-/** Întrebările de acum: cele standard, cu ce a schimbat adminul din Setări (KV `CONFIG`). */
-async function chestionarul(env: EnvActiuniBuletin): Promise<Record<CheieIntrebare, string>> {
+/**
+ * Întrebările de acum: cele standard, cu ce a schimbat adminul din Setări (KV `CONFIG`).
+ *
+ * ⚠️ Exportată fiindcă o cheamă și cârligul de fișiere din `index.ts`: mașina de stări trebuie să
+ * vadă ACELEAȘI întrebări din amândouă locurile, altfel un docx urcat ar răspunde la altă întrebare
+ * decât cea de pe ecran.
+ */
+export async function chestionarul(env: EnvActiuniBuletin): Promise<Record<CheieIntrebare, string>> {
   if (!env.CONFIG) return intrebarile()
   try {
     return intrebarile(normalizeazaChestionar(await env.CONFIG.get(CHEIE_CHESTIONAR, 'json')))
@@ -194,6 +209,22 @@ async function deCompus(
   return { cerut, poze: pozeleSchitei(schita), dinSchita: true }
 }
 
+/**
+ * ADRESA UNEI POZE, întreagă și publică — asta se scrie în schiță, nu cheia.
+ *
+ * ⚠️ De ce nu cheia: foaia se randează în Browser Rendering, adică într-un browser din afară, fără
+ * sesiunea omului și fără cookie-urile lui. El cere poza de pe internet, la `/fisier/<cheie>`; o cheie
+ * de depozit nu i-ar spune nimic, iar locul pozei ar rămâne gol pe pagina întâi, fără nicio eroare.
+ * Ce vine deja ca adresă (ori ca `data:`) se lasă neatins.
+ */
+function adresaPozei(env: EnvActiuniBuletin, valoare: string): string {
+  const v = valoare.trim()
+  if (/^(https?:|data:)/i.test(v)) return v
+  const cheie = v.replace(/^\/+/, '').replace(/^fisier\//, '')
+  const radacina = (env.ORIGINE_PUBLICA ?? '').replace(/\/+$/, '')
+  return radacina ? `${radacina}/fisier/${cheie}` : v
+}
+
 /** Calendarul săptămânii tipărite, în forma cerută de socoteală; `undefined` dacă programul tace. */
 async function calendarulPentru(
   env: EnvActiuniBuletin,
@@ -232,6 +263,15 @@ export const REGULI = [
   'Fiecare răspuns al omului → `buletin.raspunde`, cu subiectul cerut de întrebarea de atunci. Răspunsul acțiunii îți dă întrebarea următoare: pune-o și mergi mai departe, până se spune că schița e completă.',
   'Nu inventa câmpuri și nu scrie subiecte din afara listei. Nu rescrie textul omului: trimite-l literă cu literă în `valoare` — el se păstrează pe server, nu în discuția noastră.',
   'Când schița e completă, cheamă `buletin.compune` FĂRĂ argumente: ia totul din schiță. Abia acolo omul confirmă cu Da/Nu. Apoi el apasă „Validează" pe ecranul „buletin nou" — validarea e publicarea, și e a lui, nu a ta.',
+  /*
+   * ⚠️ INSTRUCȚIUNILE PUNCTUALE (user, 18.09.2026, 22:20: „instrucțiunile sunt precise, către un
+   * obiect din lista de obiecte ce formează buletinul"). Partea grea o duce codul; modelului îi
+   * rămâne de potrivit fraza cu un subiect și un articol — și atât. De aceea rândurile astea sunt
+   * scrise ca o poruncă scurtă, nu ca o explicație.
+   */
+  'OBIECTELE FOII, pe care le poți schimba oricând, și numele lor: motto, moto_autor, iar la fiecare articol text, autor, ani, pomenire, titlu, sursa, nota, poza. Articolele sunt trei: `principal`, `s1` (secundar 1), `s2` (secundar 2).',
+  'O instrucțiune care numește un obiect al foii și (dacă spune) un articol se traduce DIRECT în `buletin.raspunde`, fără să întrebi nimic: „schimbă motto-ul în X" → {subiect:"motto", valoare:"X"}; „titlul articolului secundar 1: Y" → {subiect:"titlu", valoare:"Y", articol:"s1"}; „scoate secundarul 2" → {subiect:"sterge_secundar"}. Valoarea e literă cu literă ce a scris omul.',
+  'Lasă `articol` GOL când omul răspunde la întrebarea pe care tocmai i-ai pus-o. Scrie-l numai când omul spune el despre care articol e vorba. Dacă `intrebare` vine `null`, nu mai întreba nimic — spune doar ce s-a schimbat.',
 ]
 
 export const actiuniBuletin = registru<EnvActiuniBuletin>([
@@ -489,10 +529,12 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
   actiune({
     nume: 'buletin.raspunde',
     descriere:
-      'Scrie în schița numărului nou RĂSPUNSUL omului la întrebarea de acum și întoarce întrebarea ' +
-      'următoare, gata scrisă. Subiectul se ia din întrebare: `pastreaza` pentru „da / rămâne așa", ' +
-      '`sari` pentru „nu", ori chiar câmpul (`motto`, `text`, `autor`, `ani`, `pomenire`, `titlu`, ' +
-      '`sursa`). Textul omului se trimite LITERĂ CU LITERĂ în `valoare` — nu-l rescrie și nu-l scurta.',
+      'Scrie în schița numărului nou UN LUCRU: fie răspunsul omului la întrebarea de acum, fie o ' +
+      'instrucțiune punctuală către un obiect al foii („schimbă motto-ul în …", „titlul articolului ' +
+      'secundar 1: …", „autorul e …", „scoate secundarul 2", „pune poza asta la principal"). ' +
+      'Subiectul spune CE se scrie, `articol` spune UNDE (lipsă = articolul la care e chestionarul). ' +
+      'Textul omului se trimite LITERĂ CU LITERĂ în `valoare` — nu-l rescrie și nu-l scurta. ' +
+      'Răspunsul îți dă ce s-a schimbat și, dacă mai e vreuna, întrebarea următoare.',
     efect: 'ciorna',
     permisiune: 'bulletin.write',
     intrare: z.object({
@@ -503,7 +545,11 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
       ),
       valoare: z.string().optional().describe(
         'ce a spus omul, cuvânt cu cuvânt. Lipsește la `pastreaza` și `sari`. La `titlu` merge și ' +
-        'numărul titlului ales din listă („2")',
+        'numărul titlului ales din listă („2"); la `poza`, adresa ei sau cheia pozei urcate',
+      ),
+      articol: z.enum(ARTICOLE).optional().describe(
+        'la ce articol se scrie: `principal`, `s1` (secundarul 1), `s2` (secundarul 2). LASĂ GOL ' +
+        'când omul răspunde la întrebarea pusă; scrie-l când omul spune anume despre care articol e vorba',
       ),
     }),
     iesire: z.object({
@@ -513,7 +559,8 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
       masura: z.object({ semne: z.number(), incap: z.number(), ramase: z.number() }).nullable(),
       articol: z.string(),
       subiect: z.string(),
-      intrebare: z.string(),
+      /** întrebarea rămasă; `null` = nu mai e nimic de întrebat (ori a fost o instrucțiune punctuală) */
+      intrebare: z.string().nullable(),
       instructiune: z.string(),
       gata: z.boolean(),
     }),
@@ -525,10 +572,41 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
       { fraza: 'autorul e Sfântul Ioan Gură de Aur', argumente: { subiect: 'autor', valoare: 'SFÂNTUL IOAN GURĂ DE AUR' } },
       { fraza: 'a trăit între 347 și 407', argumente: { subiect: 'ani', valoare: '347-407' } },
       { fraza: 'mai adăugăm un text', argumente: { subiect: 'mai_adaugam', valoare: 'da' } },
+      /*
+       * ⚠️ DE AICI ÎN JOS: INSTRUCȚIUNI PUNCTUALE, cu argumentele gata scrise (user, 18.09.2026,
+       * 22:20). Pentru un model mic ele sunt antrenamentul care hotărăște: fără ele cere lămuriri
+       * („la ce articol?") în loc să cheme unealta, deși omul a spus limpede și ce, și unde.
+       */
+      { fraza: 'schimbă motto-ul în „Rugăciunea este respirația sufletului"', argumente: { subiect: 'motto', valoare: 'Rugăciunea este respirația sufletului' } },
+      { fraza: 'motto-ul e al Părintelui Arsenie Papacioc', argumente: { subiect: 'moto_autor', valoare: 'Părintele Arsenie Papacioc' } },
+      { fraza: 'titlul articolului secundar 1: DESPRE POST', argumente: { subiect: 'titlu', valoare: 'DESPRE POST', articol: 's1' } },
+      { fraza: 'autorul secundarului 2 e Sfântul Vasile cel Mare', argumente: { subiect: 'autor', valoare: 'SFÂNTUL VASILE CEL MARE', articol: 's2' } },
+      { fraza: 'la principal, anii sunt 330-379', argumente: { subiect: 'ani', valoare: '330-379', articol: 'principal' } },
+      { fraza: 'pomenirea e pe 1 ianuarie', argumente: { subiect: 'pomenire', valoare: '1 ianuarie' } },
+      { fraza: 'sursa articolului secundar 1 e ziarullumina.ro', argumente: { subiect: 'sursa', valoare: 'ziarullumina.ro', articol: 's1' } },
+      { fraza: 'scoate secundarul 2', argumente: { subiect: 'sterge_secundar' } },
+      { fraza: 'pune poza asta la principal', argumente: { subiect: 'poza', valoare: 'poze/616-2026-09-20/mfk3z2-a91b04.jpg', articol: 'principal' } },
+      { fraza: 'ia-o de la capăt', argumente: { subiect: 'de_la_capat' } },
     ],
     async executa(a, c) {
       const [{ schita }, intrebari] = await Promise.all([schitaNumarului(c.env), chestionarul(c.env)])
-      const scris = scrieRaspuns(schita, a, intrebari)
+      /*
+       * ⚠️ ÎNTREBAREA DE ACUM SE SOCOTEȘTE ÎNAINTE DE SCRIERE: din ea se vede dacă omul a RĂSPUNS la
+       * ea, ori a dat o instrucțiune punctuală. Socotită după, ar fi mereu următoarea, și n-am mai
+       * ști de unde am plecat.
+       */
+      const deAcum = urmatoareaIntrebare(schita, intrebari)
+      const eRaspunsLaIntrebare =
+        deAcum.subiect !== 'gata' &&
+        a.articol === undefined &&
+        (a.subiect === 'pastreaza' || a.subiect === 'sari' || a.subiect === deAcum.subiect)
+
+      // O poză dată prin CHEIE (așa o întoarce urcarea din bulă) devine adresa ei publică: foaia se
+      // randează într-un browser din afară, care n-are cum să ceară nimic din depozitul nostru.
+      const cerut =
+        a.subiect === 'poza' && a.valoare ? { ...a, valoare: adresaPozei(c.env, a.valoare) } : a
+
+      const scris = scrieRaspuns(schita, cerut, intrebari)
       // autorul tocmai scris poate fi sfânt: se întreabă calendarul ÎNAINTE de întrebarea următoare
       await cautaPomenirile(c.env, scris.schita)
       const intrebare = urmatoareaIntrebare(scris.schita, intrebari)
@@ -541,14 +619,26 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
        */
       const { masura: calendar } = await calendarulPentru(c.env, scris.schita.data)
       const masura = masuraArticolului(scris.schita, scris.articol, calendar)
+      const maiE = intrebare.subiect !== 'gata'
+
       return {
         scris: scris.scris,
         masura,
         articol: intrebare.articol,
         subiect: intrebare.subiect,
-        intrebare: intrebare.text,
-        instructiune: intrebare.instructiune,
-        gata: intrebare.subiect === 'gata',
+        intrebare: maiE ? intrebare.text : null,
+        /*
+         * ⚠️ O INSTRUCȚIUNE PUNCTUALĂ NU REIA CHESTIONARUL DE LA CAPĂT (user, 18.09.2026, 22:20).
+         * Până aici, orice chemare întorcea întrebarea următoare cu „pune-o omului EXACT așa" — deci
+         * după „schimbă motto-ul în X", spus la două zile după ce numărul era gata, modelul relua
+         * cuminte „Care este textul articolului principal?". Acum: la un răspuns din chestionar,
+         * purtarea de dinainte; la o instrucțiune, se spune ce s-a schimbat, iar întrebarea rămasă e
+         * o ofertă, nu o poruncă.
+         */
+        instructiune: eRaspunsLaIntrebare
+          ? intrebare.instructiune
+          : 'Spune-i omului ce ai schimbat într-o frază; dacă `intrebare` nu e null, pune-o.',
+        gata: !maiE,
       }
     },
   }),

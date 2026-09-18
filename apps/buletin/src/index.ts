@@ -33,7 +33,7 @@ import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/co
 import { Logger, correlationId } from '@xc/observability'
 import { modulActiuni } from '@xc/actiuni'
 import { modulChat } from '@xc/chat'
-import { actiuniBuletin } from './actiuni.js'
+import { actiuniBuletin, chestionarul, schitaNumarului } from './actiuni.js'
 import { dataVersiunii, eroareApi, html, json, jsonCuEtag } from '@xc/ui'
 import pkg from '../package.json'
 import {
@@ -59,15 +59,21 @@ import {
   mottoDinainte,
   textCurat,
 } from './compune.js'
-import { PAGINI, type NumarCerut, socoteste } from './masuri.js'
+import { PAGINI, type NumarCerut, semne, socoteste } from './masuri.js'
 import {
   CHEIE_CHESTIONAR,
   INTREBARI_STANDARD,
+  NUMELE_ZONEI,
+  articolul,
   catreCerere,
+  cautaPomenirile,
   citesteSchita,
   intrebarile,
   normalizeazaChestionar,
+  scrieRaspuns,
+  scrieSchita,
   stergeSchita,
+  urmatoareaIntrebare,
 } from './schita.js'
 import { abonamentul, ruteazaAbonare } from '@xc/abonare'
 import { ruteazaSetari } from '@xc/setari'
@@ -83,6 +89,7 @@ import {
   paginaMesaj,
   paginaNou,
   rubricaChestionar,
+  schitaPeEcran,
 } from './pagini.js'
 
 /**
@@ -151,7 +158,77 @@ const MODUL = modulActiuni<Env>({ aplicatie: 'buletin', versiune: pkg.version, a
  * pagina se reîncarcă — și atunci ecranul `/nou` se umple din cererea păstrată lângă PDF. De aceea
  * „să-l completeze" nu cere niciun drum nou: ciorna compusă E starea ecranului.
  */
-const CHAT = modulChat({ aplicatie: 'buletin', titlu: 'Scrie buletinul' })
+const CHAT = modulChat({
+  aplicatie: 'buletin',
+  titlu: 'Scrie buletinul',
+  /*
+   * ⚠️ FIȘIERUL INTRĂ DIRECT ÎN SCHIȚĂ, nu în discuție (user, 18.09.2026, 22:20). Un articol de Word
+   * are vreo 9000 de semne: dacă ar pleca spre model ca mesaj, ar trebui să-l trimită el înapoi,
+   * literă cu literă, printr-un `buletin.raspunde` — adică exact lucrul pe care schița a fost scrisă
+   * să-l ocolească („partea grea o duce codul, modelul doar potrivește fraza cu un subiect").
+   * Aici CODUL scrie, prin aceeași funcție de domeniu (`scrieRaspuns`), iar modelul primește o frază.
+   */
+  laFisier: (f, c) => laFisierulBuletinului(f, c.env as unknown as Env),
+})
+
+/** Cifrele mari, cum se citesc: „8 912". */
+const cuMii = (n: number): string => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+
+const hexScurt = (cati: number): string =>
+  [...crypto.getRandomValues(new Uint8Array(cati))].map((b) => b.toString(16).padStart(2, '0')).join('')
+
+/**
+ * CE FACE BULETINUL CU UN FIȘIER URCAT ÎN BULĂ.
+ *
+ *  - **.docx / .txt** → textul articolului la care e chestionarul acum, scris pe loc în schiță. Numai
+ *    dacă acolo chiar se aștepta un text (întrebarea de acum e `text`, ori articolul n-are niciunul):
+ *    altfel se întoarce `null` și fișierul merge pe drumul generic, ca mesaj — omul spune el unde-l vrea.
+ *  - **poză** → în depozitul buletinului, sub `poze/<nr>-<data>/…`, iar în schiță se scrie ADRESA ei
+ *    publică. ⚠️ Adresa, nu cheia: foaia se randează în Browser Rendering, un browser din afară care
+ *    ia poza de pe internet; cu o cheie de depozit, locul pozei ar rămâne gol, fără nicio eroare.
+ */
+async function laFisierulBuletinului(
+  f: { nume: string; fel: string; tip: string; text: string; continut: ArrayBuffer },
+  env: Env,
+): Promise<{ text?: string; mesaj?: string; poza?: string; unelte?: string[] } | null> {
+  const [{ schita }, intrebari] = await Promise.all([schitaNumarului(env), chestionarul(env)])
+  const deAcum = urmatoareaIntrebare(schita, intrebari)
+  const care = deAcum.articol
+  const unde = NUMELE_ZONEI[care]
+
+  const pastreaza = async (cerut: Parameters<typeof scrieRaspuns>[1]) => {
+    const scris = scrieRaspuns(schita, cerut, intrebari)
+    // autorul se propune din textul proaspăt scris, deci pomenirea lui se caută acum, nu la mesajul următor
+    await cautaPomenirile(env, scris.schita)
+    const urm = urmatoareaIntrebare(scris.schita, intrebari)
+    await scrieSchita(env, scris.schita, { subiect: urm.subiect, articol: urm.articol })
+  }
+
+  if (f.fel === 'docx' || f.fel === 'txt') {
+    const asteaptaText = deAcum.subiect === 'text' || !articolul(schita, care).text
+    if (!asteaptaText) return null
+    await pastreaza({ subiect: 'text', valoare: f.text, articol: care })
+    return {
+      text: f.text,
+      // ⚠️ `unelte` e pentru ecranul de dedesubt: schița s-a schimbat ACUM, nu când răspunde modelul.
+      unelte: ['buletin.raspunde'],
+      mesaj:
+        `Am pus textul din ${f.nume} (${cuMii(semne(f.text))} de semne) ca textul articolului ${unde}. ` +
+        'Continuă cu întrebarea următoare.',
+    }
+  }
+
+  const ext = f.fel === 'png' ? 'png' : f.fel === 'webp' ? 'webp' : 'jpg'
+  const cheie = `poze/${schita.nr ?? 0}-${schita.data}/${Date.now().toString(36)}-${hexScurt(3)}.${ext}`
+  await env.FISIERE.put(cheie, f.continut, { httpMetadata: { contentType: f.tip } })
+  const adresa = `${env.ORIGINE_PUBLICA.replace(/\/+$/, '')}/fisier/${cheie}`
+  await pastreaza({ subiect: 'poza', valoare: adresa, articol: care })
+  return {
+    poza: adresa,
+    unelte: ['buletin.raspunde'],
+    mesaj: `Am pus poza ${f.nume} la articolul ${unde}. Dacă o vrei la alt articol, spune-mi.`,
+  }
+}
 
 const SERVICIU = 'app-buletin'
 /** Audienta abonatilor — numele ei sta in registrul `ABONAMENTE` din `@xc/abonare`, nu aici. */
@@ -163,6 +240,18 @@ const eAdresaDeMasina = (cale: string) => /^\/(v1|intern|\.well-known|health)(\/
 /** Cheile din R2 sunt scrise de import, nu de om: `2026/buletin-615-2026-09-06.pdf`. Orice altceva
  *  nu se cauta in depozit — nici macar ca sa se afle ca nu exista. */
 const CHEIE_BUNA = /^\d{4}\/buletin-\d{3,4}-\d{4}-\d{2}-\d{2}(-mic)?\.(pdf|jpg)$/
+
+/**
+ * POZELE URCATE ÎN BULĂ, pentru numărul care se face: `poze/<nr>-<data>/<timp36>-<hex6>.jpg`.
+ *
+ * ⚠️ TREBUIE SĂ FIE PUBLICE, și de aceea stau aici, lângă foi: pagina întâi se randează în Browser
+ * Rendering, adică într-un browser din afară, fără sesiunea omului. El cere poza de pe internet, la
+ * `/fisier/<cheie>`; ascunsă în spatele porții, ar lăsa locul pozei gol pe hârtie, fără nicio eroare.
+ * Nu se deschide nimic în plus: cheia poartă ora și șase semne la întâmplare, deci nu se ghicește, iar
+ * ce e în ea ajunge oricum pe o foaie împărțită în biserică.
+ * ⚠️ Forma cheii e scrisă și în `laFisierulBuletinului` — se schimbă amândouă odată.
+ */
+const CHEIE_POZA = /^poze\/\d{1,4}-\d{4}-\d{2}-\d{2}\/[a-z0-9]{1,12}-[0-9a-f]{6}\.(jpg|png|webp)$/
 
 /**
  * Asseturile modulului de rasfoit (Real3D FlipBook), tinute tot in depozit, sub `flipbook/`: 3,8 MB
@@ -243,13 +332,23 @@ async function comunicare<T = unknown>(env: Env, cale: string, corp: unknown): P
  *     rescrisa se indreapta singura la prima revalidare, care costa un 304.
  */
 async function fisierul(req: Request, url: URL, env: Env, cheie: string): Promise<Response> {
-  if (!CHEIE_BUNA.test(cheie)) return new Response('Nu există fișierul.', { status: 404 })
+  const ePoza = CHEIE_POZA.test(cheie)
+  if (!CHEIE_BUNA.test(cheie) && !ePoza) return new Response('Nu există fișierul.', { status: 404 })
   const obiect = await env.FISIERE.get(cheie, { onlyIf: req.headers })
   if (!obiect) return new Response('Nu există fișierul.', { status: 404 })
   const h = new Headers()
   obiect.writeHttpMetadata(h)
   h.set('etag', obiect.httpEtag)
-  h.set('cache-control', url.searchParams.has('v') ? 'public, max-age=31536000, immutable' : 'public, max-age=3600')
+  // Poza urcată în bulă: cache SCURT. Cheia ei e unică, deci n-ar strica un an — dar ea trăiește
+  // câteva ore, cât se face numărul, iar Browser Rendering o cere la fiecare recompunere.
+  h.set(
+    'cache-control',
+    ePoza
+      ? 'public, max-age=300'
+      : url.searchParams.has('v')
+        ? 'public, max-age=31536000, immutable'
+        : 'public, max-age=3600',
+  )
   if (cheie.endsWith('.pdf')) {
     const nume = cheie.slice(cheie.lastIndexOf('/') + 1)
     h.set(
@@ -706,6 +805,30 @@ export default {
         const calendar = 'eroare' in cal ? null : { titlu: cal.titlu, slujbe: cal.slujbe, stare: cal.stare }
         const masuraCalendarului = 'eroare' in cal ? undefined : { slujbe: cal.slujbe, detalii: cal.detalii }
 
+        /** Măsura fiecărui articol, cum o socotește serverul — ecranul nu mai are ce număra singur. */
+        const masuraSchitei = (s: Awaited<ReturnType<typeof citesteSchita>>) =>
+          s
+            ? socoteste({ ...catreCerere(s), calendar: masuraCalendarului }).zone.map((z) => ({
+                cine: z.cine, semne: z.semne, scrise: z.scrise, ramase: z.ramase,
+              }))
+            : undefined
+
+        /*
+         * DOAR BLOCUL SCHIȚEI, ca fragment (18.09.2026, 22:20). Îl cere pagina singură, după ce bula
+         * a chemat o unealtă care atinge schița — așa ecranul se împrospătează fără reîncărcare, în
+         * timp ce omul scrie mai departe în chat.
+         *
+         * ⚠️ Aceeași funcție ca în pagină (`schitaPeEcran`), nu una scrisă a doua oară: două feluri de
+         * a desena aceeași schiță ar fi însemnat două adevăruri despre același număr.
+         * ⚠️ Poarta e cea de sus (adminul buletinului) — fragmentul nu e o ușă nouă, e aceeași ușă.
+         */
+        if (req.method !== 'POST' && url.searchParams.get('bucata') === 'schita') {
+          const s = await citesteSchita(env, nou)
+          return new Response(schitaPeEcran(s, masuraSchitei(s)), {
+            headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
+          })
+        }
+
         if (req.method !== 'POST') {
           /*
            * BULA DE CHAT — NUMAI AICI (user, 18.09.2026). Din 18.09.2026, seara, ea e SINGURUL drum
@@ -726,11 +849,7 @@ export default {
           const coperta = foaia ? await env.FISIERE.head(cheiaCopertei({ nr: nou.nr!, data: nou.data })) : null
           // măsura fiecărui articol, socotită aici: ecranul n-o mai socotește singur, fiindcă n-are
           // ce număra — textul nu se mai scrie în pagină
-          const masura = schita
-            ? socoteste({ ...catreCerere(schita), calendar: masuraCalendarului }).zone.map((z) => ({
-                cine: z.cine, semne: z.semne, scrise: z.scrise, ramase: z.ramase,
-              }))
-            : undefined
+          const masura = masuraSchitei(schita)
           return html(
             paginaNou(ctx, m, nou, {
               calendar,

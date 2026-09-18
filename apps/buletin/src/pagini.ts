@@ -881,7 +881,7 @@ function articolulSchitei(
  * s-a compus) și blocul ăsta, care spune la ce s-a ajuns. Un formular lăsat alături ar fi fost al
  * doilea drum către aceleași câmpuri — adică două adevăruri despre același număr.
  */
-function schitaPeEcran(schita: Schita | null | undefined, masura: StareaCompunerii['masura']): string {
+export function schitaPeEcran(schita: Schita | null | undefined, masura: StareaCompunerii['masura']): string {
   const gaseste = (cine: string) => masura?.find((z) => z.cine === cine)
   const articole = schita
     ? [
@@ -895,32 +895,72 @@ function schitaPeEcran(schita: Schita | null | undefined, masura: StareaCompuner
     ? `<p class="sc-motto">„${esc(schita.motto)}"${schita.motoAutor ? ` <span class="sc-cine">– ${esc(schita.motoAutor)}</span>` : ''}</p>`
     : `<p class="sc-rand"><b>Motto</b> <i class="sc-gol">încă nespus</i></p>`
 
-  return `<section class="schita">
+  return `<section class="schita" id="schita">
   <h3>Schița numărului</h3>
   <p class="sc-spune">Se completează din chat: scrie <b>„buletin nou"</b> în bulă.</p>
   ${motto}
   ${articole || '<p class="sc-rand"><i class="sc-gol">Niciun articol încă. Chestionarul începe cu motto-ul.</i></p>'}
-</section>
-<script>${VEZI_TOT}</script>`
+</section>`
 }
 
 /**
  * Cheia „vezi tot / vezi mai puțin" de sub textele strânse. ES5 dinadins, ca tot ce trimitem în
  * pagină (regula aplicației, 13.09.2026).
+ *
+ * ⚠️ ASCULTĂ PE DOCUMENT, nu pe fiecare buton (18.09.2026): blocul schiței se ÎNLOCUIEȘTE din chat,
+ * fără reîncărcare, iar butoanele legate unul câte unul ar fi rămas în blocul aruncat — cheile din
+ * blocul nou n-ar mai fi făcut nimic, fără nicio eroare nicăieri.
  */
 const VEZI_TOT = `
 (function(){
-  var chei = document.querySelectorAll('.sc-cheie');
-  for (var i = 0; i < chei.length; i++) {
-    chei[i].addEventListener('click', function(){
-      var bloc = document.getElementById(this.getAttribute('data-vezi'));
-      if (!bloc) return;
-      var rest = bloc.querySelector('.sc-rest'), puncte = bloc.querySelector('.sc-puncte');
-      var intins = bloc.getAttribute('data-strans') === null;
-      if (intins) { bloc.setAttribute('data-strans', ''); rest.setAttribute('hidden', ''); if (puncte) puncte.removeAttribute('hidden'); this.textContent = 'vezi tot'; }
-      else { bloc.removeAttribute('data-strans'); rest.removeAttribute('hidden'); if (puncte) puncte.setAttribute('hidden', ''); this.textContent = 'vezi mai puțin'; }
-    });
-  }
+  document.addEventListener('click', function(ev){
+    var cheie = ev.target && ev.target.closest ? ev.target.closest('.sc-cheie') : null;
+    if (!cheie) return;
+    var bloc = document.getElementById(cheie.getAttribute('data-vezi'));
+    if (!bloc) return;
+    var rest = bloc.querySelector('.sc-rest'), puncte = bloc.querySelector('.sc-puncte');
+    var intins = bloc.getAttribute('data-strans') === null;
+    if (intins) { bloc.setAttribute('data-strans', ''); rest.setAttribute('hidden', ''); if (puncte) puncte.removeAttribute('hidden'); cheie.textContent = 'vezi tot'; }
+    else { bloc.removeAttribute('data-strans'); rest.removeAttribute('hidden'); if (puncte) puncte.setAttribute('hidden', ''); cheie.textContent = 'vezi mai puțin'; }
+  });
+})();`
+
+/**
+ * ECRANUL SE ÎMPROSPĂTEAZĂ DIN CHAT, FĂRĂ REÎNCĂRCARE (user, 18.09.2026, 22:20).
+ *
+ * Bula dă de veste la fiecare răspuns (`xc-chat:raspuns`), cu tot răspunsul în `detail`. Dacă printre
+ * uneltele chemate e vreuna care a atins schița, se cere ÎNAPOI doar blocul ei (`?bucata=schita`) și
+ * se pune în locul celui vechi. Atât: nicio stare în pagină, niciun al doilea adevăr.
+ *
+ * ⚠️ Reîncărcarea ÎNTREAGĂ rămâne unde era — după propunerea confirmată (compunerea), fiindcă atunci
+ * se schimbă foaia, butoanele de tipar și validarea, nu doar schița.
+ * ⚠️ `no-store` la cerere: fragmentul e al omului și al clipei; ținut în cache, ar arăta schița de
+ * acum două răspunsuri.
+ */
+const IMPROSPATEAZA = `
+(function(){
+  var ATING = ['buletin.raspunde', 'buletin.chestionar', 'buletin.compune'];
+  var cere = false;
+  window.addEventListener('xc-chat:raspuns', function(ev){
+    var d = ev && ev.detail ? ev.detail : {};
+    var unelte = d.unelte || [];
+    var atins = false;
+    for (var i = 0; i < unelte.length; i++) if (ATING.indexOf(unelte[i]) >= 0) atins = true;
+    if (!atins || cere) return;
+    cere = true;
+    fetch(location.pathname + '?bucata=schita', { credentials: 'same-origin', cache: 'no-store' })
+      .then(function(x){ return x.ok ? x.text() : null; })
+      .then(function(html){
+        cere = false;
+        var vechi = document.getElementById('schita');
+        if (!html || !vechi) return;
+        var cutie = document.createElement('div');
+        cutie.innerHTML = html;
+        var nou = cutie.firstElementChild;
+        if (nou) vechi.parentNode.replaceChild(nou, vechi);
+      })
+      .catch(function(){ cere = false; });
+  });
 })();`
 
 /**
@@ -1032,7 +1072,9 @@ export function paginaNou(
     `${capul}
 ${veste}
 ${calendar}
-${schitaPeEcran(stare.schita, stare.masura)}`,
+${schitaPeEcran(stare.schita, stare.masura)}
+<script>${VEZI_TOT}</script>
+${ctx.chat ? `<script>${IMPROSPATEAZA}</script>` : ''}`,
   )
 }
 

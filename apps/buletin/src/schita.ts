@@ -601,10 +601,15 @@ export interface Scris {
  * ⚠️ `pastreaza` și `sari` se leagă de ÎNTREBAREA DE ACUM, socotită aici din aceeași mașină de
  * stări care a pus-o. Așa „da" înseamnă lucruri diferite la întrebări diferite (la autor: „ăsta e";
  * la „mai adăugăm?": „da, mai punem un text"), fără ca modelul să aibă de ținut minte nimic.
+ *
+ * ⚠️ `articol` SPUS ANUME (18.09.2026, seara): „titlul articolului secundar 1: …" nu e un răspuns la
+ * întrebarea de acum, e o INSTRUCȚIUNE punctuală către un obiect al foii (cererea userului: „către un
+ * obiect din lista de obiecte ce formează buletinul"). Atunci scrisul merge unde s-a spus, nu unde
+ * ajunsese chestionarul. Fără el, purtarea rămâne cea dinainte, literă cu literă.
  */
 export function scrieRaspuns(
   vechea: Schita,
-  cerut: { subiect: Subiect; valoare?: string },
+  cerut: { subiect: Subiect; valoare?: string; articol?: Articol },
   intrebari: Record<CheieIntrebare, string>,
 ): Scris {
   const s: Schita = {
@@ -614,7 +619,19 @@ export function scrieRaspuns(
     gata: [...(vechea.gata ?? [])],
   }
   const acum = urmatoareaIntrebare(vechea, intrebari)
-  const care = acum.articol
+  /*
+   * ⚠️ Un articol cerut ANUME se și DESCHIDE dacă nu există: „titlul secundarului 1: …" înaintea
+   * întrebării „mai adăugăm?" trebuie să lucreze, nu să scrie în gol. Peste `SECUNDARI_MAXIM` nu se
+   * trece — acolo cade înapoi pe articolul întrebării de acum.
+   */
+  let care = acum.articol
+  if (cerut.articol) {
+    const trebuie = cerut.articol === 's1' ? 1 : cerut.articol === 's2' ? 2 : 0
+    if (trebuie <= SECUNDARI_MAXIM) {
+      while (s.secundari.length < trebuie) s.secundari.push({})
+      care = cerut.articol
+    }
+  }
   const v = cerut.valoare ?? ''
 
   // ------------------------------------------------- îndreptările, întâi

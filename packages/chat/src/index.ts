@@ -26,9 +26,19 @@ import {
   scrieConfigAplicatie,
   type EnvComutator,
 } from './comutator.js'
+import {
+  LIMITA_OCTETI,
+  TAIERE_MESAJ_OM,
+  cheiaFisierului,
+  extrageTextDocx,
+  extrageTextTxt,
+  felulFisierului,
+  type FelFisier,
+} from './fisiere.js'
 import { rubricaChat, type UnealtaDeBifat } from './setari.js'
 
 export * from './comutator.js'
+export * from './fisiere.js'
 export * from './modele.js'
 export * from './setari.js'
 export { IC_BULA, SALUT } from './bula.js'
@@ -95,6 +105,52 @@ function tineAprins(ctxExec: ExecutionContext, lucrul: Promise<unknown>): void {
   }
 }
 
+/**
+ * UN FIȘIER URCAT, așa cum îl vede aplicația în cârligul ei.
+ *
+ * ⚠️ `cheie` e SCRISĂ DE SERVER (vezi `cheiaFisierului`) — n-a trecut niciodată prin browser. Octeții
+ * vin odată cu ea (`continut`) fiindcă aplicația poate vrea să-i pună la ea acasă: buletinul mută poza
+ * în depozitul lui, ca Browser Rendering s-o poată lua de pe o adresă publică.
+ */
+export interface FisierUrcat {
+  nume: string
+  fel: FelFisier
+  /** Tipul cu care s-a pus în depozit — cel din lista albă, nu cel spus de browser. */
+  tip: string
+  octeti: number
+  /** Cheia din media; `/chat/fisier/<cheie>` o servește celui care are voie la chat. */
+  cheie: string
+  /** Textul scos din .docx / .txt; gol la poze. */
+  text: string
+  continut: ArrayBuffer
+  /** Ce a scris omul în câmp odată cu fișierul (poate fi gol). */
+  mesajOmului: string
+}
+
+/** Ce poate răspunde aplicația când ia fișierul în primire. `null` = „nu e al meu, fă ce faci de obicei". */
+export interface RaspunsLaFisier {
+  /** Textul scris în domeniul aplicației (pentru urmă, nu se mai lipește în mesaj). */
+  text?: string
+  /** Mesajul care pleacă spre model în locul celui obișnuit. */
+  mesaj?: string
+  /** Adresa sub care a ajuns poza la aplicație, dacă a mutat-o la ea. */
+  poza?: string
+  /**
+   * CE A ATINS aplicația, cu numele acțiunilor ei (`buletin.raspunde`).
+   *
+   * ⚠️ Pentru împrospătarea ecranului de dedesubt: cârligul scrie ÎNAINTE ca modelul să răspundă, iar
+   * dacă modelul nu cheamă nicio unealtă (n-are de ce, treaba e făcută), pagina n-ar afla niciodată că
+   * s-a schimbat ceva. Așa vestea pleacă îndată după urcare, cu aceleași nume ca la un răspuns.
+   */
+  unelte?: string[]
+}
+
+export interface ContextFisier {
+  env: EnvChat
+  ctxExec: ExecutionContext
+  ctx: ContextChat
+}
+
 export interface ModulChat {
   bula(env: EnvChat, ctx: ContextChat): Promise<BucataChat | undefined>
   /**
@@ -111,7 +167,20 @@ export interface ModulChat {
   ): Promise<Response | null>
 }
 
-export function modulChat(cfg: { aplicatie: string; titlu?: string }): ModulChat {
+export function modulChat(cfg: {
+  aplicatie: string
+  titlu?: string
+  /**
+   * CÂRLIGUL APLICAȚIEI la un fișier urcat (18.09.2026). Fără el, urcarea e generică: textul unui
+   * .docx devine mesajul omului, iar poza devine un card. Cu el, aplicația ia fișierul în domeniul ei
+   * — buletinul scrie textul direct în schiță și pune poza la articolul de acum, deci omul nu mai
+   * lipește nimic a doua oară.
+   *
+   * ⚠️ Ce întoarce NU e un răspuns către om, ci mesajul cu care se merge mai departe la model: după
+   * urcare bula trimite singură mesajul pe drumul obișnuit (`/chat/mesaj`), ca lanțul să fie unul.
+   */
+  laFisier?: (f: FisierUrcat, c: ContextFisier) => Promise<RaspunsLaFisier | null>
+}): ModulChat {
   /**
    * Poarta, într-un singur loc: același răspuns și pentru bulă, și pentru rute. Dacă s-ar
    * despărți, o stingere din admin ar ascunde bula lăsând rutele deschise.
@@ -159,6 +228,114 @@ export function modulChat(cfg: { aplicatie: string; titlu?: string }): ModulChat
     } catch {
       return null
     }
+  }
+
+  /**
+   * URCAREA, cap-coadă. Ordinea pașilor e cea din proiectul de chineză, și fiecare e acolo cu rost:
+   * întâi antetul (un fișier de 40 MB se refuză fără să fie citit), apoi mărimea adevărată, apoi
+   * lista albă, și abia la urmă octeții.
+   */
+  async function urca(
+    req: Request,
+    env: EnvChat,
+    ctxExec: ExecutionContext,
+    ctx: ContextChat,
+  ): Promise<Response> {
+    const preaMare = { ok: false, mesaj: 'Fișierul e prea mare — primesc cel mult 12 MB.' }
+    // ⚠️ 65536 de îngăduință: `content-length` numără și învelișul multipart, nu doar fișierul.
+    if (Number(req.headers.get('content-length') ?? 0) > LIMITA_OCTETI + 65536) return json(preaMare, 413)
+
+    let formular: FormData
+    try {
+      formular = await req.formData()
+    } catch {
+      return json({ ok: false, mesaj: 'Nu am înțeles ce mi-ai trimis.' }, 400)
+    }
+
+    const camp = formular.get('fisier')
+    const scrisDeOm = String(formular.get('text') ?? '').trim()
+    if (!camp || typeof camp === 'string') return json({ ok: false, mesaj: 'Lipsește fișierul.' }, 400)
+    const fisier = camp as File
+    if (!fisier.size) return json({ ok: false, mesaj: 'Fișierul e gol.' }, 400)
+    if (fisier.size > LIMITA_OCTETI) return json(preaMare, 413)
+
+    const felul = felulFisierului(fisier.name ?? '', fisier.type ?? '')
+    if (!felul) {
+      return json({ ok: false, mesaj: 'Primesc documente Word (.docx), text (.txt) și poze (jpg, png, webp).' }, 415)
+    }
+    const nume = (fisier.name || `fisier.${felul.ext}`).replace(/[\r\n\t]/g, ' ').trim().slice(0, 120)
+
+    const continut = await fisier.arrayBuffer()
+    let text = ''
+    if (felul.fel === 'docx' || felul.fel === 'txt') {
+      try {
+        text = felul.fel === 'docx' ? await extrageTextDocx(continut) : extrageTextTxt(continut)
+      } catch (e) {
+        return json({ ok: false, mesaj: `Nu am putut citi ${nume}: ${e instanceof Error ? e.message : String(e)}` }, 422)
+      }
+      if (!text) return json({ ok: false, mesaj: `${nume} nu are text în el.` }, 422)
+    }
+
+    // Octeții stau în media, ca orice hârtie a platformei; aplicația îi dă mai departe din
+    // `/chat/fisier/<cheie>`, sub aceeași poartă ca restul chatului.
+    if (!env.MEDIA) return json({ ok: false, mesaj: 'Nu am unde să pun fișierul: depozitul nu e legat.' }, 503)
+    const cheie = cheiaFisierului({
+      aplicatie: cfg.aplicatie,
+      userId: ctx.principal?.userId ?? '',
+      ext: felul.ext,
+    })
+    const pus = await env.MEDIA.fetch('https://media.intern/incarca', {
+      method: 'POST',
+      headers: {
+        [ANTET_SECRET]: env.SECRET_INTERN ?? '',
+        [ANTET_PRIN]: `app-${cfg.aplicatie}`,
+        'content-type': felul.tip,
+        'x-meta': JSON.stringify({ key: cheie, contentType: felul.tip }),
+      },
+      body: continut,
+    })
+    if (!pus.ok) return json({ ok: false, mesaj: 'Nu am putut păstra fișierul.' }, 502)
+
+    /*
+     * CÂRLIGUL APLICAȚIEI. ⚠️ O cădere a lui NU pierde fișierul: octeții sunt deja în depozit, iar
+     * drumul generic (textul ca mesaj) duce treaba mai departe. Altfel o greșeală din buletin ar face
+     * ca un articol lipit să dispară fără urmă — cel mai rău fel de eroare.
+     */
+    let alAplicatiei: RaspunsLaFisier | null = null
+    if (cfg.laFisier) {
+      try {
+        alAplicatiei = await cfg.laFisier(
+          { nume, fel: felul.fel, tip: felul.tip, octeti: fisier.size, cheie, text, continut, mesajOmului: scrisDeOm },
+          { env, ctxExec, ctx },
+        )
+      } catch {
+        alAplicatiei = null
+      }
+    }
+
+    let mesaj = alAplicatiei?.mesaj ?? ''
+    if (!mesaj) {
+      mesaj = felul.ePoza
+        ? `${scrisDeOm ? `${scrisDeOm}\n\n` : ''}Am urcat poza ${nume} (${cheie}).`
+        : `${scrisDeOm ? `${scrisDeOm}\n\n` : ''}Textul din fișierul ${nume}:\n${text}`
+    }
+    /*
+     * TĂIEREA SE FACE AICI, nu (doar) la creier: cardul din fir spune „s-a tăiat", iar vorba aceea
+     * trebuie să fie adevărată. Dacă am fi lăsat tăierea numai în chat-worker, cardul ar fi spus
+     * „întreg" peste un text ciuntit.
+     */
+    const taiat = mesaj.length > TAIERE_MESAJ_OM
+    if (taiat) mesaj = mesaj.slice(0, TAIERE_MESAJ_OM)
+
+    return json({
+      ok: true,
+      obiect: { cheie, titlu: nume, fel: felul.fel, octeti: fisier.size },
+      text: mesaj,
+      semne: text.length,
+      taiat,
+      poza: alAplicatiei?.poza ?? null,
+      unelte: alAplicatiei?.unelte ?? [],
+    })
   }
 
   return {
@@ -261,6 +438,20 @@ export function modulChat(cfg: { aplicatie: string; titlu?: string }): ModulChat
       }
 
       if (req.method !== 'POST') return inexistent()
+
+      /*
+       * URCAREA UNUI FIȘIER (user, 18.09.2026, 22:20: „chatul trebuie să accepte fișiere Word (.docx)
+       * sau .txt, poze și text ca și acum").
+       *
+       * Drumul, cap-coadă: multipart cu câmpul `fisier` (și, opțional, `text` — ce a scris omul odată
+       * cu el) → limita, apoi lista albă → octeții în `media`, sub o cheie scrisă de server → cârligul
+       * aplicației, dacă are unul → înapoi la bulă MESAJUL cu care merge mai departe. Bula îl trimite
+       * singură pe `/chat/mesaj`, ca omul să nu mai apese încă o dată.
+       *
+       * ⚠️ OCTEȚII NU TREC PRIN MODEL, niciodată — nici poza, nici fișierul. Prin discuție trece doar
+       * textul (la .docx/.txt) sau cheia (la poză), exact regula obiectelor din arhitectură.
+       */
+      if (cale === '/chat/urca') return await urca(req, env, ctxExec, ctx)
 
       const rute: Record<string, string> = {
         '/chat/mesaj': 'https://chat.intern/mesaj',

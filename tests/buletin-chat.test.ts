@@ -307,7 +307,7 @@ describe('`/nou` se deschide cu ciorna compusă și cu schița din chat', () => 
   it('arată schița strânsă din chat, numai de citit', async () => {
     const { env } = mediu({ depozit: depozitCuCiorna })
     const text = await (await cere(env, '/nou')).text()
-    expect(text).toContain('<section class="schita">')
+    expect(text).toContain('<section class="schita" id="schita">')
     expect(text).toContain('SFÂNTUL IOAN GURĂ DE AUR')
     expect(text).toContain('DESPRE RUGĂCIUNE')
     expect(text).toContain('Rândul întâi al articolului scris de chat.')

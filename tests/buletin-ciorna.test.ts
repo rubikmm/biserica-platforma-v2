@@ -110,7 +110,7 @@ describe('numărul compus, arătat în pagină ca unul gata de validat', () => {
    */
   it('stă ÎNAINTEA schiței: întâi se vede foaia, apoi ce s-a răspuns', () => {
     const h = dupaCompunere()
-    expect(h.indexOf('<section class="ciorna">')).toBeLessThan(h.indexOf('<section class="schita">'))
+    expect(h.indexOf('<section class="ciorna">')).toBeLessThan(h.indexOf('<section class="schita" id="schita">'))
   })
 
   it('nu se arată deloc până nu s-a compus ceva', () => {

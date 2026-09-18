@@ -360,7 +360,7 @@ describe('buletin · numarul care urmeaza', () => {
       },
       masura: [{ cine: 'principal', semne: 9028, scrise: 27, ramase: 9001 }],
     })
-    expect(h).toContain('<section class="schita">')
+    expect(h).toContain('<section class="schita" id="schita">')
     expect(h).toContain('Se completează din chat')
     expect(h).toContain('buletin nou')
     expect(h).toContain('SFÂNTUL IOAN GURĂ DE AUR')
@@ -381,7 +381,7 @@ describe('buletin · numarul care urmeaza', () => {
       cheie_pdf: null, cheie_poza_mica: null, pagini: 4,
     }
     const h = paginaNouB(CTX_PROBA, { nou: true }, buletinulNou(b, '2026-09-17'), STARE_PROBA)
-    expect(h).toContain('<section class="schita">')
+    expect(h).toContain('<section class="schita" id="schita">')
     expect(h).toContain('Niciun articol încă')
     expect(h).toContain('încă nespus')
   })
@@ -425,7 +425,7 @@ describe('buletin · numarul care urmeaza', () => {
     expect(h).not.toContain('nu e încă validat')
     expect(h).not.toContain('class="veste rau atentie propus"')
     // ecranul ramane intreg: nevalidat nu inseamna oprit
-    expect(h).toContain('<section class="schita">')
+    expect(h).toContain('<section class="schita" id="schita">')
   })
 
   it('cu programul validat nu scrie PROPUS nicaieri', () => {

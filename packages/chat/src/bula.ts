@@ -15,6 +15,7 @@
  * ⚠️ FĂRĂ ACCENT GRAV în comentariile de stil: STIL e un template literal, iar un backtick scris
  * într-un comentariu CSS închide șirul și rupe compilarea cu erori fără legătură cu locul vinovat.
  */
+import { ACCEPTA } from './fisiere.js'
 
 /** Bulă de dialog cu trei puncte: semnul universal de „stai de vorbă", în linia iconițelor din
  *  carcasă (traseu subțire, fără umplere). Desenată aici, nu adusă de undeva. */
@@ -28,6 +29,9 @@ const IC_NOUA = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" str
 const IC_COS = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/></svg>`
 
 const IC_TRIMITE = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg>`
+
+/** Clema de hartii — semnul universal de „atasez ceva". Desenata aici, ca toate celelalte. */
+const IC_CLEMA = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11.5 12.2 19.3a4.6 4.6 0 0 1-6.5-6.5l7.8-7.8a3 3 0 0 1 4.3 4.3l-7.8 7.8a1.5 1.5 0 0 1-2.1-2.1l7.2-7.2"/></svg>`
 
 export const SALUT = 'Salut! Cu ce te pot ajuta?'
 
@@ -99,6 +103,22 @@ export const STIL_CHAT = `
                       background:var(--rosu); color:#fff; cursor:pointer; display:grid;
                       place-items:center }
 .xc-chat-jos button:disabled { opacity:.45; cursor:default }
+/* clema de fisiere: acelasi loc si aceeasi masura ca butonul de trimis, dar in linie subtire — ea
+   pregateste ceva, nu trimite nimic. */
+.xc-chat-jos button.clema { background:var(--paper); color:var(--soft); border:1px solid var(--rule) }
+.xc-chat-jos button.clema:hover { color:var(--rosu); border-color:var(--rosu) }
+
+/* TRASUL UNUI FISIER PESTE PANOU: se spune ca se poate lasa aici, altfel browserul il deschide el
+   intr-o fila noua si omul crede ca a stricat ceva. */
+.xc-chat.peste .xc-chat-fir { outline:2px dashed var(--rosu); outline-offset:-8px }
+.xc-chat.peste .xc-chat-panou { border-color:var(--rosu) }
+
+/* „vezi tot / vezi mai putin" la mesajele lungi ale omului (un articol are ~9000 de semne: intins,
+   impinge tot firul si nu se mai vede raspunsul). */
+.xc-chat-vezi { display:block; margin-top:5px; border:0; background:none; padding:0; cursor:pointer;
+                font:600 12px/1.4 ui-sans-serif,system-ui; color:inherit; opacity:.8;
+                text-decoration:underline }
+.xc-chat-vezi:hover { opacity:1 }
 
 /* SEMNUL DE VIATA cat gandeste creierul (18.09.2026). Pana atunci era un „scrie…" neclintit: la un
    raspuns de doua minute, singurul lucru pe care il putea crede omul era ca s-a rupt ceva. Acum are
@@ -152,6 +172,11 @@ export function bulaHtml(o: { prefix: string; titlu?: string }): string {
     </div>
     <form class="xc-chat-jos" id="xc-chat-form">
       <textarea id="xc-chat-text" rows="1" placeholder="Scrie aici…" aria-label="Mesajul tău"></textarea>
+      <!-- Câmpul de fișier stă ascuns, iar clema îl apasă: butonul desenat de noi arată ca restul
+           bulei, pe când cel al browserului arată altfel în fiecare browser. -->
+      <input type="file" id="xc-chat-fisier" multiple hidden accept="${ACCEPTA}">
+      <button type="button" class="clema" data-xc="clema" title="Atașează un fișier"
+              aria-label="Atașează un fișier (Word, text sau poză)">${IC_CLEMA}</button>
       <button type="submit" aria-label="Trimite">${IC_TRIMITE}</button>
     </form>
   </div>
@@ -174,12 +199,18 @@ export const JS_CHAT = `(function(){
   var fir = document.getElementById('xc-chat-fir');
   var form = document.getElementById('xc-chat-form');
   var camp = document.getElementById('xc-chat-text');
+  var panou = r.querySelector('.xc-chat-panou');
+  var alege = document.getElementById('xc-chat-fisier');
   var buton = form.querySelector('button[type=submit]');
   var CHEIE_ID = 'xc-chat-id', CHEIE_DESCHIS = 'xc-chat-deschis', CHEIE_LA = 'xc-chat-la';
   var VIATA = 6 * 60 * 60 * 1000; // discutia expira dupa sase ore de la ultimul mesaj
   var PAS_SONDARE = 2500;         // cat de rar se intreaba /chat/stare cat lucreaza creierul
   var RABDARE = 5 * 60 * 1000;    // peste atat nu mai asteptam pe ecran, si o spunem limpede
+  var LIMITA = 12 * 1024 * 1024;  // aceeasi cifra ca LIMITA_OCTETI de pe server
+  var LAT_POZA = 1600;            // cat de mare ramane o poza dupa micsorarea din browser
+  var STRANS_PESTE = 600, STRANS_CAT = 500; // de la cate semne se strange un mesaj in fir, si cat se vede
   var idConv = null, incarcat = false, ocupat = false, deReincarcat = false, ultimulText = '';
+  var coada = [];                 // fisierele care asteapta: se urca unul pe rand, cu raspuns intre ele
   try {
     idConv = localStorage.getItem(CHEIE_ID);
     var la = Number(localStorage.getItem(CHEIE_LA) || 0);
@@ -193,12 +224,37 @@ export const JS_CHAT = `(function(){
 
   function jos(){ fir.scrollTop = fir.scrollHeight; }
   function esc(t){ var d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; }
-  function gata(){ ocupat = false; buton.disabled = false; }
+  // ⚠️ Slobozirea cheama si coada: un al doilea fisier tras odata cu primul asteapta aici, si fara
+  // randul asta ar ramane sa astepte pana la urmatoarea apasare a omului.
+  function gata(){ ocupat = false; buton.disabled = false; setTimeout(porneste, 0); }
+
+  /**
+   * TEXTUL UNUI MESAJ, STRANS CAND E LUNG (18.09.2026). Un articol de buletin lipit in bula are vreo
+   * 9000 de semne: intins, umple firul de sus pana jos si impinge raspunsul afara din ecran. Peste 600
+   * de semne se vad primele 500, cu o cheie „vezi tot / vezi mai putin".
+   */
+  function scrieText(d, text){
+    var t = text == null ? '' : String(text);
+    if (t.length <= STRANS_PESTE) { d.textContent = t; return d; }
+    var inceput = document.createElement('span'); inceput.textContent = t.slice(0, STRANS_CAT);
+    var puncte = document.createElement('span'); puncte.textContent = '…';
+    var rest = document.createElement('span'); rest.textContent = t.slice(STRANS_CAT); rest.hidden = true;
+    var cheie = document.createElement('button');
+    cheie.type = 'button'; cheie.className = 'xc-chat-vezi'; cheie.textContent = 'vezi tot';
+    cheie.addEventListener('click', function(){
+      var intins = !rest.hidden;
+      rest.hidden = intins; puncte.hidden = !intins;
+      cheie.textContent = intins ? 'vezi tot' : 'vezi mai puțin';
+      jos();
+    });
+    d.appendChild(inceput); d.appendChild(puncte); d.appendChild(rest); d.appendChild(cheie);
+    return d;
+  }
 
   function mesaj(rol, text){
     var d = document.createElement('div');
     d.className = 'xc-chat-m ' + rol;
-    d.textContent = text;
+    scrieText(d, text);
     fir.appendChild(d); jos(); return d;
   }
 
@@ -210,6 +266,106 @@ export const JS_CHAT = `(function(){
     a.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>'
       + '<span>' + esc(ob.titlu) + '<small>' + esc((ob.fel || '').toUpperCase()) + ' · ' + Math.round((ob.octeti || 0)/1024) + ' KB</small></span>';
     fir.appendChild(a); jos();
+  }
+
+  // ---------------------------------------------------------------- fisiere
+  // Word, text si poze, urcate din bula (user, 18.09.2026, 22:20). Octetii NU trec prin model:
+  // pleaca la server, iar in discutie intra textul (la .docx/.txt) ori cheia (la poza).
+
+  function marime(n){
+    n = Number(n) || 0;
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return Math.round(n / 1024) + ' KB';
+    return (n / 1048576).toFixed(1) + ' MB';
+  }
+  /** Cifrele mari, cu spatiu la mii: „8 912 semne" se citeste, „8912" se numara. */
+  function cifre(n){ return String(Number(n) || 0).replace(/\\B(?=(\\d{3})+(?!\\d))/g, ' '); }
+
+  /** Cardul fisierului urcat: acelasi ca al hartiilor, cu masura si semnele scrise dedesubt. */
+  function cardFisier(ob, semne, taiat){
+    if (!ob || !ob.cheie) return;
+    var a = document.createElement('a');
+    a.className = 'xc-chat-obiect';
+    a.href = prefix + '/chat/fisier/' + encodeURIComponent(ob.cheie);
+    a.target = '_blank'; a.rel = 'noopener';
+    var sub = esc(String(ob.fel || '').toUpperCase()) + ' · ' + marime(ob.octeti);
+    if (semne) sub += ' · ' + cifre(semne) + ' semne' + (taiat ? ' (tăiat)' : '');
+    a.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>'
+      + '<span>' + esc(ob.titlu) + '<small>' + sub + '</small></span>';
+    fir.appendChild(a); jos();
+  }
+
+  /**
+   * POZA, MICSORATA IN BROWSER (luata din proiectul de chineza): telefoanele dau 8 MB pe poza, iar pe
+   * foaia buletinului nu intra mai mult de vreo 1600 px. Se sare peste micsorare daca poza e deja
+   * mica — n-are rost sa treaca printr-o recompresie care doar ii strica putin.
+   */
+  function micsoreaza(f){
+    var nume = String(f.name || 'fisier');
+    if (!/^image\\//.test(f.type || '')) return Promise.resolve({ blob: f, nume: nume });
+    return new Promise(function(hai){
+      var url = URL.createObjectURL(f);
+      var img = new Image();
+      function lasa(rezultat){ URL.revokeObjectURL(url); hai(rezultat); }
+      img.onerror = function(){ lasa({ blob: f, nume: nume }); };
+      img.onload = function(){
+        try {
+          var scara = Math.min(1, LAT_POZA / Math.max(img.width, img.height));
+          if (scara === 1 && f.size < 1.5 * 1024 * 1024) { lasa({ blob: f, nume: nume }); return; }
+          var panza = document.createElement('canvas');
+          panza.width = Math.round(img.width * scara);
+          panza.height = Math.round(img.height * scara);
+          panza.getContext('2d').drawImage(img, 0, 0, panza.width, panza.height);
+          panza.toBlob(function(blob){
+            if (!blob || blob.size >= f.size) { lasa({ blob: f, nume: nume }); return; }
+            lasa({ blob: blob, nume: nume.replace(/\\.[^.]+$/, '') + '.jpg' });
+          }, 'image/jpeg', 0.82);
+        } catch (e) { lasa({ blob: f, nume: nume }); }
+      };
+      img.src = url;
+    });
+  }
+
+  /** Fisierele puse la rand. Unul pe rand, cu raspunsul intre ele: asa fiecare isi capata vorba lui. */
+  function pune(fisiere){
+    for (var i = 0; i < fisiere.length; i++) coada.push(fisiere[i]);
+    porneste();
+  }
+  function porneste(){
+    if (ocupat || !coada.length) return;
+    urcaUnul(coada.shift());
+  }
+
+  function urcaUnul(f){
+    if (f.size > LIMITA) {
+      mesaj('rea', 'Fișierul „' + f.name + '" are ' + marime(f.size) + ' — primesc cel mult 12 MB.');
+      setTimeout(porneste, 0); return;
+    }
+    ocupat = true; buton.disabled = true;
+    // Ce a scris omul odata cu fisierul pleaca impreuna cu el: „pune poza asta la principal" + poza.
+    var scris = (camp.value || '').trim();
+    camp.value = ''; camp.style.height = 'auto';
+    var rand = mesaj('rea', 'Se urcă ' + f.name + ' (' + marime(f.size) + ')…');
+    micsoreaza(f).then(function(p){
+      var fd = new FormData();
+      fd.append('fisier', p.blob, p.nume);
+      if (scris) fd.append('text', scris);
+      return fetch(prefix + '/chat/urca', { method: 'POST', credentials: 'same-origin', body: fd });
+    }).then(function(x){
+      return x.json().catch(function(){ return null; });
+    }).then(function(j){
+      rand.remove();
+      if (!j || !j.ok) { mesaj('rea', (j && j.mesaj) || 'Nu am putut urca fișierul.'); gata(); return; }
+      atinge();
+      if (scris) mesaj('om', scris);
+      cardFisier(j.obiect, j.semne, j.taiat);
+      // Ce a atins aplicatia cu fisierul asta, spus paginii ACUM — nu dupa ce raspunde modelul.
+      if (j.unelte && j.unelte.length) vesteste(j);
+      // Mesajul iese singur pe drumul obisnuit, ca omul sa nu mai apese inca o data (cerere anume).
+      duMesajul(j.text);
+    }).catch(function(){
+      rand.remove(); mesaj('rea', 'Nu am putut urca fișierul.'); gata();
+    });
   }
 
   function propunere(p){
@@ -243,8 +399,23 @@ export const JS_CHAT = `(function(){
     }).catch(function(){ cutie.remove(); mesaj('rea', 'Nu am putut trimite confirmarea.'); });
   }
 
+  /**
+   * VESTEA CATRE PAGINA (18.09.2026). Pagina de dedesubt poate vrea sa se improspateze fara
+   * reincarcare — ecranul „buletin nou" isi reface blocul schitei cand chatul a atins schita. Bula nu
+   * stie nimic despre nicio pagina: da doar de veste, cu tot raspunsul in „detail” („unelte” spune ce
+   * s-a chemat), iar cine are treaba asculta.
+   *
+   * ⚠️ Se striga SI dupa o urcare, nu doar dupa un raspuns al modelului: carligul aplicatiei scrie
+   * INAINTE ca modelul sa raspunda, iar daca el nu mai cheama nicio unealta (n-are de ce — treaba e
+   * facuta), pagina n-ar afla niciodata ca s-a schimbat ceva.
+   */
+  function vesteste(j){
+    try { window.dispatchEvent(new CustomEvent('xc-chat:raspuns', { detail: j })); } catch (e) {}
+  }
+
   function raspunsul(j){
     atinge();
+    vesteste(j);
     if (j.conversatieId){ idConv = j.conversatieId; try { localStorage.setItem(CHEIE_ID, idConv); } catch(e){} }
     if (j.text) mesaj('agent', j.text);
     (j.obiecte || []).forEach(card);
@@ -292,7 +463,9 @@ export const JS_CHAT = `(function(){
     b.type = 'button'; b.className = 'xc-chat-mic'; b.textContent = 'mai încearcă';
     b.addEventListener('click', function(){
       if (ocupat || !ultimulText) return;
-      d.remove(); camp.value = ultimulText; trimite();
+      // ⚠️ NU prin camp: mesajul e deja scris in fir (si poate avea 12000 de semne, adusi dintr-un
+      // .docx). Se trimite chiar el, fara sa se scrie a doua oara nici in camp, nici in fir.
+      d.remove(); ocupat = true; buton.disabled = true; duMesajul(ultimulText);
     });
     d.appendChild(b); fir.appendChild(d); jos();
   }
@@ -413,6 +586,46 @@ export const JS_CHAT = `(function(){
     else if (ce === 'strange') strange();
     else if (ce === 'sterge') sterge();
     else if (ce === 'noua') noua();
+    else if (ce === 'clema') alege.click();
+  });
+
+  // ------------------------------------------------- cele trei feluri de a da un fisier
+  // clema (campul ascuns), trasul peste panou si lipirea din clipboard. ⚠️ Campul se goleste dupa
+  // fiecare alegere: fara asta, acelasi fisier ales a doua oara nu mai da niciun eveniment.
+  alege.addEventListener('change', function(){
+    var f = alege.files;
+    if (f && f.length) pune(f);
+    alege.value = '';
+  });
+
+  ['dragenter', 'dragover'].forEach(function(nume){
+    panou.addEventListener(nume, function(ev){ ev.preventDefault(); r.classList.add('peste'); });
+  });
+  ['dragleave', 'dragend'].forEach(function(nume){
+    panou.addEventListener(nume, function(ev){ if (ev.target === panou) r.classList.remove('peste'); });
+  });
+  panou.addEventListener('drop', function(ev){
+    ev.preventDefault(); r.classList.remove('peste');
+    var d = ev.dataTransfer;
+    if (d && d.files && d.files.length) pune(d.files);
+  });
+
+  // Lipirea unei poze din clipboard (captura de ecran, poza copiata dintr-o pagina). Textul lipit
+  // ramane ce era — se opreste doar lipirea cand chiar sunt poze in clipboard.
+  camp.addEventListener('paste', function(ev){
+    var date = ev.clipboardData;
+    if (!date || !date.items) return;
+    var poze = [];
+    for (var i = 0; i < date.items.length; i++) {
+      var it = date.items[i];
+      if (it.kind === 'file' && /^image\\//.test(it.type || '')) {
+        var f = it.getAsFile();
+        if (f) poze.push(f);
+      }
+    }
+    if (!poze.length) return;
+    ev.preventDefault();
+    pune(poze);
   });
 
   // Discutie noua: firul de pe ecran se goleste si urmatorul mesaj deschide alta discutie pe
@@ -438,9 +651,19 @@ export const JS_CHAT = `(function(){
   function trimite(){
     var text = (camp.value || '').trim();
     if (!text || ocupat) return;
-    ocupat = true; buton.disabled = true; ultimulText = text;
+    ocupat = true; buton.disabled = true;
     camp.value = ''; camp.style.height = 'auto';
     mesaj('om', text);
+    duMesajul(text);
+  }
+
+  /**
+   * MESAJUL, PE DRUMUL OBISNUIT. Despartit de „trimite” fiindca se cheama din DOUA locuri: de la
+   * campul de scris si de la urcarea unui fisier (unde textul e facut de server, iar in fir s-au
+   * scris deja cardul si vorba omului). Cine cheama a pus deja „ocupat”.
+   */
+  function duMesajul(text){
+    ultimulText = text;
     var semn = semnDeViata();
     fetch(prefix + '/chat/mesaj', {
       method:'POST', credentials:'same-origin', headers:{'content-type':'application/json'},
