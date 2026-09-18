@@ -342,8 +342,9 @@ propunerea automată, ca în V1.
       (a) pagina a patra iese curată și (b) `data-raport` ajunge înapoi (siguranța „nimic pe
       dinafară"). ⚠️ PDF-ul vechi al lui 616 e tot cel defect — nu se repară singur, trebuie refăcut.
       ⚠️ **616 de pe live (compus 18.09, 09:01) a arătat al doilea defect al paginii a patra** —
-      calendarul retezat jos —, reparat în **0.6.2**, pe disc, NEPUBLICAT: deci recompunerea lui 616
-      are rost abia **după ce se publică 0.6.2**;
+      calendarul retezat jos —, reparat în **0.6.2, publicat 18.09.2026, 09:56**. PDF-ul vechi al lui
+      616 nu se repară singur: trebuie **recompus din `/nou`**. Din **0.7.0** recompunerea se și vede
+      pe loc (ciorna în pagină), iar validarea din ecran îl publică în arhivă;
    3. **fonturile din Chromium-ul de laborator**: săgeata `→` din tabelul programului iese strâmbă
       local — **și la foaia programului, care e cod netins de runda asta**, deci e lipsa fonturilor
       din container, nu un defect nou. De verificat totuși cum iese pe producție.
@@ -2067,6 +2068,39 @@ forța antetul `Host`**.
 ## Jurnal
 
 ### 2026-09-18
+
+- **NUMĂRUL COMPUS SE VEDE ÎN PAGINĂ, CU BUTON DE VALIDARE — buletin 0.7.0** (user, 09:52, două
+  mesaje: „să faci ceva cu cache-ul când afișezi buletinul generat — să-l afișezi direct în pagină ca
+  și cum e un buletin gata de validat"; „să fie toate butoanele de tipar și download și flip3D + un
+  buton de validare"; la întrebarea ce înseamnă validarea, la 09:58: **„validarea = publicarea"**).
+  Până acum, după compunere, ecranul spunea „Numărul e compus. Deschide PDF-ul" — un link.
+  - **ciorna pe ecran** (`ciornaPeEcran`, `pagini.ts`): ACELAȘI bloc ca la un număr din arhivă —
+    `coperta` + `butoaneleNumarului` + `fereastraRasfoit` —, cu un rând de arhivă închipuit din
+    cheile ciornei. În plus față de arhivă: butonul de răsfoit (flip3D) se VEDE și e butonul de
+    validare. Stil nou `.ciorna` (chenar) și `.btn.mare.bun` (verde: rosul e, aici, al lucrului nefăcut);
+  - **coperta iese din aceeași randare ca PDF-ul** — `pdfCuRaportSiCoperta` în `@xc/ui/hartie.ts`,
+    o singură sesiune de browser (pagina e deja încărcată; a doua ar fi costat încă o pornire).
+    Cheia: `2026/buletin-616-2026-09-20.jpg`, ca la numerele din V1. ⚠️ Una singură, nu și `-mic.jpg`:
+    tăierea la 460 nu se poate face în Worker, deci rândul o pune în amândouă coloanele;
+  - **validarea = publicarea**: `POST /nou` cu `fapta=valideaza` → `scrieBuletin` (`INSERT OR REPLACE`,
+    `sursa: 'site'`, textul pentru căutare din cererea păstrată sub `compus/`), audit
+    `buletin.valideaza`, apoi 303 spre pagina numărului. Se validează numărul DE PE ECRAN (nr+data din
+    formular, cântărite față de ce urmează acum): dacă între timp s-a validat altceva, nu scrie peste.
+    Poarta e tot rolul de admin — o cheie nouă ar fi cerut republicarea lui `xc-authz`;
+  - **CACHE-UL** (partea nevăzută, dar cea care l-a păcălit pe user azi-noapte): `/fisier/<cheie>` se
+    dădea cu `immutable` pe un an, pe presupunerea „numele poartă numărul și data, deci conținutul nu
+    se schimbă". Presupunerea a murit în ziua în care numărul se compune chiar aici: la recompunere
+    cheia e ACEEAȘI. Acum: un an **numai cu `?v=<amprenta>`** pe adresă (amprenta = etag-ul R2 al
+    randării; ecranul compunerii o pune în TOATE adresele — copertă, foaie, descărcare, broșură,
+    răsfoit), altfel o oră cu etag. La fel la `/tipar/`. În plus, la recompunere se **aruncă broșurile
+    vechi** ale numărului (cheia lor iese din cheia PDF-ului, deci altfel s-ar fi tipărit foaia veche),
+    iar `?v=` a cerut și îndreptarea întrerupătorului „Revers", care lipea `?revers=1` orbește cu „?";
+  - **broșura merge și la numărul nevalidat** (`ciornaDinDepozit`): „Tipărește" e chiar butonul după
+    care omul se uită pe hârtie înainte să valideze, iar rândul din arhivă încă nu există.
+  - Probe noi: `tests/buletin-ciorna.test.ts` (8), plus unealta de laborator
+    `apps/buletin/unelte/proba-ecran.mjs` (randează ecranul fără Cloudflare — ecranul se vede cu ochiul,
+    nu doar bucăți de HTML în probe). 507 probe trec, tsc curat pe 37 de pachete.
+    Ecranul: `outputs/buletin-ecran-nou-ciorna.png`.
 
 - **PATRU ÎNDREPTĂRI LA PAGINA A PATRA (user, 09:11) — buletin 0.6.2, pe disc, NEPUBLICAT.** (1) golul
   floare → „PROGRAMUL LITURGIC" **0.5 cm** (era 1 mm); (2) capul calendarului **20 pt** (era 18);

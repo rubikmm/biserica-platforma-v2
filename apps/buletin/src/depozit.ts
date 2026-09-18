@@ -194,6 +194,53 @@ export async function capulTextului(db: D1Database, nr: number, data: string): P
   return r?.cap ?? null
 }
 
+/**
+ * NUMĂRUL INTRĂ ÎN ARHIVĂ — rândul scris la validarea unui număr compus aici (user, 18.09.2026:
+ * „un buton de validare"). Până la el, numărul compus era doar un PDF în depozit, pe care nu-l vedea
+ * nimeni din afara ecranului de compunere.
+ *
+ * ⚠️ `INSERT OR REPLACE`, nu `INSERT`: cheia e (nr, data), iar drumul obișnuit al omului e să
+ * recompună același număr de câteva ori până iese cum vrea. A doua validare a aceleiași zile
+ * ÎNLOCUIEȘTE rândul, nu se plânge — fișierele din depozit au oricum aceleași nume și s-au rescris
+ * și ele.
+ * ⚠️ `sursa: 'site'` — așa se deosebește, în arhivă, numărul făcut pe platformă de cele 619 aduse
+ * din V1 (`arhiva`).
+ */
+export async function scrieBuletin(
+  db: D1Database,
+  b: {
+    nr: number
+    data: string
+    cheie_pdf: string
+    cheie_poza: string | null
+    cheie_poza_mica: string | null
+    marime_pdf: number
+    pagini: number
+    text: string
+  },
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT OR REPLACE INTO buletine
+         (nr, data, an, luna, cheie_pdf, cheie_poza, cheie_poza_mica, marime_pdf, pagini, sursa, text, text_plat)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'site', ?10, ?11)`,
+    )
+    .bind(
+      b.nr,
+      b.data,
+      b.data.slice(0, 4),
+      b.data.slice(5, 7),
+      b.cheie_pdf,
+      b.cheie_poza,
+      b.cheie_poza_mica,
+      b.marime_pdf,
+      b.pagini,
+      b.text,
+      plat(b.text),
+    )
+    .run()
+}
+
 export async function numaratoare(db: D1Database): Promise<{ buletine: number; ani: number; ultimul: string | null }> {
   const r = await db
     .prepare('SELECT COUNT(*) AS buletine, COUNT(DISTINCT an) AS ani, MAX(data) AS ultimul FROM buletine')

@@ -318,6 +318,19 @@ ul.atentie.lista { max-width:760px; margin:0 auto 10px; padding:0 0 0 20px; font
 .btn.mare { font-size:16px; padding:10px 22px }
 @media (max-width:640px) { .doua { grid-template-columns:1fr } }
 
+/* ── CIORNA: numarul proaspat compus, aratat CHIAR IN PAGINA, ca un buletin gata de validat
+   (user, 18.09.2026). Un chenar in jurul lui, ca sa se vada ca e altceva decat formularul de
+   dedesubt: inauntru sta un buletin intreg — coperta, butoanele lui si validarea. */
+.ciorna { max-width:760px; margin:0 auto 22px; padding:16px 16px 18px; border:1px solid var(--rule);
+          border-radius:10px; background:color-mix(in srgb, var(--ink) 3%, transparent) }
+.ciorna .veste { text-align:center }
+.ciorna .valideaza { text-align:center; margin:18px 0 0 }
+/* Butonul care PUBLICA: verdele faptei duse la capat, nu rosul platformei — rosul e, peste tot aici,
+   al lucrului nefacut (numarul nou, atentia, socoteala trecuta peste masura). */
+.btn.mare.bun { background:#0A6B41; border-color:#0A6B41; color:#fff }
+.btn.mare.bun:hover { background:#095c38; border-color:#095c38 }
+.ciorna .marunt { text-align:center; margin:8px 0 0 }
+
 /* ── COPERTA: pagina intai, mare, care duce in PDF. Chenar subtire si o umbra abia simtita,
    ca sa se vada ca e o hartie, nu o poza lipita pe fundal. */
 .coperta { display:block; max-width:460px; margin:0 auto; line-height:0 }

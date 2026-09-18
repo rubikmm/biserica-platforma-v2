@@ -122,8 +122,16 @@ function contDin(ctx: Ctx) {
  *  doua date si zile cu doua numere — de aceea in adresa stau amandoua. */
 export const adresa = (ctx: Ctx, b: { nr: number; data: string }): string => `${ctx.prefix}/buletin/${b.nr}-${b.data}`
 
-/** Adresa unui fisier din R2, asa cum il serveste aplicatia. */
-export const fisier = (ctx: Ctx, cheie: string): string => `${ctx.prefix}/fisier/${cheie}`
+/**
+ * Adresa unui fisier din R2, asa cum il serveste aplicatia.
+ *
+ * ⚠️ `v` — AMPRENTA RANDĂRII, pusă numai de ecranul compunerii (18.09.2026). Cheia unui număr nu se
+ * schimbă niciodată, dar CONȚINUTUL ei se schimbă la fiecare recompunere a aceluiași număr: fără un
+ * semn în adresă, browserul celui care tocmai a compus a doua oară arată tot foaia dintâi. Adresele
+ * arhivei rămân curate, fără întrebare — acolo fișierul chiar nu se mai atinge.
+ */
+export const fisier = (ctx: Ctx, cheie: string, v?: string | null): string =>
+  `${ctx.prefix}/fisier/${cheie}${v ? `?v=${encodeURIComponent(v)}` : ''}`
 
 /** „6 sept." — pentru raftul arhivei, unde anul si luna scriu deja deasupra. */
 const ziuaScurt = (data: string): string => {
@@ -372,10 +380,18 @@ const JS_REVERS = `
   var CHEIE = "buletin_revers";
   var b = document.getElementById("b-revers"), t = document.getElementById("b-tipareste");
   if (!b || !t) return;
-  var baza = t.getAttribute("href").replace(/\\?revers=1$/, "");
+  // ⚠️ Adresa poate avea DEJA o intrebare pe ea (v= — amprenta randarii, la numarul nevalidat de pe
+  // ecranul compunerii), deci „revers" nu se mai lipeste cu „?" orbeste: se scoate din sirul de
+  // intrebari si se pune inapoi cu semnul potrivit. Fara asta iesea ?v=abc?revers=1.
+  // (Fara accente grave in comentariile astea: bucata e un template literal, iar ele l-ar rupe.)
+  var intreg = t.getAttribute("href");
+  var rupt = intreg.split("?");
+  var baza = rupt[0];
+  var intrebari = (rupt[1] || "").split("&").filter(function(p){ return p && p !== "revers=1"; });
   function pune(pornit){
     b.setAttribute("aria-pressed", pornit ? "true" : "false");
-    t.setAttribute("href", pornit ? baza + "?revers=1" : baza);
+    var toate = intrebari.concat(pornit ? ["revers=1"] : []);
+    t.setAttribute("href", toate.length ? baza + "?" + toate.join("&") : baza);
   }
   var pornit = false;
   try { pornit = localStorage.getItem(CHEIE) === "1"; } catch (e) {}
@@ -581,7 +597,7 @@ const fisa = (ctx: Ctx, b: BuletinScurt): string =>
  *
  * Fara PDF (doua numere vechi au ramas doar cu poza), butoanele se sting in loc sa duca in gol.
  */
-function butoaneleNumarului(ctx: Ctx, b: Buletin): string {
+function butoaneleNumarului(ctx: Ctx, b: Buletin, v?: string | null): string {
   if (!b.cheie_pdf) {
     return (
       `<span class="btn intreg gol" title="Numărul acesta a rămas în arhivă doar ca poză">` +
@@ -590,12 +606,13 @@ function butoaneleNumarului(ctx: Ctx, b: Buletin): string {
   }
   const marime = b.marime_pdf ? `<small>${(b.marime_pdf / 1048576).toFixed(1)} MB</small>` : ''
   const nume = b.cheie_pdf.slice(b.cheie_pdf.lastIndexOf('/') + 1)
+  const amprenta = v ? `?v=${encodeURIComponent(v)}` : ''
   return (
-    `<a class="btn intreg" id="b-descarca" href="${fisier(ctx, b.cheie_pdf)}?descarca=1"` +
+    `<a class="btn intreg" id="b-descarca" href="${fisier(ctx, b.cheie_pdf, v)}${v ? '&' : '?'}descarca=1"` +
     ` download="${esc(nume)}" title="Descarcă foaia numărului ${b.nr}" aria-label="Descarcă foaia numărului ${b.nr}">` +
     `${IC_DESCARCA}${marime}</a>` +
     `<span class="pastila tipar">` +
-    `<a class="btn intreg" id="b-tipareste" href="${esc(ctx.prefix)}/tipar/${b.nr}-${b.data}.pdf"` +
+    `<a class="btn intreg" id="b-tipareste" href="${esc(ctx.prefix)}/tipar/${b.nr}-${b.data}.pdf${amprenta}"` +
     ` target="_blank" rel="noopener"` +
     ` title="Broșură pentru tipar: două pagini pe o coală A4, în ordinea îndoirii">` +
     `${IC_TIPAR} Tipărește</a>` +
@@ -621,10 +638,10 @@ function butoaneleNumarului(ctx: Ctx, b: Buletin): string {
  *
  * Nu se pune decât unde numărul chiar are PDF.
  */
-function fereastraRasfoit(ctx: Ctx, b: Buletin): string {
+function fereastraRasfoit(ctx: Ctx, b: Buletin, v?: string | null): string {
   if (!b.cheie_pdf) return ''
   return `<dialog class="rasfoit" id="d-rasfoit" aria-label="Răsfoiește numărul ${b.nr}"
-  data-pdf="${fisier(ctx, b.cheie_pdf)}" data-js="${esc(ctx.prefix)}/flipbook" data-v="${esc(ctx.versiune)}">
+  data-pdf="${fisier(ctx, b.cheie_pdf, v)}" data-js="${esc(ctx.prefix)}/flipbook" data-v="${esc(ctx.versiune)}">
   <div class="rasfoit-cap">
     <b>Nr. ${b.nr}</b> <span class="rasfoit-cand">${dataLunga(b.data)}</span>
     <button type="button" class="modal-x" id="r-inchide" aria-label="Închide răsfoitul">&times;</button>
@@ -635,14 +652,14 @@ function fereastraRasfoit(ctx: Ctx, b: Buletin): string {
 }
 
 /** Coperta: pagina intai, mare, care duce in PDF. */
-function coperta(ctx: Ctx, b: Buletin): string {
+function coperta(ctx: Ctx, b: Buletin, v?: string | null): string {
   const mare = b.cheie_poza
-    ? `<img src="${fisier(ctx, b.cheie_poza)}" alt="Pagina întâi a numărului ${b.nr}" width="1400" height="1980">`
+    ? `<img src="${fisier(ctx, b.cheie_poza, v)}" alt="Pagina întâi a numărului ${b.nr}" width="1400" height="1980">`
     : poza(ctx, b, 'cop')
   // Coperta deschide RĂSFOITUL, ca și butonul de sub ea (`data-rasfoit`); `href` rămâne fișierul,
   // ca ea să facă ceva și acolo unde răsfoitul nu poate rula.
   return b.cheie_pdf
-    ? `<a class="coperta" data-rasfoit href="${fisier(ctx, b.cheie_pdf)}" target="_blank" rel="noopener"
+    ? `<a class="coperta" data-rasfoit href="${fisier(ctx, b.cheie_pdf, v)}" target="_blank" rel="noopener"
          title="Răsfoiește numărul">${mare}</a>`
     : `<span class="coperta">${mare}</span>`
 }
@@ -765,6 +782,12 @@ export interface StareaCompunerii {
   raspuns?: {
     facut: boolean
     cheie?: string | null
+    /** coperta proaspăt randată (pagina întâi ca poză); `null` dacă browserul n-a dat-o */
+    cheiePoza?: string | null
+    /** amprenta randării — intră în adresele foii, ca browserul să n-o arate pe cea dinainte */
+    versiune?: string | null
+    /** cât are foaia, în octeți — scrisă pe butonul de descărcare */
+    marime?: number
     plangeri: string[]
     /** ce nu oprește, dar se spune la vedere: programul PROPUS, textul de probă */
     atentie?: string[]
@@ -828,6 +851,60 @@ function campuriArticol(prefix: string, titlu: string, scris: Record<string, str
  * ⚠️ Cifra din pagină e o PREVESTIRE, nu adevărul: adevărul îl spune curgerea la randare, iar
  * răspunsul compunerii îl arată. De aceea scrie „încap ~", cu tilda.
  */
+/**
+ * NUMĂRUL PROASPĂT COMPUS, ARĂTAT ÎN PAGINĂ — nu un link către PDF (user, 18.09.2026: „să-l afișezi
+ * direct în pagină ca și cum e un buletin gata de validat… toate butoanele de tipar și download și
+ * flip3D + un buton de validare").
+ *
+ * E ACELAȘI bloc ca la un număr din arhivă — coperta mare, care deschide răsfoitul, și rândul de
+ * butoane —, fiindcă asta e și întrebarea omului: arată a buletin? De aceea nu s-a scris un al
+ * doilea fel de a arăta un număr, ci se cheamă chiar `coperta`, `butoaneleNumarului` și
+ * `fereastraRasfoit`, cu un rând de arhivă închipuit din cheile ciornei.
+ *
+ * Trei lucruri în plus față de arhivă, toate cerute:
+ *  - **butonul de răsfoit (flip3D) se vede**. La numerele apărute a ieșit dinadins (coperta îl
+ *    deschide, iar butonul ar fi fost al treilea într-un rând de fapte limpezi); aici omul se uită
+ *    la o ciornă și trebuie să poată întoarce paginile fără să ghicească că poza e de apăsat;
+ *  - **butonul de VALIDARE**, care publică numărul (vezi ruta `/nou`, `fapta=valideaza`);
+ *  - **amprenta randării în toate adresele** (`?v=…`): fără ea, a doua compunere a aceluiași număr
+ *    ar arăta foaia dintâi, ținută în cache-ul browserului sub aceeași adresă.
+ */
+function ciornaPeEcran(
+  ctx: Ctx,
+  nou: { nr: number | null; data: string },
+  r: NonNullable<StareaCompunerii['raspuns']>,
+): string {
+  if (!r.cheie || !nou.nr) return `<p class="veste bine">Numărul e compus.</p>`
+  const v = r.versiune ?? null
+  const ciorna: Buletin = {
+    nr: nou.nr,
+    data: nou.data,
+    an: nou.data.slice(0, 4),
+    luna: nou.data.slice(5, 7),
+    cheie_pdf: r.cheie,
+    cheie_poza: r.cheiePoza ?? null,
+    cheie_poza_mica: r.cheiePoza ?? null,
+    marime_pdf: r.marime ?? 0,
+    pagini: 4,
+    sursa: 'ciorna',
+  }
+  return `<section class="ciorna">
+  <p class="veste bine">Numărul e compus — uită-te la el și, dacă e bun, validează-l.</p>
+  ${coperta(ctx, ciorna, v)}
+  <nav class="btns hartii">${butoaneleNumarului(ctx, ciorna, v)}<button type="button" class="btn intreg" data-rasfoit
+    title="Răsfoiește numărul, pagină cu pagină">${IC_CARTE} Răsfoiește</button></nav>
+  <form method="post" action="${ctx.prefix}/nou" class="valideaza">
+    <input type="hidden" name="fapta" value="valideaza">
+    <input type="hidden" name="nr" value="${nou.nr}">
+    <input type="hidden" name="data" value="${esc(nou.data)}">
+    <button type="submit" class="btn mare bun">Validează și publică nr. ${nou.nr}</button>
+  </form>
+  <p class="marunt">Validarea îl publică: numărul intră în arhivă și devine numărul curent al parohiei.
+    Până atunci, foaia e doar a ecranului ăstuia.</p>
+${fereastraRasfoit(ctx, ciorna, v)}
+</section>`
+}
+
 export function paginaNou(
   ctx: Ctx,
   m: Meniu,
@@ -859,7 +936,7 @@ export function paginaNou(
     : ''
   const veste = stare.raspuns
     ? stare.raspuns.facut
-      ? `${atentii}<p class="veste bine">Numărul e compus. <a href="${ctx.prefix}/fisier/${esc(stare.raspuns.cheie ?? '')}">Deschide PDF-ul</a>.</p>`
+      ? `${atentii}${ciornaPeEcran(ctx, nou, stare.raspuns)}`
       : `${atentii}<div class="veste rau"><p>Nu s-a compus:</p><ul>${stare.raspuns.plangeri.map((p) => `<li>${esc(p)}</li>`).join('')}</ul></div>`
     : ''
 

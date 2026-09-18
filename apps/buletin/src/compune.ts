@@ -13,7 +13,7 @@
  * NU se dă drept bun, oricât de bine ar fi ieșit socoteala. Ordinea asta — întâi socoteala, la
  * urmă proba randării — e singura care nu minte nici pe repede, nici pe încet.
  */
-import { dataLunga, pdfCuRaport } from '@xc/ui'
+import { dataLunga, pdfCuRaportSiCoperta } from '@xc/ui'
 import { capulTextului, mottoDinText } from './depozit.js'
 import { foaieHtml, textCurat } from './foaie.js'
 import { type NumarCerut, type Socoteala, SECUNDARI_MAXIM, semne, socoteste } from './masuri.js'
@@ -82,6 +82,8 @@ export interface Compus {
   /** ce a intrat cu adevărat, măsurat la randare */
   raport?: { intrate: number; peDinafara: number; coloaneFolosite: number }
   pdf?: ArrayBuffer
+  /** pagina întâi ca poză, din aceeași randare — coperta de pe ecran și, la validare, a arhivei */
+  coperta?: ArrayBuffer
   cheie?: string
   calendar?: Calendar | null
   /** ce oprește compunerea — cu cifre */
@@ -200,7 +202,7 @@ export async function compune(env: EnvCompunere, o: OptiuniCompunere): Promise<C
     return { ok: plangeri.length === 0, socoteala, calendar, plangeri, atentie, cerut, cheie: undefined, pdf: undefined, raport: undefined }
   }
 
-  const { pdf, raport } = await randeaza(env, html)
+  const { pdf, raport, coperta } = await randeaza(env, html)
   if (raport && raport.peDinafara > 0) {
     plangeri.push(
       `la randare au rămas ${raport.peDinafara} de semne pe dinafară — socoteala zicea că încap, ` +
@@ -213,6 +215,7 @@ export async function compune(env: EnvCompunere, o: OptiuniCompunere): Promise<C
     socoteala,
     raport,
     pdf,
+    coperta,
     calendar,
     plangeri,
     atentie,
@@ -222,8 +225,20 @@ export async function compune(env: EnvCompunere, o: OptiuniCompunere): Promise<C
 }
 
 /** Cheia din depozit: aceeași formă ca la numerele venite din V1. */
-export const cheiaNumarului = (cerut: NumarCerut): string =>
+export const cheiaNumarului = (cerut: Pick<NumarCerut, 'nr' | 'data'>): string =>
   `${cerut.data.slice(0, 4)}/buletin-${cerut.nr}-${cerut.data}.pdf`
+
+/**
+ * Cheia COPERTEI — pagina întâi ca poză, sub același nume ca la numerele aduse din V1
+ * (`2026/buletin-613-2026-08-09.jpg`), ca arhiva să nu aibă două feluri de nume.
+ *
+ * ⚠️ Una singură, nu două: în V1 erau `…jpg` (1400) și `…-mic.jpg` (460), tăiate la import cu o
+ * unealtă care nu există în Worker. Aici poza iese din aceeași sesiune de browser ca PDF-ul, la o
+ * singură măsură (~1590 px), iar rândul din arhivă o pune în amândouă coloanele. Raftul o arată mai
+ * mică decât e — un fișier ceva mai greu la un număr pe săptămână, nu la toate cele 619.
+ */
+export const cheiaCopertei = (cerut: Pick<NumarCerut, 'nr' | 'data'>): string =>
+  `${cerut.data.slice(0, 4)}/buletin-${cerut.nr}-${cerut.data}.jpg`
 
 /**
  * CEREREA PĂSTRATĂ LÂNGĂ PDF — numărul ca date (motto, articole), nu doar ca foaie.
@@ -281,8 +296,8 @@ export async function mottoDinainte(
  * din foaie e semnul după care `@xc/ui` știe să aștepte, iar scriptul foii îl ridică după ce a
  * terminat de curs. Fără el s-ar tipări pagina goală, înainte ca textul să fi ajuns în coloane.
  */
-async function randeaza(env: EnvCompunere, html: string): Promise<{ pdf: ArrayBuffer; raport?: Compus['raport'] }> {
-  return await pdfCuRaport<Compus['raport']>(env.BROWSER, html)
+async function randeaza(env: EnvCompunere, html: string): Promise<{ pdf: ArrayBuffer; raport?: Compus['raport']; coperta?: ArrayBuffer }> {
+  return await pdfCuRaportSiCoperta<Compus['raport']>(env.BROWSER, html)
 }
 
 /** Textul numărului, pentru căutarea din arhivă. */

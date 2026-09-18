@@ -35,20 +35,31 @@ import { actiuniBuletin } from './actiuni.js'
 import { dataVersiunii, eroareApi, html, json, jsonCuEtag } from '@xc/ui'
 import pkg from '../package.json'
 import {
+  type Buletin,
   type BuletinScurt,
   anii,
   cauta,
   celMaiNouCuNumarul,
   dintrUnAn,
   numaratoare,
+  scrieBuletin,
   ultimele,
   ultimul,
   unul,
   vecini,
 } from './depozit.js'
 import { type Coala, brosura, cheiaBrosurii, numeBrosura } from './tipar.js'
-import { calendarulNumarului, cheiaNumarului, compune, mottoDinainte, pastreazaCererea } from './compune.js'
-import { variante } from './masuri.js'
+import {
+  calendarulNumarului,
+  cheiaCererii,
+  cheiaCopertei,
+  cheiaNumarului,
+  compune,
+  mottoDinainte,
+  pastreazaCererea,
+  textCurat,
+} from './compune.js'
+import { PAGINI, type NumarCerut, variante } from './masuri.js'
 import { abonamentul, ruteazaAbonare } from '@xc/abonare'
 import { ruteazaSetari } from '@xc/setari'
 import {
@@ -167,8 +178,17 @@ async function comunicare<T = unknown>(env: Env, cale: string, corp: unknown): P
 }
 
 /**
- * Un fisier din depozit: PDF-ul unui numar sau poza paginii lui intai. Nu se schimba niciodata dupa
- * ce a fost pus (numele poarta numarul si data), deci se poate tine in cache un an.
+ * Un fisier din depozit: PDF-ul unui numar sau poza paginii lui intai.
+ *
+ * ⚠️ NU MAI E „IMMUTABLE" DIN OFICIU (18.09.2026, user: „să faci ceva cu cache-ul"). Presupunerea
+ * veche — numele poarta numarul si data, deci continutul nu se schimba niciodata — s-a rupt in ziua
+ * in care numarul se compune CHIAR AICI: omul recompune 616 de cinci ori pana iese cum vrea, iar
+ * cheia ramane aceeasi. Cu `immutable` pe un an, browserul lui arata a doua oara tot foaia dintai si
+ * pare ca indreptarea nu s-a facut.
+ *   - cu `?v=<amprenta>` (asa isi scrie ecranul compunerii toate legaturile) adresa e ALTA la fiecare
+ *     randare, deci se poate tine un an — cine o are, o are pe cea buna;
+ *   - fara `v`, o ora, cu `etag`: numerele vechi din arhiva se tin oricum in cache, iar o foaie
+ *     rescrisa se indreapta singura la prima revalidare, care costa un 304.
  */
 async function fisierul(req: Request, url: URL, env: Env, cheie: string): Promise<Response> {
   if (!CHEIE_BUNA.test(cheie)) return new Response('Nu există fișierul.', { status: 404 })
@@ -177,7 +197,7 @@ async function fisierul(req: Request, url: URL, env: Env, cheie: string): Promis
   const h = new Headers()
   obiect.writeHttpMetadata(h)
   h.set('etag', obiect.httpEtag)
-  h.set('cache-control', 'public, max-age=31536000, immutable')
+  h.set('cache-control', url.searchParams.has('v') ? 'public, max-age=31536000, immutable' : 'public, max-age=3600')
   if (cheie.endsWith('.pdf')) {
     const nume = cheie.slice(cheie.lastIndexOf('/') + 1)
     h.set(
@@ -202,7 +222,14 @@ async function fisierul(req: Request, url: URL, env: Env, cheie: string): Promis
  * ⚠️ Cine n-are PDF (doua numere vechi, ramase doar ca poza) primeste 404, nu o brosura goala.
  */
 async function tiparul(req: Request, url: URL, env: Env, nr: number, data: string): Promise<Response> {
-  const b = await unul(env.DB, nr, data)
+  /*
+   * ⚠️ Și numărul NEVALIDAT se poate tipări (18.09.2026): ecranul compunerii arată foaia proaspăt
+   * făcută cu toate butoanele ei, iar „Tipărește" e chiar butonul după care omul se uită pe hârtie
+   * înainte să valideze. Rândul din arhivă nu există încă, dar PDF-ul stă în depozit sub cheia lui
+   * știută — de acolo se ia. Nu se deschide nimic în plus: cheia se putea ghici oricum, iar foaia
+   * e publică din clipa în care e pusă (`/fisier/…`).
+   */
+  const b = (await unul(env.DB, nr, data)) ?? (await ciornaDinDepozit(env, nr, data))
   if (!b?.cheie_pdf) return new Response('Numărul acesta n-are foaie de tipărit.', { status: 404 })
   const coala: Coala = url.searchParams.get('coala') === 'a3' ? 'a3' : 'a4'
   // `?revers=1` — versoul intors cu 180°, pentru imprimantele care intorc coala pe latura scurta
@@ -210,11 +237,13 @@ async function tiparul(req: Request, url: URL, env: Env, nr: number, data: strin
   const cheie = cheiaBrosurii(b.cheie_pdf, coala, revers)
   const nume = numeBrosura(b.cheie_pdf, coala, revers)
 
+  // Cache-ul, ca la `/fisier/`: un an numai cu `?v=<amprenta>` pe adresă, altfel o oră cu etag —
+  // altfel broșura unui număr recompus ar rămâne cea dinainte în browserul celui care tocmai a tipărit.
   const antete = (etag: string) =>
     new Headers({
       'content-type': 'application/pdf',
       etag,
-      'cache-control': 'public, max-age=31536000, immutable',
+      'cache-control': url.searchParams.has('v') ? 'public, max-age=31536000, immutable' : 'public, max-age=3600',
       'content-disposition': `${url.searchParams.has('descarca') ? 'attachment' : 'inline'}; filename="${nume}"`,
     })
 
@@ -235,6 +264,30 @@ async function tiparul(req: Request, url: URL, env: Env, nr: number, data: strin
     httpMetadata: { contentType: 'application/pdf' },
   })
   return new Response(octeti, { headers: antete(pus?.httpEtag ?? `"${cheie}"`) })
+}
+
+/**
+ * CIORNA din depozit — numărul compus, dar încă nevalidat: în bază nu e niciun rând, iar fișierele
+ * stau deja sub cheile lui știute. Se întoarce în forma unui rând de arhivă, ca paginile și broșura
+ * să nu aibă nevoie de două drumuri. `null` dacă n-a fost compus.
+ */
+async function ciornaDinDepozit(env: Env, nr: number, data: string): Promise<Buletin | null> {
+  const cheie = cheiaNumarului({ nr, data })
+  const foaia = await env.FISIERE.head(cheie)
+  if (!foaia) return null
+  const coperta = await env.FISIERE.head(cheiaCopertei({ nr, data }))
+  return {
+    nr,
+    data,
+    an: data.slice(0, 4),
+    luna: data.slice(5, 7),
+    cheie_pdf: cheie,
+    cheie_poza: coperta ? coperta.key : null,
+    cheie_poza_mica: coperta ? coperta.key : null,
+    marime_pdf: foaia.size,
+    pagini: PAGINI,
+    sursa: 'ciorna',
+  }
 }
 
 /**
@@ -542,6 +595,73 @@ export default {
         const f = await req.formData()
         const scris: Record<string, string> = {}
         for (const [k, v] of f.entries()) if (typeof v === 'string') scris[k] = v
+
+        /*
+         * VALIDAREA = PUBLICAREA (user, 18.09.2026, limpede: „validarea = publicarea"). Până aici
+         * numărul compus era doar un PDF în depozit, pe care nu-l vedea nimeni din afara ecranului
+         * ăstuia; apăsarea îl scrie în arhivă, și din clipa aceea el e numărul curent al parohiei —
+         * pe prima pagină, în arhivă, în căutare și în API-ul celorlalte aplicații.
+         *
+         * ⚠️ Se validează NUMĂRUL DE PE ECRAN, nu „ultimul compus": nr. și data vin din formular și
+         * se cântăresc față de ce ar urma acum (`nou`). Dacă între timp s-a validat altceva (două
+         * ferestre deschise), apăsarea NU scrie peste — spune ce s-a schimbat și arată ecranul din nou.
+         * ⚠️ Poarta e tot rolul de admin, ca la compunere: o cheie nouă de permisiune ar fi cerut
+         * republicarea lui `xc-authz` (aceeași socoteală ca la `/nou`).
+         */
+        if (scris.fapta === 'valideaza') {
+          const cerNr = Number(scris.nr ?? '0') || 0
+          const cerData = scris.data ?? ''
+          if (!nou.nr || cerNr !== nou.nr || cerData !== nou.data) {
+            return html(
+              paginaNou(ctx, m, b, nou, {
+                variante: masuri, calendar, motto,
+                raspuns: {
+                  facut: false,
+                  plangeri: [
+                    `numărul de pe ecran (${cerNr} / ${cerData}) nu mai e cel care urmează (${nou.nr} / ${nou.data}) — ` +
+                    'între timp s-a validat altceva; recompune-l pe cel de acum',
+                  ],
+                },
+              }),
+              409,
+              alLui,
+            )
+          }
+          const ciorna = await ciornaDinDepozit(env, nou.nr, nou.data)
+          if (!ciorna?.cheie_pdf) {
+            return html(
+              paginaNou(ctx, m, b, nou, {
+                variante: masuri, calendar, motto,
+                raspuns: { facut: false, plangeri: ['numărul nu e compus — compune-l întâi, apoi validează-l'] },
+              }),
+              409,
+              alLui,
+            )
+          }
+          // textul pentru căutare iese din cererea păstrată lângă PDF; dacă lipsește, rândul intră
+          // fără text (se caută după el, nu se tipărește din el)
+          const cerereaPastrata = await env.FISIERE.get(cheiaCererii({ nr: nou.nr, data: nou.data }))
+          const dateleNumarului = cerereaPastrata ? ((await cerereaPastrata.json()) as NumarCerut) : null
+          await scrieBuletin(env.DB, {
+            nr: nou.nr,
+            data: nou.data,
+            cheie_pdf: ciorna.cheie_pdf,
+            cheie_poza: ciorna.cheie_poza,
+            cheie_poza_mica: ciorna.cheie_poza_mica,
+            marime_pdf: ciorna.marime_pdf,
+            pagini: ciorna.pagini ?? PAGINI,
+            text: dateleNumarului ? textCurat(dateleNumarului) : '',
+          })
+          ctxExec.waitUntil(
+            scrieAudit(env, {
+              action: 'buletin.valideaza', target: `${nou.nr}-${nou.data}`, outcome: 'success',
+              correlationId: cid, actorId: principal?.userId,
+            }),
+          )
+          // Numărul are de acum pagina lui: acolo se duce omul, nu înapoi în formular.
+          return redirect(`${prefix}/buletin/${nou.nr}-${nou.data}`)
+        }
+
         const articol = (prefix: string) => ({
           autor: (scris[`${prefix}_autor`] ?? '').trim(),
           ani: (scris[`${prefix}_ani`] ?? '').trim() || undefined,
@@ -572,9 +692,24 @@ export default {
         const r = await compune(env, { cerut, poze })
         if (r.ok && r.pdf) {
           const cheie = cheiaNumarului(cerut)
-          await env.FISIERE.put(cheie, r.pdf, { httpMetadata: { contentType: 'application/pdf' } })
+          const pus = await env.FISIERE.put(cheie, r.pdf, { httpMetadata: { contentType: 'application/pdf' } })
+          // coperta, din aceeași randare: ea se vede pe ecran înainte de validare și merge mai
+          // departe în arhivă, la validare (fără ea rândul ar rămâne cu locul poze desenat)
+          const cheiePoza = cheiaCopertei(cerut)
+          if (r.coperta) await env.FISIERE.put(cheiePoza, r.coperta, { httpMetadata: { contentType: 'image/jpeg' } })
           // cererea, ca date, lângă PDF — de aici ia numărul următor motto-ul (ce a scris omul, nu proba)
           await pastreazaCererea(env, cerut)
+          /*
+           * ⚠️ BROȘURILE VECHI ALE NUMĂRULUI SE ARUNCĂ. Ele se țin în depozit sub o cheie scoasă din
+           * cheia PDF-ului, iar la recompunere PDF-ul se schimbă sub același nume: fără ștergerea
+           * asta, „Tipărește" ar da mai departe broșura foii dinainte, așezată din pagini vechi.
+           */
+          ctxExec.waitUntil(
+            env.FISIERE.delete([
+              cheiaBrosurii(cheie, 'a4', false), cheiaBrosurii(cheie, 'a4', true),
+              cheiaBrosurii(cheie, 'a3', false), cheiaBrosurii(cheie, 'a3', true),
+            ]).catch(() => undefined),
+          )
           ctxExec.waitUntil(
             scrieAudit(env, {
               action: 'buletin.compune', target: cheie, outcome: 'success',
@@ -584,7 +719,17 @@ export default {
           return html(
             paginaNou(ctx, m, b, nou, {
               variante: masuri, calendar, scris, motto,
-              raspuns: { facut: true, cheie, plangeri: [], atentie: r.atentie },
+              raspuns: {
+                facut: true,
+                cheie,
+                cheiePoza: r.coperta ? cheiePoza : null,
+                // amprenta randării: ea desparte foaia de acum de cea dinainte în cache-ul
+                // browserului, care altfel ar arăta foaia veche sub aceeași adresă
+                versiune: (pus?.httpEtag ?? '').replace(/[^\w-]/g, '') || String(Date.now()),
+                marime: r.pdf.byteLength,
+                plangeri: [],
+                atentie: r.atentie,
+              },
             }),
             200,
             alLui,

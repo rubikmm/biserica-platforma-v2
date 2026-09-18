@@ -86,6 +86,46 @@ export async function pdfCuRaport<T = unknown>(legatura: Fetcher, html: string):
   })
 }
 
+/**
+ * PDF-ul, raportul ȘI COPERTA — pagina întâi fotografiată —, dintr-o SINGURĂ sesiune de browser.
+ *
+ * De ce împreună: coperta se cere exact atunci când se face foaia (buletinul o arată pe ecran înainte
+ * de validare și o duce mai departe în arhivă), iar o a doua sesiune ar însemna încă o pornire de
+ * browser și încă o încărcare a aceluiași HTML — partea scumpă, de câteva secunde. Poza se ia DUPĂ
+ * PDF, ca schimbarea de fereastră să nu atingă hârtia.
+ *
+ * Coperta e elementul `.pagina` (prima foaie A4), la doi pixeli pe punct. Dacă nu se poate face, se
+ * întoarce `undefined`: hârtia rămâne bună și fără poză.
+ */
+export async function pdfCuRaportSiCoperta<T = unknown>(
+  legatura: Fetcher,
+  html: string,
+): Promise<{ pdf: ArrayBuffer; raport?: T; coperta?: ArrayBuffer }> {
+  return cuBrowser(legatura, async (browser) => {
+    const page = await incarca(browser, html)
+    const pdf = await page.pdf({ format: 'a4', printBackground: true, preferCSSPageSize: true, timeout: 20000 })
+    const scris = await page
+      .evaluate("document.documentElement.getAttribute('data-raport')")
+      .catch(() => null)
+    let coperta: ArrayBuffer | undefined
+    try {
+      await page.setViewport({ width: 794, height: 1123, deviceScaleFactor: 2 })
+      const el = await page.$('.pagina')
+      if (el) coperta = new Uint8Array(await el.screenshot({ type: 'jpeg', quality: 88 })).buffer as ArrayBuffer
+    } catch {
+      coperta = undefined
+    }
+    await page.close()
+    let raport: T | undefined
+    try {
+      raport = typeof scris === 'string' ? (JSON.parse(scris) as T) : undefined
+    } catch {
+      raport = undefined
+    }
+    return { pdf: new Uint8Array(pdf).buffer as ArrayBuffer, raport, coperta }
+  })
+}
+
 export async function jpgDin(legatura: Fetcher, html: string): Promise<ArrayBuffer> {
   return cuBrowser(legatura, async (browser) => {
     const page = await incarca(browser, html)
