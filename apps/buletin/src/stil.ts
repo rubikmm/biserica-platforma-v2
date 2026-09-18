@@ -310,6 +310,17 @@ export const LOCAL = `
 .sc-masura.peste { color:var(--rosu); font-weight:600 }
 .btn.mare { font-size:16px; padding:10px 22px }
 
+/* ── COMPUNEREA DE MANA (user, 19.09.2026: „ar fi si un buton manual in pagina"). Sub schita, cu
+   butonul obisnuit al paginii — face acelasi lucru ca buletin.compune din chat, deci n-are de ce sa
+   arate altfel. Randul de dedesubt spune, cand e cazul, DE CE n-a iesit: socoteala refuza cu cifra
+   ei, nu taie textul omului.
+   (Fara accente grave in comentariul asta: blocul e un template literal, iar ele l-ar rupe.)
+   ⚠️ E DINAFARA blocului .schita: acela se inlocuieste singur cand chatul atinge schita. */
+.compunerea { max-width:760px; margin:12px auto 0; text-align:center }
+.compunerea .btns { justify-content:center }
+.compunerea .btn[disabled] { opacity:.5; cursor:default }
+.compunerea .marunt { margin:8px 0 0 }
+
 /* ── CIORNA: numarul proaspat compus, aratat CHIAR IN PAGINA, ca un buletin gata de validat
    (user, 18.09.2026). Un chenar in jurul lui, ca sa se vada ca e altceva decat formularul de
    dedesubt: inauntru sta un buletin intreg — coperta, butoanele lui si validarea. */

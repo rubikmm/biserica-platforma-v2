@@ -29,6 +29,7 @@
  */
 import { LUNI } from '@xc/ui'
 import { SECUNDARI_MAXIM, type NumarCerut, semne, socoteste } from './masuri.js'
+import { DE_PROBA, TEXT_IMPLICIT, eDeProba } from './umplere.js'
 
 // ---------------------------------------------------------------------------
 // Întrebările standard — și locurile lor de completat
@@ -196,6 +197,56 @@ export function schitaGoala(n: {
   }
 }
 
+/**
+ * ARTICOLUL PRINCIPAL AL VARIANTEI ZERO — fiecare câmp cu locul lui ocupat, ca numărul să se poată
+ * compune din prima clipă (user, 19.09.2026: „toate câmpurile să aibă ceva implicit ca să poți
+ * genera varianta 0 de buletin").
+ *
+ * ⚠️ Pomenirea, mențiunea și poza NU primesc nimic: ele chiar lipsesc din multe numere adevărate,
+ * deci un loc ocupat acolo ar fi o minciună pe hârtie, nu un ajutor. O adresă de poză inventată ar
+ * lăsa, pe deasupra, un pătrat gol în foaie, fără nicio eroare nicăieri.
+ */
+export const ARTICOLUL_IMPLICIT = (): ArticolSchitei => ({
+  autor: DE_PROBA.autor,
+  ani: DE_PROBA.ani,
+  titlu: DE_PROBA.titlu,
+  text: TEXT_IMPLICIT,
+  sursa: DE_PROBA.sursa,
+})
+
+/**
+ * SCHIȚA IMPLICITĂ — cea care se scrie la PRIMA intrare pe `/nou` (user, 19.09.2026).
+ *
+ * E schița goală, cu locurile ocupate: motto-ul numărului trecut (mecanismul dinainte) și un articol
+ * principal de probă, cu textul „text". Din ea iese VARIANTA ZERO a numărului, fără să se fi răspuns
+ * la nicio întrebare.
+ *
+ * ⚠️ `gata` RĂMÂNE GOL — asta ține chestionarul în viață: mașina de stări întreabă mai departe de la
+ * motto încolo, iar fiecare răspuns scrie peste locul lui. Dacă valorile astea ar fi fost însemnate
+ * ca hotărâte, numărul zero ar fi fost și numărul final, iar bula n-ar mai fi avut ce întreba.
+ */
+export function schitaImplicita(n: {
+  nr: number | null
+  data: string
+  motto?: string | null
+  motoAutor?: string | null
+}): Schita {
+  return { ...schitaGoala(n), principal: ARTICOLUL_IMPLICIT() }
+}
+
+/**
+ * SCHIȚA LA CARE OMUL N-A RĂSPUNS ÎNCĂ NIMIC — cea implicită, neatinsă.
+ *
+ * De ea atârnă compunerea de la sine a variantei zero: ecranul `/nou` o pornește NUMAI aici. Odată ce
+ * omul a răspuns ceva, compunerea rămâne a lui (butonul ori chatul) — altfel un text prea lung ar
+ * porni, la fiecare reîncărcare de pagină, o randare care se știe dinainte că va fi refuzată.
+ */
+export function eSchitaNeatinsa(s: Schita): boolean {
+  if ((s.gata ?? []).length > 0 || s.secundari.length > 0) return false
+  const a = s.principal
+  return (a.gata ?? []).length === 0 && !a.nota && !a.poza && !a.pomenire
+}
+
 /** Ce scrie în depozit, adus la forma de acum. `null` când n-a fost începută nicio schiță. */
 export async function citesteSchita(
   env: EnvSchita,
@@ -266,7 +317,9 @@ const eRandDeSursa = (r: string): boolean => /^\s*(sursa|sursă|surse|din)\s*[:�
  */
 export function autorPropus(text: string): string | null {
   const t = (text ?? '').trim()
-  if (!t) return null
+  // ⚠️ Locul textului („text", din schița implicită) NU e un text: regula 3 de mai jos ar vedea în el
+  // un rând scurt fără punct, adică un nume, și ar propune „text" drept autor al numărului.
+  if (!t || eDeProba(t)) return null
   const r = randurile(t)
   const ultim = r[r.length - 1] ?? ''
   const prim = r[0] ?? ''
@@ -636,6 +689,12 @@ export function scrieRaspuns(
 
   // ------------------------------------------------- îndreptările, întâi
   if (cerut.subiect === 'de_la_capat') {
+    /*
+     * ⚠️ GOALĂ DE TOT, nu implicită (19.09.2026, hotărât anume): „ia-o de la capăt" e o ștergere
+     * cerută de om, iar numărul rămâne oricum compozabil — `umplere.ts` pune textul de probă la
+     * compunere, fie că locurile stau scrise în schiță, fie că nu. Repusă implicită, ștergerea s-ar
+     * fi văzut pe ecran ca „NUME AUTOR" reapărut singur, adică nu ca o ștergere.
+     */
     const curat = schitaGoala({ nr: s.nr, data: s.data, motto: s.motto ?? null, motoAutor: s.motoAutor ?? null })
     return { schita: curat, scris: 'am luat schița de la capăt; motto-ul numărului trecut a rămas', articol: 'principal' }
   }
@@ -782,16 +841,28 @@ export function scrieRaspuns(
 // Din schiță în ce cere compunerea
 // ---------------------------------------------------------------------------
 
-const caArticol = (a: ArticolSchitei): NumarCerut['principal'] => ({
-  autor: a.autor ?? '',
-  ...(a.ani ? { ani: a.ani } : {}),
-  ...(a.pomenire ? { pomenire: a.pomenire } : {}),
-  titlu: a.titlu ?? '',
-  text: a.text ?? '',
-  ...(a.sursa ? { sursa: a.sursa } : {}),
-  ...(a.nota ? { nota: a.nota } : {}),
-  poza: Boolean(a.poza),
-})
+/**
+ * ⚠️ LOCURILE SCHIȚEI IMPLICITE IES AICI, GOALE (19.09.2026). Peste granița asta trece numai ce a
+ * spus omul: „NUME AUTOR" ori „text" pleacă mai departe ca un câmp nescris, iar `umplere.ts` le pune
+ * la loc, ca și până acum, cu socoteala lui și cu nota din `atentie`. Trecute ca atare, ar fi ieșit
+ * pe hârtie cu patru semne de text și s-ar fi păstrat sub `compus/` ca și cum ar fi fost scrise.
+ */
+const fara = (v: string | undefined): string => (eDeProba(v) ? '' : (v ?? ''))
+
+const caArticol = (a: ArticolSchitei): NumarCerut['principal'] => {
+  const ani = fara(a.ani)
+  const sursa = fara(a.sursa)
+  return {
+    autor: fara(a.autor),
+    ...(ani ? { ani } : {}),
+    ...(a.pomenire ? { pomenire: a.pomenire } : {}),
+    titlu: fara(a.titlu),
+    text: fara(a.text),
+    ...(sursa ? { sursa } : {}),
+    ...(a.nota ? { nota: a.nota } : {}),
+    poza: Boolean(a.poza),
+  }
+}
 
 /**
  * SCHIȚA, ÎN FORMA CERUTĂ DE COMPUNERE. Ce lipsește rămâne gol — `umplere.ts` pune text de probă
@@ -842,18 +913,23 @@ export function masuraArticolului(
 export function rezumatulSchitei(s: Schita): string[] {
   const out: string[] = []
   if (s.motto) out.push(`motto: „${scurt(s.motto, 60)}"${s.motoAutor ? ` — ${s.motoAutor}` : ''}`)
+  /*
+   * ⚠️ LOCURILE NU SE DAU DREPT RĂSPUNSURI (19.09.2026). Schița implicită pornește cu „NUME AUTOR",
+   * „TITLU ARTICOL" și „text" în câmpuri; spuse aici ca atare, modelul ar citi „principal: autor NUME
+   * AUTOR, titlu «TITLU ARTICOL»" și ar crede că numărul e scris. Ce n-a spus omul e „încă nimic".
+   */
   for (const care of articolele(s)) {
     const a = articolul(s, care)
     const parti: string[] = []
-    if (a.autor) parti.push(`autor ${a.autor}`)
-    if (a.ani) parti.push(`anii ${a.ani}`)
+    if (!eDeProba(a.autor)) parti.push(`autor ${a.autor}`)
+    if (!eDeProba(a.ani)) parti.push(`anii ${a.ani}`)
     if (a.pomenire) parti.push(`pomenire ${a.pomenire}`)
-    if (a.titlu) parti.push(`titlu „${a.titlu}"`)
-    if (a.text) parti.push(`text ${semne(a.text)} de semne`)
-    if (a.sursa) parti.push(`sursa ${a.sursa}`)
+    if (!eDeProba(a.titlu)) parti.push(`titlu „${a.titlu}"`)
+    if (!eDeProba(a.text)) parti.push(`text ${semne(a.text ?? '')} de semne`)
+    if (!eDeProba(a.sursa)) parti.push(`sursa ${a.sursa}`)
     if (a.nota) parti.push('mențiune deasupra sursei')
     if (a.poza) parti.push('poză')
-    out.push(`${NUMELE_ZONEI[care]}: ${parti.length ? parti.join(', ') : 'încă nimic'}`)
+    out.push(`${NUMELE_ZONEI[care]}: ${parti.length ? parti.join(', ') : 'încă nimic (de probă, cât să se poată compune)'}`)
   }
   return out
 }

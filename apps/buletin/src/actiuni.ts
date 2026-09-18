@@ -45,7 +45,7 @@ import {
   normalizeazaChestionar,
   pozeleSchitei,
   rezumatulSchitei,
-  schitaGoala,
+  schitaImplicita,
   scrieRaspuns,
   scrieSchita,
   urmatoareaIntrebare,
@@ -166,6 +166,8 @@ export async function chestionarul(env: EnvActiuniBuletin): Promise<Record<Cheie
  *
  * ⚠️ Una singură pe număr, cheia fiind chiar numărul: două ferestre deschise scriu în aceeași
  * schiță, nu în două. Ultima scriere câștigă — ca la formularul dinainte.
+ * ⚠️ Cea nouă e IMPLICITĂ, nu goală (user, 19.09.2026): pornește cu toate locurile ocupate, ca
+ * numărul să se poată compune din prima clipă. Vezi `schitaImplicita`.
  */
 export async function schitaNumarului(
   env: EnvActiuniBuletin,
@@ -178,8 +180,79 @@ export async function schitaNumarului(
   if (gasita) return { schita: gasita, noua: false }
   const motto = await mottoDinainte(env, b).catch(() => null)
   return {
-    schita: schitaGoala({ nr: urm.nr, data: urm.data, motto: motto?.motto, motoAutor: motto?.motoAutor }),
+    schita: schitaImplicita({ nr: urm.nr, data: urm.data, motto: motto?.motto, motoAutor: motto?.motoAutor }),
     noua: true,
+  }
+}
+
+/**
+ * SCHIȚA, ȘI SCRISĂ ÎN DEPOZIT DACĂ N-A FOST — asta se cheamă de pe ecranul `/nou`.
+ *
+ * ⚠️ De ce se scrie la o simplă privire a paginii: schița implicită trebuie să fie ACEEAȘI pentru
+ * ecran, pentru buton și pentru chat. Ținută doar în memoria cererii, ecranul ar arăta o variantă
+ * zero pe care bula n-a văzut-o niciodată, iar primul răspuns din chat ar porni de la o a doua.
+ */
+export async function schitaPastrata(env: EnvActiuniBuletin): Promise<Schita> {
+  const [{ schita, noua }, intrebari] = await Promise.all([schitaNumarului(env), chestionarul(env)])
+  if (noua) {
+    const i = urmatoareaIntrebare(schita, intrebari)
+    await scrieSchita(env, schita, { subiect: i.subiect, articol: i.articol })
+  }
+  return schita
+}
+
+/**
+ * COMPUNEREA, ÎNTR-UN SINGUR LOC — o cheamă și acțiunea `buletin.compune` (din chat), și butonul
+ * „Compune numărul" de pe `/nou` (`POST /nou/compune`).
+ *
+ * ⚠️ Scrisă deosebit de acțiune fiindcă are DOI chemători (19.09.2026). Butonul din pagină nu trece
+ * prin model, prin propunere și prin bugetul de timp al chatului — dar trebuie să facă exact același
+ * lucru, altfel ecranul ar avea două feluri de a compune același număr, adică două adevăruri.
+ */
+export async function compuneNumarul(
+  env: EnvActiuniBuletin,
+  a: z.infer<typeof Numar> = {},
+  ctxExec?: Pick<ExecutionContext, 'waitUntil'>,
+): Promise<{
+  facut: boolean
+  nr: number
+  data: string
+  cheie: string | null
+  semne_intrate: number | null
+  semne_pe_dinafara: number | null
+  calendar: string | null
+  program: 'validat' | 'propus' | null
+  atentie: string[]
+  plangeri: string[]
+}> {
+  const { cerut, poze } = await deCompus(a, env)
+  // ⚠️ Plângerile de formă (nr., data, prea mulți secundari) le întoarce `compune` ÎNAINTE de randare,
+  // deci nu se mai cer aici a doua oară: un singur loc care hotărăște ce nu se poate compune.
+  const r = await compune(env, { cerut, poze })
+  const calendar = r.calendar ? NUMELE_TREPTEI[r.calendar.strans] : null
+  const program = r.calendar?.stare ?? null
+  if (!r.ok || !r.pdf) {
+    return { facut: false, nr: cerut.nr, data: cerut.data, cheie: null, semne_intrate: null, semne_pe_dinafara: null, calendar, program, atentie: r.atentie, plangeri: r.plangeri }
+  }
+  /*
+   * ⚠️ TOT ce urmează unei randări reușite stă în `pastreazaNumarul`: PDF-ul, COPERTA, cererea
+   * păstrată și aruncarea broșurilor vechi. Până pe 18.09.2026 aici se punea numai PDF-ul, iar
+   * un număr compus din bulă rămânea pe ecran cu coperta dinainte (ori fără niciuna), cu
+   * „Tipărește" dând broșura foii vechi — fără nicio eroare nicăieri (user: „a zis că Compune
+   * buletinul după o modificare și nu se vede nimic").
+   */
+  const { cheie } = await pastreazaNumarul(env, { cerut, peHartie: r.cerut, pdf: r.pdf, coperta: r.coperta }, ctxExec)
+  return {
+    facut: true,
+    nr: cerut.nr,
+    data: cerut.data,
+    cheie,
+    semne_intrate: r.raport?.intrate ?? null,
+    semne_pe_dinafara: r.raport?.peDinafara ?? null,
+    calendar,
+    program,
+    atentie: r.atentie,
+    plangeri: [],
   }
 }
 
@@ -260,6 +333,13 @@ export const REGULI = [
    * spus omul, sub subiectul cerut.
    */
   'Numărul nou se face dintr-un CHESTIONAR, nu dintr-un formular: comanda „buletin nou" (ori „unde am rămas?") → cheamă `buletin.chestionar`. El îți dă întrebarea următoare, gata scrisă.',
+  /*
+   * ⚠️ VARIANTA ZERO (user, 19.09.2026). Schița pornește cu toate locurile ocupate, deci numărul se
+   * poate compune ORICÂND, din prima clipă. Modelul trebuie să știe asta: altfel, la „compune
+   * buletinul" spus înainte să se fi răspuns la ceva, ar spune că n-are încă ce compune — și tocmai
+   * asta a cerut omul să se poată, ca să vadă cum arată foaia.
+   */
+  'Numărul se poate compune ORICÂND, chiar înainte de orice răspuns: schița pornește cu locurile ocupate, iar `buletin.compune` scoate „varianta zero" — foaia întreagă, cu text de probă la vedere. Răspunsurile de mai târziu scriu peste locuri, unul câte unul.',
   'Fiecare răspuns al omului → `buletin.raspunde`, cu subiectul cerut de întrebarea de atunci. Răspunsul acțiunii îți dă întrebarea următoare: pune-o și mergi mai departe, până se spune că schița e completă.',
   'Nu inventa câmpuri și nu scrie subiecte din afara listei. Nu rescrie textul omului: trimite-l literă cu literă în `valoare` — el se păstrează pe server, nu în discuția noastră.',
   /*
@@ -438,38 +518,9 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
         `${cati ? ` și încă ${cati} ${cati === 1 ? 'articol' : 'articole'}` : ''}. ` +
         `PDF-ul se va pune în depozit la ${cheiaNumarului(cerut)}.`
     },
+    // ⚠️ Un singur loc care compune, pentru amândoi chemătorii (chatul și butonul din `/nou`).
     async executa(a, c) {
-      const { cerut, poze } = await deCompus(a, c.env)
-      const r = await compune(c.env, { cerut, poze })
-      const calendar = r.calendar ? NUMELE_TREPTEI[r.calendar.strans] : null
-      const program = r.calendar?.stare ?? null
-      if (!r.ok || !r.pdf) {
-        return { facut: false, nr: cerut.nr, data: cerut.data, cheie: null, semne_intrate: null, semne_pe_dinafara: null, calendar, program, atentie: r.atentie, plangeri: r.plangeri }
-      }
-      /*
-       * ⚠️ TOT ce urmează unei randări reușite stă în `pastreazaNumarul`: PDF-ul, COPERTA, cererea
-       * păstrată și aruncarea broșurilor vechi. Până pe 18.09.2026 aici se punea numai PDF-ul, iar
-       * un număr compus din bulă rămânea pe ecran cu coperta dinainte (ori fără niciuna), cu
-       * „Tipărește" dând broșura foii vechi — fără nicio eroare nicăieri (user: „a zis că Compune
-       * buletinul după o modificare și nu se vede nimic").
-       */
-      const { cheie } = await pastreazaNumarul(
-        c.env,
-        { cerut, peHartie: r.cerut, pdf: r.pdf, coperta: r.coperta },
-        c.ctxExec,
-      )
-      return {
-        facut: true,
-        nr: cerut.nr,
-        data: cerut.data,
-        cheie,
-        semne_intrate: r.raport?.intrate ?? null,
-        semne_pe_dinafara: r.raport?.peDinafara ?? null,
-        calendar,
-        program,
-        atentie: r.atentie,
-        plangeri: [],
-      }
+      return await compuneNumarul(c.env, a, c.ctxExec)
     },
   }),
 

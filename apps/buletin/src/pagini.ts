@@ -38,6 +38,7 @@ import { JS_ABONARE, abonamentul, butonAbonare, fereastraAbonare } from '@xc/abo
 import { type Buletin, type BuletinScurt, type Gasit, plat } from './depozit.js'
 import type { ArticolSchitei, Schita } from './schita.js'
 import { LOCAL } from './stil.js'
+import { eDeProba } from './umplere.js'
 
 export interface Ctx {
   prefix: string
@@ -821,6 +822,12 @@ export interface StareaCompunerii {
   calendar?: { titlu: string; slujbe: number; stare?: 'validat' | 'propus' } | null
   /** motto-ul numărului trecut, cu care se precompletează câmpul (user, 17.09.2026) */
   motto?: { motto: string; motoAutor?: string } | null
+  /**
+   * SĂ COMPUNĂ SINGUR, ÎNDATĂ CE S-A ÎNCĂRCAT PAGINA — varianta zero, la prima intrare pe `/nou`
+   * (user, 19.09.2026). Adevărat numai când numărul n-are încă foaie ȘI schița e neatinsă: altfel
+   * compunerea rămâne a omului (butonul ori chatul).
+   */
+  compuneAcum?: boolean
 }
 
 /* ─────────────────── SCHIȚA NUMĂRULUI, ARĂTATĂ (nu editată) ─────────────────── */
@@ -828,9 +835,20 @@ export interface StareaCompunerii {
 /** Câte semne din text se văd strânse, până la „vezi tot". */
 const TEXT_STRANS = 300
 
-/** Un rând al schiței: eticheta la stânga, ce s-a răspuns la dreapta; nescris = un gând spus. */
+/**
+ * Un rând al schiței: eticheta la stânga, ce s-a răspuns la dreapta; nescris = un gând spus.
+ *
+ * ⚠️ LOCURILE SE VĂD, DAR ȘTERS (19.09.2026). Schița pornește cu „NUME AUTOR", „TITLU ARTICOL" și
+ * „text" în câmpuri, ca numărul să se poată compune din prima clipă; scrise negru pe alb, ele s-ar
+ * citi ca răspunsuri ale omului. Așa că se scriu ÎN STILUL GOLULUI, cenușiu și cursiv — același prin
+ * care ecranul spune de când se știe „încă nespus". Nicio grafică nouă, niciun avertisment în plus.
+ */
 const randSchita = (eticheta: string, valoare: string | undefined, gol: string): string =>
-  `<p class="sc-rand"><b>${esc(eticheta)}</b> ${valoare ? esc(valoare) : `<i class="sc-gol">${esc(gol)}</i>`}</p>`
+  `<p class="sc-rand"><b>${esc(eticheta)}</b> ${
+    eDeProba(valoare)
+      ? `<i class="sc-gol">${esc((valoare ?? '').trim() || gol)}</i>`
+      : esc(valoare ?? '')
+  }</p>`
 
 /**
  * Textul unui articol, STRÂNS: primele ~300 de semne și o cheie „vezi tot / vezi mai puțin".
@@ -838,8 +856,12 @@ const randSchita = (eticheta: string, valoare: string | undefined, gol: string):
  * butoanele ei jos de tot, iar ecranul ăsta e mai ales despre foaia compusă.
  */
 function textulStrans(text: string | undefined, id: string): string {
-  if (!text) return `<p class="sc-rand"><b>Text</b> <i class="sc-gol">încă nescris</i></p>`
-  const curatat = text.replace(/\s+/g, ' ').trim()
+  // ⚠️ Și locul textului („text", din schița implicită) se arată ca un gol, nu ca un articol de patru
+  // semne: la compunere el CHIAR se poartă ca un câmp nescris (vezi `umplere.ts`).
+  if (eDeProba(text)) {
+    return `<p class="sc-rand"><b>Text</b> <i class="sc-gol">${esc((text ?? '').trim() || 'încă nescris')}</i></p>`
+  }
+  const curatat = (text ?? '').replace(/\s+/g, ' ').trim()
   if (curatat.length <= TEXT_STRANS) return `<p class="sc-text">${esc(curatat)}</p>`
   return `<div class="sc-text" id="${id}" data-strans>
   <span class="sc-inceput">${esc(curatat.slice(0, TEXT_STRANS))}</span><span class="sc-rest" hidden>${esc(curatat.slice(TEXT_STRANS))}</span><span class="sc-puncte">…</span>
@@ -963,6 +985,75 @@ const IMPROSPATEAZA = `
   });
 })();`
 
+/* ─────────────────── COMPUNEREA, CU BUTONUL DIN PAGINĂ ─────────────────── */
+
+/**
+ * BUTONUL „COMPUNE NUMĂRUL" (user, 19.09.2026: „ar fi și un buton manual în pagină / acum nu merg
+ * să-i zici să-l compună … tot aștept și nu răspunde").
+ *
+ * Face exact ce face `buletin.compune` din chat — aceeași funcție pe server (`compuneNumarul`) —,
+ * dar pe drumul scurt: o cerere a paginii către `POST /nou/compune`, fără model, fără propunere cu
+ * Da/Nu și fără bugetul de timp al chatului. De aceea nici nu arată altfel: e butonul obișnuit al
+ * paginii, așezat sub schiță.
+ *
+ * ⚠️ STĂ ÎN AFARA BLOCULUI `#schita`: acela se înlocuiește singur când chatul atinge schița
+ * (`IMPROSPATEAZA`), iar butonul ar fi plecat cu el tocmai la mijlocul unei compuneri.
+ * ⚠️ `data-auto` = compune singur la încărcare (varianta zero, prima intrare). Tot butonul ăsta, doar
+ * apăsat de pagină — nu un al doilea drum.
+ */
+function butonulCompunerii(auto: boolean): string {
+  return `<section class="compunerea">
+  <nav class="btns"><button type="button" class="btn" id="b-compune"${auto ? ' data-auto' : ''}>Compune numărul</button></nav>
+  <p class="marunt" id="compune-veste">${auto ? 'Se compune varianta de probă a numărului…' : ''}</p>
+</section>`
+}
+
+/**
+ * CE FACE BUTONUL. ES5 dinadins, ca tot ce trimitem în pagină (regula aplicației, 13.09.2026).
+ *
+ * Cât ține compunerea, butonul e stins și scrie „se compune…" — randarea trece printr-un browser
+ * adevărat și poate ține și un minut, deci tăcerea ar fi fost citită drept cădere. Reușita
+ * REÎNCARCĂ pagina: atunci se schimbă foaia, coperta, butoanele de tipar și validarea, nu doar
+ * schița — adică exact cazul în care împrospătarea pe bucăți n-ar fi de ajuns.
+ *
+ * ⚠️ REFUZUL SE SPUNE CU CIFRA LUI, nu se ascunde: socoteala nu taie niciodată singură textul omului
+ * (regula lui), deci „s-a trecut cu 812 de semne peste măsură" e chiar instrucțiunea de care are
+ * nevoie. De aceea plângerile se scriu întregi sub buton.
+ */
+const JS_COMPUNE = `
+(function(){
+  var b = document.getElementById('b-compune');
+  if (!b) return;
+  var veste = document.getElementById('compune-veste');
+  var lucreaza = false, scris = b.textContent;
+  function spune(text, rau){
+    if (!veste) return;
+    veste.textContent = text || '';
+    veste.className = rau ? 'marunt rau' : 'marunt';
+  }
+  function slobod(){ lucreaza = false; b.disabled = false; b.textContent = scris; }
+  function compune(){
+    if (lucreaza) return;
+    lucreaza = true; b.disabled = true; b.textContent = 'se compune…';
+    fetch(location.pathname.replace(/\\/+$/, '') + '/compune', {
+      method:'POST', credentials:'same-origin', cache:'no-store',
+      headers:{ 'accept':'application/json', 'content-type':'application/json' }, body:'{}'
+    }).then(function(x){
+      return x.json().catch(function(){ return { facut:false, plangeri:['serverul a raspuns ' + x.status] }; });
+    }).then(function(j){
+      if (j && j.facut) { spune('Gata. Actualizez pagina…'); location.reload(); return; }
+      slobod();
+      var p = j && j.plangeri && j.plangeri.length ? j.plangeri.join(' ') : 'nu s-a compus';
+      spune('Nu s-a compus: ' + p, true);
+    }).catch(function(){
+      slobod();
+      spune('Nu am putut cere compunerea. Încearcă din nou.', true);
+    });
+  }
+  b.addEventListener('click', compune);
+  if (b.getAttribute('data-auto') !== null) compune();
+})();`
+
 /**
  * NUMĂRUL PROASPĂT COMPUS, ARĂTAT ÎN PAGINĂ — nu un link către PDF (user, 18.09.2026: „să-l afișezi
  * direct în pagină ca și cum e un buletin gata de validat… toate butoanele de tipar și download și
@@ -1073,7 +1164,9 @@ export function paginaNou(
 ${veste}
 ${calendar}
 ${schitaPeEcran(stare.schita, stare.masura)}
+${butonulCompunerii(stare.compuneAcum === true)}
 <script>${VEZI_TOT}</script>
+<script>${JS_COMPUNE}</script>
 ${ctx.chat ? `<script>${IMPROSPATEAZA}</script>` : ''}`,
   )
 }

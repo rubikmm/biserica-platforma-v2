@@ -327,17 +327,127 @@ describe('`/nou` se deschide cu ciorna compusă și cu schița din chat', () => 
     expect(text).toContain('Validează')
   })
 
-  it('fără nimic în depozit, ecranul spune că nu s-a început nimic', async () => {
+  /*
+   * VARIANTA ZERO, LA PRIMA INTRARE (user, 19.09.2026: „la prima accesare a /nou să se genereze
+   * varianta cu «text» la conținut textul principal și restul câmpurilor implicite… ca să poți
+   * genera varianta 0 de buletin").
+   *
+   * ⚠️ Până aici, ecranul spunea „Niciun articol încă". Acum schița se NAȘTE cu locurile ocupate, iar
+   * pagina cere singură compunerea — asta închide și NEXT 00d („PDF gol la prima intrare pe /nou").
+   */
+  it('fără nimic în depozit, se naște schița implicită — cu locurile ocupate, arătate ca goluri', async () => {
     const { env } = mediu()
     const text = await (await cere(env, '/nou')).text()
     expect(text).not.toContain('<section class="ciorna">')
     expect(text).toContain('Se completează din chat')
-    expect(text).toContain('Niciun articol încă')
+    expect(text).not.toContain('Niciun articol încă')
+    // locurile se văd, dar în stilul golului: sunt de probă, nu răspunsuri ale omului
+    expect(text).toContain('<i class="sc-gol">NUME AUTOR</i>')
+    expect(text).toContain('<i class="sc-gol">TITLU ARTICOL</i>')
+    expect(text).toContain('<i class="sc-gol">text</i>')
+    // și nu trec drept scris: măsura articolului pornește tot de la zero
+    expect(text).toContain('0 de semne scrise')
+  })
+
+  it('la prima intrare pagina cere singură compunerea variantei zero', async () => {
+    const { env } = mediu()
+    const text = await (await cere(env, '/nou')).text()
+    // ⚠️ Se caută CHIAR ATRIBUTUL de pe buton, nu cuvântul „data-auto": el e scris și în scriptul
+    // care îl citește, deci o căutare slobodă ar trece totdeauna, oricât ar fi de stins butonul.
+    expect(text).toContain('id="b-compune" data-auto')
+    expect(text).toContain('Se compune varianta de probă a numărului…')
+  })
+
+  /**
+   * ⚠️ NUMAI CÂT SCHIȚA E NEATINSĂ. Odată ce omul a răspuns ceva — ori numărul are deja o foaie —
+   * compunerea rămâne a lui (butonul ori chatul): altfel un text prea lung ar porni, la fiecare
+   * reîncărcare de pagină, o randare despre care se știe dinainte că socoteala o va refuza.
+   */
+  it('cu foaia compusă, ori cu răspunsuri în schiță, NU mai compune singură — dar butonul rămâne', async () => {
+    for (const depozit of [depozitCuCiorna, { [cheiaSchitei(URMATOR)]: SCHITA_PASTRATA }]) {
+      const { env } = mediu({ depozit })
+      const text = await (await cere(env, '/nou')).text()
+      expect(text).toContain('id="b-compune"')
+      expect(text).not.toContain('id="b-compune" data-auto')
+    }
   })
 
   it('rămâne al adminilor buletinului: fără cheie, 403', async () => {
     const { env } = mediu({ cheiOmului: [] })
     expect((await cere(env, '/nou')).status).toBe(403)
+  })
+})
+
+/*
+ * ---------------------------------------------------------------------------
+ * BUTONUL „COMPUNE NUMĂRUL" (user, 19.09.2026: „ar fi și un buton manual în pagină / acum nu merg
+ * să-i zici să-l compună … tot aștept și nu răspunde").
+ *
+ * Două lucruri se pot strica tăcut: (1) POARTA — o ușă care compune trebuie să rămână a adminului
+ * buletinului, altfel oricine cu cont ar porni randări în Browser Rendering; (2) METODA — o compunere
+ * pornită de un GET s-ar face la fiecare privire, inclusiv a unui robot de indexare.
+ * ---------------------------------------------------------------------------
+ */
+describe('`POST /nou/compune` — compunerea cerută din pagină, fără model', () => {
+  const posteaza = (env: unknown) =>
+    cere(env, '/nou/compune', {
+      method: 'POST',
+      // ⚠️ `origin` ca la browser: bariera de origine a aplicației e ÎNAINTEA rutei, la orice POST.
+      headers: { 'content-type': 'application/json', origin: 'https://buletin.staging.sfantul-ilie.ro' },
+      body: '{}',
+    })
+
+  it('cere aceeași cheie ca `/nou`: fără ea, nu compune nimic', async () => {
+    const { env } = mediu({ cheiOmului: [] })
+    const r = await posteaza(env)
+    expect(r.status).toBe(403)
+    expect(((await r.json()) as { facut: boolean }).facut).toBe(false)
+  })
+
+  it('fără antetul Origin nu trece de bariera aplicației', async () => {
+    const { env } = mediu()
+    expect((await cere(env, '/nou/compune', { method: 'POST', body: '{}' })).status).toBe(403)
+  })
+
+  it('GET nu compune: e o faptă, nu o privire', async () => {
+    const { env } = mediu()
+    expect((await cere(env, '/nou/compune')).status).toBe(405)
+  })
+
+  /**
+   * ⚠️ SOCOTEALA REFUZĂ, NU TAIE (regula userului). Un text peste măsură nu se compune pe jumătate:
+   * răspunsul spune CU CÂT s-a trecut, iar butonul scrie cifra sub el — aceea e instrucțiunea de care
+   * are nevoie omul. Aici se probează chiar drumul butonului, cap-coadă.
+   */
+  it('textul peste măsură se refuză cu cifra lui, și numărul NU se randează', async () => {
+    const lung = 'Un rând de text al parohiei. '.repeat(900)
+    const { env } = mediu({
+      depozit: {
+        [cheiaSchitei(URMATOR)]: {
+          ...SCHITA_PASTRATA,
+          principal: { ...SCHITA_PASTRATA.principal, text: lung },
+        },
+      },
+    })
+    const r = await posteaza(env)
+    const j = (await r.json()) as { facut: boolean; plangeri: string[]; nr: number }
+    expect(r.status).toBe(200)
+    expect(j.facut).toBe(false)
+    expect(j.nr).toBe(URMATOR.nr)
+    expect(j.plangeri.join(' ')).toMatch(/de semne peste măsură/)
+  })
+
+  /**
+   * ⚠️ O RANDARE CĂZUTĂ RĂMÂNE JSON, nu o pagină de eroare: butonul citește `plangeri` din răspuns,
+   * iar o carcasă HTML l-ar lăsa mut. (Browserul de probă nu dă niciun PDF, deci randarea cade.)
+   */
+  it('o randare căzută răspunde tot JSON, cu motivul în `plangeri`', async () => {
+    const { env } = mediu()
+    const r = await posteaza(env)
+    expect(r.headers.get('content-type')).toContain('application/json')
+    const j = (await r.json()) as { facut: boolean; plangeri: string[] }
+    expect(j.facut).toBe(false)
+    expect(j.plangeri.length).toBeGreaterThan(0)
   })
 })
 

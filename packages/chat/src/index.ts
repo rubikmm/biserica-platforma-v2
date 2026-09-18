@@ -459,11 +459,21 @@ export function modulChat(cfg: {
       // neschimbate. `/chat/stare` e ușa sondării — bula o întreabă la două-trei secunde cât
       // lucrează creierul, deci trebuie să fie ieftină și să nu ceară nimic în plus.
       if (req.method === 'GET' && (cale === '/chat/discutie' || cale === '/chat/stare')) {
-        const id = new URL(req.url).searchParams.get('id') ?? ''
+        const cautate = new URL(req.url).searchParams
+        const id = cautate.get('id') ?? ''
         const unde = cale === '/chat/stare' ? 'stare' : 'discutie'
-        const r = await chat.fetch(`https://chat.intern/${unde}?id=${encodeURIComponent(id)}`, {
-          headers: cap,
-        })
+        /*
+         * ⚠️ `propunere` merge mai departe NUMAI la `/stare` (19.09.2026): cu el, bula sondează dacă
+         * o confirmare („Da, fă-o") s-a isprăvit. Fără el, o acțiune grea — buletinul randează PDF-ul
+         * într-un browser adevărat — lăsa bula cu butoanele stinse și fără niciun cuvânt, fiindcă
+         * răspunsul venea pe o conexiune care se rupsese pe drum.
+         */
+        const propunere = unde === 'stare' ? (cautate.get('propunere') ?? '') : ''
+        const r = await chat.fetch(
+          `https://chat.intern/${unde}?id=${encodeURIComponent(id)}` +
+            (propunere ? `&propunere=${encodeURIComponent(propunere)}` : ''),
+          { headers: cap },
+        )
         return new Response(r.body, { status: r.status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } })
       }
 

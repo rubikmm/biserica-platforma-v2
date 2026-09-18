@@ -24,17 +24,23 @@ import {
   catreCerere,
   cheiaSchitei,
   completeaza,
+  eSchitaNeatinsa,
   intrebarile,
+  masuraArticolului,
   normalizeazaChestionar,
   numeDeCautat,
   pozeleSchitei,
+  rezumatulSchitei,
   schitaGoala,
+  schitaImplicita,
   scrieRaspuns,
   sursaPropusa,
   titluriPropuse,
   urmatoareaIntrebare,
   type Schita,
 } from '../apps/buletin/src/schita.js'
+import { DE_PROBA, TEXT_IMPLICIT, umpleCuProba } from '../apps/buletin/src/umplere.js'
+import { semne } from '../apps/buletin/src/masuri.js'
 import { buletinulNou, rubricaChestionar } from '../apps/buletin/src/pagini.js'
 
 /** Rândurile rubricii, ca în `index.ts` — aici ne trebuie doar cheile și etichetele. */
@@ -672,5 +678,114 @@ describe('compunerea fără argumente ia totul din schiță', () => {
       ctxActiune(env) as never,
     )
     expect(rezumat).toContain('nr. 620')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// VARIANTA ZERO: schița implicită de la prima intrare pe `/nou`
+// ---------------------------------------------------------------------------
+
+/**
+ * SCHIȚA IMPLICITĂ (user, 19.09.2026: „la prima accesare a /nou să se genereze varianta cu «text» la
+ * conținut textul principal și restul câmpurilor implicite… ca să poți genera varianta 0 de buletin").
+ *
+ * Trei lucruri se pot strica TĂCUT, și de asta stau aici:
+ *   1. **locurile n-au voie să treacă drept răspunsuri** — „NUME AUTOR" și „text" scrise pe hârtie ca
+ *      atare ar da un număr cu patru semne pe pagina întâi, iar sub `compus/` s-ar păstra ca și cum
+ *      le-ar fi scris omul (de acolo se ia motto-ul numărului următor);
+ *   2. **chestionarul trebuie să meargă mai departe peste ele** — dacă locurile s-ar însemna ca
+ *      hotărâte, bula n-ar mai avea ce întreba, și numărul zero ar rămâne numărul final;
+ *   3. **compunerea de la sine** — se pornește NUMAI cât schița e neatinsă.
+ */
+describe('schița implicită — varianta zero', () => {
+  const IMPLICITA = () => schitaImplicita({ nr: 616, data: '2026-09-20', motto: 'Un citat', motoAutor: 'Cineva' })
+
+  it('pornește cu toate locurile ocupate, iar textul principal e chiar „text"', () => {
+    const s = IMPLICITA()
+    expect(s.principal.autor).toBe(DE_PROBA.autor)
+    expect(s.principal.ani).toBe(DE_PROBA.ani)
+    expect(s.principal.titlu).toBe(DE_PROBA.titlu)
+    expect(s.principal.sursa).toBe(DE_PROBA.sursa)
+    expect(s.principal.text).toBe(TEXT_IMPLICIT)
+    expect(s.principal.text).toBe('text')
+    expect(s.motto).toBe('Un citat')
+    // ⚠️ pomenirea și poza rămân NESCRISE: ele lipsesc și din numere adevărate, iar o adresă de poză
+    // închipuită ar lăsa un pătrat gol în foaie, fără nicio eroare nicăieri
+    expect(s.principal.pomenire).toBeUndefined()
+    expect(s.principal.poza).toBeUndefined()
+  })
+
+  it('locurile NU trec drept răspunsuri: peste granița compunerii ies goale', () => {
+    const cerut = catreCerere(IMPLICITA())
+    expect(cerut.principal.autor).toBe('')
+    expect(cerut.principal.titlu).toBe('')
+    expect(cerut.principal.text).toBe('')
+    expect(cerut.principal.ani).toBeUndefined()
+    expect(cerut.principal.sursa).toBeUndefined()
+  })
+
+  /** ⚠️ Chiar asta e „varianta 0": o foaie întreagă, nu una cu patru semne de text. */
+  it('umplerea de probă o duce la o foaie ÎNTREAGĂ, cu lorem cât încape', () => {
+    const { cerut, deProba } = umpleCuProba(catreCerere(IMPLICITA()), { slujbe: 6, detalii: 5 })
+    expect(cerut.principal.text.startsWith('Lorem ipsum')).toBe(true)
+    expect(semne(cerut.principal.text)).toBeGreaterThan(5000)
+    expect(cerut.principal.autor).toBe(DE_PROBA.autor)
+    expect(deProba.join('; ')).toContain('principal: textul')
+  })
+
+  it('chestionarul merge mai departe peste ea: începe tot de la motto', () => {
+    const i = urmatoareaIntrebare(IMPLICITA(), intrebarile())
+    expect(i.subiect).toBe('motto')
+    expect((IMPLICITA().gata ?? []).length).toBe(0)
+  })
+
+  /** ⚠️ Altfel „da, îl folosim" la autor ar scrie „text" ca autor al numărului. */
+  it('din locul textului nu se propune niciun autor', () => {
+    expect(autorPropus(TEXT_IMPLICIT)).toBe(null)
+    expect(autorPropus('  Text  ')).toBe(null)
+  })
+
+  it('„unde am rămas?" spune „încă nimic", nu locurile de probă', () => {
+    const r = rezumatulSchitei(IMPLICITA()).join(' | ')
+    expect(r).not.toContain('NUME AUTOR')
+    expect(r).not.toContain('TITLU ARTICOL')
+    expect(r).toContain('încă nimic')
+  })
+
+  it('măsura pornește de la zero semne scrise, nu de la patru', () => {
+    expect(masuraArticolului(IMPLICITA(), 'principal').semne).toBe(0)
+  })
+
+  it('e „neatinsă" până la primul răspuns, apoi nu mai e', () => {
+    const s = IMPLICITA()
+    expect(eSchitaNeatinsa(s)).toBe(true)
+    const dupa = scrieRaspuns(s, { subiect: 'motto', valoare: 'Alt citat' }, intrebarile()).schita
+    expect(eSchitaNeatinsa(dupa)).toBe(false)
+  })
+
+  it('un răspuns scrie PESTE loc, nu pe lângă el', () => {
+    let s = IMPLICITA()
+    s = scrieRaspuns(s, { subiect: 'autor', valoare: 'SFÂNTUL VASILE CEL MARE' }, intrebarile()).schita
+    s = scrieRaspuns(s, { subiect: 'text', valoare: ARTICOL }, intrebarile()).schita
+    expect(s.principal.autor).toBe('SFÂNTUL VASILE CEL MARE')
+    expect(s.principal.text).toBe(ARTICOL)
+    expect(catreCerere(s).principal.autor).toBe('SFÂNTUL VASILE CEL MARE')
+  })
+
+  /** „Indicând exact ce vine": o valoare dată direct, la ce articol vrea omul, în orice ordine. */
+  it('o valoare dată anume, la un articol anume, intră fără să treacă prin întrebări', () => {
+    let s = IMPLICITA()
+    s = scrieRaspuns(s, { subiect: 'titlu', valoare: 'DESPRE POST', articol: 's1' }, intrebarile()).schita
+    expect(s.secundari.length).toBe(1)
+    expect(s.secundari[0]!.titlu).toBe('DESPRE POST')
+    // iar chestionarul rămâne unde era: la principal, la motto
+    expect(urmatoareaIntrebare(s, intrebarile()).subiect).toBe('motto')
+  })
+
+  it('acțiunea `buletin.chestionar` scrie schița implicită în depozit, la prima chemare', async () => {
+    const { env, tinut } = mediu()
+    await incepe(env)
+    const scrisa = JSON.parse(tinut.get(cheiaSchitei(URMATOR)) ?? 'null') as { principal: { text: string } }
+    expect(scrisa.principal.text).toBe(TEXT_IMPLICIT)
   })
 })

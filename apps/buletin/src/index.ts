@@ -33,7 +33,7 @@ import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/co
 import { Logger, correlationId } from '@xc/observability'
 import { modulActiuni } from '@xc/actiuni'
 import { modulChat } from '@xc/chat'
-import { actiuniBuletin, chestionarul, schitaNumarului } from './actiuni.js'
+import { actiuniBuletin, chestionarul, compuneNumarul, schitaNumarului, schitaPastrata } from './actiuni.js'
 import { dataVersiunii, eroareApi, html, json, jsonCuEtag } from '@xc/ui'
 import pkg from '../package.json'
 import {
@@ -60,6 +60,7 @@ import {
   textCurat,
 } from './compune.js'
 import { PAGINI, type NumarCerut, semne, socoteste } from './masuri.js'
+import { eDeProba } from './umplere.js'
 import {
   CHEIE_CHESTIONAR,
   INTREBARI_STANDARD,
@@ -68,6 +69,7 @@ import {
   catreCerere,
   cautaPomenirile,
   citesteSchita,
+  eSchitaNeatinsa,
   intrebarile,
   normalizeazaChestionar,
   scrieRaspuns,
@@ -223,9 +225,14 @@ async function textulInSchita(
 ): Promise<{ mesaj: string; unelte: string[] } | null> {
   const { schita, deAcum, pastreaza } = await schitaDeAcum(env)
   const care = deAcum.articol
+  /*
+   * ⚠️ „N-ARE ÎNCĂ TEXT" ÎNSEAMNĂ ȘI „ARE DOAR LOCUL LUI" (19.09.2026). De când schița pornește
+   * implicită, cu „text" în câmp, un `!articolul(…).text` ar fi fost fals la primul .docx urcat: fișierul
+   * s-ar fi dus pe drumul generic, iar articolul ar fi rămas cu patru semne. Vezi `eDeProba`.
+   */
   const asteaptaText =
     deAcum.subiect === 'text' ||
-    (!articolul(schita, care).text && (!o.strict || (deAcum.subiect !== 'motto' && deAcum.subiect !== 'gata')))
+    (eDeProba(articolul(schita, care).text) && (!o.strict || (deAcum.subiect !== 'motto' && deAcum.subiect !== 'gata')))
   if (!asteaptaText) return null
 
   await pastreaza({ subiect: 'text', valoare: text, articol: care })
@@ -840,6 +847,45 @@ export default {
        * ⚠️ Pagina e personala (se vede altfel dupa rol si sub masca „vezi ca"), deci NU se tine in
        * cache-ul de muchie, oricat ar fi mediul.
        */
+      /*
+       * COMPUNEREA CERUTĂ DE PAGINĂ (user, 19.09.2026: „ar fi și un buton manual în pagină / acum nu
+       * merg să-i zici să-l compună … tot aștept și nu răspunde").
+       *
+       * Drumul scurt al butonului „Compune numărul": aceeași funcție pe care o cheamă și acțiunea
+       * `buletin.compune` din chat (`compuneNumarul`), dar fără model, fără propunere cu Da/Nu și
+       * fără bugetul de timp al chatului. De aceea nu e un al doilea adevăr despre același număr: e
+       * același, cerut pe o ușă mai scurtă.
+       *
+       * ⚠️ POARTA E CEA DE LA `/nou`: adminul BULETINULUI. Nu o cheie nouă de permisiune — una nouă ar
+       * fi cerut și republicarea lui `xc-authz` (aceeași socoteală ca la `/nou`).
+       * ⚠️ Originea o cerne paza de mai sus (`verificaCsrf`, la orice POST), deci aici nu se mai cere
+       * încă un jeton: cererea vine din pagina noastră ori nu vine deloc.
+       * ⚠️ Răspunsul e JSON, nu o pagină: butonul îl citește și, la izbândă, reîncarcă singur ecranul.
+       */
+      if (cale === '/nou/compune') {
+        const fara = { 'cache-control': 'private, no-store' }
+        // ⚠️ POARTA ÎNTÂI, metoda pe urmă: cine n-are voie nu află de la noi nici măcar ce metode
+        // primește ușa asta. Aceeași rânduială ca la restul aplicației.
+        if (!ctx.eAdmin) {
+          return json({ facut: false, plangeri: ['Buletinul nou e al administratorilor.'] }, 403, fara)
+        }
+        if (req.method !== 'POST') return json({ facut: false, plangeri: ['doar POST'] }, 405, fara)
+        try {
+          const r = await compuneNumarul(env, {}, ctxExec)
+          ctxExec.waitUntil(
+            scrieAudit(env, {
+              action: 'buletin.compune', target: `${r.nr}-${r.data}`,
+              outcome: r.facut ? 'success' : 'failure',
+              correlationId: cid, actorId: principal?.userId,
+            }),
+          )
+          return json(r, 200, fara)
+        } catch (e) {
+          log.error('compunerea din pagina n-a iesit', { eroare: e instanceof Error ? e.message : String(e) })
+          return json({ facut: false, plangeri: ['compunerea n-a mers până la capăt; încearcă din nou'] }, 500, fara)
+        }
+      }
+
       if (cale === '/nou') {
         const alLui = { 'cache-control': 'private, no-store' }
         if (!ctx.eAdmin) {
@@ -901,19 +947,39 @@ export default {
            * compus una) și SCHIȚA — răspunsurile din chat. Așa ce s-a scris din bulă se vede la
            * prima reîncărcare, iar discuția se poate relua a doua zi, de pe alt telefon.
            */
+          /*
+           * ⚠️ SCHIȚA SE CREEAZĂ AICI, LA PRIMA INTRARE (user, 19.09.2026: „la prima accesare a /nou
+           * să se genereze varianta cu «text» la conținut… toate câmpurile să aibă ceva implicit ca
+           * să poți genera varianta 0 de buletin"). `schitaPastrata` o și SCRIE în depozit dacă n-a
+           * fost: așa ecranul, butonul „Compune numărul" și bula văd aceeași variantă zero.
+           */
           const [foaia, schita] = await Promise.all([
             nou.nr ? env.FISIERE.head(cheiaNumarului({ nr: nou.nr, data: nou.data })) : Promise.resolve(null),
-            citesteSchita(env, nou),
+            schitaPastrata(env),
           ])
           const coperta = foaia ? await env.FISIERE.head(cheiaCopertei({ nr: nou.nr!, data: nou.data })) : null
           // măsura fiecărui articol, socotită aici: ecranul n-o mai socotește singur, fiindcă n-are
           // ce număra — textul nu se mai scrie în pagină
           const masura = masuraSchitei(schita)
+          /*
+           * VARIANTA ZERO SE COMPUNE SINGURĂ (închide NEXT 00d: „PDF gol la prima intrare pe /nou").
+           *
+           * ⚠️ NU ÎN CEREREA ASTA, ci îndată după ce s-a încărcat pagina, printr-o a doua cerere
+           * (`POST /nou/compune`) pe care o dă butonul singur. Randarea trece prin Browser Rendering
+           * și poate ține un minut: făcută aici, ecranul ar fi rămas alb atâta vreme, iar o randare
+           * căzută ar fi însemnat un `/nou` care nu se mai deschide deloc. Așa pagina vine îndată,
+           * spune „se compune…" și se reîncarcă singură când foaia e gata.
+           * ⚠️ NUMAI CÂND SCHIȚA E NEATINSĂ: de îndată ce omul a răspuns ceva, compunerea e a lui
+           * (butonul ori chatul). Altfel un text prea lung ar porni, la fiecare reîncărcare, o
+           * randare despre care se știe dinainte că va fi refuzată de socoteală.
+           */
+          const compuneAcum = !foaia && nou.nr !== null && eSchitaNeatinsa(schita)
           return html(
             paginaNou(ctx, m, nou, {
               calendar,
               motto,
               schita,
+              compuneAcum,
               ...(masura ? { masura } : {}),
               ...(foaia
                 ? {

@@ -600,3 +600,110 @@ describe('aplicația pornește lucrul și îl ține în viață', () => {
     expect(ajunse[0]!.cale).toBe('/stare')
   })
 })
+
+// ---------------------------------------------------------------------------
+// „DA, FĂ-O" — așteptarea care nu se mai pierde (19.09.2026)
+// ---------------------------------------------------------------------------
+
+/**
+ * CONFIRMAREA UNEI PROPUNERI ținea omul în loc la fel ca mesajul, până pe 19.09.2026 — dar fără
+ * niciun leac: `/confirma` execută acțiunea SINCRON, pe conexiunea bulei, iar o acțiune grea (la
+ * buletin, `buletin.compune` randează PDF-ul într-un browser adevărat, un minut și mai bine) ține
+ * cererea deschisă până cade. Bula n-avea nici ceas, nici sondare: butoanele rămâneau stinse și nu
+ * se scria niciun cuvânt. Așa a arătat, la ecran, „tot aștept și nu răspunde" (user, 19.09.2026).
+ *
+ * ⚠️ „Gata" NU se poate socoti aici din mesajul agentului, ca la un mesaj obișnuit: după o propunere,
+ * ULTIMUL mesaj e chiar cel care o poartă, deci `gata` e adevărat din prima clipă. Semnul că s-a
+ * isprăvit e altul, și e un FAPT, nu un steag: propunerea nu mai așteaptă.
+ */
+describe('sondarea unei confirmări: `/stare` spune și starea propunerii', () => {
+  /** Duce discuția până la propunerea cu Da/Nu și întoarce ce trebuie sondării. */
+  async function panaLaPropunere() {
+    const m = mediuCreier({
+      modelul: (apel) => (apel === 1 ? cheamaUnealta('program__adauga_slujba') : vorba('Am pregătit-o.')),
+    })
+    const pornit = (await (await cere(m.env, '/mesaj', { text: 'adaugă Vecernia', aplicatie: 'program', asincron: true })).json()) as {
+      conversatieId: string
+      mesajId: string
+    }
+    await cere(m.env, '/lucreaza', { conversatieId: pornit.conversatieId, mesajId: pornit.mesajId, aplicatie: 'program' })
+    const gata = (await (await cere(m.env, `/stare?id=${pornit.conversatieId}`)).json()) as {
+      raspuns: { propunere: { id: string; rezumat: string } | null }
+    }
+    expect(gata.raspuns.propunere).toBeTruthy()
+    return { ...m, conversatieId: pornit.conversatieId, propunereId: gata.raspuns.propunere!.id }
+  }
+
+  it('cât timp propunerea așteaptă, sondarea spune „asteapta" — nu „gata, s-a făcut"', async () => {
+    const { env, conversatieId, propunereId } = await panaLaPropunere()
+    const j = (await (await cere(env, `/stare?id=${conversatieId}&propunere=${propunereId}`)).json()) as {
+      gata: boolean
+      propunereStare: string
+    }
+    // ⚠️ `gata` E DEJA ADEVĂRAT (mesajul propunerii e al agentului): tocmai de aceea nu el e semnul
+    expect(j.gata).toBe(true)
+    expect(j.propunereStare).toBe('asteapta')
+  })
+
+  it('după „Da, fă-o" sondarea vede propunerea „facuta" și dă mesajul NOU', async () => {
+    const { env, conversatieId, propunereId } = await panaLaPropunere()
+    const c = (await (await cere(env, '/confirma', { propunereId, raspuns: 'da' })).json()) as { ok: boolean }
+    expect(c.ok).toBe(true)
+
+    const j = (await (await cere(env, `/stare?id=${conversatieId}&propunere=${propunereId}`)).json()) as {
+      gata: boolean
+      propunereStare: string
+      raspuns: { text: string }
+    }
+    expect(j.propunereStare).toBe('facuta')
+    expect(j.gata).toBe(true)
+    expect(j.raspuns.text).toContain('Gata.')
+  })
+
+  it('după „Nu" propunerea e „refuzata", deci pagina nu se mai reîncarcă degeaba', async () => {
+    const { env, conversatieId, propunereId } = await panaLaPropunere()
+    await cere(env, '/confirma', { propunereId, raspuns: 'nu' })
+    const j = (await (await cere(env, `/stare?id=${conversatieId}&propunere=${propunereId}`)).json()) as {
+      propunereStare: string
+    }
+    expect(j.propunereStare).toBe('refuzata')
+  })
+
+  /** ⚠️ Fără `?propunere=`, răspunsul rămâne cel dinainte, literă cu literă: sondarea mesajelor nu se atinge. */
+  it('fără `?propunere=`, răspunsul e neschimbat — nicio cheie în plus', async () => {
+    const { env, conversatieId } = await panaLaPropunere()
+    const j = (await (await cere(env, `/stare?id=${conversatieId}`)).json()) as Record<string, unknown>
+    expect('propunereStare' in j).toBe(false)
+  })
+
+  it('aplicația duce `propunere` mai departe la creier, la sondare', async () => {
+    const ajunse: string[] = []
+    const env = {
+      MEDIU: 'staging',
+      SECRET_INTERN: 'secret',
+      CONFIG: kvFals({ 'modul:chat': CONFIG_GLOBAL }),
+      CHAT: {
+        fetch: async (adresa: string) => {
+          ajunse.push(new URL(adresa).search)
+          return new Response('{}', { headers: { 'content-type': 'application/json' } })
+        },
+      } as unknown as Fetcher,
+    }
+    await modulChat({ aplicatie: 'program' }).ruteaza(
+      new Request('https://program.test/chat/stare?id=c1&propunere=p9'),
+      env as never,
+      ctxExec,
+      '/chat/stare',
+      { prefix: '', principal: { userId: 'u1', email: 'p@example.ro', roles: [] } as never, numeleOmului: 'Om', eAdmin: true },
+    )
+    expect(ajunse[0]).toContain('id=c1')
+    expect(ajunse[0]).toContain('propunere=p9')
+  })
+
+  /** Bula: fără rândurile astea, sondarea confirmării n-ar exista, oricât de bine ar răspunde serverul. */
+  it('bula sondează confirmarea și nu mai spune „n-am putut trimite" peste o treabă făcută', () => {
+    expect(JS_CHAT).toContain("'&propunere=' + encodeURIComponent(id)")
+    expect(JS_CHAT).toContain("if (s === 'facuta') deReincarcat = true;")
+    expect(JS_CHAT).not.toContain('Nu am putut trimite confirmarea.')
+  })
+})

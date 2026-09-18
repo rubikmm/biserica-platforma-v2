@@ -4,7 +4,7 @@
  * la programul întreg. Și motto-ul numărului trecut, citit din textul PDF-ului din arhivă.
  */
 import { describe, expect, it } from 'vitest'
-import { DE_PROBA, LOREM, LOREM_FATA_DE_ROMANA, eArticolGol, loremDe, umpleCuProba } from '../apps/buletin/src/umplere.js'
+import { DE_PROBA, LOREM, LOREM_FATA_DE_ROMANA, TEXT_IMPLICIT, eArticolGol, eDeProba, loremDe, umpleCuProba } from '../apps/buletin/src/umplere.js'
 import { type ArticolCerut, type NumarCerut, SEMNE_PE_RAND, semne, socoteste } from '../apps/buletin/src/masuri.js'
 import { mottoDinText } from '../apps/buletin/src/depozit.js'
 
@@ -146,5 +146,56 @@ describe('motto-ul numărului trecut, din textul PDF-ului', () => {
     expect(mottoDinText('un text fără ghilimele Nr. 3')).toBeNull()
     expect(mottoDinText(null)).toBeNull()
     expect(mottoDinText('')).toBeNull()
+  })
+})
+
+/**
+ * LOCUL TEXTULUI, „text" (user, 19.09.2026). Schița implicită pornește cu el în câmp, ca omul să
+ * vadă de unde se pleacă — dar la compunere el NU e un text de patru semne: e un câmp nescris.
+ *
+ * ⚠️ De asta stă aici, nu doar în probele schiței: dacă regula s-ar pierde tocmai în `umplere.ts`,
+ * numărul zero ar ieși pe hârtie cu un singur cuvânt pe pagina întâi și cu trei sferturi de coloană
+ * albe — și nimic n-ar da vreo eroare.
+ */
+describe('locurile schiței implicite se umplu ca niște câmpuri goale', () => {
+  const cuLocuri = (): ArticolCerut => ({
+    autor: DE_PROBA.autor, ani: DE_PROBA.ani, titlu: DE_PROBA.titlu, sursa: DE_PROBA.sursa, text: TEXT_IMPLICIT,
+  })
+
+  it('„text" e un articol gol, oricum ar fi scris', () => {
+    expect(eArticolGol(cuLocuri())).toBe(true)
+    expect(eArticolGol({ ...gol(), text: '  Text  ' })).toBe(true)
+    expect(eArticolGol({ ...gol(), text: 'Un articol adevărat despre rugăciune.' })).toBe(false)
+  })
+
+  it('un număr numai cu locuri se umple la fel ca unul gol de tot', () => {
+    const cuProba = umpleCuProba(numar({ principal: cuLocuri() }), CALENDAR)
+    const golDeTot = umpleCuProba(numar({ principal: gol() }), CALENDAR)
+    expect(cuProba.cerut.principal.text.startsWith('Lorem ipsum')).toBe(true)
+    expect(semne(cuProba.cerut.principal.text)).toBe(semne(golDeTot.cerut.principal.text))
+    expect(cuProba.cerut.principal.autor).toBe(DE_PROBA.autor)
+    expect(cuProba.cerut.principal.titlu).toBe(DE_PROBA.titlu)
+    expect(cuProba.cerut.principal.sursa).toBe(DE_PROBA.sursa)
+    // și se SPUNE că e probă, ca `atentie` să nu tacă despre un număr întreg de lorem
+    expect(cuProba.deProba.join('; ')).toContain('principal: textul')
+  })
+
+  it('un text adevărat nu se atinge, oricât de scurt', () => {
+    const scurt = 'Trei cuvinte aici.'
+    const { cerut, deProba } = umpleCuProba(numar({ principal: { ...gol(), text: scurt } }), CALENDAR)
+    expect(cerut.principal.text).toBe(scurt)
+    expect(deProba.join('; ')).not.toContain('principal: textul')
+  })
+
+  it('`eDeProba` nu confundă un răspuns adevărat cu un loc', () => {
+    expect(eDeProba(undefined)).toBe(true)
+    expect(eDeProba('   ')).toBe(true)
+    expect(eDeProba(DE_PROBA.autor)).toBe(true)
+    expect(eDeProba(TEXT_IMPLICIT)).toBe(true)
+    expect(eDeProba('SFÂNTUL IOAN GURĂ DE AUR')).toBe(false)
+    expect(eDeProba('347-407')).toBe(false)
+    expect(eDeProba('ziarullumina.ro')).toBe(false)
+    // ⚠️ „textul" nu e „text": potrivirea e pe cuvântul întreg, nu pe început
+    expect(eDeProba('textul articolului')).toBe(false)
   })
 })

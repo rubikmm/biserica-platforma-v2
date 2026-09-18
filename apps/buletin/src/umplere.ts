@@ -31,6 +31,32 @@ export const DE_PROBA = {
   sursa: '-',
 } as const
 
+/**
+ * TEXTUL DE PORNIRE al articolului principal în schița implicită (user, 19.09.2026: „la prima
+ * accesare a /nou să se genereze varianta cu «text» la conținut… și aici la textul articol principal
+ * să setezi implicit «text»").
+ *
+ * ⚠️ E un LOC, nu un text: la compunere se poartă exact ca un câmp gol, deci se umple cu Lorem ipsum
+ * cât încape. Altfel numărul zero ar ieși cu patru semne pe pagina întâi și n-ar arăta nimic din ce
+ * vrea omul să vadă — cum e așezată foaia.
+ */
+export const TEXT_IMPLICIT = 'text'
+
+/** Valorile pe care le pune schița implicită. Ele NU sunt răspunsuri ale omului. */
+const ALE_PROBEI = new Set<string>([DE_PROBA.titlu, DE_PROBA.autor, DE_PROBA.ani, DE_PROBA.sursa])
+
+/**
+ * UN CÂMP CARE E DOAR LOCUL LUI: gol de tot, ori chiar valoarea de probă pusă de schița implicită.
+ *
+ * ⚠️ De ce se compară cu valoarea, nu cu un steag ținut pe lângă: un steag ar trebui purtat prin R2,
+ * prin cerere și prin fiecare copiere a schiței, iar prima uitare l-ar face să mintă. Iar dacă omul
+ * scrie chiar „NUME AUTOR" ori „-" la sursă, înțelesul e tot „n-am", deci răspunsul e același.
+ */
+export const eDeProba = (v: string | undefined): boolean => {
+  const t = (v ?? '').trim()
+  return !t || ALE_PROBEI.has(t) || t.toLowerCase() === TEXT_IMPLICIT
+}
+
 /** Lorem ipsum clasic — un paragraf; textul de probă se face din el, cât e nevoie. */
 export const LOREM =
   'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut ' +
@@ -39,7 +65,12 @@ export const LOREM =
   'esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt ' +
   'in culpa qui officia deserunt mollit anim id est laborum.'
 
-const eGol = (s: string | undefined): boolean => !s || !s.trim()
+/**
+ * ⚠️ „GOL" AICI ÎNSEAMNĂ ȘI „ÎNCĂ LOCUL LUI" (19.09.2026): un câmp rămas cu valoarea de probă a
+ * schiței implicite se umple la fel ca unul nescris. Fără asta, numărul zero s-ar compune cu „text"
+ * pe pagina întâi, iar `atentie` n-ar mai spune că e probă.
+ */
+const eGol = eDeProba
 
 /**
  * ⚠️ LOREM IPSUM E MAI LAT DECÂT ROMÂNA: are cuvinte lungi („consectetur", „reprehenderit"), deci pe

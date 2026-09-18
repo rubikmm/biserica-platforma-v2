@@ -673,12 +673,29 @@ export default {
           }
         }
         const alAgentului = mesaje.slice(iOm + 1).filter((m) => m.rol === 'agent').pop()
+        /*
+         * ⚠️ ȘI STAREA UNEI PROPUNERI ANUME (19.09.2026), când se cere cu `?propunere=`.
+         *
+         * De ce: „Da, fă-o" execută acțiunea SINCRON, pe cererea bulei (`/confirma`), iar o acțiune
+         * grea — `buletin.compune` randează PDF-ul într-un browser adevărat — ține un minut și mai
+         * bine. Conexiunea aceea se poate rupe pe drum (pățit pe 18.09.2026, la `/mesaj`: 2 min 49 s,
+         * conexiunea căzută, răspunsul scris totuși în bază), și atunci bula rămânea cu butoanele
+         * stinse și fără niciun cuvânt, la nesfârșit — „tot aștept și nu răspunde" (user, 19.09.2026).
+         *
+         * Aici, „gata" nu se mai poate socoti din mesajul agentului: după o propunere, ULTIMUL mesaj
+         * e chiar cel care o poartă, deci `gata` e adevărat din prima clipă. Semnul că s-a isprăvit e
+         * altul, și e un FAPT, nu un steag: propunerea nu mai așteaptă.
+         */
+        const cerutaPropunere = url.searchParams.get('propunere') ?? ''
+        const stari = alAgentului || cerutaPropunere ? await starilePropunerilor(env.DB, c.id) : undefined
+        const starePropunere = cerutaPropunere
+          ? { propunereStare: stari?.get(cerutaPropunere) ?? 'asteapta' }
+          : {}
         if (alAgentului) {
-          const stari = await starilePropunerilor(env.DB, c.id)
-          return json({ gata: true, raspuns: raspunsulDin(alAgentului, c.id, stari) })
+          return json({ gata: true, raspuns: raspunsulDin(alAgentului, c.id, stari), ...starePropunere })
         }
         const lucru = iOm >= 0 ? lucrulDin(mesaje[iOm]!.date_json) : null
-        return json({ gata: false, etapa: lucru?.etapa ?? '', deLa: lucru?.de_la ?? null })
+        return json({ gata: false, etapa: lucru?.etapa ?? '', deLa: lucru?.de_la ?? null, ...starePropunere })
       }
 
       /*

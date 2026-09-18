@@ -383,26 +383,96 @@ export const JS_CHAT = `(function(){
     fir.appendChild(d); jos();
   }
 
+  /**
+   * „DA, FA-O" — SI ASTEPTAREA EI (19.09.2026).
+   *
+   * ⚠️ AICI ERA TACEREA de care s-a plans userul („acum nu merg să-i zici să-l compună … tot aștept
+   * și nu răspunde"). Pana aici, confirmarea era o SINGURA cerere, fara ceas si fara sondare: butoanele
+   * se stingeau, iar ruta /chat/confirma executa actiunea SINCRON, pe chiar conexiunea aceea. La o
+   * actiune grea — buletin.compune randeaza PDF-ul intr-un browser adevarat, un minut si mai bine —
+   * conexiunea se rupe pe drum (patit pe 18.09.2026 la /chat/mesaj: 2 min 49 s si cadere, desi
+   * raspunsul se scria in baza). Atunci catch-ul prindea o cadere de retea DUPA ce treaba se facuse,
+   * ori nu prindea nimic: butoane moarte, zero cuvinte, la nesfarsit.
+   *
+   * De acum se asteapta CA LA UN MESAJ: semn de viata cu ceas si „renunț", iar in PARALEL cu cererea
+   * se sondeaza /chat/stare cu id-ul propunerii. Propunerea care nu mai asteapta = treaba ispravita,
+   * oricat de rupta ar fi conexiunea dintai. Cine raspunde primul inchide, celalalt tace.
+   * (Fara accente grave in comentariul asta: bucata e un template literal, iar ele l-ar rupe.)
+   */
   function raspunde(id, raspuns, cutie){
     cutie.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
+    var incheiat = false, ceas = null, pornit = Date.now();
+    var semn = semnDeViata();
+    semn.etapa(raspuns === 'da' ? 'lucrez…' : 'las baltă…');
+
+    /** Primul care are ce spune inchide asteptarea; al doilea nu mai scrie nimic. */
+    function inchide(){
+      if (incheiat) return false;
+      incheiat = true;
+      if (ceas) { clearTimeout(ceas); ceas = null; }
+      semn.opreste(); cutie.remove(); atinge();
+      return true;
+    }
+    /** Pagina de dedesubt e desenata la incarcare: dupa o schimbare facuta se reincarca, cu panoul
+     *  STRANS (user, 21:48). ⚠️ SE SPUNE INTAI, si abia apoi se reincarca (18.09.2026): pagina care
+     *  sare singura, fara nicio vorba, se citeste ca o cadere — nu ca o treaba dusa la capat. */
+    function poateReincarca(){
+      if (!deReincarcat) return;
+      mesaj('agent', 'Actualizez pagina, ca să vezi schimbarea…');
+      setTimeout(function(){ strange(); location.reload(); }, 1200);
+    }
+
+    semn.laRenunt(function(){
+      if (!inchide()) return;
+      mesaj('agent', 'Nu mai aștept aici. Dacă se duce la capăt, o vezi la redeschiderea chatului.');
+    });
+
+    function pas(){
+      if (incheiat) return;
+      if (!idConv) { ceas = setTimeout(pas, PAS_SONDARE); return; }
+      if (Date.now() - pornit > RABDARE) {
+        if (inchide()) {
+          mesaj('rea', 'Durează neobișnuit de mult, așa că nu mai aștept aici. Dacă apucă să se facă, o vezi la redeschiderea chatului.');
+        }
+        return;
+      }
+      fetch(prefix + '/chat/stare?id=' + encodeURIComponent(idConv) + '&propunere=' + encodeURIComponent(id),
+            { credentials:'same-origin' })
+        .then(function(x){ return x.ok ? x.json() : null; })
+        .then(function(j){
+          if (incheiat) return;
+          var s = j && j.propunereStare;
+          if (s && s !== 'asteapta' && j.gata && j.raspuns) {
+            if (!inchide()) return;
+            if (s === 'facuta') deReincarcat = true;
+            raspunsul(j.raspuns);
+            // Urmarea („validez saptamana?") vine ca propunere in raspuns: reincarcarea asteapta.
+            if (!j.raspuns.propunere) poateReincarca();
+            return;
+          }
+          ceas = setTimeout(pas, PAS_SONDARE);
+        })
+        .catch(function(){ if (!incheiat) ceas = setTimeout(pas, PAS_SONDARE); });
+    }
+    ceas = setTimeout(pas, PAS_SONDARE);
+
     fetch(prefix + '/chat/confirma', {
       method:'POST', credentials:'same-origin', headers:{'content-type':'application/json'},
       body: JSON.stringify({ propunereId: id, raspuns: raspuns })
     }).then(function(x){ return x.json(); }).then(function(j){
-      cutie.remove(); atinge();
+      if (!inchide()) return;
       mesaj(j.ok ? 'agent' : 'rea', j.text || (j.ok ? 'Gata.' : 'N-a mers.'));
       if (j.reincarca) deReincarcat = true;
       // Urmarea („validez saptamana?"): inca o propunere, tot cu Da/Nu — reincarcarea asteapta.
       if (j.propunere) { propunere(j.propunere); return; }
-      // Pagina de dedesubt e desenata la incarcare: dupa o schimbare facuta se reincarca, cu panoul
-      // STRANS (user, 21:48); la click se vede ultima discutie — sta pe server.
-      // ⚠️ SE SPUNE INTAI, si abia apoi se reincarca (18.09.2026): pagina care sare singura, fara
-      // nicio vorba, se citeste ca o cadere — nu ca o treaba dusa la capat.
-      if (deReincarcat) {
-        mesaj('agent', 'Actualizez pagina, ca să vezi schimbarea…');
-        setTimeout(function(){ strange(); location.reload(); }, 1200);
-      }
-    }).catch(function(){ cutie.remove(); mesaj('rea', 'Nu am putut trimite confirmarea.'); });
+      poateReincarca();
+    }).catch(function(){
+      // ⚠️ AICI NU SE MAI SPUNE „n-am putut trimite confirmarea", si nu se mai inchide asteptarea:
+      // cererea poate sa fi cazut DUPA ce treaba s-a facut (pățit pe 18.09.2026), iar vorba aceea ar
+      // fi o minciuna pe ecran. Se spune doar ce se stie sigur; adevarul il aduce sondarea, care merge
+      // mai departe, iar daca nici ea, ramane rabdarea.
+      if (!incheiat) semn.inainte(mesaj('agent', 'Cererea nu s-a întors, dar aștept mai departe: verific dacă s-a făcut totuși.'));
+    });
   }
 
   /**
