@@ -36,6 +36,7 @@ import type { Navigatie } from '@xc/config'
 import { ICOANE, LUNI, LUNI_SCURT, dataCuZi, dataLunga, esc, pagina, type BucataChat } from '@xc/ui'
 import { JS_ABONARE, abonamentul, butonAbonare, fereastraAbonare } from '@xc/abonare'
 import { type Buletin, type BuletinScurt, type Gasit, plat } from './depozit.js'
+import type { ArticolSchitei, Schita } from './schita.js'
 import { LOCAL } from './stil.js'
 
 export interface Ctx {
@@ -790,8 +791,14 @@ export function buletinulNou(
  * in care va intra cuprinsul („ce punem în pagină mai vedem" — user).
  */
 export interface StareaCompunerii {
-  /** câte semne încap în fiecare variantă — cifrele din `masuri.ts`, pentru socoteala din pagină */
-  variante: Array<{ varianta: string; semne: number; zone: Array<{ cine: string; semne: number }> }>
+  /**
+   * SCHIȚA numărului — ce s-a răspuns în chat. `null` = nu s-a început niciun chestionar.
+   * ⚠️ Din 18.09.2026 ecranul o ARATĂ, nu o editează: formularul a ieșit cu totul, iar toate
+   * completările trec prin bulă (hotărârea userului).
+   */
+  schita?: Schita | null
+  /** măsura fiecărui articol, socotită pe server cu calendarul săptămânii tipărite */
+  masura?: Array<{ cine: string; semne: number; scrise: number; ramase: number }>
   /** ce a răspuns ultima compunere, dacă s-a cerut una */
   raspuns?: {
     facut: boolean
@@ -807,8 +814,6 @@ export interface StareaCompunerii {
     atentie?: string[]
     zone?: Array<{ cine: string; semne: number; scrise: number; ramase: number }>
   }
-  /** ce scrisese omul, ca să nu se piardă la reîncărcare */
-  scris?: Record<string, string>
   /**
    * programul săptămânii tipărite — ce a spus aplicația `program`. `stare: 'propus'` = nevalidat,
    * s-a luat ce era disponibil; `null` = programul n-a răspuns deloc.
@@ -818,53 +823,106 @@ export interface StareaCompunerii {
   motto?: { motto: string; motoAutor?: string } | null
 }
 
-/** Un câmp de formular, cu eticheta lui. */
-const camp = (nume: string, eticheta: string, val: string, o: { lung?: boolean; ajutor?: string; tip?: string } = {}): string =>
-  `<p class="camp${o.lung ? ' lung' : ''}">
-  <label for="c-${nume}">${esc(eticheta)}</label>
-  ${o.lung
-    ? `<textarea id="c-${nume}" name="${nume}" rows="8" data-numara>${esc(val)}</textarea>`
-    : `<input id="c-${nume}" name="${nume}" type="${o.tip ?? 'text'}" value="${esc(val)}">`}
-  ${o.ajutor ? `<span class="ajutor">${o.ajutor}</span>` : ''}
-</p>`
+/* ─────────────────── SCHIȚA NUMĂRULUI, ARĂTATĂ (nu editată) ─────────────────── */
 
-/** Blocul unui articol din formular: autorul (zona neagră), titlul, textul, sursa. */
-function campuriArticol(prefix: string, titlu: string, scris: Record<string, string>, cuPoza: string): string {
-  const v = (c: string): string => scris[`${prefix}_${c}`] ?? ''
-  // ⚠️ Câmpurile goale NU opresc compunerea (user, 17.09.2026, seara): se umplu cu text de probă, la
-  // vedere — ajutorul de sub fiecare spune cu ce, ca omul să știe ce va ieși pe foaie dacă nu scrie.
-  return `<fieldset class="articol" data-articol="${prefix}">
-  <legend>${esc(titlu)}</legend>
-  ${camp(`${prefix}_autor`, 'Autorul (scrisul alb din zona neagră)', v('autor'), { ajutor: 'Dacă nu se știe: „Fără autor". Gol = „NUME AUTOR", de probă.' })}
-  <div class="doua">
-    ${camp(`${prefix}_ani`, 'Anii vieții', v('ani'), { ajutor: 'ex. 1661-1729' })}
-    ${camp(`${prefix}_pomenire`, 'Pomenirea', v('pomenire'), { ajutor: 'ex. † 16 august' })}
-  </div>
-  ${camp(`${prefix}_titlu`, 'Titlul', v('titlu'), { ajutor: 'Gol = „TITLU ARTICOL", de probă.' })}
-  ${camp(`${prefix}_poza`, cuPoza, v('poza'), { ajutor: 'adresa pozei; gol = locul ei, desenat' })}
-  ${camp(`${prefix}_text`, 'Textul', v('text'), { lung: true, ajutor: 'Gol = Lorem ipsum, exact cât încape.' })}
-  ${camp(`${prefix}_sursa`, 'Sursa', v('sursa'), { ajutor: 'ex. ziarullumina.ro; gol = „-"' })}
-  <p class="socoteala" data-pentru="${prefix}"></p>
-</fieldset>`
+/** Câte semne din text se văd strânse, până la „vezi tot". */
+const TEXT_STRANS = 300
+
+/** Un rând al schiței: eticheta la stânga, ce s-a răspuns la dreapta; nescris = un gând spus. */
+const randSchita = (eticheta: string, valoare: string | undefined, gol: string): string =>
+  `<p class="sc-rand"><b>${esc(eticheta)}</b> ${valoare ? esc(valoare) : `<i class="sc-gol">${esc(gol)}</i>`}</p>`
+
+/**
+ * Textul unui articol, STRÂNS: primele ~300 de semne și o cheie „vezi tot / vezi mai puțin".
+ * ⚠️ Textul întreg e chiar miezul numărului (până la 9 000 de semne): întins, ar împinge ciorna și
+ * butoanele ei jos de tot, iar ecranul ăsta e mai ales despre foaia compusă.
+ */
+function textulStrans(text: string | undefined, id: string): string {
+  if (!text) return `<p class="sc-rand"><b>Text</b> <i class="sc-gol">încă nescris</i></p>`
+  const curatat = text.replace(/\s+/g, ' ').trim()
+  if (curatat.length <= TEXT_STRANS) return `<p class="sc-text">${esc(curatat)}</p>`
+  return `<div class="sc-text" id="${id}" data-strans>
+  <span class="sc-inceput">${esc(curatat.slice(0, TEXT_STRANS))}</span><span class="sc-rest" hidden>${esc(curatat.slice(TEXT_STRANS))}</span><span class="sc-puncte">…</span>
+  <button type="button" class="sc-cheie" data-vezi="${id}">vezi tot</button>
+</div>`
+}
+
+/** Un articol din schiță: zona neagră, titlul, sursa, textul strâns și măsura lui. */
+function articolulSchitei(
+  cine: string,
+  eticheta: string,
+  a: ArticolSchitei,
+  masura: { semne: number; scrise: number; ramase: number } | undefined,
+): string {
+  const semneScrise = masura?.scrise ?? 0
+  const rand = masura
+    ? `<p class="sc-masura${masura.ramase < 0 ? ' peste' : ''}">${semneScrise} de semne scrise, încap ~${masura.semne}. ` +
+      `${masura.ramase >= 0 ? `Mai e loc pentru ${masura.ramase}.` : `S-a trecut cu ${-masura.ramase} peste măsură.`}</p>`
+    : ''
+  return `<section class="sc-articol" data-articol="${esc(cine)}">
+  <h4>${esc(eticheta)}</h4>
+  ${randSchita('Autor', a.autor, 'încă nespus')}
+  ${randSchita('Anii vieții', a.ani, 'fără')}
+  ${randSchita('Pomenire', a.pomenire, 'fără')}
+  ${randSchita('Titlu', a.titlu, 'încă nespus')}
+  ${randSchita('Sursa', a.sursa, 'fără')}
+  ${a.nota ? randSchita('Mențiune', a.nota, '') : ''}
+  ${a.poza ? randSchita('Poza', a.poza, '') : ''}
+  ${textulStrans(a.text, `sc-${cine}`)}
+  ${rand}
+</section>`
 }
 
 /**
- * ECRANUL NUMĂRULUI CARE URMEAZĂ — capul lui și, din 17.09.2026, formularul din care se compune
- * foaia tipărită.
+ * SCHIȚA NUMĂRULUI, pe ecran — CE S-A RĂSPUNS, nu unde se scrie.
  *
- * Capul e cel de la orice număr, doar că eticheta măruntă scrie „Numărul următor" cu VERDE (user,
- * 17.09.2026), numărul mare e ROȘU (ultimul din arhivă + 1), iar sub el stă duminica lui.
- * ⚠️ Numărul de după cel nou (617) NU se scrie: a ieșit la cererea userului. Nu-l readu.
- * ⚠️ NUMĂRUL ROȘU E CEL NOU, NU CEL DIN ARHIVĂ: el numără de la buletinul la care LUCREAZĂ.
- * ⚠️ Numerele nu se scriu în cod: ies din arhivă, deci se mișcă singure când intră un număr nou.
- *
- * ⚠️ SOCOTEALA SE VEDE ÎN TIMP CE SCRII, nu după ce apeși. Sub fiecare text stă câte semne încap
- * și câte au mai rămas, socotite în pagină din aceleași cifre ca la server (`masuri.ts`, trimise
- * o dată, ca JSON). Un om care află abia la compunere că a scris cu 2 000 de semne prea mult a
- * pierdut o oră degeaba — iar textul buletinului se scrie o dată pe săptămână, seara.
- * ⚠️ Cifra din pagină e o PREVESTIRE, nu adevărul: adevărul îl spune curgerea la randare, iar
- * răspunsul compunerii îl arată. De aceea scrie „încap ~", cu tilda.
+ * ⚠️ FORMULARUL A IEȘIT CU TOTUL (user, 18.09.2026, seara): „formularul iese de pe /nou; toate
+ * completările trec prin chat". Ecranul rămâne cu trei lucruri: capul numărului, foaia compusă (dacă
+ * s-a compus) și blocul ăsta, care spune la ce s-a ajuns. Un formular lăsat alături ar fi fost al
+ * doilea drum către aceleași câmpuri — adică două adevăruri despre același număr.
  */
+function schitaPeEcran(schita: Schita | null | undefined, masura: StareaCompunerii['masura']): string {
+  const gaseste = (cine: string) => masura?.find((z) => z.cine === cine)
+  const articole = schita
+    ? [
+        articolulSchitei('principal', 'Articolul principal', schita.principal, gaseste('principal')),
+        ...schita.secundari.map((a, i) =>
+          articolulSchitei(`s${i + 1}`, `Articolul secundar ${i + 1}`, a, gaseste(`secundar ${i + 1}`)),
+        ),
+      ].join('\n')
+    : ''
+  const motto = schita?.motto
+    ? `<p class="sc-motto">„${esc(schita.motto)}"${schita.motoAutor ? ` <span class="sc-cine">– ${esc(schita.motoAutor)}</span>` : ''}</p>`
+    : `<p class="sc-rand"><b>Motto</b> <i class="sc-gol">încă nespus</i></p>`
+
+  return `<section class="schita">
+  <h3>Schița numărului</h3>
+  <p class="sc-spune">Se completează din chat: scrie <b>„buletin nou"</b> în bulă.</p>
+  ${motto}
+  ${articole || '<p class="sc-rand"><i class="sc-gol">Niciun articol încă. Chestionarul începe cu motto-ul.</i></p>'}
+</section>
+<script>${VEZI_TOT}</script>`
+}
+
+/**
+ * Cheia „vezi tot / vezi mai puțin" de sub textele strânse. ES5 dinadins, ca tot ce trimitem în
+ * pagină (regula aplicației, 13.09.2026).
+ */
+const VEZI_TOT = `
+(function(){
+  var chei = document.querySelectorAll('.sc-cheie');
+  for (var i = 0; i < chei.length; i++) {
+    chei[i].addEventListener('click', function(){
+      var bloc = document.getElementById(this.getAttribute('data-vezi'));
+      if (!bloc) return;
+      var rest = bloc.querySelector('.sc-rest'), puncte = bloc.querySelector('.sc-puncte');
+      var intins = bloc.getAttribute('data-strans') === null;
+      if (intins) { bloc.setAttribute('data-strans', ''); rest.setAttribute('hidden', ''); if (puncte) puncte.removeAttribute('hidden'); this.textContent = 'vezi tot'; }
+      else { bloc.removeAttribute('data-strans'); rest.removeAttribute('hidden'); if (puncte) puncte.setAttribute('hidden', ''); this.textContent = 'vezi mai puțin'; }
+    });
+  }
+})();`
+
 /**
  * NUMĂRUL PROASPĂT COMPUS, ARĂTAT ÎN PAGINĂ — nu un link către PDF (user, 18.09.2026: „să-l afișezi
  * direct în pagină ca și cum e un buletin gata de validat… toate butoanele de tipar și download și
@@ -917,13 +975,28 @@ ${fereastraRasfoit(ctx, ciorna, v)}
 </section>`
 }
 
+/**
+ * ECRANUL NUMĂRULUI CARE URMEAZĂ.
+ *
+ * Capul e cel de la orice număr, doar că eticheta măruntă scrie „Numărul următor" cu VERDE (user,
+ * 17.09.2026), numărul mare e ROȘU (ultimul din arhivă + 1), iar sub el stă duminica lui.
+ * ⚠️ Numărul de după cel nou (617) NU se scrie: a ieșit la cererea userului. Nu-l readu.
+ * ⚠️ NUMĂRUL ROȘU E CEL NOU, NU CEL DIN ARHIVĂ: el numără de la buletinul la care LUCREAZĂ.
+ * ⚠️ Numerele nu se scriu în cod: ies din arhivă, deci se mișcă singure când intră un număr nou.
+ *
+ * ⚠️ FORMULARUL A IEȘIT CU TOTUL pe 18.09.2026, seara (user: „formularul iese de pe /nou; toate
+ * completările trec prin chat"). Ecranul are de acum trei bucăți, în ordinea asta: capul numărului,
+ * FOAIA compusă cu butoanele ei (dacă s-a compus una) și SCHIȚA — ce s-a răspuns până acum în bulă,
+ * numai de citit. Odată cu formularul au ieșit și câmpurile, și socoteala care mergea cu scrisul:
+ * măsura se socotește acum pe server, la fiecare răspuns, și se spune în chat.
+ * ⚠️ Singurul formular rămas pe ecran e VALIDAREA (`fapta=valideaza`), butonul care publică numărul.
+ */
 export function paginaNou(
   ctx: Ctx,
   m: Meniu,
   nou: { nr: number | null; data: string },
   stare: StareaCompunerii,
 ): string {
-  const scris = stare.scris ?? {}
   const capul = `<div class="cap-numar cap-nou">
   <p class="eticheta urmator">Numărul următor</p>
   <h2>${nou.nr ? `Nr. ${nou.nr}` : 'Buletin nou'}</h2>
@@ -943,42 +1016,6 @@ export function paginaNou(
       : `<div class="veste rau"><p>Nu s-a compus:</p><ul>${stare.raspuns.plangeri.map((p) => `<li>${esc(p)}</li>`).join('')}</ul></div>`
     : ''
 
-  const cati = Number(scris.secundari ?? '0')
-  const secundare = [1, 2]
-    .map((i) => `<div class="secundar" data-nr="${i}"${i > cati ? ' hidden' : ''}>${campuriArticol(`s${i}`, `Articolul secundar ${i}`, scris, 'Poza mică (adresă)')}</div>`)
-    .join('')
-
-  /*
-   * ⚠️ NUMĂRUL ȘI DATA NU SE EDITEAZĂ (user, 17.09.2026, seara: „Nr și data buletin — nu sunt
-   * editabile"): ies din arhivă (ultimul + 1, duminica următoare) și stau scrise în capul paginii.
-   * Nu sunt câmpuri — nici ascunse: serverul le ia tot din arhivă, nu din formular.
-   * ⚠️ MOTTO-UL VINE PRECOMPLETAT cu cel al numărului trecut (aceeași cerere) — omul îl schimbă dacă
-   * vrea altul; ce a scris el (`scris`) bate precompletarea.
-   * ⚠️ CÂTE ARTICOLE SECUNDARE se alege ÎNAINTEA articolului principal (user, 18.09.2026: totalul și
-   * butonul „să fie sub câmpul de text de mai sus, cu care este asociat"). Cu selectul între textul
-   * principal și total, socoteala cădea sub o listă derulantă când numărul n-avea secundare; mutat
-   * sus, ultimul lucru dinaintea totalului e mereu un câmp de text. Se citește și mai bine: întâi
-   * spui din câte articole e numărul, apoi le scrii.
-   */
-  const motto = scris.motto ?? stare.motto?.motto ?? ''
-  const motoAutor = scris.moto_autor ?? stare.motto?.motoAutor ?? ''
-  const formular = `<form method="post" action="${ctx.prefix}/nou" class="compunere">
-  ${camp('motto', 'Motto', motto, { lung: true, ajutor: stare.motto && scris.motto === undefined ? 'precompletat cu motto-ul numărului trecut — schimbă-l dacă e altul' : 'citatul de sub antet, pe cel mult două rânduri' })}
-  ${camp('moto_autor', 'Cine a spus-o', motoAutor)}
-  <p class="cati-secundari">
-    <label for="c-secundari">Articole secundare</label>
-    <select id="c-secundari" name="secundari">
-      ${[0, 1, 2].map((i) => `<option value="${i}"${i === cati ? ' selected' : ''}>${i === 0 ? 'niciunul' : i === 1 ? 'unul' : 'două'}</option>`).join('')}
-    </select>
-  </p>
-  ${campuriArticol('p', 'Articolul principal', scris, 'Poza mare (adresă)')}
-  ${secundare}
-  <p class="total" data-total></p>
-  <p class="butoane">
-    <button type="submit" name="fapta" value="compune" class="btn mare">Compune numărul</button>
-  </p>
-</form>`
-
   /*
    * Rândul care spunea ce program intră pe pagina a patra a ieșit odată cu avertismentele (user,
    * 18.09.2026: „șterge de tot textul acesta"). Rămâne doar vorba când programul N-A RĂSPUNS: acolo
@@ -995,59 +1032,73 @@ export function paginaNou(
     `${capul}
 ${veste}
 ${calendar}
-${formular}
-<script>window.XC_MASURI = ${JSON.stringify(stare.variante)};</script>
-<script>${SOCOTESTE_IN_PAGINA}</script>`,
+${schitaPeEcran(stare.schita, stare.masura)}`,
   )
 }
 
 /**
- * Socoteala care merge odată cu scrisul: alege varianta după câți secundari sunt și după poză,
- * apoi scrie sub fiecare text câte semne încap și câte au rămas.
+ * RUBRICA „CHESTIONARUL BULETINULUI NOU" din Setări — cele opt întrebări, editabile.
  *
- * ES5 dinadins, ca tot ce trimitem în pagină (regula aplicației, 13.09.2026).
+ * ⚠️ De ce se pot schimba din ecran și nu se scriu în cod: întrebările sunt VORBELE parohiei cu
+ * părintele care ține buletinul, nu o parte a mecanismului. O virgulă schimbată n-are de ce să
+ * ceară o publicare. Ce rămâne al codului e ORDINEA lor și ce se caută la fiecare — acelea chiar
+ * sunt mecanism (vezi `schita.ts`).
+ *
+ * ⚠️ Un câmp lăsat gol NU e o întrebare goală: înseamnă „ține textul standard". De aceea butonul
+ * „Înapoi la textele standard" doar golește, nu scrie altceva.
  */
-const SOCOTESTE_IN_PAGINA = `
-(function(){
-  var masuri = window.XC_MASURI || [];
-  var form = document.querySelector('form.compunere');
-  if (!form || !masuri.length) return;
-  function cati(){ var s = form.querySelector('[name=secundari]'); return s ? Number(s.value) : 0; }
-  // trei variante, dupa cati secundari sunt: [0] un autor, [1] +1, [2] +2 — poza nu schimba socoteala,
-  // coloana intai a paginii intai e a ei oricum (regula generala a userului)
-  function varianta(){ return masuri[Math.min(cati(), masuri.length - 1)]; }
-  function semne(t){ return t.replace(/\\s+/g, ' ').replace(/^ | $/g, '').length; }
-  function arata(){
-    var v = varianta(); if (!v) return;
-    var n = cati(), total = 0;
-    for (var i = 1; i <= 2; i++) {
-      var bloc = form.querySelector('.secundar[data-nr="' + i + '"]');
-      if (bloc) { if (i <= n) bloc.removeAttribute('hidden'); else bloc.setAttribute('hidden', ''); }
-    }
-    var zone = [['p', v.zone[0]]];
-    for (var k = 1; k <= n && k < v.zone.length; k++) zone.push(['s' + k, v.zone[k]]);
-    for (var z = 0; z < zone.length; z++) {
-      var prefix = zone[z][0], masura = zone[z][1];
-      var camp = form.querySelector('[name=' + prefix + '_text]');
-      var unde = form.querySelector('.socoteala[data-pentru=' + prefix + ']');
-      if (!camp || !unde || !masura) continue;
-      var scrise = semne(camp.value); total += scrise;
-      var ramase = masura.semne - scrise;
-      // gol = text de probă (Lorem ipsum), exact cât încape — nu e o lipsă, e o alegere a foii
-      unde.textContent = scrise === 0
-        ? 'Gol: intră text de probă (Lorem ipsum), ~' + masura.semne + ' de semne.'
-        : 'Încap ~' + masura.semne + ' de semne. Scrise: ' + scrise + '. ' +
-          (ramase >= 0 ? 'Mai ai loc pentru ' + ramase + '.' : 'Ai trecut cu ' + (-ramase) + ' peste măsură.');
-      unde.className = 'socoteala' + (ramase < 0 ? ' peste' : '');
-      unde.setAttribute('data-pentru', prefix);
-    }
-    var t = form.querySelector('[data-total]');
-    if (t) t.textContent = 'Cu totul: ' + total + ' din ~' + v.semne + ' de semne (' + v.varianta + ').';
+export function rubricaChestionar(o: {
+  prefix: string
+  csrf: string
+  /** ce se pune acum, întrebare cu întrebare (standardul, cu schimbările adminului peste el) */
+  intrebari: Record<string, string>
+  /** textele din cod, ca ecranul să arate ce s-a schimbat față de ele */
+  standard: Record<string, string>
+  /** rândurile ecranului: cheia, eticheta și la ce se uită întrebarea */
+  randuri: Array<{ cheie: string; eticheta: string; spune: string }>
+  salvat?: boolean
+}): string {
+  const camp = (r: { cheie: string; eticheta: string; spune: string }) => {
+    const acum = o.intrebari[r.cheie] ?? ''
+    const schimbat = acum !== (o.standard[r.cheie] ?? '')
+    return `<div class="ches-rand">
+    <label for="ches-${r.cheie}"><b>${esc(r.eticheta)}</b>${schimbat ? ' <em class="ches-schimbat">schimbată</em>' : ''}</label>
+    <p class="set-spune">${esc(r.spune)}</p>
+    <textarea id="ches-${r.cheie}" name="${esc(r.cheie)}" rows="2" maxlength="600">${esc(acum)}</textarea>
+  </div>`
   }
-  form.addEventListener('input', arata);
-  form.addEventListener('change', arata);
-  arata();
-})();`
+  return `<section class="set-grup" id="chestionar">
+  <style>${STIL_CHESTIONAR}</style>
+  <span class="set-treapta">Adminul aplicației</span>
+  <h2>Chestionarul buletinului nou</h2>
+  <p class="set-spune">Întrebările pe care le pune bula, în ordine, când scrii „buletin nou". Se
+  trimit cuvânt cu cuvânt: modelul nu le rescrie. Locurile dintre acolade se umplu de server înainte
+  să plece întrebarea — <code>{motto}</code>, <code>{autor}</code>, <code>{ani}</code>,
+  <code>{pomenire}</code>, <code>{titluri}</code>, <code>{sursa}</code> și <code>{articol}</code>
+  („principal din acest buletin", „articolului secundar 1").</p>
+  ${o.salvat ? '<p class="set-stare"><span class="set-bulina da"></span> <span>Chestionarul s-a salvat.</span></p>' : ''}
+  <form method="post" action="${esc(o.prefix)}/setari/chestionar">
+    <input type="hidden" name="csrf" value="${esc(o.csrf)}">
+    ${o.randuri.map(camp).join('\n    ')}
+    <p class="ches-butoane">
+      <button class="btn" type="submit" name="fapta" value="salveaza">Salvează</button>
+      <button class="btn" type="submit" name="fapta" value="standard">Înapoi la textele standard</button>
+    </p>
+  </form>
+</section>`
+}
+
+/** Stilul rubricii — puțin: restul vine din Setări și din carcasă (ca la rubrica „Chat AI"). */
+const STIL_CHESTIONAR = `
+.ches-rand { margin:0 0 14px }
+.ches-rand label { display:block; font:13px ui-sans-serif,system-ui; margin:0 0 2px }
+.ches-rand textarea { width:100%; box-sizing:border-box; padding:9px 11px; resize:vertical;
+  font:14px/1.5 ui-sans-serif,system-ui; border:1px solid var(--rule); border-radius:8px;
+  background:var(--card); color:inherit }
+.ches-schimbat { font:600 11px/1 ui-sans-serif,system-ui; color:var(--rosu); font-style:normal;
+  text-transform:uppercase; letter-spacing:.04em; margin-left:6px }
+.ches-butoane { display:flex; gap:10px; flex-wrap:wrap }
+`
 
 /**
  * ARHIVA: **un singur an pe ecran**, ca la A2 — 619 de numere intr-un teanc nu se rasfoiesc. Anul

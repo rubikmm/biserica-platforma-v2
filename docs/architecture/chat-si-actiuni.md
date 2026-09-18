@@ -217,6 +217,42 @@ Acțiunea care scrie se execută **numai** după ce omul apasă „Da" — a dou
 propunerii, verificată din nou la permisiuni (drepturile se pot fi schimbat între timp) și scrisă
 în audit. Propunerea expiră în zece minute.
 
+### Bucla nu mai ține conexiunea: răspuns asincron + sondare (18.09.2026)
+
+Bucla de mai sus poate ține **minute** cu un model mic: un mesaj măsurat pe viu a ținut 2 min 49 s.
+Cât timp răspunsul venea pe cererea care-l ceruse, se întâmpla ce era de așteptat — conexiunea cădea
+pe drum, bula spunea „Nu am putut trimite mesajul", iar răspunsul, scris în D1, apărea „de nicăieri"
+la reîncărcarea paginii. Deci mesajul are acum **două mișcări**:
+
+```
+om → POST /chat/mesaj ─► chat-worker `/mesaj` (asincron:true)
+                            scrie mesajul omului, însemnează „în lucru"
+                         ◄─ {conversatieId, mesajId, inLucru:true}      (sub o secundă)
+     aplicația ─► chat-worker `/lucreaza`  ── ținut de ctxExec.waitUntil AL APLICAȚIEI
+                            bucla de mai sus, cu buget de timp (90 s)
+                            scrie etapa lângă mesajul omului: „caut în program… (program.ziua)"
+                            la capăt scrie răspunsul agentului în D1
+     bula ─► GET /chat/stare?id=… la 2,5 s ─► {gata:false, etapa} … {gata:true, raspuns}
+```
+
+Trei lucruri de ținut minte dacă se umblă aici:
+
+- **cine ține lumina aprinsă**: `waitUntil` e al APLICAȚIEI, nu al lui chat-worker. Un worker chemat
+  prin Service Binding trăiește cât cererea care l-a chemat; dacă aplicația își întoarce răspunsul și
+  nu mai ține nimic aprins, munca poate fi tăiată la mijloc.
+- **„gata" nu e un steag**, ci un fapt: `/stare` se uită dacă există un mesaj al agentului DUPĂ
+  ultimul mesaj al omului. Așa nu se pierde nicio stare dacă lucrul cade la mijloc, iar paza de lucru
+  dublat (`/lucreaza` chemat de două ori) iese din același fapt.
+- **etapa stă în `date_json` al mesajului omului** — fără coloană nouă și fără tabel nou: rândul acela
+  există oricum, e al discuției și piere odată cu ea.
+
+Forma răspunsului n-a mișcat (`text`, `obiecte`, `propunere`, `unelte`): `/stare` îl întoarce întreg,
+iar drumul vechi (`/mesaj` fără `asincron`) răspunde dintr-o bucată, ca până acum.
+
+**Bugetul de timp**: bucla se oprește când s-au scurs 90 de secunde și spune omului ce a apucat să
+caute; cu bugetul consumat nu se mai face nici apelul final „fără unelte", nici reîncercarea Workers
+AI cu `max_tokens` dublat. Mai bine un răspuns scurt acum decât unul întreg peste trei minute.
+
 ### Creierul, în spatele unei uși
 
 ```ts

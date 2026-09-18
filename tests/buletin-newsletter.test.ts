@@ -311,45 +311,99 @@ describe('buletin · numarul care urmeaza', () => {
   })
 
   /**
-   * ⚠️ CHENARUL GOL A IEȘIT la 17.09.2026: pagina compune acum numărul, deci locul lui l-a luat
-   * formularul (cerere user: API-ul + ecranul). Probele de mai jos țin forma cerută — motto, număr
-   * și dată ca start, articolul principal, cel mult DOI secundari — și socoteala care merge odată
-   * cu scrisul, fiindcă ea e miezul cererii („trebuie calculată lungimea textului care intră").
+   * ⚠️ FORMULARUL A IEȘIT CU TOTUL pe 18.09.2026, seara (user: „formularul iese de pe /nou; toate
+   * completările trec prin chat"). Ce se probează aici e tocmai ASTA — că nu s-a întors niciun
+   * câmp: un formular lăsat alături ar fi al doilea drum către aceleași date, și de-acolo încolo
+   * două adevăruri despre același număr, fără ca nimic să dea vreo eroare.
    */
-  it('pagina numarului nou are formularul de compunere, cu socoteala lui', () => {
+  it('ecranul numarului nou NU mai are niciun camp de scris — totul trece prin chat', () => {
     const b: BuletinScurt = {
       nr: 615, data: '2026-09-06', an: '2026', luna: '09',
       cheie_pdf: null, cheie_poza_mica: null, pagini: 4,
     }
     const h = paginaNouB(CTX_PROBA, { nou: true, ani: ['2026'] }, buletinulNou(b, '2026-09-17'), STARE_PROBA)
-    expect(h).not.toContain('<div class="chenar-nou" aria-hidden="true"></div>')
-    expect(h).toContain('<form method="post" action="/buletin/nou" class="compunere">')
-    // startul numarului: motto (+ cine l-a spus); NUMARUL SI DATA NU SE EDITEAZA (user, 17.09.2026,
-    // seara) — stau scrise in capul paginii si ies din arhiva, nu din formular
-    for (const c of ['motto', 'moto_autor']) expect(h).toContain(`name="${c}"`)
-    expect(h).not.toContain('name="nr"')
-    expect(h).not.toContain('name="data"')
-    expect(h).toContain('Nr. 616')
-    // articolul principal: zona neagra (autor, ani, pomenire), titlul, poza, textul, sursa
-    for (const c of ['p_autor', 'p_ani', 'p_pomenire', 'p_titlu', 'p_poza', 'p_text', 'p_sursa']) {
-      expect(h).toContain(`name="${c}"`)
+    expect(h).not.toContain('class="compunere"')
+    expect(h).not.toContain('value="compune"')
+    expect(h).not.toContain('<textarea')
+    for (const c of ['motto', 'moto_autor', 'secundari', 'p_autor', 'p_ani', 'p_pomenire', 'p_titlu', 'p_poza', 'p_text', 'p_sursa', 's1_text', 's2_text']) {
+      expect(h, c).not.toContain(`name="${c}"`)
     }
-    // cel mult DOI secundari — al treilea nu există nicăieri în pagină
-    expect(h).toContain('name="s1_text"')
-    expect(h).toContain('name="s2_text"')
-    expect(h).not.toContain('name="s3_text"')
-    // socoteala se face in pagina, din aceleasi cifre ca la server
-    expect(h).toContain('window.XC_MASURI = ')
-    expect(h).toContain('class="socoteala" data-pentru="p"')
-    // ⚠️ randul „Pe pagina a patra intră programul liturgic pentru…" a IESIT (user, 18.09.2026:
-    // „șterge de tot textul acesta"). Cand programul A raspuns, pagina nu mai spune nimic despre el.
-    expect(h).not.toContain('Pe pagina a patra')
-    expect(h).not.toContain('21 – 27 septembrie 2026')
-    // TOTALUL SI BUTONUL stau sub ultimul camp de text: alegerea catelor secundare e mai SUS decat
-    // articolul principal, ca sa nu cada intre textul scris si socoteala lui (user, 18.09.2026)
-    expect(h.indexOf('name="secundari"')).toBeLessThan(h.indexOf('name="p_text"'))
-    expect(h.indexOf('name="s2_text"')).toBeLessThan(h.indexOf('class="total" data-total'))
-    expect(h.indexOf('class="total" data-total')).toBeLessThan(h.indexOf('value="compune"'))
+    // socoteala din pagina a iesit odata cu campurile: n-are ce numara, iar masura se spune in chat
+    expect(h).not.toContain('window.XC_MASURI = ')
+    // capul paginii ramane neatins
+    expect(h).toContain('Nr. 616')
+  })
+
+  /** Blocul „Schița numărului": ce s-a răspuns în chat, numai de citit. */
+  it('ecranul arata SCHITA numarului si spune de unde se completeaza', () => {
+    const b: BuletinScurt = {
+      nr: 615, data: '2026-09-06', an: '2026', luna: '09',
+      cheie_pdf: null, cheie_poza_mica: null, pagini: 4,
+    }
+    const h = paginaNouB(CTX_PROBA, { nou: true, ani: ['2026'] }, buletinulNou(b, '2026-09-17'), {
+      ...STARE_PROBA,
+      schita: {
+        nr: 616,
+        data: '2026-09-20',
+        motto: 'Rugăciunea este respirația sufletului.',
+        motoAutor: 'Părintele Arsenie Papacioc',
+        principal: {
+          autor: 'SFÂNTUL IOAN GURĂ DE AUR',
+          ani: '347-407',
+          pomenire: '† 13 noiembrie',
+          titlu: 'DESPRE RUGĂCIUNE',
+          text: 'Rândul întâi al articolului.',
+          sursa: 'ziarullumina.ro',
+        },
+        secundari: [],
+        actualizat: '2026-09-18T20:00:00.000Z',
+      },
+      masura: [{ cine: 'principal', semne: 9028, scrise: 27, ramase: 9001 }],
+    })
+    expect(h).toContain('<section class="schita">')
+    expect(h).toContain('Se completează din chat')
+    expect(h).toContain('buletin nou')
+    expect(h).toContain('SFÂNTUL IOAN GURĂ DE AUR')
+    expect(h).toContain('347-407')
+    expect(h).toContain('† 13 noiembrie')
+    expect(h).toContain('DESPRE RUGĂCIUNE')
+    expect(h).toContain('ziarullumina.ro')
+    expect(h).toContain('Rugăciunea este respirația sufletului.')
+    // măsura, socotită pe server: cât s-a scris, cât încape, cât a rămas
+    expect(h).toContain('27 de semne scrise, încap ~9028')
+    expect(h).toContain('Mai e loc pentru 9001.')
+  })
+
+  /** Fără chestionar început, ecranul spune limpede că nu e nimic — nu tace. */
+  it('fara schita, ecranul spune ca nu s-a inceput nimic', () => {
+    const b: BuletinScurt = {
+      nr: 615, data: '2026-09-06', an: '2026', luna: '09',
+      cheie_pdf: null, cheie_poza_mica: null, pagini: 4,
+    }
+    const h = paginaNouB(CTX_PROBA, { nou: true }, buletinulNou(b, '2026-09-17'), STARE_PROBA)
+    expect(h).toContain('<section class="schita">')
+    expect(h).toContain('Niciun articol încă')
+    expect(h).toContain('încă nespus')
+  })
+
+  /**
+   * ⚠️ TEXTUL STĂ STRÂNS (primele 300 de semne) — întins, ar împinge foaia compusă și butoanele ei
+   * jos de tot, iar ecranul ăsta e mai ales despre foaie. „vezi tot" îl deschide, în ES5.
+   */
+  it('textul lung se arata strans, cu „vezi tot"', () => {
+    const b: BuletinScurt = {
+      nr: 615, data: '2026-09-06', an: '2026', luna: '09',
+      cheie_pdf: null, cheie_poza_mica: null, pagini: 4,
+    }
+    const lung = `ÎNCEPUTUL ${'a'.repeat(400)} SFÂRȘITUL`
+    const h = paginaNouB(CTX_PROBA, { nou: true }, buletinulNou(b, '2026-09-17'), {
+      ...STARE_PROBA,
+      schita: { nr: 616, data: '2026-09-20', principal: { text: lung }, secundari: [], actualizat: '' },
+    })
+    expect(h).toContain('vezi tot')
+    expect(h).toContain('class="sc-rest" hidden')
+    // textul întreg e tot acolo — se ascunde, nu se taie: altfel omul n-ar putea citi ce a lipit
+    expect(h).toContain('SFÂRȘITUL')
   })
 
   /**
@@ -370,8 +424,8 @@ describe('buletin · numarul care urmeaza', () => {
     expect(h).not.toContain('PROPUS')
     expect(h).not.toContain('nu e încă validat')
     expect(h).not.toContain('class="veste rau atentie propus"')
-    // formularul ramane intreg: nevalidat nu inseamna oprit
-    expect(h).toContain('<form method="post" action="/buletin/nou" class="compunere">')
+    // ecranul ramane intreg: nevalidat nu inseamna oprit
+    expect(h).toContain('<section class="schita">')
   })
 
   it('cu programul validat nu scrie PROPUS nicaieri', () => {
@@ -398,21 +452,29 @@ describe('buletin · numarul care urmeaza', () => {
     expect(h).not.toContain('(PROPUS)')
   })
 
-  it('motto-ul vine precompletat cu cel al numarului trecut, iar ce a scris omul bate precompletarea', () => {
+  /**
+   * ⚠️ MOTTO-UL NUMĂRULUI TRECUT NU MAI E O PRECOMPLETARE DE CÂMP (nu mai e niciun câmp): el intră
+   * în SCHIȚĂ când se începe chestionarul și e chiar răspunsul implicit la întrebarea 1 („Rămâne
+   * așa sau introducem altul?"). Ecranul arată ce scrie în schiță, atât.
+   */
+  it('motto-ul de pe ecran e cel din schita, nu o precompletare de camp', () => {
     const b: BuletinScurt = {
       nr: 615, data: '2026-09-06', an: '2026', luna: '09',
       cheie_pdf: null, cheie_poza_mica: null, pagini: 4,
     }
-    const motto = { motto: '„Maica Domnului ne iubește mult.”', motoAutor: 'Părintele Arsenie Papacioc' }
-    const gol = paginaNouB(CTX_PROBA, { nou: true }, buletinulNou(b, '2026-09-17'), { ...STARE_PROBA, motto })
-    expect(gol).toContain('„Maica Domnului ne iubește mult.”</textarea>')
-    expect(gol).toContain('value="Părintele Arsenie Papacioc"')
-    expect(gol).toContain('precompletat cu motto-ul numărului trecut')
-    const scris = paginaNouB(CTX_PROBA, { nou: true }, buletinulNou(b, '2026-09-17'), {
-      ...STARE_PROBA, motto, scris: { motto: 'Alt citat', moto_autor: 'Altcineva' },
+    const h = paginaNouB(CTX_PROBA, { nou: true }, buletinulNou(b, '2026-09-17'), {
+      ...STARE_PROBA,
+      schita: {
+        nr: 616, data: '2026-09-20',
+        motto: '„Maica Domnului ne iubește mult.”',
+        motoAutor: 'Părintele Arsenie Papacioc',
+        principal: {}, secundari: [], actualizat: '',
+      },
     })
-    expect(scris).toContain('Alt citat</textarea>')
-    expect(scris).not.toContain('Maica Domnului')
+    expect(h).toContain('Maica Domnului ne iubește mult')
+    expect(h).toContain('Părintele Arsenie Papacioc')
+    expect(h).not.toContain('</textarea>')
+    expect(h).not.toContain('precompletat cu motto-ul numărului trecut')
   })
 
   /**
@@ -440,12 +502,16 @@ describe('buletin · numarul care urmeaza', () => {
     const h = paginaNouB(CTX_PROBA, { nou: true }, buletinulNou(b, '2026-09-17'), {
       ...STARE_PROBA,
       raspuns: { facut: false, plangeri: ['principal: 1200 de semne peste măsură (încap 9000, sunt 10200)'] },
-      scris: { motto: 'Un citat care nu trebuie să se piardă', p_text: 'text' },
+      schita: {
+        nr: 616, data: '2026-09-20',
+        motto: 'Un citat care nu trebuie să se piardă',
+        principal: {}, secundari: [], actualizat: '',
+      },
     })
     expect(h).toContain('Nu s-a compus')
     expect(h).toContain('1200 de semne peste măsură')
     expect(h).not.toContain('Numărul e compus')
-    // ce scrisese omul nu se pierde cand raspunsul e „nu incape"
+    // ⚠️ ce s-a răspuns nu se pierde când compunerea cade: schița stă pe server, nu în pagină
     expect(h).toContain('Un citat care nu trebuie să se piardă')
   })
 })
@@ -459,14 +525,8 @@ const CTX_PROBA: CtxBuletin = {
   modificata: '17.09.2026',
 }
 
-/** Cifrele socotelii, ca cele date de `variante()` — proba nu cheamă programul. */
+/** Starea ecranului, fără nicio schiță începută — proba nu cheamă programul. */
 const STARE_PROBA = {
-  variante: [
-    { varianta: 'un singur autor, cu poză mare', semne: 9028, zone: [{ cine: 'principal', semne: 9028 }] },
-    { varianta: 'un singur autor, fără poză', semne: 9974, zone: [{ cine: 'principal', semne: 9974 }] },
-    { varianta: 'autor principal + 1 secundar', semne: 8206, zone: [{ cine: 'principal', semne: 6100 }, { cine: 'secundar 1', semne: 2106 }] },
-    { varianta: 'autor principal + 2 secundari', semne: 7385, zone: [{ cine: 'principal', semne: 3200 }, { cine: 'secundar 1', semne: 2092 }, { cine: 'secundar 2', semne: 2093 }] },
-  ],
   calendar: { titlu: '21 – 27 septembrie 2026', slujbe: 6 },
 }
 

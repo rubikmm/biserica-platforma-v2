@@ -285,33 +285,30 @@ export const LOCAL = `
 .chenar-nou { max-width:460px; margin:0 auto; aspect-ratio:460/650;
               border:1px dashed var(--rule); border-radius:6px; background:var(--tinta) }
 
-/* ── FORMULARUL DE COMPUNERE (17.09.2026). Un singur șir de câmpuri, larg cât coloana de citit:
-   textul buletinului se scrie seara, dintr-o bucată, nu se completează ca o cerere la ghișeu.
-   ⚠️ Socoteala de sub fiecare text e piesa importantă a ecranului — de aceea stă LIPITĂ de câmp,
-   nu la piciorul paginii, și se înroșește când s-a trecut peste măsură. */
-.compunere { max-width:760px; margin:18px auto 0 }
-.compunere .articol { border:1px solid var(--rule); border-radius:8px; padding:14px 16px 6px; margin:0 0 18px }
-.compunere legend { font:600 15px ui-sans-serif,system-ui; padding:0 6px; color:var(--faint) }
-.camp { margin:0 0 12px }
-.camp label { display:block; font:600 13px ui-sans-serif,system-ui; margin:0 0 4px }
-.camp input, .camp textarea, .cati-secundari select {
-  width:100%; box-sizing:border-box; font:15px/1.45 ui-sans-serif,system-ui;
-  padding:8px 10px; border:1px solid var(--rule); border-radius:6px;
-  background:var(--paper); color:var(--ink) }
-.camp textarea { font-family:Georgia,"Times New Roman",serif; resize:vertical; min-height:160px }
-.camp .ajutor { display:block; font-size:13px; color:var(--faint); margin:3px 0 0 }
-.doua { display:grid; grid-template-columns:1fr 1fr; gap:0 14px }
-.socoteala { font:13px ui-sans-serif,system-ui; color:var(--faint); margin:0 0 10px }
-.socoteala.peste { color:var(--rosu); font-weight:600 }
-/* TOTALUL ȘI BUTONUL stau pe mijloc, sub ultimul articol scris (user, 18.09.2026: „să fie sub câmpul
-   de text de mai sus, cu care este asociat"). Alegerea câtor secundare sunt s-a urcat deasupra
-   articolului principal tocmai ca între ultimul text și total să nu mai cadă o listă derulantă. */
-.total { font:600 14px ui-sans-serif,system-ui; text-align:center; margin:0 0 12px }
-.cati-secundari { margin:0 0 16px }
-.cati-secundari label { display:block; font:600 13px ui-sans-serif,system-ui; margin:0 0 4px }
-.butoane { text-align:center; margin:0 0 8px }
+/* ── SCHIȚA NUMĂRULUI (18.09.2026, seara). ⚠️ AICI ERA FORMULARUL DE COMPUNERE, și a ieșit cu totul
+   la cererea userului: „formularul iese de pe /nou; toate completările trec prin chat". În locul
+   câmpurilor stă acum ce s-a RĂSPUNS în bulă, numai de citit — un singur șir, larg cât coloana de
+   citit, ca să se vadă dintr-o privire la ce s-a ajuns.
+   ⚠️ Textul stă STRÂNS (primele 300 de semne, cu o cheie „vezi tot"): întins, ar împinge foaia
+   compusă și butoanele ei jos de tot, iar ecranul ăsta e mai ales despre foaie. */
+.schita { max-width:760px; margin:18px auto 0; padding:14px 16px 10px;
+          border:1px solid var(--rule); border-radius:10px }
+.schita h3 { margin:0 0 2px; font:600 17px ui-sans-serif,system-ui }
+.sc-spune { font:13px/1.5 ui-sans-serif,system-ui; color:var(--faint); margin:0 0 12px }
+.sc-motto { font:italic 16px/1.4 Georgia,"Times New Roman",serif; margin:0 0 14px }
+.sc-cine { font-style:normal; font-size:13px; color:var(--faint) }
+.sc-articol { border-top:1px solid var(--rule); padding:12px 0 2px }
+.sc-articol h4 { margin:0 0 6px; font:600 13px/1 ui-sans-serif,system-ui; letter-spacing:.06em;
+                 text-transform:uppercase; color:var(--faint) }
+.sc-rand { margin:0 0 3px; font:14px/1.5 ui-sans-serif,system-ui }
+.sc-rand b { font:600 13px ui-sans-serif,system-ui; color:var(--faint); margin-right:6px }
+.sc-gol { color:var(--faint); font-style:italic }
+.sc-text { margin:8px 0 6px; font:15px/1.55 Georgia,"Times New Roman",serif }
+.sc-cheie { display:inline; margin-left:4px; padding:0; border:0; background:none; cursor:pointer;
+            font:13px ui-sans-serif,system-ui; color:var(--rosu); text-decoration:underline }
+.sc-masura { font:13px ui-sans-serif,system-ui; color:var(--faint); margin:0 0 6px }
+.sc-masura.peste { color:var(--rosu); font-weight:600 }
 .btn.mare { font-size:16px; padding:10px 22px }
-@media (max-width:640px) { .doua { grid-template-columns:1fr } }
 
 /* ── CIORNA: numarul proaspat compus, aratat CHIAR IN PAGINA, ca un buletin gata de validat
    (user, 18.09.2026). Un chenar in jurul lui, ca sa se vada ca e altceva decat formularul de

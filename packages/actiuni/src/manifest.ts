@@ -68,7 +68,9 @@ export function manifest(aplicatie: string, versiune: string, r: Registru): Mani
  * in manifest pentru aplicatiile care o citesc, dar nu se trimite modelului — ar umple contextul
  * fara sa-l ajute sa aleaga.
  *
- * `efect: scrie` se scrie in descriere, ca modelul sa stie ca urmeaza o confirmare de la om.
+ * `efect: scrie` se scrie in descriere, ca modelul sa stie ca urmeaza o confirmare de la om; iar
+ * `efect: ciorna` se scrie tocmai ca sa stie ca NU urmeaza niciuna — altfel un model mic intreaba
+ * „sa scriu?" la fiecare raspuns al omului si chestionarul se dubleaza in apasari.
  */
 export interface UnealtaDescrisa {
   name: string
@@ -102,6 +104,9 @@ export function unelteDinManifest(m: Manifest): UnealtaDescrisa[] {
       a.descriere +
       (a.efect === 'scrie'
         ? ' [SCHIMBĂ date. Cheam-o direct, fără să ceri voie în text: chemarea doar pregătește o propunere, pe care omul o confirmă pe un buton.]'
+        : '') +
+      (a.efect === 'ciorna'
+        ? ' [scrie doar în ciorna aplicației; se face pe loc, fără confirmare — nu întreba „să scriu?", scrie.]'
         : '') +
       (a.da === 'obiect' ? ' [dă o hârtie: se arată ca fișier, se poate trimite]' : '') +
       (a.exemple.length

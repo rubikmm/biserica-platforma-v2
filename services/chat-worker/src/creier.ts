@@ -135,6 +135,31 @@ export interface RaspunsModel {
   brut?: BlocClaude[]
 }
 
+/**
+ * Ce se cere de la un apel de model. `pana` e BUGETUL DE TIMP (18.09.2026): clipa după care nu mai
+ * are rost să se aștepte nimic de la model, fiindcă omul se uită de prea mult la „scrie…".
+ *
+ * Aici bugetul face două lucruri: taie așteptarea unui apel care atârnă (`AbortSignal`) și oprește
+ * REÎNCERCAREA cu buget dublat de la Workers AI — ea dublează și timpul, iar a doua încercare
+ * pornită în secunda 89 nu ajunge nicăieri, doar ține omul degeaba.
+ */
+export interface OptiuniModel {
+  faraApeluri?: boolean
+  /** Id-ul ales din panoul de Module; fără el, varsa workerului. */
+  model?: string
+  /** `Date.now()` până când se poate lucra. Lipsa lui înseamnă „fără ceas" (probe, chemări scurte). */
+  pana?: number
+}
+
+/** Cât se mai poate aștepta un singur apel, ca să nu atârne la nesfârșit. */
+const ASTEPTARE_IMPLICITA_MS = 120_000
+function catMaiAstept(o: OptiuniModel): number {
+  if (!o.pana) return ASTEPTARE_IMPLICITA_MS
+  // Cel puțin cinci secunde: un apel pornit are dreptul să încerce, altfel se anulează pe loc și
+  // omul primește o eroare în loc de un răspuns scurt.
+  return Math.max(5_000, Math.min(ASTEPTARE_IMPLICITA_MS, o.pana - Date.now()))
+}
+
 const ROLURI: Record<RolMesaj, string> = {
   sistem: 'system',
   om: 'user',
@@ -327,7 +352,7 @@ async function intreabaClaude(
   env: EnvCreier,
   mesaje: MesajModel[],
   unelte: UnealtaModel[],
-  o: { faraApeluri?: boolean; model?: string },
+  o: OptiuniModel,
 ): Promise<RaspunsModel> {
   const poarta = adresaPortiiAnthropic(env)
   if (!poarta) return FARA_POARTA
@@ -362,9 +387,12 @@ async function intreabaClaude(
         'cf-aig-authorization': `Bearer ${env.AI_GATEWAY_TOKEN}`,
       },
       body: JSON.stringify(corp),
+      // ⚠️ Fără ceas aici, o cerere care atârnă ținea tot lanțul (browser → aplicație → chat-worker)
+      // până cădea singură — și omul vedea „scrie…" la nesfârșit (18.09.2026).
+      signal: AbortSignal.timeout(catMaiAstept(o)),
     })
   } catch {
-    return { text: 'Nu ajung la poarta AI acum. Mai încearcă peste puțin.', cereri: [], taiat: false }
+    return { text: 'Nu ajung la poarta AI acum (ori a ținut prea mult). Mai încearcă peste puțin.', cereri: [], taiat: false }
   }
 
   if (!r.ok) {
@@ -476,7 +504,7 @@ async function intreabaWorkersAi(
   env: EnvCreier,
   mesaje: MesajModel[],
   unelte: UnealtaModel[],
-  o: { faraApeluri?: boolean; model?: string },
+  o: OptiuniModel,
 ): Promise<RaspunsModel> {
   const model = o.model || env.MODEL_CHAT || MODEL_IMPLICIT
   // Si Workers AI trece prin poarta, mereu — fara ea nu se cheama nimic (vezi mai sus).
@@ -523,7 +551,13 @@ async function intreabaWorkersAi(
 
   let r = desface(await env.AI.run(model, cerere(2500), poarta))
   // Taiat, sau ramas fara nimic dupa curatarea gandirii: inca o incercare, cu buget dublat.
-  if ((r.taiat || !r.text) && !r.cereri.length) r = desface(await env.AI.run(model, cerere(6000), poarta))
+  // ⚠️ DAR NUMAI DACĂ MAI E VREME (18.09.2026): reîncercarea dublează și așteptarea, iar pornită
+  // când bugetul mesajului s-a scurs nu face decât să mai țină omul un minut degeaba. Mai bine un
+  // răspuns scurt acum decât unul întreg peste trei minute.
+  const maiEVreme = !o.pana || Date.now() < o.pana
+  if ((r.taiat || !r.text) && !r.cereri.length && maiEVreme) {
+    r = desface(await env.AI.run(model, cerere(6000), poarta))
+  }
   return r
 }
 
@@ -536,8 +570,7 @@ export async function intreabaModelul(
   mesaje: MesajModel[],
   unelte: UnealtaModel[],
   prin: FelCreier = 'claude',
-  /** `model`: id-ul ales din panoul de Module; fără el, varsa workerului. */
-  o: { faraApeluri?: boolean; model?: string } = {},
+  o: OptiuniModel = {},
 ): Promise<RaspunsModel> {
   if (prin === 'claude') return intreabaClaude(env, mesaje, unelte, o)
   return intreabaWorkersAi(env, mesaje, unelte, o)

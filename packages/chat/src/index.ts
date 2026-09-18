@@ -69,6 +69,32 @@ function json(date: unknown, status = 200): Response {
 /** Pentru cine n-are voie, modulul nu există. Nu spunem că e stins, nu spunem că e acolo. */
 const inexistent = () => new Response('Not Found', { status: 404 })
 
+/**
+ * ȚINE LUMINA APRINSĂ cât lucrează creierul (18.09.2026).
+ *
+ * Răspunsul la un mesaj poate ține minute, iar de pe 18.09 nu mai stă nimeni pe firul cererii:
+ * aplicația întoarce îndată `{inLucru:true}`, iar munca se face într-o cerere de serviciu pe care o
+ * păstrează `waitUntil` AL APLICAȚIEI.
+ *
+ * ⚠️ De ce aici și nu în chat-worker, cu `waitUntil` al lui: el e chemat prin Service Binding, iar o
+ * cerere de serviciu trăiește cât cererea care a chemat-o. Dacă aplicația își întoarce răspunsul și
+ * nu mai ține nimic aprins, munca poate fi tăiată la mijloc — adică exact boala pe care o dregem.
+ *
+ * `try` fiindcă la probe contextul de execuție e un obiect gol: atunci promisiunea curge cum poate,
+ * iar cererea a plecat oricum.
+ */
+function tineAprins(ctxExec: ExecutionContext, lucrul: Promise<unknown>): void {
+  const tacut = lucrul.then(
+    () => undefined,
+    () => undefined,
+  )
+  try {
+    ctxExec.waitUntil(tacut)
+  } catch {
+    void tacut
+  }
+}
+
 export interface ModulChat {
   bula(env: EnvChat, ctx: ContextChat): Promise<BucataChat | undefined>
   /**
@@ -165,7 +191,7 @@ export function modulChat(cfg: { aplicatie: string; titlu?: string }): ModulChat
       })
     },
 
-    async ruteaza(req, env, _ctxExec, cale, ctx) {
+    async ruteaza(req, env, ctxExec, cale, ctx) {
       if (cale !== '/chat' && !cale.startsWith('/chat/')) return null
 
       /*
@@ -222,9 +248,13 @@ export function modulChat(cfg: { aplicatie: string; titlu?: string }): ModulChat
         })
       }
 
-      if (req.method === 'GET' && cale === '/chat/discutie') {
+      // Istoricul discuției și STAREA lucrului: amândouă doar se citesc, amândouă merg mai departe
+      // neschimbate. `/chat/stare` e ușa sondării — bula o întreabă la două-trei secunde cât
+      // lucrează creierul, deci trebuie să fie ieftină și să nu ceară nimic în plus.
+      if (req.method === 'GET' && (cale === '/chat/discutie' || cale === '/chat/stare')) {
         const id = new URL(req.url).searchParams.get('id') ?? ''
-        const r = await chat.fetch(`https://chat.intern/discutie?id=${encodeURIComponent(id)}`, {
+        const unde = cale === '/chat/stare' ? 'stare' : 'discutie'
+        const r = await chat.fetch(`https://chat.intern/${unde}?id=${encodeURIComponent(id)}`, {
           headers: cap,
         })
         return new Response(r.body, { status: r.status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } })
@@ -247,12 +277,48 @@ export function modulChat(cfg: { aplicatie: string; titlu?: string }): ModulChat
         return json({ ok: false, mesaj: 'mesaj neînțeles' }, 400)
       }
 
+      // Aplicația spune de unde vine întrebarea și cum îl cheamă pe om — chat-worker n-are
+      // voie să țină nume, dar modelul se poartă altfel dacă știe cu cine vorbește.
+      const dus = { ...corp, aplicatie: cfg.aplicatie, numeleOmului: ctx.numeleOmului ?? null }
+
+      /*
+       * MESAJUL, ÎN DOUĂ MIȘCĂRI (18.09.2026). Întâi scrierea mesajului omului, care ține o clipă și
+       * întoarce `{conversatieId, inLucru:true}`; apoi lucrul adevărat, pornit aici și ținut aprins cu
+       * `waitUntil`. Bula află răspunsul sondând `/chat/stare`.
+       *
+       * ⚠️ Răspunsul primei mișcări se citește AICI, ca să se afle discuția pe care lucrăm — de aceea
+       * nu se mai trece corpul mai departe ca stream, ci se recompune. Un chat-worker care răspunde
+       * altceva decât JSON (n-ar trebui) pleacă mai departe așa cum a venit.
+       */
+      if (cale === '/chat/mesaj') {
+        const r = await chat.fetch(catre, { method: 'POST', headers: cap, body: JSON.stringify({ ...dus, asincron: true }) })
+        const brut = await r.text()
+        let date: Record<string, unknown> | null = null
+        try {
+          date = JSON.parse(brut) as Record<string, unknown>
+        } catch {
+          date = null
+        }
+        if (!date) {
+          return new Response(brut, { status: r.status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } })
+        }
+        if (r.ok && date.inLucru && typeof date.conversatieId === 'string') {
+          tineAprins(
+            ctxExec,
+            chat.fetch('https://chat.intern/lucreaza', {
+              method: 'POST',
+              headers: cap,
+              body: JSON.stringify({ ...dus, conversatieId: date.conversatieId, mesajId: date.mesajId ?? null }),
+            }),
+          )
+        }
+        return json(date, r.status)
+      }
+
       const r = await chat.fetch(catre, {
         method: 'POST',
         headers: cap,
-        // Aplicația spune de unde vine întrebarea și cum îl cheamă pe om — chat-worker n-are
-        // voie să țină nume, dar modelul se poartă altfel dacă știe cu cine vorbește.
-        body: JSON.stringify({ ...corp, aplicatie: cfg.aplicatie, numeleOmului: ctx.numeleOmului ?? null }),
+        body: JSON.stringify(dus),
       })
       return new Response(r.body, {
         status: r.status,

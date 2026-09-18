@@ -16,6 +16,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import buletin from '../apps/buletin/src/index.js'
 import { actiuniBuletin } from '../apps/buletin/src/actiuni.js'
 import { cheiaCererii, cheiaCopertei, cheiaNumarului, pastreazaNumarul } from '../apps/buletin/src/compune.js'
+import { cheiaSchitei } from '../apps/buletin/src/schita.js'
 import { cheiaBrosurii } from '../apps/buletin/src/tipar.js'
 import { buletinulNou } from '../apps/buletin/src/pagini.js'
 import { CE_VEDE_BULA, aplicatiileLegate } from '../services/chat-worker/src/index.js'
@@ -61,6 +62,25 @@ const CERERE_PASTRATA = {
   },
   secundari: [{ autor: 'FĂRĂ AUTOR', titlu: 'AL DOILEA', text: 'Text scurt.' }],
   floare: true,
+}
+
+/** Schița numărului, cum o lasă chestionarul din bulă — ea e ce arată ecranul `/nou`. */
+const SCHITA_PASTRATA = {
+  nr: URMATOR.nr,
+  data: URMATOR.data,
+  motto: 'Rugăciunea este respirația sufletului.',
+  motoAutor: 'Părintele Arsenie Papacioc',
+  principal: {
+    autor: 'SFÂNTUL IOAN GURĂ DE AUR',
+    ani: '347-407',
+    titlu: 'DESPRE RUGĂCIUNE',
+    text: 'Rândul întâi al articolului scris de chat.',
+    sursa: 'ziarullumina.ro',
+    gata: ['text', 'autor', 'ani', 'titlu', 'sursa'],
+  },
+  secundari: [{ autor: 'FĂRĂ AUTOR', titlu: 'AL DOILEA', text: 'Text scurt.' }],
+  gata: ['motto'],
+  actualizat: '2026-09-18T20:00:00.000Z',
 }
 
 /** D1, cât îi trebuie paginii: ultimul număr și numărătoarea anilor. */
@@ -267,26 +287,36 @@ describe('rutele chatului din buletin', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Ecranul se umple din ce s-a compus
+// Ecranul se umple din ce s-a compus și din ce s-a răspuns în chat
 // ---------------------------------------------------------------------------
 
-describe('`/nou` se deschide cu ciorna compusă, nu cu formularul gol', () => {
+describe('`/nou` se deschide cu ciorna compusă și cu schița din chat', () => {
   const depozitCuCiorna = {
     [cheiaNumarului(URMATOR)]: null,
     [cheiaCopertei(URMATOR)]: null,
     [cheiaCererii(URMATOR)]: CERERE_PASTRATA,
+    [cheiaSchitei(URMATOR)]: SCHITA_PASTRATA,
     [`compus/2026/buletin-${URMATOR.nr}-${URMATOR.data}.json`]: CERERE_PASTRATA,
   }
 
-  it('umple formularul din cererea păstrată lângă PDF', async () => {
+  /**
+   * ⚠️ Din 18.09.2026, seara, ecranul ARATĂ schița, nu o editează: formularul a ieșit cu totul, iar
+   * completările trec prin bulă. Ce se probează aici e că răspunsurile din chat se văd la
+   * reîncărcare — fără asta, tot ce s-a răspuns ar părea pierdut după „Da, fă-o".
+   */
+  it('arată schița strânsă din chat, numai de citit', async () => {
     const { env } = mediu({ depozit: depozitCuCiorna })
     const text = await (await cere(env, '/nou')).text()
+    expect(text).toContain('<section class="schita">')
     expect(text).toContain('SFÂNTUL IOAN GURĂ DE AUR')
     expect(text).toContain('DESPRE RUGĂCIUNE')
     expect(text).toContain('Rândul întâi al articolului scris de chat.')
     expect(text).toContain('Rugăciunea este respirația sufletului.')
-    // și câte articole secundare are — altfel al doilea ar rămâne ascuns
-    expect(text).toContain('<option value="1" selected>')
+    // și articolul secundar, cu numele lui
+    expect(text).toContain('Articolul secundar 1')
+    // niciun câmp de scris: totul trece prin bulă
+    expect(text).not.toContain('name="p_text"')
+    expect(text).not.toContain('value="compune"')
   })
 
   it('arată ciorna cu butoanele ei și cu amprenta randării', async () => {
@@ -297,16 +327,90 @@ describe('`/nou` se deschide cu ciorna compusă, nu cu formularul gol', () => {
     expect(text).toContain('Validează')
   })
 
-  it('fără ciornă în depozit, ecranul e cel gol de până acum', async () => {
+  it('fără nimic în depozit, ecranul spune că nu s-a început nimic', async () => {
     const { env } = mediu()
     const text = await (await cere(env, '/nou')).text()
     expect(text).not.toContain('<section class="ciorna">')
-    expect(text).toContain('Compune numărul')
+    expect(text).toContain('Se completează din chat')
+    expect(text).toContain('Niciun articol încă')
   })
 
   it('rămâne al adminilor buletinului: fără cheie, 403', async () => {
     const { env } = mediu({ cheiOmului: [] })
     expect((await cere(env, '/nou')).status).toBe(403)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Întrebările chestionarului, salvate din Setări
+// ---------------------------------------------------------------------------
+
+/**
+ * ⚠️ Ruta asta scrie în KV o cheie pe care o citește apoi FIECARE mesaj al bulei. Cele două lucruri
+ * care se pot strica tăcut: paza (oricine ar putea rescrie întrebările parohiei) și butonul
+ * „Înapoi la textele standard" — dacă ar SCRIE standardul în loc să golească cheia, o îndreptare
+ * din cod n-ar mai ajunge niciodată la parohie.
+ */
+describe('POST /setari/chestionar', () => {
+  const CSRF = 'jeton-csrf-de-proba'
+  function cuKv(o: Parameters<typeof mediu>[0] = {}) {
+    const scrise = new Map<string, string>()
+    const sterse: string[] = []
+    const { env } = mediu(o)
+    return {
+      scrise,
+      sterse,
+      env: {
+        ...env,
+        CONFIG: {
+          get: env.CONFIG.get,
+          put: async (cheie: string, val: string) => { scrise.set(cheie, val) },
+          delete: async (cheie: string) => { sterse.push(cheie) },
+        },
+      },
+    }
+  }
+  const trimite = (env: unknown, corp: Record<string, string>) =>
+    cere(env, '/setari/chestionar', {
+      method: 'POST',
+      headers: {
+        origin: 'https://buletin.staging.sfantul-ilie.ro',
+        'content-type': 'application/x-www-form-urlencoded',
+        cookie: `xc_sesiune=jeton-de-proba; xc_csrf=${CSRF}`,
+      },
+      body: new URLSearchParams(corp).toString(),
+    })
+
+  it('scrie în KV numai întrebările schimbate, și duce înapoi la Setări', async () => {
+    const { env, scrise } = cuKv()
+    const r = await trimite(env, { csrf: CSRF, fapta: 'salveaza', autor: 'Zic eu că e {autor}?', titlu: '' })
+    expect(r.status).toBe(303)
+    expect(r.headers.get('location')).toContain('chestionar=salvat')
+    const scris = JSON.parse(scrise.get('buletin:chestionar')!) as Record<string, string>
+    expect(scris.autor).toBe('Zic eu că e {autor}?')
+    // câmpul gol nu devine o întrebare goală: înseamnă „ține textul standard"
+    expect(scris.titlu).toBeUndefined()
+  })
+
+  it('„Înapoi la textele standard" GOLEȘTE cheia, nu scrie standardul în ea', async () => {
+    const { env, scrise, sterse } = cuKv()
+    const r = await trimite(env, { csrf: CSRF, fapta: 'standard' })
+    expect(r.status).toBe(303)
+    expect(sterse).toEqual(['buletin:chestionar'])
+    expect(scrise.size).toBe(0)
+  })
+
+  it('fără jeton CSRF pereche, nu se scrie nimic', async () => {
+    const { env, scrise } = cuKv()
+    const r = await trimite(env, { csrf: 'altceva', fapta: 'salveaza', autor: 'x' })
+    expect(r.headers.get('location')).toContain('chestionar=rau')
+    expect(scrise.size).toBe(0)
+  })
+
+  it('cine nu ține buletinul nu poate scrie întrebările lui', async () => {
+    const { env, scrise } = cuKv({ cheiOmului: [] })
+    await trimite(env, { csrf: CSRF, fapta: 'salveaza', autor: 'x' })
+    expect(scrise.size).toBe(0)
   })
 })
 
@@ -371,8 +475,17 @@ describe('nr. și data nu vin de la model, ci din arhivă', () => {
 describe('ce aplicații vede bula fiecărei aplicații', () => {
   const env = { PROGRAM: {}, CALENDAR: {}, TIPIC: {}, BULETIN: {} } as never
 
-  it('bula buletinului vede numai buletinul', () => {
-    expect(aplicatiileLegate(env, 'buletin').map((a) => a.nume)).toEqual(['buletin'])
+  /**
+   * ⚠️ ȘI CALENDARUL, din 18.09.2026: foaia se scrie despre sfântul zilei, iar pomenirea lui se caută
+   * în calendar. Fără el, bula buletinului n-avea de unde ști cine se prăznuiește duminica ce vine —
+   * și un model mic, întrebat fără unealtă, ghicește. Programul și tipicul rămân pe dinafară: de
+   * acelea nu se leagă nimic din foaie.
+   */
+  it('bula buletinului vede buletinul și calendarul — nu programul, nu tipicul', () => {
+    const vazute = aplicatiileLegate(env, 'buletin').map((a) => a.nume)
+    expect(vazute).toEqual(['calendar', 'buletin'])
+    expect(vazute).not.toContain('program')
+    expect(vazute).not.toContain('tipic')
   })
 
   /**

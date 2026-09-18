@@ -21,7 +21,24 @@ export interface ExempluActiune {
   argumente: Record<string, unknown>
 }
 
-export const EFECTE = ['citeste', 'scrie'] as const
+/**
+ * CE FACE O ACTIUNE CU LUMEA:
+ *
+ *   `citeste` — nu schimba nimic. Se executa pe loc, ori de cate ori o cere modelul.
+ *   `scrie`   — schimba DATELE PAROHIEI (programul, arhiva buletinului, o scrisoare care pleaca).
+ *               Se opreste si se propune omului cu Da/Nu, si intra in audit.
+ *   `ciorna`  — scrie DOAR in ciorna aplicatiei: o foaie de lucru a omului care sta in chat, nu
+ *               inca o dată a parohiei. Se face pe loc, FARA Da/Nu.
+ *
+ * ⚠️ DE CE `ciorna` NU CERE CONFIRMARE (user, 18.09.2026, la chestionarul buletinului nou): un
+ * chestionar de opt intrebari cu Da/Nu la fiecare raspuns ar fi saisprezece apasari pentru un
+ * singur numar — iar omul tocmai a spus ce vrea, in vorbele lui. Regula care ține asta in frau:
+ * ciorna **nu e o dată a parohiei si nu pleaca nicaieri** — nu se publica, nu se trimite, nu se
+ * vede din afara ecranului celui care o scrie. Confirmarea rămâne UNA, acolo unde ciorna devine
+ * fapt: la compunere (`buletin.compune`, efect `scrie`).
+ * Cand un efect nou ar atinge date adevarate, el e `scrie`, nu inca un `ciorna`.
+ */
+export const EFECTE = ['citeste', 'scrie', 'ciorna'] as const
 export const Efect = z.enum(EFECTE)
 export type Efect = z.infer<typeof Efect>
 
@@ -55,6 +72,7 @@ export interface Actiune<I extends z.ZodType = z.ZodType, O extends z.ZodType = 
    * documentatia pentru o alta aplicatie. O descriere lenesa („da saptamana") e un bug.
    */
   descriere: string
+  /** Vezi `EFECTE`: `citeste` nu schimba nimic, `scrie` cere Da/Nu si audit, `ciorna` nici una. */
   efect: Efect
   /** Cheie din CHEI_PERMISIUNI. Lipsa ei inseamna „la liber", ca restul platformei. */
   permisiune?: Permisiune

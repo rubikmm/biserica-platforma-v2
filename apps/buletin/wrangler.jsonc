@@ -41,6 +41,10 @@
     // Calendarul de pe pagina a patra a foii tiparite: tabelul se CERE de la program, nu se
     // copiaza aici (`/v1/tabel-tipar`). Programul ramane proprietarul formei lui.
     { "binding": "PROGRAM", "service": "xc-program" },
+    // Calendarul parohiei: de la el se afla ziua de pomenire a autorului, la intrebarea 5 a
+    // chestionarului numarului nou (`/v1/cauta?q=<nume>&an=<anul>`). Buletinul nu tine niciun
+    // calendar al lui — il CERE, ca pe tabelul programului.
+    { "binding": "CALENDAR", "service": "xc-calendar" },
     // Creierul bulei de chat de pe `/nou` (18.09.2026). Bula se aprinde din panoul de admin, la
     // Module, nu de aici. ⚠️ `xc-chat` are, la randul lui, o legatura spre `xc-buletin`: cercul se
     // publica cu ocolul din `infrastructure/cutover/publica-cu-ocol.mjs` (altfel cod 10143).
@@ -97,6 +101,7 @@
         { "binding": "AUDIT", "service": "xc-audit-staging" },
         { "binding": "COMUNICARE", "service": "xc-communication-staging" },
         { "binding": "PROGRAM", "service": "xc-program-staging" },
+        { "binding": "CALENDAR", "service": "xc-calendar-staging" },
         { "binding": "CHAT", "service": "xc-chat-staging" },
         { "binding": "MEDIA", "service": "xc-media-staging" }
       ],
@@ -142,6 +147,7 @@
         { "binding": "AUDIT", "service": "xc-audit-production" },
         { "binding": "COMUNICARE", "service": "xc-communication-production" },
         { "binding": "PROGRAM", "service": "xc-program-production" },
+        { "binding": "CALENDAR", "service": "xc-calendar-production" },
         { "binding": "CHAT", "service": "xc-chat-production" },
         { "binding": "MEDIA", "service": "xc-media-production" }
       ],

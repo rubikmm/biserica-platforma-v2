@@ -28,7 +28,7 @@
  */
 import { SCOPE_GLOBAL, SESIUNE_ANONIMA } from '@xc/contracts'
 import { eAdminulAplicatiei } from '@xc/authorization'
-import { principalDin, sesiuneCurenta, verificaCsrf } from '@xc/auth'
+import { principalDin, sesiuneCurenta, verificaCsrf, verificaTokenCsrf } from '@xc/auth'
 import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
 import { Logger, correlationId } from '@xc/observability'
 import { modulActiuni } from '@xc/actiuni'
@@ -56,12 +56,19 @@ import {
   cheiaCererii,
   cheiaCopertei,
   cheiaNumarului,
-  compune,
   mottoDinainte,
-  pastreazaNumarul,
   textCurat,
 } from './compune.js'
-import { PAGINI, type NumarCerut, variante } from './masuri.js'
+import { PAGINI, type NumarCerut, socoteste } from './masuri.js'
+import {
+  CHEIE_CHESTIONAR,
+  INTREBARI_STANDARD,
+  catreCerere,
+  citesteSchita,
+  intrebarile,
+  normalizeazaChestionar,
+  stergeSchita,
+} from './schita.js'
 import { abonamentul, ruteazaAbonare } from '@xc/abonare'
 import { ruteazaSetari } from '@xc/setari'
 import {
@@ -75,7 +82,24 @@ import {
   paginaCautare,
   paginaMesaj,
   paginaNou,
+  rubricaChestionar,
 } from './pagini.js'
+
+/**
+ * Rândurile rubricii „Chestionarul buletinului nou": ce se editează și la ce se uită fiecare
+ * întrebare. ⚠️ ORDINEA e cea din `schita.ts` — ea e a mașinii de stări, nu a ecranului; aici se
+ * scriu doar etichetele, ca adminul să știe la ce răspunde fiecare câmp.
+ */
+const RANDURILE_CHESTIONARULUI = [
+  { cheie: 'motto', eticheta: '1. Motto-ul', spune: 'Se arată motto-ul numărului trecut ({motto}) și cine l-a spus ({autor}).' },
+  { cheie: 'text', eticheta: '2. Textul', spune: 'Aici omul lipește articolul. {articol} spune despre care articol e vorba.' },
+  { cheie: 'autor', eticheta: '3. Autorul', spune: 'Autorul ({autor}) e propus de cod din text — primul sau ultimul rând scurt, „de …", „Sfântul …".' },
+  { cheie: 'ani', eticheta: '4. Anii vieții', spune: 'Anii ({ani}) ies din text, dacă apar scriși acolo.' },
+  { cheie: 'pomenire', eticheta: '5. Pomenirea', spune: 'Ziua ({pomenire}) se caută în calendarul parohiei, după numele autorului. Dacă nu e sfânt, întrebarea nu se pune.' },
+  { cheie: 'titlu', eticheta: '6. Titlul', spune: 'Titlurile ({titluri}) sunt scoase din text și numerotate; omul alege unul sau scrie altul.' },
+  { cheie: 'sursa', eticheta: '7. Sursa', spune: 'Sursa ({sursa}) se caută în text: „Sursa:", „din:" sau un domeniu scris acolo.' },
+  { cheie: 'mai_adaugam', eticheta: '8. Mai adăugăm?', spune: 'La „da" se reiau întrebările 2–7 pentru un articol secundar; la „nu" se trece la compunere.' },
+]
 
 export interface Env {
   DB: D1Database
@@ -87,6 +111,8 @@ export interface Env {
   COMUNICARE: Fetcher
   /** Programul: de la el se cere tabelul tiparit de pe pagina a patra (`/v1/tabel-tipar`). */
   PROGRAM: Fetcher
+  /** Calendarul: de la el se afla ziua de pomenire a autorului, la chestionarul numarului nou. */
+  CALENDAR?: Fetcher
   /** Browser Rendering: din HTML-ul foii iese PDF-ul de tipar. */
   BROWSER: Fetcher
   /** Creierul bulei de chat de pe `/nou` (18.09.2026); lipsa lui inseamna doar ca bula nu se aprinde. */
@@ -290,35 +316,6 @@ async function tiparul(req: Request, url: URL, env: Env, nr: number, data: strin
     httpMetadata: { contentType: 'application/pdf' },
   })
   return new Response(octeti, { headers: antete(pus?.httpEtag ?? `"${cheie}"`) })
-}
-
-/**
- * CEREREA PĂSTRATĂ, întoarsă în câmpurile formularului din `/nou`.
- *
- * ⚠️ Drumul invers al lui `cerut` din POST: aceleași nume de câmpuri, ca ecranul să se umple cu exact
- * ce s-a compus — fie de mână, fie de bula de chat. Dacă se schimbă un nume de câmp acolo, se schimbă
- * și aici, altfel reumplerea pierde în tăcere tocmai câmpul acela.
- * ⚠️ Nr. și data NU intră: nu sunt câmpuri (le ia serverul din arhivă). Adresa pozei nu se păstrează
- * în cerere, deci nu se poate reumple.
- */
-function scrisDinCerere(c: NumarCerut): Record<string, string> {
-  const scris: Record<string, string> = {
-    motto: c.motto ?? '',
-    moto_autor: c.motoAutor ?? '',
-    secundari: String((c.secundari ?? []).length),
-  }
-  const pune = (prefix: string, a: NumarCerut['principal'] | undefined) => {
-    if (!a) return
-    scris[`${prefix}_autor`] = a.autor ?? ''
-    scris[`${prefix}_ani`] = a.ani ?? ''
-    scris[`${prefix}_pomenire`] = a.pomenire ?? ''
-    scris[`${prefix}_titlu`] = a.titlu ?? ''
-    scris[`${prefix}_text`] = a.text ?? ''
-    scris[`${prefix}_sursa`] = a.sursa ?? ''
-  }
-  pune('p', c.principal)
-  ;(c.secundari ?? []).forEach((a, i) => pune(`s${i + 1}`, a))
-  return scris
 }
 
 /**
@@ -601,6 +598,36 @@ export default {
       })
       if (raspunsAbonare) return raspunsAbonare
 
+      /*
+       * CHESTIONARUL BULETINULUI NOU — cele opt întrebări ale bulei, scrise de adminul buletinului
+       * (user, 18.09.2026, seara). Ruta stă ÎNAINTEA Setărilor fiindcă `ruteazaSetari` nu cunoaște
+       * calea asta (ar da `null`), iar paza e a noastră: adminul aplicației + jetonul CSRF pereche
+       * cu al paginii. Se scrie în KV `CONFIG`, la cheia aplicației — nicio publicare pentru o
+       * virgulă schimbată într-o întrebare.
+       */
+      if (cale === '/setari/chestionar') {
+        const inapoi = (coada: string) =>
+          new Response(null, { status: 303, headers: { location: `${prefix}/setari${coada}#chestionar`, 'cache-control': 'no-store' } })
+        if (req.method !== 'POST' || !ctx.eAdmin) return redirect(`${prefix}/setari`)
+        const f = await req.formData()
+        if (verificaTokenCsrf(req, String(f.get('csrf') ?? ''))) return inapoi('?chestionar=rau')
+        if (!env.CONFIG) return inapoi('?chestionar=rau')
+        try {
+          if (f.get('fapta') === 'standard') {
+            // „Înapoi la textele standard" doar GOLEȘTE cheia: standardul stă în cod, nu se copiază
+            // în KV — altfel o îndreptare de acolo n-ar mai ajunge la parohie.
+            await env.CONFIG.delete(CHEIE_CHESTIONAR)
+          } else {
+            const scrise: Record<string, string> = {}
+            for (const [k, v] of f.entries()) if (typeof v === 'string') scrise[k] = v
+            await env.CONFIG.put(CHEIE_CHESTIONAR, JSON.stringify(normalizeazaChestionar(scrise)))
+          }
+        } catch {
+          return inapoi('?chestionar=rau')
+        }
+        return inapoi('?chestionar=salvat')
+      }
+
       // SETARILE — tot un singur loc, `@xc/setari` (user, 15.09.2026).
       const raspunsSetari = await ruteazaSetari(req, cale, env, {
         cod: 'buletin',
@@ -612,9 +639,28 @@ export default {
         urlCont: nav.cont,
         urlTermeni: `${nav.home || ''}/termeni`,
         carcasa: (p) => paginaCarcasa(ctx, p),
-        // Rubrica „Chat AI" — îndrumările și uneltele BULETINULUI, scrise de adminul lui
-        // (user, 18.09.2026). Bucata vine din modul, la fel pentru toate aplicațiile.
-        rubrici: ({ csrf }) => CHAT.rubricaSetari(env, ctxChat, { csrf }),
+        /*
+         * Două rubrici, în ordinea asta:
+         *  - „Chat AI" — îndrumările și uneltele BULETINULUI (user, 18.09.2026). Bucata vine din
+         *    modul, la fel pentru toate aplicațiile;
+         *  - „Chestionarul buletinului nou" — cele opt întrebări ale bulei, care sunt numai ale
+         *    buletinului. ⚠️ Nu se dublează una pe alta: prima spune CE ȘTIE bula, a doua CE ÎNTREABĂ.
+         */
+        rubrici: async ({ csrf }) => {
+          const chat = await CHAT.rubricaSetari(env, ctxChat, { csrf })
+          if (!ctx.eAdmin) return chat
+          const scrise = env.CONFIG
+            ? await env.CONFIG.get(CHEIE_CHESTIONAR, 'json').catch(() => null)
+            : null
+          return chat + rubricaChestionar({
+            prefix,
+            csrf,
+            intrebari: intrebarile(normalizeazaChestionar(scrise)),
+            standard: INTREBARI_STANDARD,
+            randuri: RANDURILE_CHESTIONARULUI,
+            salvat: url.searchParams.get('chestionar') === 'salvat',
+          })
+        },
       })
       if (raspunsSetari) return raspunsSetari
 
@@ -658,37 +704,39 @@ export default {
          */
         const [cal, motto] = await Promise.all([calendarulNumarului(env, nou.data), mottoDinainte(env, b)])
         const calendar = 'eroare' in cal ? null : { titlu: cal.titlu, slujbe: cal.slujbe, stare: cal.stare }
-        const masuri = variante('eroare' in cal ? undefined : { slujbe: cal.slujbe, detalii: cal.detalii })
+        const masuraCalendarului = 'eroare' in cal ? undefined : { slujbe: cal.slujbe, detalii: cal.detalii }
 
         if (req.method !== 'POST') {
           /*
-           * BULA DE CHAT — NUMAI AICI (user, 18.09.2026). Cu ea omul trimite instrucțiuni și texte,
-           * iar modelul cheamă `buletin.compune`. Poarta e a modulului: stins din Module, ori om fără
-           * drept, ori fără creier legat — `bula` întoarce `undefined` și pagina rămâne cum era.
+           * BULA DE CHAT — NUMAI AICI (user, 18.09.2026). Din 18.09.2026, seara, ea e SINGURUL drum
+           * prin care se completează numărul: formularul a ieșit, iar omul scrie „buletin nou" și
+           * răspunde la întrebări. Poarta e a modulului: stins din Module, ori om fără drept, ori
+           * fără creier legat — `bula` întoarce `undefined` și ecranul rămâne doar de citit.
            */
           ctx.chat = await CHAT.bula(env, ctxChat)
           /*
-           * ⚠️ CIORNA COMPUSĂ E STAREA ECRANULUI (18.09.2026). Până acum `/nou` se deschidea mereu
-           * cu formularul gol: numărul compus se vedea doar în răspunsul POST-ului, deci ce compunea
-           * chatul (sau o altă fereastră) se pierdea la prima reîncărcare — iar după „Da, fă-o" pagina
-           * se reîncarcă tocmai atunci. Acum, dacă numărul care urmează are deja o ciornă în depozit,
-           * ea se arată, iar formularul vine umplut din cererea păstrată lângă PDF: „completat de chat"
-           * nu e un drum nou, e starea citită de unde era deja scrisă.
-           * ⚠️ Adresa pozei NU se păstrează în cerere (acolo `poza` e doar da/nu), deci câmpul ei rămâne
-           * gol la reumplere. Se vede în ciorna de deasupra că poza e acolo.
+           * ⚠️ STAREA ECRANULUI STĂ ÎN DEPOZIT, nu în pagină (18.09.2026): FOAIA compusă (dacă s-a
+           * compus una) și SCHIȚA — răspunsurile din chat. Așa ce s-a scris din bulă se vede la
+           * prima reîncărcare, iar discuția se poate relua a doua zi, de pe alt telefon.
            */
-          const [foaia, pastrata] = await Promise.all([
+          const [foaia, schita] = await Promise.all([
             nou.nr ? env.FISIERE.head(cheiaNumarului({ nr: nou.nr, data: nou.data })) : Promise.resolve(null),
-            nou.nr ? env.FISIERE.get(cheiaCererii({ nr: nou.nr, data: nou.data })) : Promise.resolve(null),
+            citesteSchita(env, nou),
           ])
-          const cerereaVeche = pastrata ? ((await pastrata.json()) as NumarCerut) : null
           const coperta = foaia ? await env.FISIERE.head(cheiaCopertei({ nr: nou.nr!, data: nou.data })) : null
+          // măsura fiecărui articol, socotită aici: ecranul n-o mai socotește singur, fiindcă n-are
+          // ce număra — textul nu se mai scrie în pagină
+          const masura = schita
+            ? socoteste({ ...catreCerere(schita), calendar: masuraCalendarului }).zone.map((z) => ({
+                cine: z.cine, semne: z.semne, scrise: z.scrise, ramase: z.ramase,
+              }))
+            : undefined
           return html(
             paginaNou(ctx, m, nou, {
-              variante: masuri,
               calendar,
               motto,
-              ...(cerereaVeche ? { scris: scrisDinCerere(cerereaVeche) } : {}),
+              schita,
+              ...(masura ? { masura } : {}),
               ...(foaia
                 ? {
                     raspuns: {
@@ -712,6 +760,14 @@ export default {
         for (const [k, v] of f.entries()) if (typeof v === 'string') scris[k] = v
 
         /*
+         * ⚠️ `POST /nou` FACE DE ACUM UN SINGUR LUCRU: validează (18.09.2026, seara). Ramura de
+         * compunere din formular a ieșit odată cu formularul — numărul se compune prin
+         * `buletin.compune`, chemat de bulă din schiță, și tot acolo e confirmarea cu Da/Nu. Un al
+         * doilea drum de compunere ar fi fost al doilea adevăr despre același număr.
+         */
+        if (scris.fapta !== 'valideaza') return redirect(`${prefix}/nou`)
+
+        /*
          * VALIDAREA = PUBLICAREA (user, 18.09.2026, limpede: „validarea = publicarea"). Până aici
          * numărul compus era doar un PDF în depozit, pe care nu-l vedea nimeni din afara ecranului
          * ăstuia; apăsarea îl scrie în arhivă, și din clipa aceea el e numărul curent al parohiei —
@@ -723,130 +779,50 @@ export default {
          * ⚠️ Poarta e tot rolul de admin, ca la compunere: o cheie nouă de permisiune ar fi cerut
          * republicarea lui `xc-authz` (aceeași socoteală ca la `/nou`).
          */
-        if (scris.fapta === 'valideaza') {
-          const cerNr = Number(scris.nr ?? '0') || 0
-          const cerData = scris.data ?? ''
-          if (!nou.nr || cerNr !== nou.nr || cerData !== nou.data) {
-            return html(
-              paginaNou(ctx, m, nou, {
-                variante: masuri, calendar, motto,
-                raspuns: {
-                  facut: false,
-                  plangeri: [
-                    `numărul de pe ecran (${cerNr} / ${cerData}) nu mai e cel care urmează (${nou.nr} / ${nou.data}) — ` +
-                    'între timp s-a validat altceva; recompune-l pe cel de acum',
-                  ],
-                },
-              }),
-              409,
-              alLui,
-            )
-          }
-          const ciorna = await ciornaDinDepozit(env, nou.nr, nou.data)
-          if (!ciorna?.cheie_pdf) {
-            return html(
-              paginaNou(ctx, m, nou, {
-                variante: masuri, calendar, motto,
-                raspuns: { facut: false, plangeri: ['numărul nu e compus — compune-l întâi, apoi validează-l'] },
-              }),
-              409,
-              alLui,
-            )
-          }
-          // textul pentru căutare iese din cererea păstrată lângă PDF; dacă lipsește, rândul intră
-          // fără text (se caută după el, nu se tipărește din el)
-          const cerereaPastrata = await env.FISIERE.get(cheiaCererii({ nr: nou.nr, data: nou.data }))
-          const dateleNumarului = cerereaPastrata ? ((await cerereaPastrata.json()) as NumarCerut) : null
-          await scrieBuletin(env.DB, {
-            nr: nou.nr,
-            data: nou.data,
-            cheie_pdf: ciorna.cheie_pdf,
-            cheie_poza: ciorna.cheie_poza,
-            cheie_poza_mica: ciorna.cheie_poza_mica,
-            marime_pdf: ciorna.marime_pdf,
-            pagini: ciorna.pagini ?? PAGINI,
-            text: dateleNumarului ? textCurat(dateleNumarului) : '',
-          })
-          ctxExec.waitUntil(
-            scrieAudit(env, {
-              action: 'buletin.valideaza', target: `${nou.nr}-${nou.data}`, outcome: 'success',
-              correlationId: cid, actorId: principal?.userId,
-            }),
-          )
-          // Numărul are de acum pagina lui: acolo se duce omul, nu înapoi în formular.
-          return redirect(`${prefix}/buletin/${nou.nr}-${nou.data}`)
-        }
+        const cerNr = Number(scris.nr ?? '0') || 0
+        const cerData = scris.data ?? ''
+        const nuMerge = (motiv: string, status: 409) =>
+          html(paginaNou(ctx, m, nou, { calendar, motto, raspuns: { facut: false, plangeri: [motiv] } }), status, alLui)
 
-        const articol = (prefix: string) => ({
-          autor: (scris[`${prefix}_autor`] ?? '').trim(),
-          ani: (scris[`${prefix}_ani`] ?? '').trim() || undefined,
-          pomenire: (scris[`${prefix}_pomenire`] ?? '').trim() || undefined,
-          titlu: (scris[`${prefix}_titlu`] ?? '').trim(),
-          text: scris[`${prefix}_text`] ?? '',
-          sursa: (scris[`${prefix}_sursa`] ?? '').trim() || undefined,
-          poza: !!(scris[`${prefix}_poza`] ?? '').trim(),
-        })
-        const cati = Math.min(2, Math.max(0, Number(scris.secundari ?? '0') || 0))
-        // ⚠️ Numărul și data NU vin din formular (user: „nu sunt editabile"): sunt ale arhivei.
-        const cerut = {
-          motto: (scris.motto ?? '').trim(),
-          motoAutor: (scris.moto_autor ?? '').trim() || undefined,
-          nr: nou.nr ?? 0,
+        if (!nou.nr || cerNr !== nou.nr || cerData !== nou.data) {
+          return nuMerge(
+            `numărul de pe ecran (${cerNr} / ${cerData}) nu mai e cel care urmează (${nou.nr} / ${nou.data}) — ` +
+            'între timp s-a validat altceva; recompune-l pe cel de acum',
+            409,
+          )
+        }
+        const ciorna = await ciornaDinDepozit(env, nou.nr, nou.data)
+        if (!ciorna?.cheie_pdf) {
+          return nuMerge('numărul nu e compus — compune-l întâi din chat, apoi validează-l', 409)
+        }
+        // textul pentru căutare iese din cererea păstrată lângă PDF; dacă lipsește, rândul intră
+        // fără text (se caută după el, nu se tipărește din el)
+        const cerereaPastrata = await env.FISIERE.get(cheiaCererii({ nr: nou.nr, data: nou.data }))
+        const dateleNumarului = cerereaPastrata ? ((await cerereaPastrata.json()) as NumarCerut) : null
+        await scrieBuletin(env.DB, {
+          nr: nou.nr,
           data: nou.data,
-          principal: articol('p'),
-          secundari: Array.from({ length: cati }, (_, i) => articol(`s${i + 1}`)),
-          floare: true,
-        }
-        const poze: Record<string, string> = {}
-        if (scris.p_poza?.trim()) poze.p = scris.p_poza.trim()
-        for (let i = 1; i <= cati; i++) {
-          const u = scris[`s${i}_poza`]?.trim()
-          if (u) poze[`s${i}`] = u
-        }
-
-        const r = await compune(env, { cerut, poze })
-        if (r.ok && r.pdf) {
-          // Tot ce urmează randării — PDF, copertă, cererea păstrată, broșurile vechi aruncate — stă
-          // într-un singur loc, folosit și de acțiunea prin care lucrează chatul (vezi `pastreazaNumarul`).
-          const pusul = await pastreazaNumarul(
-            env,
-            { cerut, peHartie: r.cerut, pdf: r.pdf, coperta: r.coperta },
-            ctxExec,
-          )
-          const cheie = pusul.cheie
-          ctxExec.waitUntil(
-            scrieAudit(env, {
-              action: 'buletin.compune', target: cheie, outcome: 'success',
-              correlationId: cid, actorId: principal?.userId,
-            }),
-          )
-          return html(
-            paginaNou(ctx, m, nou, {
-              variante: masuri, calendar, scris, motto,
-              raspuns: {
-                facut: true,
-                cheie,
-                cheiePoza: pusul.cheiePoza,
-                // amprenta randării: ea desparte foaia de acum de cea dinainte în cache-ul
-                // browserului, care altfel ar arăta foaia veche sub aceeași adresă
-                versiune: pusul.versiune,
-                marime: pusul.marime,
-                plangeri: [],
-                atentie: r.atentie,
-              },
-            }),
-            200,
-            alLui,
-          )
-        }
-        return html(
-          paginaNou(ctx, m, nou, {
-            variante: masuri, calendar, scris, motto,
-            raspuns: { facut: false, plangeri: r.plangeri, atentie: r.atentie },
+          cheie_pdf: ciorna.cheie_pdf,
+          cheie_poza: ciorna.cheie_poza,
+          cheie_poza_mica: ciorna.cheie_poza_mica,
+          marime_pdf: ciorna.marime_pdf,
+          pagini: ciorna.pagini ?? PAGINI,
+          text: dateleNumarului ? textCurat(dateleNumarului) : '',
+        })
+        /*
+         * ⚠️ SCHIȚA SE ȘTERGE ABIA AICI, nu la compunere: până la validare omul mai recompune de
+         * câteva ori, iar a doua compunere pornește tot din ce a răspuns. După publicare însă ea
+         * n-are ce căuta: numărul următor are cheia lui, și trebuie să înceapă de la o foaie albă.
+         */
+        ctxExec.waitUntil(stergeSchita(env, { nr: nou.nr, data: nou.data }))
+        ctxExec.waitUntil(
+          scrieAudit(env, {
+            action: 'buletin.valideaza', target: `${nou.nr}-${nou.data}`, outcome: 'success',
+            correlationId: cid, actorId: principal?.userId,
           }),
-          200,
-          alLui,
         )
+        // Numărul are de acum pagina lui: acolo se duce omul, nu înapoi pe ecranul de lucru.
+        return redirect(`${prefix}/buletin/${nou.nr}-${nou.data}`)
       }
 
       // --------------------------------------------------- un numar din arhiva

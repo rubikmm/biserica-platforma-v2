@@ -23,17 +23,12 @@ const CTX: Ctx = {
   modificata: '18.09.2026',
 }
 
-const VARIANTE = [
-  { varianta: 'un singur autor, cu poză mare', semne: 9028, zone: [{ cine: 'principal', semne: 9028 }] },
-]
-
 const ULTIMUL = { nr: 615, data: '2026-09-06', an: '2026', luna: '09', cheie_pdf: null, cheie_poza_mica: null, pagini: 4 }
 const NOU = buletinulNou(ULTIMUL, '2026-09-17')
 
 /** Ecranul `/nou` după o compunere izbutită. */
 const dupaCompunere = (v: string | null = 'abc123') =>
   paginaNou(CTX, { nou: true, ani: ['2026'] }, NOU, {
-    variante: VARIANTE,
     calendar: { titlu: '21 – 27 septembrie 2026', slujbe: 6 },
     raspuns: {
       facut: true,
@@ -109,14 +104,17 @@ describe('numărul compus, arătat în pagină ca unul gata de validat', () => {
     expect(h).toContain('numărul intră în arhivă și devine numărul curent')
   })
 
-  it('stă ÎNAINTEA formularului de scris: întâi se vede foaia, apoi se umblă la text', () => {
+  /**
+   * ⚠️ Din 18.09.2026, seara, dedesubt nu mai e formularul, ci SCHIȚA (răspunsurile din chat) —
+   * dar ordinea a rămas cea cerută: întâi se vede foaia, apoi la ce s-a ajuns cu scrisul.
+   */
+  it('stă ÎNAINTEA schiței: întâi se vede foaia, apoi ce s-a răspuns', () => {
     const h = dupaCompunere()
-    expect(h.indexOf('<section class="ciorna">')).toBeLessThan(h.indexOf('class="compunere"'))
+    expect(h.indexOf('<section class="ciorna">')).toBeLessThan(h.indexOf('<section class="schita">'))
   })
 
   it('nu se arată deloc până nu s-a compus ceva', () => {
     const h = paginaNou(CTX, { nou: true }, NOU, {
-      variante: VARIANTE,
       calendar: { titlu: '21 – 27 septembrie 2026', slujbe: 6 },
     })
     expect(h).not.toContain('class="ciorna"')

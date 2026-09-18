@@ -21,6 +21,7 @@ import {
   numeUnealta,
   unelteDinManifest,
   type Actor,
+  type Efect,
   type Manifest,
   type UnealtaDescrisa,
 } from '@xc/actiuni'
@@ -32,12 +33,18 @@ import { configAplicatie, configChat, type ConfigAplicatie, type ConfigChat } fr
 import { intreabaModelul, instructiuni, type EnvCreier, type MesajModel } from './creier.js'
 import {
   conversatia,
+  conversatiaDe,
   inchidePropunerea,
+  lucrulDin,
   mesajeleDin,
   propunereaDe,
+  scrieLucrul,
   scrieMesaj,
   scriePropunere,
+  starilePropunerilor,
   stergeConversatia,
+  type MesajScris,
+  type Propunere,
 } from './depozit.js'
 
 export interface Env extends EnvCreier {
@@ -66,6 +73,32 @@ const PASI_MAXIM = 3
 /** Cât din răspunsul unei acțiuni intră în context. Un an de program n-are ce căuta acolo. */
 const TAIERE_REZULTAT = 2500
 
+/**
+ * BUGETUL DE TIMP AL UNUI MESAJ (18.09.2026).
+ *
+ * Un mesaj măsurat pe viu a ținut 2 min 49 s: trei ocoluri model → unealtă → model, plus apelul
+ * final „fără unelte", plus reîncercarea cu buget dublat a Workers AI — până la șase apeluri de
+ * model. Omul nu așteaptă atât fără să creadă că s-a rupt ceva.
+ *
+ * Deci bucla are un CEAS, nu doar o numărătoare de pași: când s-a scurs bugetul, se oprește și
+ * spune ce a apucat. Nu e un plafon de calitate, e unul de răbdare — modelul mic mai bine răspunde
+ * scurt decât perfect peste trei minute.
+ */
+const BUGET_MS = 90_000
+
+/**
+ * Cât se ia din mesajul omului. Era 2000 — destul pentru o întrebare, PREA PUȚIN pentru munca de la
+ * buletin: articolul de pe pagina întâi are vreo 9000 de semne, iar cine lipea articolul în bulă
+ * vedea cum se taie la mijloc, fără niciun semn. 12000 acoperă articolul cu tot cu titlu și autor
+ * (user, 18.09.2026).
+ */
+const TAIERE_MESAJ_OM = 12000
+
+/** Cand `creier` e `fara`: interfata merge intreaga, dar nimeni nu intreaba niciun model. */
+const FARA_CREIER =
+  'Deocamdată sunt doar interfața: nu sunt legat la niciun model, deci nu pot răspunde la ' +
+  'întrebări. Se aprinde din panoul de administrare, la Module.'
+
 function json(date: unknown, status = 200): Response {
   return new Response(JSON.stringify(date), {
     status,
@@ -92,7 +125,10 @@ function json(date: unknown, status = 200): Response {
  */
 export const CE_VEDE_BULA: Record<string, readonly string[]> = {
   program: ['program', 'calendar', 'tipic'],
-  buletin: ['buletin'],
+  // ⚠️ Buletinul vede ȘI calendarul (18.09.2026): foaia se scrie despre sfântul zilei, iar pomenirea
+  // lui se caută în calendar. Fără el, bula buletinului n-avea de unde ști cine se prăznuiește
+  // duminica ce vine — și un model mic, întrebat fără unealtă, ghicește.
+  buletin: ['buletin', 'calendar'],
 }
 
 /** Exportata pentru probe: regula de mai sus se strica in tacere (un chat mut nu da nicio eroare). */
@@ -115,7 +151,16 @@ interface UndeStaActiunea {
   nume: string
   aplicatie: string
   fetcher: Fetcher
-  efect: 'citeste' | 'scrie'
+  /**
+   * ⚠️ Tipul vine din `@xc/actiuni` (`Efect`), nu scris de mână cu două variante: lista efectelor
+   * crește (`ciorna`, din 18.09.2026 — scriere într-o ciornă a aplicației, fără Da/Nu), iar
+   * chat-worker trebuie să compileze și înainte, și după ce se adaugă unul.
+   *
+   * Regula de purtare de aici e scrisă pe DOS: se oprește și se propune NUMAI la `scrie`; orice
+   * alt efect se execută pe loc, ca o citire. Așa un efect nou nu rămâne blocat până își amintește
+   * cineva să-i scrie rândul aici.
+   */
+  efect: Efect
   descriere: string
   /** Ce se propune dupa ce s-a facut (vezi `Actiune.urmare`). */
   urmare: { actiune: string; argumente: Record<string, string> } | null
@@ -232,6 +277,39 @@ interface RaspunsChat {
   propunere: { id: string; rezumat: string } | null
   /** Uneltele chemate pentru raspunsul asta, in ordine. Pentru probe si pentru curiosi. */
   unelte: string[]
+  /**
+   * O propunere care A FOST, dar nu se mai poate apăsa (a expirat ori s-a răspuns la ea). Se trimite
+   * la refacerea firului din istoric, ca bula să spună „a expirat, cere din nou" în loc să deseneze
+   * butoane moarte.
+   */
+  propunereTrecuta?: { rezumat: string; stare: Propunere['stare'] }
+}
+
+/**
+ * Răspunsul, refăcut din rândul lui din bază. Îl folosesc sondarea (`/stare`) și paza de lucru
+ * dublat: după ce mesajul agentului e scris, el ESTE răspunsul — nu se mai cheamă nimic.
+ */
+function raspunsulDin(
+  m: MesajScris,
+  conversatieId: string,
+  stari?: Map<string, Propunere['stare']>,
+): RaspunsChat {
+  let d: { obiecte?: Obiect[]; propunere?: { id: string; rezumat: string } | null } = {}
+  try {
+    d = JSON.parse(m.date_json || '{}') as typeof d
+  } catch {
+    d = {}
+  }
+  const p = d.propunere ?? null
+  const stare = p ? (stari?.get(p.id) ?? 'asteapta') : 'asteapta'
+  return {
+    conversatieId,
+    text: m.text,
+    obiecte: Array.isArray(d.obiecte) ? d.obiecte : [],
+    propunere: p && stare === 'asteapta' ? p : null,
+    unelte: [],
+    ...(p && stare !== 'asteapta' ? { propunereTrecuta: { rezumat: p.rezumat, stare } } : {}),
+  }
 }
 
 async function poarta(req: Request, env: Env): Promise<{ actor: Actor; cid: string } | Response> {
@@ -251,6 +329,220 @@ async function poarta(req: Request, env: Env): Promise<{ actor: Actor; cid: stri
   } catch {
     return json({ ok: false, mesaj: 'nu se înțelege cine scrie' }, 400)
   }
+}
+
+/**
+ * LUCRUL LA UN MESAJ — de la instrucțiuni până la răspunsul scris în bază.
+ *
+ * Stă într-o funcție a lui, nu în rută, fiindcă se cheamă din două locuri: `/mesaj` (drumul de
+ * odinioară, care așteaptă răspunsul) și `/lucreaza` (drumul de-acum: bula a primit deja
+ * `{inLucru:true}` și sondează, iar asta se învârte în `waitUntil` al aplicației).
+ *
+ * Mesajul omului e DEJA scris în discuție când intrăm aici — de aceea istoricul e destul și nu se
+ * mai dă textul separat.
+ */
+async function lucreaza(
+  env: Env,
+  o: {
+    actor: Actor
+    cid: string
+    secret: string
+    aplicatie: string
+    numeleOmului: string | null
+    conversatieId: string
+    /** Mesajul omului: lângă el se scrie etapa („caut în program…"), ca s-o vadă sondarea. */
+    mesajId: string | null
+    log: Logger
+  },
+): Promise<RaspunsChat> {
+  const pornit = Date.now()
+  const pana = pornit + BUGET_MS
+  const deLa = new Date(pornit).toISOString()
+  /** Ce face acum, pentru omul care se uită la „scrie…". O scriere mică în D1, nu ține nimic pe loc. */
+  const spune = async (etapa: string) => {
+    if (!o.mesajId) return
+    await scrieLucrul(env.DB, o.mesajId, { etapa, de_la: deLa }).catch(() => undefined)
+  }
+
+  // ⚠️ Deodată, nu una după alta (18.09.2026): comutatorul, rândul aplicației și istoricul nu
+  // depind unul de altul, iar înșirate pe rând adăugau sute de milisecunde înainte de primul
+  // apel de model — la fiecare mesaj.
+  const [comutator, aleAplicatiei, istoric] = await Promise.all([
+    configChat(env) as Promise<ConfigChat>,
+    configAplicatie(env, o.aplicatie) as Promise<ConfigAplicatie>,
+    mesajeleDin(env.DB, o.conversatieId),
+  ])
+
+  // PAZA DE LUCRU DUBLAT: dacă după mesajul omului există deja un răspuns al agentului, treaba s-a
+  // făcut (o cerere repetată, o sondare care a pornit de două ori). Nu se mai cheamă modelul —
+  // altfel o apăsare dublă ar plăti de două ori și ar scrie două răspunsuri.
+  const ultim = istoric[istoric.length - 1]
+  if (ultim && ultim.rol === 'agent') {
+    const stari = await starilePropunerilor(env.DB, o.conversatieId)
+    return raspunsulDin(ultim, o.conversatieId, stari)
+  }
+
+  // Comutatorul poate fi stins ÎNTRE mesaj și lucru (sunt două cereri deosebite, din 18.09.2026):
+  // atunci se spune limpede, nu se ghicește un creier.
+  if (comutator.creier === 'fara') {
+    await scrieMesaj(env.DB, { conversatie_id: o.conversatieId, rol: 'agent', text: FARA_CREIER })
+    return { conversatieId: o.conversatieId, text: FARA_CREIER, obiecte: [], propunere: null, unelte: [] }
+  }
+
+  const { unelte, harta, fundal } = await adunaUneltele(env, {
+    secret: o.secret,
+    correlationId: o.cid,
+    permise: aleAplicatiei.unelte,
+    pentruAplicatia: o.aplicatie,
+  })
+
+  const mesaje: MesajModel[] = [
+    { rol: 'sistem', text: instructiuni(o.aplicatie, o.numeleOmului, ziuaDeAzi(), fundal, aleAplicatiei.indrumari, unelte.map((x) => x.name)) },
+    ...istoric.map((m) => ({
+      rol: m.rol === 'om' ? ('om' as const) : m.rol === 'agent' ? ('agent' as const) : ('unealta' as const),
+      text: m.text,
+    })),
+  ]
+
+  const obiecte: Obiect[] = []
+  const unelteChemate: string[] = []
+  /** Numele CANONICE ale uneltelor chemate, o dată fiecare — doar ca să i le putem spune omului. */
+  const apucate = new Set<string>()
+  /** Pentru referinta si antrenament: fiecare apel cu argumentele lui si cum a iesit. */
+  const apeluri: Array<{ nume: string; argumente: unknown; rezultat: string }> = []
+  let propunere: RaspunsChat['propunere'] = null
+  let textFinal = ''
+  let bugetulSaScurs = false
+
+  for (let pas = 0; pas < PASI_MAXIM; pas++) {
+    if (Date.now() >= pana) {
+      bugetulSaScurs = true
+      break
+    }
+    await spune(pas === 0 ? 'mă gândesc…' : 'mă gândesc mai departe…')
+    const r = await intreabaModelul(env, mesaje, unelte, comutator.creier, { model: comutator.model, pana })
+    textFinal = r.text || textFinal
+
+    if (!r.cereri.length) break
+
+    // Apelurile cerute intra in istoric ca mesaj al agentului: raspunsurile uneltelor trebuie
+    // sa atarne de ele, altfel modelul primeste rezultate fara intrebare si tace.
+    mesaje.push({ rol: 'agent', text: r.text, apeluri: r.cereri, brut: r.brut })
+
+    for (const cerut of r.cereri) {
+      unelteChemate.push(cerut.nume)
+      // Numele traduse (cu `__`) sunt cele trimise modelului, dar unele modele raspund
+      // totusi cu numele canonic — se cauta si asa, ca sa nu cada cererea degeaba.
+      const unde = harta.get(cerut.nume) ?? harta.get(numeUnealta(cerut.nume))
+      if (!unde) {
+        apeluri.push({ nume: cerut.nume, argumente: cerut.argumente, rezultat: 'necunoscuta' })
+        mesaje.push({ rol: 'unealta', text: `Nu există unealta ${cerut.nume}.`, numeUnealta: cerut.nume, idApel: cerut.id })
+        continue
+      }
+      apucate.add(unde.nume)
+      await spune(`caut în ${unde.aplicatie}… (${unde.nume})`)
+
+      // ⚠️ AICI se oprește totul pentru acțiunile care schimbă date: se propune, nu se face.
+      // Intai PREVIZUALIZAREA: argumentele se valideaza, dreptul se verifica, iar aplicatia
+      // spune in vorbe ce ar urma („ora 08:00 → 07:00"). Omul confirma ceva concret si deja
+      // verificat; daca cererea n-are sens, afla de ce, si nu se propune nimic.
+      //
+      // ⚠️ NUMAI `scrie` se oprește. Un efect nou (`ciorna`, 18.09.2026 — scriere într-o ciornă a
+      // aplicației, fără Da/Nu) se execută pe loc, ca o citire: ciorna nu e hotărâre, e o foaie pe
+      // masă, iar omul o vede și o validează în ecranul aplicației.
+      if (unde.efect === 'scrie') {
+        const prev = await previzualizeaza(unde.fetcher, unde.nume, cerut.argumente, o.actor, {
+          secret: o.secret,
+          correlationId: o.cid,
+          prin: 'chat',
+        })
+        apeluri.push({ nume: unde.nume, argumente: cerut.argumente, rezultat: prev.ok ? 'propusa' : `previzualizare: ${prev.cod}` })
+        if (!prev.ok) {
+          mesaje.push({
+            rol: 'unealta',
+            text: `Nu se poate (${prev.cod}): ${prev.mesaj}`,
+            numeUnealta: cerut.nume,
+            idApel: cerut.id,
+          })
+          continue
+        }
+        const p = await scriePropunere(env.DB, {
+          conversatie_id: o.conversatieId,
+          aplicatie: unde.aplicatie,
+          actiune: unde.nume,
+          argumente: cerut.argumente,
+          rezumat: prev.date.rezumat,
+        })
+        propunere = { id: p.id, rezumat: p.rezumat }
+        mesaje.push({
+          rol: 'unealta',
+          text: `Propunere pregătită, așteaptă confirmarea omului: ${prev.date.rezumat}`,
+          numeUnealta: cerut.nume,
+          idApel: cerut.id,
+        })
+        break
+      }
+
+      const rez = await cereActiune(unde.fetcher, unde.nume, cerut.argumente, o.actor, {
+        secret: o.secret,
+        correlationId: o.cid,
+        prin: 'chat',
+      })
+      apeluri.push({ nume: unde.nume, argumente: cerut.argumente, rezultat: rez.ok ? 'ok' : rez.cod })
+      if (!rez.ok) {
+        mesaje.push({
+          rol: 'unealta',
+          text: `Nu a mers (${rez.cod}): ${rez.mesaj}`,
+          numeUnealta: cerut.nume,
+          idApel: cerut.id,
+        })
+        continue
+      }
+      const rezumat = rezumaRezultat(rez.date)
+      if (rezumat.obiect) obiecte.push(rezumat.obiect)
+      mesaje.push({ rol: 'unealta', text: rezumat.text, numeUnealta: cerut.nume, idApel: cerut.id })
+    }
+
+    if (propunere) {
+      // Un ultim rand de la model, ca sa spuna omului ce a pregatit — fara unelte, ca sa nu
+      // mai ceara altceva pana nu s-a raspuns la asta. ⚠️ Cu bugetul scurs NU se mai cheama:
+      // propunerea e deja pregatita, iar o fraza de politete nu merita inca un minut de asteptare.
+      if (Date.now() < pana) {
+        await spune('compun răspunsul…')
+        const ultimRand = await intreabaModelul(env, mesaje, unelte, comutator.creier, { faraApeluri: true, model: comutator.model, pana })
+        textFinal = ultimRand.text || textFinal || 'Am pregătit schimbarea. O fac dacă îmi confirmi.'
+      } else {
+        textFinal = textFinal || 'Am pregătit schimbarea. O fac dacă îmi confirmi.'
+      }
+      break
+    }
+  }
+
+  if (bugetulSaScurs) {
+    // Ce a apucat, spus pe față: mai bine „am căutat în program, dar nu am terminat" decât un
+    // răspuns pe jumătate dat ca întreg.
+    const ceAmCautat = apucate.size ? ` Am apucat să caut cu: ${[...apucate].join(', ')}.` : ''
+    textFinal = textFinal
+      ? `${textFinal}\n\n(M-am oprit aici — mi s-a scurs timpul pe care mi-l dau pentru un mesaj.)`
+      : `Nu am terminat în timpul pe care mi-l dau pentru un mesaj (${Math.round(BUGET_MS / 1000)} de secunde).${ceAmCautat} Cere-mi un singur lucru, mai pe scurt, și mă descurc.`
+    o.log.warn('buget de timp scurs', { conversatie: o.conversatieId, unelte: unelteChemate.length })
+  }
+
+  if (!textFinal) {
+    textFinal = 'N-am reușit să duc asta la capăt. Încearcă să-mi spui altfel?'
+    o.log.warn('raspuns gol de la model', { conversatie: o.conversatieId })
+  }
+
+  await scrieMesaj(env.DB, {
+    conversatie_id: o.conversatieId,
+    rol: 'agent',
+    text: textFinal,
+    // Ce se pastreaza langa raspuns: hartiile si propunerea (pentru redeschiderea panoului),
+    // plus modelul si apelurile lui (pentru referinta si antrenament — user, 11.09.2026).
+    date: { obiecte, propunere, model: comutator.model, apeluri },
+  })
+
+  return { conversatieId: o.conversatieId, text: textFinal, obiecte, propunere, unelte: unelteChemate }
 }
 
 export default {
@@ -273,15 +565,71 @@ export default {
       // -------------------------------------------------------------- istoricul
       if (req.method === 'GET' && cale === '/discutie') {
         const id = url.searchParams.get('id')
-        if (!id) return json({ mesaje: [] })
-        const c = await conversatia(env.DB, userId, '', id)
-        const mesaje = await mesajeleDin(env.DB, c.id)
+        // ⚠️ `conversatiaDe`, nu `conversatia`: la CITIT nu se deschide nicio discuție nouă. Altfel
+        // fiecare reîncărcare de pagină cu o discuție veche în localStorage scria un rând gol.
+        const c = id ? await conversatiaDe(env.DB, id, userId) : null
+        if (!c) return json({ mesaje: [] })
+        const [mesaje, stari] = await Promise.all([mesajeleDin(env.DB, c.id), starilePropunerilor(env.DB, c.id)])
+        const deVazut = mesaje.filter((m) => m.rol !== 'unealta')
+        /*
+         * ⚠️ FIRUL REFĂCUT POARTĂ ȘI PROPUNEREA (18.09.2026). Până acum bula desena din istoric doar
+         * textul și hârtiile, deci butoanele Da/Nu se pierdeau la strângerea panoului — omul rămânea
+         * cu o propunere pregătită pe care nu mai avea cum s-o confirme. Se trimite numai ce se poate
+         * încă apăsa (`asteapta`, neexpirată); ce a trecut pleacă drept `propunereTrecuta`, ca bula
+         * să spună limpede „a expirat" în loc să deseneze butoane moarte.
+         */
         return json({
           conversatieId: c.id,
-          mesaje: mesaje
-            .filter((m) => m.rol !== 'unealta')
-            .map((m) => ({ rol: m.rol, text: m.text, date: JSON.parse(m.date_json || '{}') })),
+          mesaje: deVazut.map((m) => {
+            const r = raspunsulDin(m, c.id, stari)
+            return {
+              rol: m.rol,
+              text: m.text,
+              date: {
+                obiecte: r.obiecte,
+                propunere: r.propunere,
+                ...(r.propunereTrecuta ? { propunereTrecuta: r.propunereTrecuta } : {}),
+              },
+            }
+          }),
+          // Panoul redeschis în timp ce creierul lucrează: bula reia sondarea de unde a rămas, în loc
+          // să arate un fir care se termină cu întrebarea omului și nimic după ea.
+          inLucru: (() => {
+            const ultimul = deVazut[deVazut.length - 1]
+            if (!ultimul || ultimul.rol !== 'om') return null
+            const lucru = lucrulDin(ultimul.date_json)
+            return lucru ? { etapa: lucru.etapa, deLa: lucru.de_la } : null
+          })(),
         })
+      }
+
+      /*
+       * SONDAREA (18.09.2026) — ce se întreabă la două-trei secunde, cât lucrează creierul.
+       *
+       * Răspunsul nu mai vine pe cererea care l-a cerut (vezi `/mesaj` cu `asincron`), deci bula are
+       * nevoie de o ușă mică și ieftină: ori „încă lucrez, iată la ce sunt", ori răspunsul întreg.
+       * Miezul: „gata" NU e un steag pe care-l scrie cineva, ci un FAPT — există un mesaj al agentului
+       * după ultimul mesaj al omului. Așa nu se poate pierde nicio stare dacă lucrul cade la mijloc.
+       */
+      if (req.method === 'GET' && cale === '/stare') {
+        const id = url.searchParams.get('id') ?? ''
+        const c = await conversatiaDe(env.DB, id, userId)
+        if (!c) return json({ gata: false, lipseste: true, etapa: '' }, 404)
+        const mesaje = await mesajeleDin(env.DB, c.id, 6)
+        let iOm = -1
+        for (let i = mesaje.length - 1; i >= 0; i--) {
+          if (mesaje[i]!.rol === 'om') {
+            iOm = i
+            break
+          }
+        }
+        const alAgentului = mesaje.slice(iOm + 1).filter((m) => m.rol === 'agent').pop()
+        if (alAgentului) {
+          const stari = await starilePropunerilor(env.DB, c.id)
+          return json({ gata: true, raspuns: raspunsulDin(alAgentului, c.id, stari) })
+        }
+        const lucru = iOm >= 0 ? lucrulDin(mesaje[iOm]!.date_json) : null
+        return json({ gata: false, etapa: lucru?.etapa ?? '', deLa: lucru?.de_la ?? null })
       }
 
       /*
@@ -391,165 +739,101 @@ export default {
         return json({ ok: r.ok, text, propunere: urmare, reincarca: r.ok })
       }
 
-      // -------------------------------------------------------------- mesajul
-      if (cale !== '/mesaj') return json({ ok: false, mesaj: 'rută necunoscută' }, 404)
+      /*
+       * MESAJUL — DOUĂ DRUMURI (18.09.2026).
+       *
+       * `asincron: true` (drumul bulei de azi): se scrie mesajul omului, se însemnează „în lucru" și
+       * se răspunde ÎNDATĂ cu `{conversatieId, mesajId, inLucru:true}`. Lucrul îl pornește aplicația,
+       * pe `/lucreaza`, în `waitUntil` al cererii ei — deci nicio conexiune nu mai stă deschisă minute
+       * întregi, iar bula întreabă din când în când `/stare`.
+       *
+       * Fără `asincron`: drumul de odinioară, care așteaptă răspunsul întreg. Rămâne fiindcă e limpede
+       * de probat și fiindcă o chemare de serviciu poate vrea răspunsul pe loc.
+       *
+       * ⚠️ PĂȚIT PE 18.09.2026: un mesaj a ținut 2 min 49 s, conexiunea a căzut pe drum, iar bula a
+       * spus „Nu am putut trimite mesajul" — deși răspunsul se scria în D1 și apărea „de nicăieri" la
+       * reîncărcarea paginii. Aceea a fost cauza, nu modelul.
+       */
+      if (cale === '/mesaj') {
+        const cerere = (await req.json()) as {
+          text?: string
+          aplicatie?: string
+          conversatieId?: string
+          numeleOmului?: string | null
+          asincron?: boolean
+        }
+        const textOm = (cerere.text ?? '').trim().slice(0, TAIERE_MESAJ_OM)
+        if (!textOm) return json({ ok: false, mesaj: 'mesaj gol' }, 400)
 
-      const cerere = (await req.json()) as {
-        text?: string
-        aplicatie?: string
-        conversatieId?: string
-        numeleOmului?: string | null
-      }
-      const textOm = (cerere.text ?? '').trim().slice(0, 2000)
-      if (!textOm) return json({ ok: false, mesaj: 'mesaj gol' }, 400)
+        const c = await conversatia(env.DB, userId, cerere.aplicatie ?? '', cerere.conversatieId)
+        discutiaInLucru = c.id
+        const alOmului = await scrieMesaj(env.DB, { conversatie_id: c.id, rol: 'om', text: textOm })
 
-      const c = await conversatia(env.DB, userId, cerere.aplicatie ?? '', cerere.conversatieId)
-      discutiaInLucru = c.id
-      await scrieMesaj(env.DB, { conversatie_id: c.id, rol: 'om', text: textOm })
+        // Cu ce creier raspundem — scris in panoul de admin, citit de aici. `fara` inseamna ca
+        // interfata merge intreaga, dar nimeni nu intreaba niciun model (si nu costa nimic).
+        // Se răspunde pe loc și pe drumul asincron: n-are rost sondat ceva ce se știe de-acum.
+        const comutator: ConfigChat = await configChat(env)
+        if (comutator.creier === 'fara') {
+          await scrieMesaj(env.DB, { conversatie_id: c.id, rol: 'agent', text: FARA_CREIER })
+          return json({ conversatieId: c.id, text: FARA_CREIER, obiecte: [], propunere: null, unelte: [] } satisfies RaspunsChat)
+        }
 
-      // Cu ce creier raspundem — scris in panoul de admin, citit de aici. `fara` inseamna ca
-      // interfata merge intreaga, dar nimeni nu intreaba niciun model (si nu costa nimic).
-      const comutator: ConfigChat = await configChat(env)
-      if (comutator.creier === 'fara') {
-        const text =
-          'Deocamdată sunt doar interfața: nu sunt legat la niciun model, deci nu pot răspunde la ' +
-          'întrebări. Se aprinde din panoul de administrare, la Module.'
-        await scrieMesaj(env.DB, { conversatie_id: c.id, rol: 'agent', text })
-        return json({ conversatieId: c.id, text, obiecte: [], propunere: null, unelte: [] } satisfies RaspunsChat)
+        if (cerere.asincron) {
+          await scrieLucrul(env.DB, alOmului.id, { etapa: 'mă gândesc…', de_la: alOmului.creat_la })
+          return json({ conversatieId: c.id, mesajId: alOmului.id, inLucru: true })
+        }
+
+        return json(
+          await lucreaza(env, {
+            actor,
+            cid,
+            secret,
+            aplicatie: cerere.aplicatie ?? '',
+            numeleOmului: cerere.numeleOmului ?? null,
+            conversatieId: c.id,
+            mesajId: alOmului.id,
+            log,
+          }),
+        )
       }
 
       /*
-       * ÎNDRUMĂRILE ȘI UNELTELE SUNT ALE APLICAȚIEI (user, 18.09.2026, 12:53), nu ale platformei:
-       * `modul:chat:<aplicatie>`, scris din Setările ei. Din `modul:chat` rămân aici numai lucrurile
-       * platformei — pornit/stins, modelul, cine vede.
+       * LUCRUL PORNIT DEOSEBIT — chemat de aplicație îndată după `/mesaj` cu `asincron`, și ținut în
+       * viață de `waitUntil` al cererii ACELEIA.
+       *
+       * ⚠️ De ce nu-l pornește chat-worker singur, cu `ctxExec.waitUntil` al lui: el e chemat prin
+       * Service Binding, iar o cerere de serviciu trăiește cât cererea care a chemat-o. Dacă aplicația
+       * își întoarce răspunsul și nu mai ține nimic aprins, munca de aici se poate opri la mijloc —
+       * exact lucrul de care ne ferim. Așa se vede limpede cine ține lumina: aplicația.
+       *
+       * Paza: discuția trebuie să fie A OMULUI care cere (`conversatiaDe`), iar lucrul dublat se
+       * oprește în `lucreaza` — dacă răspunsul e deja scris, modelul nu se mai cheamă a doua oară.
        */
-      const aleAplicatiei: ConfigAplicatie = await configAplicatie(env, cerere.aplicatie ?? '')
-      const { unelte, harta, fundal } = await adunaUneltele(env, {
-        secret,
-        correlationId: cid,
-        permise: aleAplicatiei.unelte,
-        pentruAplicatia: cerere.aplicatie,
-      })
-      const istoric = await mesajeleDin(env.DB, c.id)
-
-      const mesaje: MesajModel[] = [
-        { rol: 'sistem', text: instructiuni(cerere.aplicatie ?? '', cerere.numeleOmului ?? null, ziuaDeAzi(), fundal, aleAplicatiei.indrumari, unelte.map((x) => x.name)) },
-        ...istoric.map((m) => ({
-          rol: m.rol === 'om' ? ('om' as const) : m.rol === 'agent' ? ('agent' as const) : ('unealta' as const),
-          text: m.text,
-        })),
-      ]
-
-      const obiecte: Obiect[] = []
-      const unelteChemate: string[] = []
-      /** Pentru referinta si antrenament: fiecare apel cu argumentele lui si cum a iesit. */
-      const apeluri: Array<{ nume: string; argumente: unknown; rezultat: string }> = []
-      let propunere: RaspunsChat['propunere'] = null
-      let textFinal = ''
-
-      for (let pas = 0; pas < PASI_MAXIM; pas++) {
-        const r = await intreabaModelul(env, mesaje, unelte, comutator.creier, { model: comutator.model })
-        textFinal = r.text || textFinal
-
-        if (!r.cereri.length) break
-
-        // Apelurile cerute intra in istoric ca mesaj al agentului: raspunsurile uneltelor trebuie
-        // sa atarne de ele, altfel modelul primeste rezultate fara intrebare si tace.
-        mesaje.push({ rol: 'agent', text: r.text, apeluri: r.cereri, brut: r.brut })
-
-        for (const cerut of r.cereri) {
-          unelteChemate.push(cerut.nume)
-          // Numele traduse (cu `__`) sunt cele trimise modelului, dar unele modele raspund
-          // totusi cu numele canonic — se cauta si asa, ca sa nu cada cererea degeaba.
-          const unde = harta.get(cerut.nume) ?? harta.get(numeUnealta(cerut.nume))
-          if (!unde) {
-            apeluri.push({ nume: cerut.nume, argumente: cerut.argumente, rezultat: 'necunoscuta' })
-            mesaje.push({ rol: 'unealta', text: `Nu există unealta ${cerut.nume}.`, numeUnealta: cerut.nume, idApel: cerut.id })
-            continue
-          }
-
-          // ⚠️ AICI se oprește totul pentru acțiunile care schimbă date: se propune, nu se face.
-          // Intai PREVIZUALIZAREA: argumentele se valideaza, dreptul se verifica, iar aplicatia
-          // spune in vorbe ce ar urma („ora 08:00 → 07:00"). Omul confirma ceva concret si deja
-          // verificat; daca cererea n-are sens, afla de ce, si nu se propune nimic.
-          if (unde.efect === 'scrie') {
-            const prev = await previzualizeaza(unde.fetcher, unde.nume, cerut.argumente, actor, {
-              secret,
-              correlationId: cid,
-              prin: 'chat',
-            })
-            apeluri.push({ nume: unde.nume, argumente: cerut.argumente, rezultat: prev.ok ? 'propusa' : `previzualizare: ${prev.cod}` })
-            if (!prev.ok) {
-              mesaje.push({
-                rol: 'unealta',
-                text: `Nu se poate (${prev.cod}): ${prev.mesaj}`,
-                numeUnealta: cerut.nume,
-                idApel: cerut.id,
-              })
-              continue
-            }
-            const p = await scriePropunere(env.DB, {
-              conversatie_id: c.id,
-              aplicatie: unde.aplicatie,
-              actiune: unde.nume,
-              argumente: cerut.argumente,
-              rezumat: prev.date.rezumat,
-            })
-            propunere = { id: p.id, rezumat: p.rezumat }
-            mesaje.push({
-              rol: 'unealta',
-              text: `Propunere pregătită, așteaptă confirmarea omului: ${prev.date.rezumat}`,
-              numeUnealta: cerut.nume,
-              idApel: cerut.id,
-            })
-            break
-          }
-
-          const rez = await cereActiune(unde.fetcher, unde.nume, cerut.argumente, actor, {
+      if (cale === '/lucreaza') {
+        const cerere = (await req.json()) as {
+          conversatieId?: string
+          mesajId?: string
+          aplicatie?: string
+          numeleOmului?: string | null
+        }
+        const c = await conversatiaDe(env.DB, cerere.conversatieId ?? '', userId)
+        if (!c) return json({ ok: false, mesaj: 'discuția nu există' }, 404)
+        discutiaInLucru = c.id
+        return json(
+          await lucreaza(env, {
+            actor,
+            cid,
             secret,
-            correlationId: cid,
-            prin: 'chat',
-          })
-          apeluri.push({ nume: unde.nume, argumente: cerut.argumente, rezultat: rez.ok ? 'ok' : rez.cod })
-          if (!rez.ok) {
-            mesaje.push({
-              rol: 'unealta',
-              text: `Nu a mers (${rez.cod}): ${rez.mesaj}`,
-              numeUnealta: cerut.nume,
-              idApel: cerut.id,
-            })
-            continue
-          }
-          const rezumat = rezumaRezultat(rez.date)
-          if (rezumat.obiect) obiecte.push(rezumat.obiect)
-          mesaje.push({ rol: 'unealta', text: rezumat.text, numeUnealta: cerut.nume, idApel: cerut.id })
-        }
-
-        if (propunere) {
-          // Un ultim rand de la model, ca sa spuna omului ce a pregatit — fara unelte, ca sa nu
-          // mai ceara altceva pana nu s-a raspuns la asta.
-          const ultim = await intreabaModelul(env, mesaje, unelte, comutator.creier, { faraApeluri: true, model: comutator.model })
-          textFinal = ultim.text || textFinal || 'Am pregătit schimbarea. O fac dacă îmi confirmi.'
-          break
-        }
+            aplicatie: cerere.aplicatie ?? c.aplicatie ?? '',
+            numeleOmului: cerere.numeleOmului ?? null,
+            conversatieId: c.id,
+            mesajId: cerere.mesajId ?? null,
+            log,
+          }),
+        )
       }
 
-      if (!textFinal) {
-        textFinal = 'N-am reușit să duc asta la capăt. Încearcă să-mi spui altfel?'
-        log.warn('raspuns gol de la model', { conversatie: c.id })
-      }
-
-      await scrieMesaj(env.DB, {
-        conversatie_id: c.id,
-        rol: 'agent',
-        text: textFinal,
-        // Ce se pastreaza langa raspuns: hartiile si propunerea (pentru redeschiderea panoului),
-        // plus modelul si apelurile lui (pentru referinta si antrenament — user, 11.09.2026).
-        date: { obiecte, propunere, model: comutator.model, apeluri },
-      })
-
-      const raspuns: RaspunsChat = { conversatieId: c.id, text: textFinal, obiecte, propunere, unelte: unelteChemate }
-      return json(raspuns)
+      return json({ ok: false, mesaj: 'rută necunoscută' }, 404)
     } catch (e) {
       const detaliu = e instanceof Error ? e.message : String(e)
       log.error('chat cazut', { eroare: detaliu })

@@ -27,13 +27,36 @@ import {
   calendarulNumarului,
   cheiaNumarului,
   compune,
+  mottoDinainte,
   pastreazaNumarul,
   plangeriDeForma,
 } from './compune.js'
 import { SECUNDARI_MAXIM, type NumarCerut, semne, socoteste, variante } from './masuri.js'
+import {
+  CHEIE_CHESTIONAR,
+  type CheieIntrebare,
+  type Schita,
+  SUBIECTE,
+  catreCerere,
+  cautaPomenirile,
+  citesteSchita,
+  intrebarile,
+  masuraArticolului,
+  normalizeazaChestionar,
+  pozeleSchitei,
+  rezumatulSchitei,
+  schitaGoala,
+  scrieRaspuns,
+  scrieSchita,
+  urmatoareaIntrebare,
+} from './schita.js'
 
 export interface EnvActiuniBuletin extends EnvCompunere {
   DB: D1Database
+  /** Calendarul parohiei: de la el se cere ziua de pomenire a autorului (întrebarea 5). */
+  CALENDAR?: Fetcher
+  /** Comutatoarele și textele editabile — de aici vin întrebările chestionarului. */
+  CONFIG?: KVNamespace
 }
 
 // ---------------------------------------------------------------------------
@@ -54,8 +77,14 @@ const Articol = z.object({
   poza: z.boolean().optional().describe('are poză? la principal e poza mare de pe pagina întâi, la secundar una mică'),
 })
 
+/**
+ * ⚠️ TOATE CÂMPURILE SUNT OPȚIONALE din 18.09.2026, seara, iar lipsa lor e drumul BUN: numărul se
+ * compune ATUNCI DIN SCHIȚĂ — din ce a răspuns omul la chestionarul din bulă. Modelul cheamă
+ * `buletin.compune` gol; el n-a cărat textul prin context, deci n-are ce scrie aici.
+ * Câmpurile au rămas pentru cine cere compunerea din afara chatului (o altă aplicație, o unealtă).
+ */
 const Numar = z.object({
-  motto: z.string().min(1).describe('citatul de sub antet, pe cel mult două rânduri'),
+  motto: z.string().optional().describe('LASĂ GOL: se ia din schiță (răspunsurile din chat)'),
   moto_autor: z.string().optional().describe('cine a spus citatul: „Părintele Arsenie Papacioc"'),
   /*
    * ⚠️ NR. ȘI DATA SUNT OPȚIONALE din 18.09.2026, iar lipsa lor e drumul BUN: le ia serverul din
@@ -65,9 +94,9 @@ const Numar = z.object({
    */
   nr: z.number().int().positive().optional().describe('LASĂ GOL: îl ia serverul din arhivă (ultimul + 1). Se scrie numai când omul cere anume alt număr'),
   data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('LASĂ GOL: e duminica următoare, socotită de server. Programul tipărit e al săptămânii care începe a doua zi'),
-  principal: Articol.describe('articolul principal: poza mare, zona neagră cu autorul, titlul, textul și sursa'),
+  principal: Articol.optional().describe('LASĂ GOL: articolul principal vine din schiță (poza mare, zona neagră, titlul, textul, sursa)'),
   secundari: z.array(Articol).max(SECUNDARI_MAXIM).optional()
-    .describe(`cel mult ${SECUNDARI_MAXIM} articole secundare, fiecare cu zona neagră, titlu, text și sursă`),
+    .describe(`LASĂ GOL: vin din schiță. Cel mult ${SECUNDARI_MAXIM} articole secundare`),
 })
 
 /** Un articol din acțiune în forma domeniului: câmpurile lipsă devin goale (le umple `umplere.ts`). */
@@ -85,11 +114,11 @@ const articolCerut = (a: z.infer<typeof Articol>): NumarCerut['principal'] => ({
  * scris — și asta e drumul obișnuit (vezi lămurirea de la `Numar`).
  */
 const caCerut = (n: z.infer<typeof Numar>, urmator: { nr: number | null; data: string }): NumarCerut => ({
-  motto: n.motto,
+  motto: n.motto ?? '',
   motoAutor: n.moto_autor,
   nr: n.nr ?? urmator.nr ?? 1,
   data: n.data ?? urmator.data,
-  principal: articolCerut(n.principal),
+  principal: articolCerut(n.principal ?? {}),
   secundari: n.secundari?.map(articolCerut),
   floare: true,
 })
@@ -99,6 +128,80 @@ async function urmatorul(env: EnvActiuniBuletin): Promise<{ nr: number | null; d
   const { ultimul } = await import('./depozit.js')
   const { buletinulNou } = await import('./pagini.js')
   return buletinulNou(await ultimul(env.DB), new Date().toISOString().slice(0, 10))
+}
+
+// ---------------------------------------------------------------------------
+// CHESTIONARUL: schița numărului care urmează
+// ---------------------------------------------------------------------------
+
+/** Întrebările de acum: cele standard, cu ce a schimbat adminul din Setări (KV `CONFIG`). */
+async function chestionarul(env: EnvActiuniBuletin): Promise<Record<CheieIntrebare, string>> {
+  if (!env.CONFIG) return intrebarile()
+  try {
+    return intrebarile(normalizeazaChestionar(await env.CONFIG.get(CHEIE_CHESTIONAR, 'json')))
+  } catch {
+    // KV care tace nu oprește chestionarul: se merge pe textele standard.
+    return intrebarile()
+  }
+}
+
+/**
+ * SCHIȚA NUMĂRULUI CARE URMEAZĂ — cea din depozit, ori una nouă, cu motto-ul numărului trecut pus
+ * deja în ea (așa întrebarea 1 are ce arăta: „Motto-ul: «…». Rămâne așa?").
+ *
+ * ⚠️ Una singură pe număr, cheia fiind chiar numărul: două ferestre deschise scriu în aceeași
+ * schiță, nu în două. Ultima scriere câștigă — ca la formularul dinainte.
+ */
+export async function schitaNumarului(
+  env: EnvActiuniBuletin,
+): Promise<{ schita: Schita; noua: boolean }> {
+  const { ultimul } = await import('./depozit.js')
+  const { buletinulNou } = await import('./pagini.js')
+  const b = await ultimul(env.DB)
+  const urm = buletinulNou(b, new Date().toISOString().slice(0, 10))
+  const gasita = await citesteSchita(env, urm)
+  if (gasita) return { schita: gasita, noua: false }
+  const motto = await mottoDinainte(env, b).catch(() => null)
+  return {
+    schita: schitaGoala({ nr: urm.nr, data: urm.data, motto: motto?.motto, motoAutor: motto?.motoAutor }),
+    noua: true,
+  }
+}
+
+/**
+ * CE SE COMPUNE: schița, ori ce a scris cel care cere.
+ *
+ * ⚠️ Hotărârea e după `principal`: fără el, numărul iese DIN SCHIȚĂ (drumul obișnuit, din chat) —
+ * cu tot cu adresele pozelor, care nu se pot scrie în argumente. Cu el, se compune ce s-a cerut,
+ * ca până acum, pentru cine cheamă acțiunea din afara chatului.
+ * ⚠️ Nr. și data scrise ANUME rămân cu putere și pe drumul schiței: „compune 620" nu trebuie să
+ * devină tăcut numărul care urmează.
+ */
+async function deCompus(
+  a: z.infer<typeof Numar>,
+  env: EnvActiuniBuletin,
+): Promise<{ cerut: NumarCerut; poze: Record<string, string>; dinSchita: boolean }> {
+  if (a.principal) {
+    return { cerut: caCerut(a, await urmatorul(env)), poze: {}, dinSchita: false }
+  }
+  const { schita } = await schitaNumarului(env)
+  const cerut = catreCerere(schita)
+  if (a.nr) cerut.nr = a.nr
+  if (a.data) cerut.data = a.data
+  if (a.motto !== undefined) cerut.motto = a.motto
+  if (a.moto_autor !== undefined) cerut.motoAutor = a.moto_autor
+  if (a.secundari) cerut.secundari = a.secundari.map(articolCerut)
+  return { cerut, poze: pozeleSchitei(schita), dinSchita: true }
+}
+
+/** Calendarul săptămânii tipărite, în forma cerută de socoteală; `undefined` dacă programul tace. */
+async function calendarulPentru(
+  env: EnvActiuniBuletin,
+  data: string,
+): Promise<{ masura?: NumarCerut['calendar']; stare: 'validat' | 'propus' | null }> {
+  const cal = await calendarulNumarului(env, data).catch(() => ({ eroare: 'programul n-a răspuns', cod: 'indisponibil' }))
+  if ('eroare' in cal) return { stare: null }
+  return { masura: { slujbe: cal.slujbe, detalii: cal.detalii }, stare: cal.stare }
 }
 
 // ---------------------------------------------------------------------------
@@ -117,10 +220,18 @@ export const REGULI = [
   'Câte semne încap e scris în `buletin.masura` — cere-o înainte să scrii. Textul care nu încape NU se taie de API: `buletin.compune` refuză și spune cu cât e peste. Scurtează cu atât și încearcă iar.',
   'Calendarul de pe pagina 4 e programul săptămânii care începe a doua zi după data numărului; dacă textul nu încape, API-ul îl strânge singur (întâi fără sfinții duminicii, apoi fără pericopă) și spune ce treaptă a folosit.',
   'Dacă programul săptămânii nu e validat, se folosește ce e disponibil (propunerea) și răspunsul spune la început „PROPUS", în `atentie`. Nu e o greșeală, dar trebuie spus omului.',
-  'Un articol gol nu e greșeală: autorul, titlul, textul și sursa lipsă se umplu cu text de probă la vedere („NUME AUTOR", „TITLU ARTICOL", Lorem ipsum, „Sursa: -"), exact cât încape la programul întreg — un secundar ia o pătrime din text, doi secundari jumătate. Răspunsul spune în `atentie` ce a fost de probă.',
   'Data numărului e duminica; numărul e ultimul din arhivă + 1. Autorul care nu se știe se scrie „Fără autor".',
   'NU scrie tu numărul și data: lasă-le goale și le pune serverul (ultimul din arhivă + 1, duminica următoare). Răspunsul îți spune apoi ce număr s-a compus.',
-  'După ce compui, omul vede numărul pe ecranul „buletin nou", cu formularul umplut din ce ai compus, și el apasă „Validează" — validarea e publicarea, și e a lui, nu a ta.',
+  /*
+   * ⚠️ CELE PATRU RÂNDURI ALE CHESTIONARULUI (user, 18.09.2026, seara). Formularul de pe ecran a
+   * ieșit cu totul: tot ce se completează trece prin bulă, ca întrebări puse în ordine. Modelul nu
+   * are de gândit nimic — are de pus întrebarea pe care i-o dă serverul și de trimis înapoi ce a
+   * spus omul, sub subiectul cerut.
+   */
+  'Numărul nou se face dintr-un CHESTIONAR, nu dintr-un formular: comanda „buletin nou" (ori „unde am rămas?") → cheamă `buletin.chestionar`. El îți dă întrebarea următoare, gata scrisă.',
+  'Fiecare răspuns al omului → `buletin.raspunde`, cu subiectul cerut de întrebarea de atunci. Răspunsul acțiunii îți dă întrebarea următoare: pune-o și mergi mai departe, până se spune că schița e completă.',
+  'Nu inventa câmpuri și nu scrie subiecte din afara listei. Nu rescrie textul omului: trimite-l literă cu literă în `valoare` — el se păstrează pe server, nu în discuția noastră.',
+  'Când schița e completă, cheamă `buletin.compune` FĂRĂ argumente: ia totul din schiță. Abia acolo omul confirmă cu Da/Nu. Apoi el apasă „Validează" pe ecranul „buletin nou" — validarea e publicarea, și e a lui, nu a ta.',
 ]
 
 export const actiuniBuletin = registru<EnvActiuniBuletin>([
@@ -176,14 +287,14 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
       'Verifică dacă textul scris încape în numărul cerut și spune, pe fiecare articol, câte ' +
       'semne încap, câte s-au scris și câte au rămas (negativ = s-a trecut peste). Nu compune ' +
       'nimic și nu schimbă nimic. Calendarul săptămânii se ia de la program, fiindcă el hotărăște ' +
-      'cât loc rămâne pe pagina a patra.',
+      'cât loc rămâne pe pagina a patra. Fără niciun argument socotește SCHIȚA numărului care urmează.',
     efect: 'citeste',
     intrare: z.object({
       // la fel ca la `buletin.compune`: lipsa lor înseamnă „numărul care urmează", din arhivă
       nr: z.number().int().positive().optional().describe('LASĂ GOL: îl ia serverul din arhivă (ultimul + 1)'),
       data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('LASĂ GOL: duminica următoare, socotită de server'),
-      motto: z.string().default(''),
-      principal: Articol.describe('articolul principal; pentru socoteală e destul textul'),
+      motto: z.string().optional(),
+      principal: Articol.optional().describe('LASĂ GOL: se socotește ce e în schiță (răspunsurile din chat)'),
       secundari: z.array(Articol).max(SECUNDARI_MAXIM).optional(),
     }),
     iesire: z.object({
@@ -203,22 +314,22 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
       plangeri: z.array(z.string()),
     }),
     exemple: [
-      { fraza: 'încape textul ăsta în buletinul 616?', argumente: { nr: 616, data: '2026-09-20' } },
+      'cât mai am loc în numărul următor?',
       'mai am loc pentru un articol secundar?',
     ],
     async executa(a, c) {
-      const urm = await urmatorul(c.env)
-      const nr = a.nr ?? urm.nr ?? 1
-      const data = a.data ?? urm.data
+      // fără articol scris în cerere, se socotește SCHIȚA: acolo stă textul strâns din chat
+      const cerut = a.principal
+        ? caCerut({ ...a, principal: a.principal }, await urmatorul(c.env))
+        : catreCerere((await schitaNumarului(c.env)).schita)
+      const nr = a.nr ?? cerut.nr
+      const data = a.data ?? cerut.data
       const cal = await calendarulNumarului(c.env, data)
       const cuCalendar = 'eroare' in cal ? null : cal
       const s = socoteste({
-        motto: a.motto,
+        ...cerut,
         nr,
         data,
-        principal: articolCerut(a.principal),
-        secundari: (a.secundari ?? []).map(articolCerut),
-        floare: true,
         calendar: cuCalendar ? { slujbe: cuCalendar.slujbe, detalii: cuCalendar.detalii } : undefined,
       })
       return {
@@ -239,9 +350,10 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
     descriere:
       'Compune foaia tipărită a unui număr — antetul fix, motto-ul, numărul și data, articolele pe ' +
       'două coloane și, pe pagina a patra, programul liturgic al săptămânii care urmează — și pune ' +
-      'PDF-ul în depozit. REFUZĂ, cu cifre, dacă textul nu încape: nu taie niciodată singur. ' +
-      'Ce lipsește (autor, titlu, text, sursă) se umple cu text de probă, la vedere. Programul ' +
-      'nevalidat se folosește ca PROPUS — răspunsul o spune în `atentie`.',
+      'PDF-ul în depozit. CHEAM-O FĂRĂ NICIUN ARGUMENT: ia totul din schiță — motto, articole, ' +
+      'poze — adică din ce a răspuns omul la chestionar. REFUZĂ, cu cifre, dacă textul nu încape: ' +
+      'nu taie niciodată singur. Ce lipsește (autor, titlu, text, sursă) se umple cu text de probă, ' +
+      'la vedere. Programul nevalidat se folosește ca PROPUS — răspunsul o spune în `atentie`.',
     efect: 'scrie',
     permisiune: 'bulletin.write',
     intrare: Numar,
@@ -262,25 +374,26 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
       plangeri: z.array(z.string()),
     }),
     exemple: [
-      { fraza: 'compune buletinul 616 de duminica viitoare', argumente: { nr: 616, data: '2026-09-20' } },
+      'compune buletinul',
+      'gata, fă numărul',
     ],
     async rezuma(a, c) {
       // ⚠️ Rezumatul spune numărul ADEVĂRAT, luat din arhivă — el e ce citește omul în propunerea cu
       // Da/Nu, deci n-are voie să scrie altceva decât ce se va compune.
-      const cerutAici = caCerut(a, await urmatorul(c.env))
-      const p = plangeriDeForma(cerutAici)
+      const { cerut } = await deCompus(a, c.env)
+      const p = plangeriDeForma(cerut)
       if (p.length) throw new Error(`nu pot compune: ${p.join('; ')}`)
-      const cati = (a.secundari ?? []).length
-      const despre = a.principal.titlu
-        ? `„${a.principal.titlu}" de ${a.principal.autor ?? 'NUME AUTOR (de probă)'}`
+      const cati = (cerut.secundari ?? []).length
+      const despre = cerut.principal.titlu
+        ? `„${cerut.principal.titlu}" de ${cerut.principal.autor || 'NUME AUTOR (de probă)'}`
         : 'un articol principal de probă (ce lipsește se umple la vedere)'
-      return `Compun buletinul nr. ${cerutAici.nr} din ${dataLunga(cerutAici.data)}: ${despre}` +
+      return `Compun buletinul nr. ${cerut.nr} din ${dataLunga(cerut.data)}: ${despre}` +
         `${cati ? ` și încă ${cati} ${cati === 1 ? 'articol' : 'articole'}` : ''}. ` +
-        `PDF-ul se va pune în depozit la ${cheiaNumarului(cerutAici)}.`
+        `PDF-ul se va pune în depozit la ${cheiaNumarului(cerut)}.`
     },
     async executa(a, c) {
-      const cerut = caCerut(a, await urmatorul(c.env))
-      const r = await compune(c.env, { cerut })
+      const { cerut, poze } = await deCompus(a, c.env)
+      const r = await compune(c.env, { cerut, poze })
       const calendar = r.calendar ? NUMELE_TREPTEI[r.calendar.strans] : null
       const program = r.calendar?.stare ?? null
       if (!r.ok || !r.pdf) {
@@ -309,6 +422,133 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
         program,
         atentie: r.atentie,
         plangeri: [],
+      }
+    },
+  }),
+
+  // -------------------------------------------------------------------------
+  // CHESTIONARUL — cele două verbe prin care se scrie un număr din bulă
+  // -------------------------------------------------------------------------
+
+  actiune({
+    nume: 'buletin.chestionar',
+    descriere:
+      'Începe sau reia CHESTIONARUL numărului nou: întrebările care se pun omului, în ordine, ca ' +
+      'să se strângă motto-ul, textele, autorii, anii, pomenirile, titlurile și sursele. Întoarce ' +
+      'ce număr se face, ce e deja completat și ÎNTREBAREA URMĂTOARE, gata scrisă — pune-o omului ' +
+      'cuvânt cu cuvânt. Nu schimbă nimic din numerele apărute.',
+    efect: 'citeste',
+    permisiune: 'bulletin.write',
+    intrare: z.object({}),
+    iesire: z.object({
+      nr: z.number().nullable(),
+      data: z.string(),
+      /** validat sau propus (nevalidat); `null` = programul n-a răspuns */
+      program: z.enum(['validat', 'propus']).nullable(),
+      /** ce e deja în schiță, pe scurt — fără textele lungi */
+      completat: z.array(z.string()),
+      /** despre ce articol e întrebarea: principal, secundar 1, secundar 2 */
+      articol: z.string(),
+      /** subiectul cu care se cheamă `buletin.raspunde`; `gata` = nu mai e nimic de întrebat */
+      subiect: z.string(),
+      intrebare: z.string(),
+      instructiune: z.string(),
+      gata: z.boolean(),
+    }),
+    exemple: ['buletin nou', 'unde am rămas?', 'hai să facem numărul următor'],
+    async executa(_a, c) {
+      const [{ schita, noua }, intrebari] = await Promise.all([schitaNumarului(c.env), chestionarul(c.env)])
+      /*
+       * ⚠️ Pomenirea se caută AICI, înaintea întrebării, nu în mașina de stări: aceea trebuie să
+       * rămână deterministă și fără rețea. Dacă autorul nu e sfânt (ori calendarul tace), se scrie
+       * „căutat, nimic" și întrebarea 5 se sare, fără să afle nimeni.
+       */
+      const cautat = await cautaPomenirile(c.env, schita)
+      const intrebare = urmatoareaIntrebare(schita, intrebari)
+      /*
+       * ⚠️ O acțiune de CITIRE care totuși scrie — și e în regulă: ce scrie e SCHIȚA, foaia de
+       * lucru a omului din chat, nu o dată a parohiei (vezi efectul `ciorna` din `@xc/actiuni`).
+       * Fără asta, „buletin nou" n-ar lăsa nicio urmă și a doua întrebare ar porni de la zero.
+       */
+      if (noua || cautat) await scrieSchita(c.env, schita, { subiect: intrebare.subiect, articol: intrebare.articol })
+      const { stare } = await calendarulPentru(c.env, schita.data)
+      return {
+        nr: schita.nr,
+        data: schita.data,
+        program: stare,
+        completat: rezumatulSchitei(schita),
+        articol: intrebare.articol,
+        subiect: intrebare.subiect,
+        intrebare: intrebare.text,
+        instructiune: intrebare.instructiune,
+        gata: intrebare.subiect === 'gata',
+      }
+    },
+  }),
+
+  actiune({
+    nume: 'buletin.raspunde',
+    descriere:
+      'Scrie în schița numărului nou RĂSPUNSUL omului la întrebarea de acum și întoarce întrebarea ' +
+      'următoare, gata scrisă. Subiectul se ia din întrebare: `pastreaza` pentru „da / rămâne așa", ' +
+      '`sari` pentru „nu", ori chiar câmpul (`motto`, `text`, `autor`, `ani`, `pomenire`, `titlu`, ' +
+      '`sursa`). Textul omului se trimite LITERĂ CU LITERĂ în `valoare` — nu-l rescrie și nu-l scurta.',
+    efect: 'ciorna',
+    permisiune: 'bulletin.write',
+    intrare: z.object({
+      subiect: z.enum(SUBIECTE).describe(
+        'ce se scrie: `pastreaza` = „da, rămâne așa"; `sari` = „nu, treci mai departe"; ' +
+        '`text`/`autor`/`ani`/`pomenire`/`titlu`/`sursa`/`motto`/`moto_autor` = chiar câmpul; ' +
+        '`nota` și `poza` se dau oricând; `sterge_secundar` și `de_la_capat` sunt îndreptări',
+      ),
+      valoare: z.string().optional().describe(
+        'ce a spus omul, cuvânt cu cuvânt. Lipsește la `pastreaza` și `sari`. La `titlu` merge și ' +
+        'numărul titlului ales din listă („2")',
+      ),
+    }),
+    iesire: z.object({
+      /** ce s-a scris în schiță, în vorbe — de spus omului pe scurt, ca să știe că s-a prins */
+      scris: z.string(),
+      /** cât text are articolul atins, cât încape și cât a mai rămas (negativ = peste măsură) */
+      masura: z.object({ semne: z.number(), incap: z.number(), ramase: z.number() }).nullable(),
+      articol: z.string(),
+      subiect: z.string(),
+      intrebare: z.string(),
+      instructiune: z.string(),
+      gata: z.boolean(),
+    }),
+    exemple: [
+      { fraza: 'rămâne așa', argumente: { subiect: 'pastreaza' } },
+      { fraza: 'da, îl folosim', argumente: { subiect: 'pastreaza' } },
+      { fraza: 'nu', argumente: { subiect: 'sari' } },
+      { fraza: '2', argumente: { subiect: 'titlu', valoare: '2' } },
+      { fraza: 'autorul e Sfântul Ioan Gură de Aur', argumente: { subiect: 'autor', valoare: 'SFÂNTUL IOAN GURĂ DE AUR' } },
+      { fraza: 'a trăit între 347 și 407', argumente: { subiect: 'ani', valoare: '347-407' } },
+      { fraza: 'mai adăugăm un text', argumente: { subiect: 'mai_adaugam', valoare: 'da' } },
+    ],
+    async executa(a, c) {
+      const [{ schita }, intrebari] = await Promise.all([schitaNumarului(c.env), chestionarul(c.env)])
+      const scris = scrieRaspuns(schita, a, intrebari)
+      // autorul tocmai scris poate fi sfânt: se întreabă calendarul ÎNAINTE de întrebarea următoare
+      await cautaPomenirile(c.env, scris.schita)
+      const intrebare = urmatoareaIntrebare(scris.schita, intrebari)
+      await scrieSchita(c.env, scris.schita, { subiect: intrebare.subiect, articol: intrebare.articol })
+
+      /*
+       * ⚠️ MĂSURA SE SPUNE, DAR NU OPREȘTE NIMIC (18.09.2026). Un text prea lung nu se refuză la
+       * schiță: omul tocmai l-a lipit, iar refuzul l-ar pune să-l lipească din nou. Refuzul cu
+       * cifre rămâne unde era și până acum — la compunere, unde chiar se face hârtia.
+       */
+      const { masura: calendar } = await calendarulPentru(c.env, scris.schita.data)
+      const masura = masuraArticolului(scris.schita, scris.articol, calendar)
+      return {
+        scris: scris.scris,
+        masura,
+        articol: intrebare.articol,
+        subiect: intrebare.subiect,
+        intrebare: intrebare.text,
+        instructiune: intrebare.instructiune,
+        gata: intrebare.subiect === 'gata',
       }
     },
   }),

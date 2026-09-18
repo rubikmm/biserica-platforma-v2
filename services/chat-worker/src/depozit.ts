@@ -70,6 +70,76 @@ export async function conversatia(
   return noua
 }
 
+/**
+ * Discuția cerută, DOAR dacă e a omului — fără să deschidă alta când n-o găsește.
+ *
+ * ⚠️ De ce e altă funcție decât `conversatia`: aceea deschide una nouă când discuția cerută lipsește
+ * sau a trecut de cele șase ore. La citit (istoricul, starea lucrului) purtarea aia e greșită — ar
+ * scrie un rând gol în bază la fiecare reîncărcare de pagină cu o discuție veche în localStorage,
+ * iar sondarea ar întreba de starea unei discuții care n-a existat niciodată.
+ */
+export async function conversatiaDe(db: D1Database, id: string, userId: string): Promise<Conversatie | null> {
+  if (!id) return null
+  const gasita = await db
+    .prepare('SELECT * FROM conversatii WHERE id = ?1 AND user_id = ?2 AND stearsa_la IS NULL')
+    .bind(id, userId)
+    .first<Conversatie>()
+  return gasita ?? null
+}
+
+/**
+ * CE FACE ACUM CREIERUL, cât omul așteaptă (18.09.2026): un mesaj poate ține minute, iar singurul
+ * semn de viață era „scrie…". Etapa se scrie lângă MESAJUL OMULUI care a pornit lucrul, în
+ * `date_json` — dinadins, ca să nu ceară nici coloană nouă, nici tabel nou: rândul acela există
+ * oricum, e al discuției și piere cu ea.
+ */
+export interface LucruInCurs {
+  /** Cum se citește omului: „caut în program… (program.slujbele_zilei)". */
+  etapa: string
+  /** Când a pornit lucrul, ca sondarea să știe de cât se așteaptă chiar dacă pagina s-a reîncărcat. */
+  de_la: string
+}
+
+export async function scrieLucrul(db: D1Database, mesajId: string, lucru: LucruInCurs): Promise<void> {
+  await db
+    .prepare('UPDATE mesaje SET date_json = ?2 WHERE id = ?1')
+    .bind(mesajId, JSON.stringify({ lucru }))
+    .run()
+}
+
+export function lucrulDin(dateJson: string | null | undefined): LucruInCurs | null {
+  try {
+    const d = JSON.parse(dateJson || '{}') as { lucru?: LucruInCurs }
+    return d.lucru && typeof d.lucru.etapa === 'string' ? d.lucru : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Starea propunerilor unei discuții, socotită ȘI cu vremea lor (o propunere „asteapta" al cărei
+ * `expira_la` a trecut e expirată, chiar dacă nimeni n-a apăsat nimic).
+ *
+ * ⚠️ De ea atârnă butoanele Da/Nu la redeschiderea panoului: fără ea, firul refăcut din istoric fie
+ * n-ar arăta niciun buton (cum era până pe 18.09.2026 — „nu mai pot confirma"), fie ar arăta butoane
+ * moarte, care la apăsare spun „propunerea nu există".
+ */
+export async function starilePropunerilor(
+  db: D1Database,
+  conversatieId: string,
+): Promise<Map<string, Propunere['stare']>> {
+  const r = await db
+    .prepare('SELECT id, stare, expira_la FROM propuneri WHERE conversatie_id = ?1')
+    .bind(conversatieId)
+    .all<Pick<Propunere, 'id' | 'stare' | 'expira_la'>>()
+  const acuma = acum()
+  const stari = new Map<string, Propunere['stare']>()
+  for (const p of r.results ?? []) {
+    stari.set(p.id, p.stare === 'asteapta' && p.expira_la < acuma ? 'expirata' : p.stare)
+  }
+  return stari
+}
+
 export async function scrieMesaj(
   db: D1Database,
   m: { conversatie_id: string; rol: RolScris; text: string; date?: unknown },

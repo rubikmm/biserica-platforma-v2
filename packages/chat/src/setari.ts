@@ -17,6 +17,7 @@
  * publică fiecare aplicație și ce vede bula asta. O listă scrisă de mână se strică în tăcere: un
  * nume greșit nu supără pe nimeni, doar că unealta nu există.
  */
+import type { Efect } from '@xc/actiuni'
 import { esc } from '@xc/ui'
 import type { ConfigAplicatie } from './comutator.js'
 
@@ -24,7 +25,11 @@ import type { ConfigAplicatie } from './comutator.js'
 export interface UnealtaDeBifat {
   nume: string
   descriere: string
-  efect: 'citeste' | 'scrie'
+  /**
+   * ⚠️ Tipul vine din `@xc/actiuni`, nu scris de mână: lista efectelor crește (`ciorna`, 18.09.2026),
+   * iar rubrica trebuie doar să știe care dintre ele CERE CONFIRMARE — și aceea e numai `scrie`.
+   */
+  efect: Efect
   /** Aplicația care o publică — la Program, bula vede și calendarul, și tipicul. */
   aplicatie: string
 }
