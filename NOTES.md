@@ -313,9 +313,10 @@ propunerea automată, ca în V1.
 ## NEXT
 
 00e. **ROTIREA ALBUMELOR — scrisă și publicată pe 18.09.2026.** Vezi „Rotirea albumelor" la „LIVE și
-    RADIO". Ce rămâne: (1) **reglarea pragului `PRAG_SUNET_DBFS`** (azi −30 dBFS, în `aparat/sunet.py`,
-    repo `biserica-rpi-v2`), după o zi de citit nivelul pe `live.sfantul-ilie.ro/mic` cu biserica
-    **goală** — microfonul aude și boxele, deci „liniște" nu e zero și pragul de acum e o ghicire;
+    RADIO". Ce rămâne: (1) **pragul `PRAG_SUNET_DBFS` e REGLAT la −60 dBFS** (18.09.2026, seara), după
+    ce biserica goală s-a măsurat la −67.5 dBFS RMS pe `live.sfantul-ilie.ro/mic`; rămâne **validat la
+    slujba de 19.09, ora 18:00**, că vocea trece peste −60 (dacă nu urcă `ultimul_sunet`, pragul e prea
+    sus și se coboară spre −65);
     (2) **verificat pe viu că a sărit primul album** după publicare (contorul semănat cu 24 h în urmă
     face rotirea scadentă pe loc) — dacă nu, `wrangler tail xc-live-production` pe `alarm`/`roteste`.
 
@@ -2345,6 +2346,17 @@ forța antetul `Host`**.
   numai acolo, alarma se pune pe `acum` în loc de capătul albumului, ca prima săritură să se vadă în
   ≤20 s de la prima telemetrie de după publicare. 635 de probe, typecheck 36/36. Versiuni: **live
   0.1.8**, **radio 0.1.8** (panoul și contractul s-au schimbat), publicate pe producție.
+  **Pragul de sunet, reglat seara la −60 dBFS** (`PRAG_SUNET_DBFS`, `aparat/sunet.py` pe Pi, backup
+  `aparat.env.bak-20260918-2024`): biserica **goală** se măsoară la −67.5 dBFS RMS, deci −30 era o
+  ghicire cu mult prea joasă — cu el, boxele singure ar fi ținut „liniștea" veșnic nescadentă. Rămâne
+  de validat la slujba de 19.09, 18:00, că vocea trece peste −60.
+  ⚠️ **HTTP 500 pe `GET /intern/aparat/comanda` NU e de la rotire** (verificat în seara asta, 20:18:04
+  și 20:18:45): jurnalul Pi le arată **zilnic de dinainte**, 2–23 pe zi din 11.09 încoace (23 pe 16.09,
+  zi fără nicio publicare; azi 3 dintre ele înainte de publicarea de la 20:17), iar `live` nu mai
+  fusese publicat din 15.09. E rata de fond a long-poll-ului de 25 s: când obiectul durabil e mutat/
+  repornit cât cererea stă parcată în `setTimeout`, `asteaptaComanda` cade pe `return this.comanda()`.
+  Aparatul merge mai departe pe ultima comandă, deci n-a pierdut nimic. Tail curat 3 min (0 excepții,
+  long-poll-uri de 25 s cu 200), 0 erori pe Pi de la 20:18:45.
 
 - **„Să nu ținem în două locuri programul"** (15:25–16:00): programul liturgic era tastat a doua oară
   în WordPress-ul de pe apex (articol `program` + ACF, tema `sfantulilie`, `content-single-program.php`).
