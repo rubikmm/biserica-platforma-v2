@@ -250,6 +250,9 @@ importers:
       '@xc/authorization':
         specifier: workspace:*
         version: link:../../packages/authorization
+      '@xc/chat':
+        specifier: workspace:*
+        version: link:../../packages/chat
       '@xc/config':
         specifier: workspace:*
         version: link:../../packages/config

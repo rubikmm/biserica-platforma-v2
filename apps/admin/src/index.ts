@@ -107,7 +107,7 @@ function tabelLivrari(livrari: LivrareRand[]): string {
 
 /** Aplicatiile in care poate sta bula. Bifa nu face nimic acolo unde modulul nu e montat in cod
  *  (trei linii in `src/index.ts` al aplicatiei) — de aceea scrie sub tabel. */
-const APLICATII_CU_CHAT = ['program', 'calendar', 'tipic', 'home', 'cont'] as const
+const APLICATII_CU_CHAT = ['program', 'buletin', 'calendar', 'tipic', 'home', 'cont'] as const
 
 function paginaModule(o: {
   comune: ReturnType<typeof comune>
@@ -143,7 +143,11 @@ ${o.salvat ? alerta('buna', 'Am salvat. Schimbarea se vede în cel mult un minut
 
   <h4>În care aplicații</h4>
   <table><tbody>${APLICATII_CU_CHAT.map(rand).join('')}</tbody></table>
-  <p class="ajutor">Bifa are efect numai acolo unde modulul e montat în cod. Azi: <code>program</code>.</p>
+  <p class="ajutor">Bifa are efect numai acolo unde modulul e montat în cod. Azi: <code>program</code> (pe toate paginile)
+  și <code>buletin</code> (numai pe <code>/nou</code>, ecranul numărului care urmează).</p>
+  <p class="ajutor">⚠️ <strong>Uneltele se cer pe aplicație</strong>: bula fiecărei aplicații vede numai acțiunile ei
+  (programul le vede și pe cele ale calendarului și tipicului). Dacă lista de mai jos e scrisă, trebuie să
+  cuprindă și numele acțiunilor aplicației nou-bifate — altfel bula ei n-are ce chema.</p>
 
   <h4>Modelul</h4>
   <p class="ajutor">Oricare ar fi, cererile trec prin <strong>AI Gateway</strong> (poarta <code>xc-chat</code>), pe factura Cloudflare.

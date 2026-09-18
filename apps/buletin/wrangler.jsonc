@@ -40,7 +40,18 @@
     { "binding": "COMUNICARE", "service": "xc-communication" },
     // Calendarul de pe pagina a patra a foii tiparite: tabelul se CERE de la program, nu se
     // copiaza aici (`/v1/tabel-tipar`). Programul ramane proprietarul formei lui.
-    { "binding": "PROGRAM", "service": "xc-program" }
+    { "binding": "PROGRAM", "service": "xc-program" },
+    // Creierul bulei de chat de pe `/nou` (18.09.2026). Bula se aprinde din panoul de admin, la
+    // Module, nu de aici. ⚠️ `xc-chat` are, la randul lui, o legatura spre `xc-buletin`: cercul se
+    // publica cu ocolul din `infrastructure/cutover/publica-cu-ocol.mjs` (altfel cod 10143).
+    { "binding": "CHAT", "service": "xc-chat" },
+    // Hartiile intoarse de actiuni: bula le da mai departe, fiindca media n-are adresa publica.
+    { "binding": "MEDIA", "service": "xc-media" }
+  ],
+
+  // Comutatoarele modulelor: de aici afla bula daca e pornita pentru buletin.
+  "kv_namespaces": [
+    { "binding": "CONFIG", "id": "f63560361bd9489aa34e873732807696" }
   ],
 
   // Foaia tiparita se face din HTML cu Browser Rendering, ca la program.
@@ -85,7 +96,12 @@
         { "binding": "AUTORIZARE", "service": "xc-authz-staging" },
         { "binding": "AUDIT", "service": "xc-audit-staging" },
         { "binding": "COMUNICARE", "service": "xc-communication-staging" },
-        { "binding": "PROGRAM", "service": "xc-program-staging" }
+        { "binding": "PROGRAM", "service": "xc-program-staging" },
+        { "binding": "CHAT", "service": "xc-chat-staging" },
+        { "binding": "MEDIA", "service": "xc-media-staging" }
+      ],
+      "kv_namespaces": [
+        { "binding": "CONFIG", "id": "4fb91926da484c4395160390d5348950" }
       ],
       "browser": { "binding": "BROWSER" },
       "routes": [{ "pattern": "buletin.staging.sfantul-ilie.ro", "custom_domain": true }]
@@ -125,7 +141,12 @@
         { "binding": "AUTORIZARE", "service": "xc-authz-production" },
         { "binding": "AUDIT", "service": "xc-audit-production" },
         { "binding": "COMUNICARE", "service": "xc-communication-production" },
-        { "binding": "PROGRAM", "service": "xc-program-production" }
+        { "binding": "PROGRAM", "service": "xc-program-production" },
+        { "binding": "CHAT", "service": "xc-chat-production" },
+        { "binding": "MEDIA", "service": "xc-media-production" }
+      ],
+      "kv_namespaces": [
+        { "binding": "CONFIG", "id": "f63560361bd9489aa34e873732807696" }
       ],
       "browser": { "binding": "BROWSER" }
       // Ruta de productie (`buletin.sfantul-ilie.ro`) ramane a lui A3 pana la cutover-ul explicit.

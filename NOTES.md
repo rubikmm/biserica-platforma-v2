@@ -312,19 +312,26 @@ propunerea automată, ca în V1.
 
 ## NEXT
 
-00. **ADMINII PE APLICAȚIE — scris 18.09.2026, NEPUBLICAT.** Vezi „ADMINII PE APLICAȚIE".
-    Codul e întreg și sub probe (532 trec, typecheck curat pe 36), dar **nimic nu e pe producție**.
-    De făcut, în ordine:
-    1. **`xc-authz-production` întâi** (0.3.0): are cheile noi și `/harta-admini`. Publicat după
-       aplicații, ele ar cere chei pe care el nu le cunoaște, iar el le-ar refuza — deci adminii
-       globali ar pierde pe loc Newsletterul, Tipicul, Biblia și Website-ul.
-    2. apoi aplicațiile atinse: program 0.8.0, calendar 0.8.1, buletin 0.7.2, newsletter 0.6.2,
-       tipic 0.3.7, biblia 0.1.5, biblioteca 0.1.5, home 0.7.4, curatenie 0.2.3, admin 0.4.0.
-    3. **userul numește cele două persoane** din Setările aplicațiilor (acum: Programul liturgic,
-       `program.sfantul-ilie.ro/setari`), apoi se vede tabelul la `admin.sfantul-ilie.ro/admini`.
-    ⚠️ **Nimic din asta nu s-a încercat viu** (`pnpm dev` nu rula în timpul lucrului): probele merg
-    prin `fetch` la workeri, cu servicii de probă. Prima încercare vie e a userului.
-    ⚠️ De hotărât cu el: bula de **chat** din Program atârnă acum de adminul Programului (cheltuială).
+00b. **BULA DE CHAT PE `/nou` LA BULETIN — scrisă 18.09.2026.** Vezi „BULA DE CHAT A BULETINULUI".
+    La publicare: **cercul se publică cu ocolul** (`publica-cu-ocol.mjs --intai services/chat-worker
+    --fara BULETIN --apoi apps/buletin`), apoi `admin` (comutatorul din Module). Pe urmă, în Module:
+    bifa `buletin` **și** `buletin.compune` + `buletin.socoteala` în lista de unelte.
+    ⚠️ Nici asta nu s-a încercat viu: probele merg cu servicii de probă, iar modelul adevărat (glm
+    flash, workers-ai) n-a fost pus să compună niciodată un buletin. Prima încercare e a userului, și
+    primul lucru de privit e dacă modelul chiar LASĂ GOALE nr. și data.
+
+00. **ADMINII PE APLICAȚIE — scris ȘI PUBLICAT pe 18.09.2026, 11:20.** Vezi „ADMINII PE APLICAȚIE".
+    Ordinea publicării, care rămâne regula la orice atingere a cheilor: **`xc-authz-production` ÎNTÂI**
+    (0.3.0 — el știe cheile noi), apoi aplicațiile. Invers, adminul global ar fi pierdut pe loc
+    Newsletterul, Tipicul, Biblia și Website-ul, fiindcă authz ar fi refuzat chei pe care nu le știe.
+    Publicate: program 0.8.0, calendar 0.8.1, buletin 0.7.2, newsletter 0.6.2, tipic 0.3.7,
+    biblia 0.1.5, biblioteca 0.1.5, home 0.7.4, curatenie 0.2.3, admin 0.4.0.
+    **Rămâne la user**: să numească oamenii din Setările aplicațiilor (acum: Programul liturgic,
+    `program.sfantul-ilie.ro/setari`), apoi tabelul la `admin.sfantul-ilie.ro/admini`.
+    ⚠️ **Nimic nu s-a încercat viu** (`pnpm dev` nu rula în timpul lucrului): probele merg prin `fetch`
+    la workeri, cu servicii de probă. Prima încercare vie e a userului.
+    ⚠️ Hotărât cu el: bula de **chat** din Program atârnă de acum de adminul Programului, ca să poată
+    compune (costă bani la fiecare mesaj — a ales știind).
 
 0a. **COMPUNEREA BULETINULUI — făcută pe 17.09.2026, seara; ce a rămas de probat și de făcut.**
 
@@ -848,6 +855,56 @@ parohiei trăiesc încă aplicațiile V1. Mutarea rutelor rămâne pas explicit,
   respins → SSO pe a doua aplicație → intrare repetată fără dublarea contului → publicare
   eveniment → outbox → coadă → automatizare → livrare simulată. 31 de teste unitare, typecheck
   curat pe 20 de pachete.
+
+## BULA DE CHAT A BULETINULUI, pe `/nou` (18.09.2026)
+
+**Cererea userului**: „Când am făcut bula de chat AI, am făcut-o să fie transmisibilă. Deci să facem
+Buletinul să aibă această funcție și să fie afișată doar pe `/nou` — când fac un buletin nou, ca să pot
+trimite instrucțiuni, texte etc. care să se lege la API-ul buletinului nou și să-l completeze."
+
+**A fost chiar „transmisibilă"**: modulul s-a montat cu trei linii, cum scrie în
+`docs/architecture/chat-si-actiuni.md` — `modulChat({ aplicatie: 'buletin' })`, `CHAT.ruteaza(…)`,
+`ctx.chat = await CHAT.bula(…)`. Nu s-a atins nimic din bulă, din creier și din protocol.
+
+**⚠️ NUMAI PE `/nou`**: bula se pune doar acolo (`apps/buletin/src/index.ts`, ramura GET a lui `/nou`).
+Restul buletinului e hârtie publică — o bulă scăpată acolo n-ar da nicio eroare, doar ar sta în colț la
+vederea oricui are cont și ar costa bani la fiecare apăsare. Poarta rutelor `/chat…` e însă a
+modulului, una pentru tot: stins din Module, ori om fără drept → **404**, nu „stins", nu „n-ai voie".
+
+**Cum „completează" ecranul, fără niciun drum nou**: lanțul e cel de la Program. Omul scrie în bulă →
+modelul cheamă `buletin.compune` → fiind acțiune de SCRIERE, se întoarce ca **propunere cu Da/Nu** →
+după „Da" acțiunea pune PDF-ul în depozit, păstrează cererea lângă el și răspunsul poartă
+`reincarca: true`, deci bula reîncarcă pagina. **Din 18.09.2026 `/nou` se deschide cu ciorna, nu cu
+formularul gol**: dacă numărul care urmează are deja o ciornă în depozit, ea se arată (cu butoanele și
+cu amprenta `?v=`), iar formularul vine umplut din cererea păstrată (`scrisDinCerere`). Deci „completat
+de chat" e starea citită de unde era deja scrisă. ⚠️ Adresa pozei NU se păstrează în cerere (acolo
+`poza` e doar da/nu), deci câmpul ei rămâne gol la reumplere.
+
+**⚠️ NR. ȘI DATA NU MAI VIN DE LA MODEL** (`buletin.compune`, `buletin.socoteala`): sunt opționale, iar
+lipsa lor e drumul bun — le ia serverul din arhivă (ultimul + 1, duminica următoare), exact ca ecranul,
+unde userul a cerut anume să nu fie editabile. Un model care le-ar ghici ar compune peste alt număr, și
+PDF-ul se scrie sub cheia numărului. Rezumatul propunerii spune numărul ADEVĂRAT (`rezuma` citește
+arhiva), iar răspunsul acțiunii întoarce acum `nr` și `data`, ca modelul să le poată spune omului.
+
+**⚠️ FIECARE BULĂ VEDE NUMAI CE-I TREBUIE** (`CE_VEDE_BULA` în `services/chat-worker/src/index.ts`):
+programul vede program+calendar+tipic, buletinul numai buletin. Până acum lista era una pentru toată
+platforma, și nu se vedea fiindcă bula era una singură. Cu două, s-ar fi întâmplat două lucruri
+nedorite: bula programului ar fi căpătat uneltele buletinului, iar **regulile și măsurile buletinului
+(cunoștințe de FUNDAL, cerute la fiecare mesaj) ar fi intrat în contextul programului** — plătite la
+fiecare apăsare. O aplicație fără rând în tabel vede tot, ca până acum.
+
+**De aprins din Administrare → Module**: bifa `buletin` (comutatorul l-a căpătat) **și** cele două
+unelte în lista de unelte permise (`buletin.compune`, `buletin.socoteala`) — dacă lista e scrisă, ce nu
+e în ea nu se vede. Fără ele bula răspunde, dar n-are ce chema.
+
+**⚠️ CERC DE LEGĂTURI**: `xc-buletin` → `CHAT`, `xc-chat` → `BULETIN`. Se publică cu
+`infrastructure/cutover/publica-cu-ocol.mjs --intai services/chat-worker --fara BULETIN --apoi apps/buletin`
+(altfel cod 10143 — niciunul nu poate fi primul). Al doilea cerc al platformei, după `program↔chat`.
+
+**Probe**: `tests/buletin-chat.test.ts` (18) — bula numai pe `/nou`, poarta rutelor (404 la stins și la
+om fără drept), umplerea ecranului din cererea păstrată, nr./data luate din arhivă, `CE_VEDE_BULA`.
+⚠️ Comutatoarele se țin un minut în memoria modulului: probele cheamă `uitaConfigChat()` înainte de
+fiecare, altfel citesc configurația probei dinainte și trec pe cauză greșită.
 
 ## ADMINII PE APLICAȚIE (18.09.2026) — „admin doar pe aplicația respectivă"
 
@@ -2159,9 +2216,20 @@ forța antetul `Host`**.
     `eAdmin` din cheie în program, calendar, buletin, newsletter, tipic, biblia, home (+ `eAdminPlatforma`
     pentru rândul „Administrare" din meniu, inclusiv la biblioteca și curatenie); rubrica de numire
     scrisă o dată în `@xc/setari`; `/harta-admini` la authz; tabelul cu buline la `admin/admini`.
-  - 532 de probe trec (23 noi), typecheck curat pe 36. **Nepublicat**: vezi NEXT, punctul 00 — authz
-    ÎNAINTEA aplicațiilor, altfel adminul global pierde pe loc 4 aplicații.
-  - Deschis: bula de chat din Program atârnă acum de adminul Programului (cheltuială la fiecare mesaj).
+  - 532 de probe trec (23 noi), typecheck curat pe 36. **Publicat la 11:20**, în ordinea care contează:
+    `xc-authz` 0.3.0 întâi, apoi cele zece aplicații. Userul numește oamenii din Setările aplicației.
+  - Hotărât cu userul: bula de chat din Program atârnă de acum de adminul Programului (cheltuială la
+    fiecare mesaj — a ales știind).
+
+- **BULA DE CHAT LA BULETIN, pe `/nou`** (user, 12:03: „când am făcut bula de chat AI am făcut-o să fie
+  transmisibilă… să fie afișată doar pe /nou… să se lege la API-ul buletinului nou și să-l completeze").
+  A fost chiar transmisibilă: trei linii, fără nimic atins din bulă ori din creier. Ce a cerut lucrul pe
+  lângă montaj: **`/nou` se deschide acum cu ciorna** (formular umplut din cererea păstrată + butoanele
+  foii), fiindcă lanțul propunerii se închide cu o reîncărcare a paginii — altfel ce compunea chatul se
+  pierdea exact atunci; **nr. și data au devenit opționale** în acțiuni, luate din arhivă (un model care
+  le ghicește compune peste alt număr); **`CE_VEDE_BULA`** în chat-worker, ca regulile buletinului să nu
+  intre în contextul programului la fiecare mesaj. 550 de probe, tsc 36/36. Vezi „BULA DE CHAT A
+  BULETINULUI" pentru cerc (publicare cu ocol) și pentru ce trebuie bifat în Module.
 
 - **NUMĂRUL COMPUS SE VEDE ÎN PAGINĂ, CU BUTON DE VALIDARE — buletin 0.7.0** (user, 09:52, două
   mesaje: „să faci ceva cu cache-ul când afișezi buletinul generat — să-l afișezi direct în pagină ca

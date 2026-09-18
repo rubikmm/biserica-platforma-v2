@@ -52,6 +52,9 @@
     { "binding": "PROGRAM", "service": "xc-program" },
     { "binding": "CALENDAR", "service": "xc-calendar" },
     { "binding": "TIPIC", "service": "xc-tipic" },
+    // Buletinul, din 18.09.2026: bula lui de pe `/nou` compune foaia tiparita. ⚠️ Cerc cu
+    // `xc-buletin` (el are legatura CHAT) — se publica cu ocolul, altfel cod 10143.
+    { "binding": "BULETIN", "service": "xc-buletin" },
     { "binding": "AUDIT", "service": "xc-audit" }
   ],
 
@@ -84,6 +87,7 @@
         { "binding": "PROGRAM", "service": "xc-program-staging" },
         { "binding": "CALENDAR", "service": "xc-calendar-staging" },
         { "binding": "TIPIC", "service": "xc-tipic-staging" },
+        { "binding": "BULETIN", "service": "xc-buletin-staging" },
         { "binding": "AUDIT", "service": "xc-audit-staging" }
       ]
     },
@@ -115,6 +119,7 @@
         { "binding": "PROGRAM", "service": "xc-program-production" },
         { "binding": "CALENDAR", "service": "xc-calendar-production" },
         { "binding": "TIPIC", "service": "xc-tipic-production" },
+        { "binding": "BULETIN", "service": "xc-buletin-production" },
         { "binding": "AUDIT", "service": "xc-audit-production" }
       ]
     }

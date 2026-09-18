@@ -58,8 +58,14 @@ const Articol = z.object({
 const Numar = z.object({
   motto: z.string().min(1).describe('citatul de sub antet, pe cel mult două rânduri'),
   moto_autor: z.string().optional().describe('cine a spus citatul: „Părintele Arsenie Papacioc"'),
-  nr: z.number().int().positive().describe('numărul buletinului — următorul din arhivă'),
-  data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe('duminica numărului, AAAA-LL-ZZ; programul tipărit e al săptămânii care începe a doua zi'),
+  /*
+   * ⚠️ NR. ȘI DATA SUNT OPȚIONALE din 18.09.2026, iar lipsa lor e drumul BUN: le ia serverul din
+   * arhivă (ultimul + 1, duminica următoare), exact ca ecranul `/nou`, unde userul a cerut anume să
+   * nu fie editabile. Un model care le-ar ghici ar putea scrie peste alt număr ori ar compune unul
+   * deja apărut — iar cifra o știe arhiva, nu el.
+   */
+  nr: z.number().int().positive().optional().describe('LASĂ GOL: îl ia serverul din arhivă (ultimul + 1). Se scrie numai când omul cere anume alt număr'),
+  data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('LASĂ GOL: e duminica următoare, socotită de server. Programul tipărit e al săptămânii care începe a doua zi'),
   principal: Articol.describe('articolul principal: poza mare, zona neagră cu autorul, titlul, textul și sursa'),
   secundari: z.array(Articol).max(SECUNDARI_MAXIM).optional()
     .describe(`cel mult ${SECUNDARI_MAXIM} articole secundare, fiecare cu zona neagră, titlu, text și sursă`),
@@ -73,16 +79,28 @@ const articolCerut = (a: z.infer<typeof Articol>): NumarCerut['principal'] => ({
   text: a.text ?? '',
 })
 
-/** Din forma acțiunii în forma domeniului (numele câmpurilor diferă doar la moto_autor). */
-const caCerut = (n: z.infer<typeof Numar>): NumarCerut => ({
+/**
+ * Din forma acțiunii în forma domeniului (numele câmpurilor diferă doar la moto_autor).
+ *
+ * ⚠️ `urmator` e numărul care urmează, citit din arhivă: el umple `nr` și `data` când modelul nu le-a
+ * scris — și asta e drumul obișnuit (vezi lămurirea de la `Numar`).
+ */
+const caCerut = (n: z.infer<typeof Numar>, urmator: { nr: number | null; data: string }): NumarCerut => ({
   motto: n.motto,
   motoAutor: n.moto_autor,
-  nr: n.nr,
-  data: n.data,
+  nr: n.nr ?? urmator.nr ?? 1,
+  data: n.data ?? urmator.data,
   principal: articolCerut(n.principal),
   secundari: n.secundari?.map(articolCerut),
   floare: true,
 })
+
+/** Numărul și duminica ce urmează, din arhivă — aceeași socoteală ca pe ecranul `/nou`. */
+async function urmatorul(env: EnvActiuniBuletin): Promise<{ nr: number | null; data: string }> {
+  const { ultimul } = await import('./depozit.js')
+  const { buletinulNou } = await import('./pagini.js')
+  return buletinulNou(await ultimul(env.DB), new Date().toISOString().slice(0, 10))
+}
 
 // ---------------------------------------------------------------------------
 // Acțiunile
@@ -102,6 +120,8 @@ export const REGULI = [
   'Dacă programul săptămânii nu e validat, se folosește ce e disponibil (propunerea) și răspunsul spune la început „PROPUS", în `atentie`. Nu e o greșeală, dar trebuie spus omului.',
   'Un articol gol nu e greșeală: autorul, titlul, textul și sursa lipsă se umplu cu text de probă la vedere („NUME AUTOR", „TITLU ARTICOL", Lorem ipsum, „Sursa: -"), exact cât încape la programul întreg — un secundar ia o pătrime din text, doi secundari jumătate. Răspunsul spune în `atentie` ce a fost de probă.',
   'Data numărului e duminica; numărul e ultimul din arhivă + 1. Autorul care nu se știe se scrie „Fără autor".',
+  'NU scrie tu numărul și data: lasă-le goale și le pune serverul (ultimul din arhivă + 1, duminica următoare). Răspunsul îți spune apoi ce număr s-a compus.',
+  'După ce compui, omul vede numărul pe ecranul „buletin nou", cu formularul umplut din ce ai compus, și el apasă „Validează" — validarea e publicarea, și e a lui, nu a ta.',
 ]
 
 export const actiuniBuletin = registru<EnvActiuniBuletin>([
@@ -160,13 +180,17 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
       'cât loc rămâne pe pagina a patra.',
     efect: 'citeste',
     intrare: z.object({
-      nr: z.number().int().positive(),
-      data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      // la fel ca la `buletin.compune`: lipsa lor înseamnă „numărul care urmează", din arhivă
+      nr: z.number().int().positive().optional().describe('LASĂ GOL: îl ia serverul din arhivă (ultimul + 1)'),
+      data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('LASĂ GOL: duminica următoare, socotită de server'),
       motto: z.string().default(''),
       principal: Articol.describe('articolul principal; pentru socoteală e destul textul'),
       secundari: z.array(Articol).max(SECUNDARI_MAXIM).optional(),
     }),
     iesire: z.object({
+      /** pentru care număr s-a socotit — el nu vine de la model, ci din arhivă */
+      nr: z.number(),
+      data: z.string(),
       incape: z.boolean(),
       semne_cu_tot: z.number(),
       scrise_cu_tot: z.number(),
@@ -184,18 +208,23 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
       'mai am loc pentru un articol secundar?',
     ],
     async executa(a, c) {
-      const cal = await calendarulNumarului(c.env, a.data)
+      const urm = await urmatorul(c.env)
+      const nr = a.nr ?? urm.nr ?? 1
+      const data = a.data ?? urm.data
+      const cal = await calendarulNumarului(c.env, data)
       const cuCalendar = 'eroare' in cal ? null : cal
       const s = socoteste({
         motto: a.motto,
-        nr: a.nr,
-        data: a.data,
+        nr,
+        data,
         principal: articolCerut(a.principal),
         secundari: (a.secundari ?? []).map(articolCerut),
         floare: true,
         calendar: cuCalendar ? { slujbe: cuCalendar.slujbe, detalii: cuCalendar.detalii } : undefined,
       })
       return {
+        nr,
+        data,
         incape: s.incape,
         semne_cu_tot: s.semneCuTot,
         scrise_cu_tot: s.scriseCuTot,
@@ -219,6 +248,9 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
     intrare: Numar,
     iesire: z.object({
       facut: z.boolean(),
+      /** ce număr s-a compus, ca modelul să-l poată spune omului — nu-l știa, l-a luat arhiva */
+      nr: z.number(),
+      data: z.string(),
       cheie: z.string().nullable(),
       semne_intrate: z.number().nullable(),
       semne_pe_dinafara: z.number().nullable(),
@@ -233,24 +265,27 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
     exemple: [
       { fraza: 'compune buletinul 616 de duminica viitoare', argumente: { nr: 616, data: '2026-09-20' } },
     ],
-    async rezuma(a) {
-      const p = plangeriDeForma(caCerut(a))
+    async rezuma(a, c) {
+      // ⚠️ Rezumatul spune numărul ADEVĂRAT, luat din arhivă — el e ce citește omul în propunerea cu
+      // Da/Nu, deci n-are voie să scrie altceva decât ce se va compune.
+      const cerutAici = caCerut(a, await urmatorul(c.env))
+      const p = plangeriDeForma(cerutAici)
       if (p.length) throw new Error(`nu pot compune: ${p.join('; ')}`)
       const cati = (a.secundari ?? []).length
       const despre = a.principal.titlu
         ? `„${a.principal.titlu}" de ${a.principal.autor ?? 'NUME AUTOR (de probă)'}`
         : 'un articol principal de probă (ce lipsește se umple la vedere)'
-      return `Compun buletinul nr. ${a.nr} din ${dataLunga(a.data)}: ${despre}` +
+      return `Compun buletinul nr. ${cerutAici.nr} din ${dataLunga(cerutAici.data)}: ${despre}` +
         `${cati ? ` și încă ${cati} ${cati === 1 ? 'articol' : 'articole'}` : ''}. ` +
-        `PDF-ul se va pune în depozit la ${cheiaNumarului(caCerut(a))}.`
+        `PDF-ul se va pune în depozit la ${cheiaNumarului(cerutAici)}.`
     },
     async executa(a, c) {
-      const cerut = caCerut(a)
+      const cerut = caCerut(a, await urmatorul(c.env))
       const r = await compune(c.env, { cerut })
       const calendar = r.calendar ? NUMELE_TREPTEI[r.calendar.strans] : null
       const program = r.calendar?.stare ?? null
       if (!r.ok || !r.pdf) {
-        return { facut: false, cheie: null, semne_intrate: null, semne_pe_dinafara: null, calendar, program, atentie: r.atentie, plangeri: r.plangeri }
+        return { facut: false, nr: cerut.nr, data: cerut.data, cheie: null, semne_intrate: null, semne_pe_dinafara: null, calendar, program, atentie: r.atentie, plangeri: r.plangeri }
       }
       const cheie = cheiaNumarului(cerut)
       await c.env.FISIERE.put(cheie, r.pdf, {
@@ -261,6 +296,8 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
       await pastreazaCererea(c.env, cerut)
       return {
         facut: true,
+        nr: cerut.nr,
+        data: cerut.data,
         cheie,
         semne_intrate: r.raport?.intrate ?? null,
         semne_pe_dinafara: r.raport?.peDinafara ?? null,

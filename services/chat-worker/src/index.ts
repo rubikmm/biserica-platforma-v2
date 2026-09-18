@@ -46,6 +46,8 @@ export interface Env extends EnvCreier {
   PROGRAM?: Fetcher
   CALENDAR?: Fetcher
   TIPIC?: Fetcher
+  /** Buletinul, din 18.09.2026: bula lui de pe `/nou` compune foaia tiparita. */
+  BULETIN?: Fetcher
   AUDIT?: Fetcher
   SECRET_INTERN?: string
   /** Comutatoarele modulelor: de aici afla si cu ce creier raspunde (sau daca raspunde fara unul). */
@@ -71,13 +73,41 @@ function json(date: unknown, status = 200): Response {
   })
 }
 
-function aplicatiileLegate(env: Env): Array<{ nume: string; fetcher: Fetcher }> {
+/**
+ * CE APLICAȚII VEDE BULA FIECĂREI APLICAȚII (18.09.2026).
+ *
+ * Pana atunci lista era una singura pentru toata platforma: orice bula vedea uneltele TUTUROR
+ * aplicatiilor legate, si primea in instructiuni cunostintele de fundal ale tuturor. Cu o singura
+ * aplicatie care avea bula (programul) nu se vedea. Cand s-a adaugat si buletinul (bula de pe
+ * `/nou`), s-ar fi intamplat doua lucruri deodata, amandoua nedorite: bula programului ar fi capatat
+ * uneltele buletinului, iar **regulile si masurile buletinului ar fi intrat in fiecare mesaj al
+ * programului** — context platit la fiecare apasare, despre o treaba care nu e a lui.
+ *
+ * Deci fiecare bula vede numai ce-i trebuie. Programul isi pastreaza calendarul si tipicul (de acolo
+ * isi ia numele zilelor si randuiala); buletinul n-are nevoie de ele — calendarul paginii a patra il
+ * cere `buletin.compune` singur, pe dinauntru, de la program.
+ *
+ * ⚠️ O aplicatie care nu e in tabel vede tot (cum era pana acum): un chat montat maine nu trebuie sa
+ * ramana mut pana isi scrie cineva randul aici.
+ */
+export const CE_VEDE_BULA: Record<string, readonly string[]> = {
+  program: ['program', 'calendar', 'tipic'],
+  buletin: ['buletin'],
+}
+
+/** Exportata pentru probe: regula de mai sus se strica in tacere (un chat mut nu da nicio eroare). */
+export function aplicatiileLegate(env: Env, pentruAplicatia?: string): Array<{ nume: string; fetcher: Fetcher }> {
   const toate: Array<[string, Fetcher | undefined]> = [
     ['program', env.PROGRAM],
     ['calendar', env.CALENDAR],
     ['tipic', env.TIPIC],
+    ['buletin', env.BULETIN],
   ]
-  return toate.filter((p): p is [string, Fetcher] => Boolean(p[1])).map(([nume, fetcher]) => ({ nume, fetcher }))
+  const ingaduite = pentruAplicatia ? CE_VEDE_BULA[pentruAplicatia] : undefined
+  return toate
+    .filter((p): p is [string, Fetcher] => Boolean(p[1]))
+    .filter(([nume]) => !ingaduite || ingaduite.includes(nume))
+    .map(([nume, fetcher]) => ({ nume, fetcher }))
 }
 
 interface UndeStaActiunea {
@@ -107,7 +137,7 @@ const TAIERE_FUNDAL = 8000
 
 async function adunaUneltele(
   env: Env,
-  o: { secret: string; correlationId: string; permise: string[] },
+  o: { secret: string; correlationId: string; permise: string[]; pentruAplicatia?: string },
 ): Promise<{ unelte: UnealtaDescrisa[]; harta: Map<string, UndeStaActiunea>; fundal: string[] }> {
   // Lista din panou ingusteaza ce vede modelul; goala = tot ce publica aplicatiile.
   const permis = (nume: string) => !o.permise.length || o.permise.includes(nume)
@@ -117,7 +147,9 @@ async function adunaUneltele(
   const deAdus: Array<Promise<void>> = []
 
   const manifeste = await Promise.all(
-    aplicatiileLegate(env).map(async (a) => ({
+    // ⚠️ Numai aplicatiile pe care le vede bula CARE A INTREBAT (`CE_VEDE_BULA`): altfel fundalul
+    // unei aplicatii s-ar plati in mesajele alteia.
+    aplicatiileLegate(env, o.pentruAplicatia).map(async (a) => ({
       a,
       m: await manifestulLui(a.fetcher, a.nume, { secret: o.secret, correlationId: o.correlationId, prin: 'chat' }),
     })),
@@ -296,7 +328,14 @@ export default {
         let urmare: RaspunsChat['propunere'] = null
         if (r.ok) {
           const comutator = await configChat(env)
-          const { harta } = await adunaUneltele(env, { secret, correlationId: cid, permise: comutator.unelte })
+          // ⚠️ Aceeasi vedere ca la mesaj (`CE_VEDE_BULA`), altfel urmarea s-ar căuta printre uneltele
+          // altei aplicatii — si `buletin.compune` n-are urmare, dar programul are.
+          const { harta } = await adunaUneltele(env, {
+            secret,
+            correlationId: cid,
+            permise: comutator.unelte,
+            pentruAplicatia: p.aplicatie,
+          })
           const facuta = harta.get(numeUnealta(p.actiune))
           const tinta = facuta?.urmare ? harta.get(numeUnealta(facuta.urmare.actiune)) : undefined
           if (facuta?.urmare && tinta) {
@@ -349,7 +388,12 @@ export default {
         return json({ conversatieId: c.id, text, obiecte: [], propunere: null, unelte: [] } satisfies RaspunsChat)
       }
 
-      const { unelte, harta, fundal } = await adunaUneltele(env, { secret, correlationId: cid, permise: comutator.unelte })
+      const { unelte, harta, fundal } = await adunaUneltele(env, {
+        secret,
+        correlationId: cid,
+        permise: comutator.unelte,
+        pentruAplicatia: cerere.aplicatie,
+      })
       const istoric = await mesajeleDin(env.DB, c.id)
 
       const mesaje: MesajModel[] = [

@@ -1,6 +1,6 @@
 {
   "name": "@xc/app-buletin",
-  "version": "0.7.2",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,6 +14,7 @@
     "@xc/actiuni": "workspace:*",
     "@xc/auth": "workspace:*",
     "@xc/authorization": "workspace:*",
+    "@xc/chat": "workspace:*",
     "@xc/config": "workspace:*",
     "@xc/contracts": "workspace:*",
     "@xc/observability": "workspace:*",

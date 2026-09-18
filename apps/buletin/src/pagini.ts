@@ -33,7 +33,7 @@
  * 17.09.2026, seara) — inapoi se merge prin Arhiva, ca la A8. Ce a iesit inainte e randul vechi de unelte.
  */
 import type { Navigatie } from '@xc/config'
-import { ICOANE, LUNI, LUNI_SCURT, dataCuZi, dataLunga, esc, pagina } from '@xc/ui'
+import { ICOANE, LUNI, LUNI_SCURT, dataCuZi, dataLunga, esc, pagina, type BucataChat } from '@xc/ui'
 import { JS_ABONARE, abonamentul, butonAbonare, fereastraAbonare } from '@xc/abonare'
 import { type Buletin, type BuletinScurt, type Gasit, plat } from './depozit.js'
 import { LOCAL } from './stil.js'
@@ -41,6 +41,11 @@ import { LOCAL } from './stil.js'
 export interface Ctx {
   prefix: string
   nav: Navigatie
+  /**
+   * Bula modulului de Chat, cand e pornita pentru buletin si omul acesta; `undefined` = stinsa.
+   * ⚠️ Se pune NUMAI pe `/nou` (user, 18.09.2026): restul buletinului e hartie publica.
+   */
+  chat?: BucataChat
   utilizator: string | null
   /** Adresa contului — fereastra de abonare o scrie in camp si o incuie; `null` la neautentificat. */
   emailulContului?: string | null
@@ -560,6 +565,8 @@ function sablon(ctx: Ctx, m: Meniu, titluPagina: string | undefined, corp: strin
     subantet: `${baraAnilor(ctx, m)}\n    ${baraCautarii(ctx, m)}\n    ${fereastraBuletinului(ctx)}`,
     corp: `${vesteaAbonarii(m)}${corp}`,
     scripturi: JS_BARE + JS_REVERS + JS_PAGINI + JS_ABONARE,
+    // Bula de chat, cand e pusa — azi numai pe `/nou`. Carcasa o aseaza singura (stil, HTML, script).
+    ...(ctx.chat ? { chat: ctx.chat } : {}),
   })
 }
 

@@ -91,6 +91,17 @@ export async function configChat(env: EnvComutator): Promise<ConfigChat> {
   }
 }
 
+/**
+ * Uită ce s-a ținut minte din configurație.
+ *
+ * ⚠️ E pentru PROBE: cache-ul de mai sus stă la nivel de MODUL, deci o probă care schimbă
+ * comutatoarele ar vedea în tăcere ce a citit proba dinainte — și ar trece (ori ar cădea) pe o cauză
+ * greșită. În funcționare nu e nevoie de el: `scrieConfigChat` pune valoarea nouă la loc chiar aici.
+ */
+export function uitaConfigChat(): void {
+  tinut = null
+}
+
 export async function scrieConfigChat(env: EnvComutator, c: ConfigChat): Promise<void> {
   if (!env.CONFIG) throw new Error('nu e legat KV-ul de configurare')
   await env.CONFIG.put(CHEIE_CONFIG, JSON.stringify(c))

@@ -32,6 +32,7 @@ import { principalDin, sesiuneCurenta, verificaCsrf } from '@xc/auth'
 import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
 import { Logger, correlationId } from '@xc/observability'
 import { modulActiuni } from '@xc/actiuni'
+import { modulChat } from '@xc/chat'
 import { actiuniBuletin } from './actiuni.js'
 import { dataVersiunii, eroareApi, html, json, jsonCuEtag } from '@xc/ui'
 import pkg from '../package.json'
@@ -88,6 +89,12 @@ export interface Env {
   PROGRAM: Fetcher
   /** Browser Rendering: din HTML-ul foii iese PDF-ul de tipar. */
   BROWSER: Fetcher
+  /** Creierul bulei de chat de pe `/nou` (18.09.2026); lipsa lui inseamna doar ca bula nu se aprinde. */
+  CHAT?: Fetcher
+  /** Hartiile pe care le intorc actiunile, cand le intorc — bula le da mai departe. */
+  MEDIA?: Fetcher
+  /** Comutatoarele modulelor, scrise din panoul de admin: de aici afla bula daca e pornita. */
+  CONFIG?: KVNamespace
   MEDIU: string
   ORIGINE_PUBLICA: string
   DOMENIU_COOKIE: string
@@ -103,6 +110,22 @@ export interface Env {
  * Răspund DOAR prin Service Binding, cu secretul platformei — de pe internet calea nu există.
  */
 const MODUL = modulActiuni<Env>({ aplicatie: 'buletin', versiune: pkg.version, actiuni: actiuniBuletin })
+
+/**
+ * BULA DE CHAT A BULETINULUI (user, 18.09.2026: „am făcut-o să fie transmisibilă… să facem Buletinul
+ * să aibă această funcție și să fie afișată doar pe /nou — când fac un buletin nou, ca să pot trimite
+ * instrucțiuni, texte etc. care să se lege la API-ul buletinului nou și să-l completeze").
+ *
+ * ⚠️ NUMAI PE `/nou`. În restul buletinului bula nu se scrie deloc: celelalte pagini sunt hârtie
+ * publică, iar acolo un chat n-ar avea ce face. Poarta modulului (comutatorul din Module + drepturile
+ * omului) rămâne a lui — asta e doar locul.
+ *
+ * ⚠️ Lanțul întreg e cel de la Program, neschimbat: omul scrie, modelul cheamă `buletin.compune`
+ * (acțiune de SCRIERE, deci se întoarce ca **propunere cu Da/Nu**, nu se face pe furiș), iar după „Da"
+ * pagina se reîncarcă — și atunci ecranul `/nou` se umple din cererea păstrată lângă PDF. De aceea
+ * „să-l completeze" nu cere niciun drum nou: ciorna compusă E starea ecranului.
+ */
+const CHAT = modulChat({ aplicatie: 'buletin', titlu: 'Scrie buletinul' })
 
 const SERVICIU = 'app-buletin'
 /** Audienta abonatilor — numele ei sta in registrul `ABONAMENTE` din `@xc/abonare`, nu aici. */
@@ -267,6 +290,35 @@ async function tiparul(req: Request, url: URL, env: Env, nr: number, data: strin
     httpMetadata: { contentType: 'application/pdf' },
   })
   return new Response(octeti, { headers: antete(pus?.httpEtag ?? `"${cheie}"`) })
+}
+
+/**
+ * CEREREA PĂSTRATĂ, întoarsă în câmpurile formularului din `/nou`.
+ *
+ * ⚠️ Drumul invers al lui `cerut` din POST: aceleași nume de câmpuri, ca ecranul să se umple cu exact
+ * ce s-a compus — fie de mână, fie de bula de chat. Dacă se schimbă un nume de câmp acolo, se schimbă
+ * și aici, altfel reumplerea pierde în tăcere tocmai câmpul acela.
+ * ⚠️ Nr. și data NU intră: nu sunt câmpuri (le ia serverul din arhivă). Adresa pozei nu se păstrează
+ * în cerere, deci nu se poate reumple.
+ */
+function scrisDinCerere(c: NumarCerut): Record<string, string> {
+  const scris: Record<string, string> = {
+    motto: c.motto ?? '',
+    moto_autor: c.motoAutor ?? '',
+    secundari: String((c.secundari ?? []).length),
+  }
+  const pune = (prefix: string, a: NumarCerut['principal'] | undefined) => {
+    if (!a) return
+    scris[`${prefix}_autor`] = a.autor ?? ''
+    scris[`${prefix}_ani`] = a.ani ?? ''
+    scris[`${prefix}_pomenire`] = a.pomenire ?? ''
+    scris[`${prefix}_titlu`] = a.titlu ?? ''
+    scris[`${prefix}_text`] = a.text ?? ''
+    scris[`${prefix}_sursa`] = a.sursa ?? ''
+  }
+  pune('p', c.principal)
+  ;(c.secundari ?? []).forEach((a, i) => pune(`s${i + 1}`, a))
+  return scris
 }
 
 /**
@@ -499,6 +551,16 @@ export default {
       poateVedeaCa: sesiune.poateVedeaCa,
       spre: adresaPaginii(cfg, url),
     }
+    /*
+     * CHATUL. Rutele (`/chat…`) merg ÎNAINTEA paginilor, ca la Program, iar bula se pune mai jos,
+     * numai pe `/nou`. ⚠️ Poarta e una singură, în modul: dacă chatul e stins din Module ori omul
+     * n-are dreptul, rutele răspund 404 — nu „stins", nu „n-ai voie". `eAdmin` de aici e adminul
+     * BULETINULUI (cheia lui), deci cine ține buletinul are și bula, fără să fie admin pe platformă.
+     */
+    const ctxChat = { prefix, principal, numeleOmului: ctx.utilizator, eAdmin: ctx.eAdmin }
+    const raspunsChat = await CHAT.ruteaza(req, env, ctxExec, cale, ctxChat)
+    if (raspunsChat) return raspunsChat
+
     // Sub masca „vezi ca" pagina e personala chiar cand n-are niciun nume pe ea; in dev nu se tine
     // cache deloc (cei cinci minute faceau schimbarile sa para nefacute).
     const cachePagina = {
@@ -596,7 +658,50 @@ export default {
         const masuri = variante('eroare' in cal ? undefined : { slujbe: cal.slujbe, detalii: cal.detalii })
 
         if (req.method !== 'POST') {
-          return html(paginaNou(ctx, m, nou, { variante: masuri, calendar, motto }), 200, alLui)
+          /*
+           * BULA DE CHAT — NUMAI AICI (user, 18.09.2026). Cu ea omul trimite instrucțiuni și texte,
+           * iar modelul cheamă `buletin.compune`. Poarta e a modulului: stins din Module, ori om fără
+           * drept, ori fără creier legat — `bula` întoarce `undefined` și pagina rămâne cum era.
+           */
+          ctx.chat = await CHAT.bula(env, ctxChat)
+          /*
+           * ⚠️ CIORNA COMPUSĂ E STAREA ECRANULUI (18.09.2026). Până acum `/nou` se deschidea mereu
+           * cu formularul gol: numărul compus se vedea doar în răspunsul POST-ului, deci ce compunea
+           * chatul (sau o altă fereastră) se pierdea la prima reîncărcare — iar după „Da, fă-o" pagina
+           * se reîncarcă tocmai atunci. Acum, dacă numărul care urmează are deja o ciornă în depozit,
+           * ea se arată, iar formularul vine umplut din cererea păstrată lângă PDF: „completat de chat"
+           * nu e un drum nou, e starea citită de unde era deja scrisă.
+           * ⚠️ Adresa pozei NU se păstrează în cerere (acolo `poza` e doar da/nu), deci câmpul ei rămâne
+           * gol la reumplere. Se vede în ciorna de deasupra că poza e acolo.
+           */
+          const [foaia, pastrata] = await Promise.all([
+            nou.nr ? env.FISIERE.head(cheiaNumarului({ nr: nou.nr, data: nou.data })) : Promise.resolve(null),
+            nou.nr ? env.FISIERE.get(cheiaCererii({ nr: nou.nr, data: nou.data })) : Promise.resolve(null),
+          ])
+          const cerereaVeche = pastrata ? ((await pastrata.json()) as NumarCerut) : null
+          const coperta = foaia ? await env.FISIERE.head(cheiaCopertei({ nr: nou.nr!, data: nou.data })) : null
+          return html(
+            paginaNou(ctx, m, nou, {
+              variante: masuri,
+              calendar,
+              motto,
+              ...(cerereaVeche ? { scris: scrisDinCerere(cerereaVeche) } : {}),
+              ...(foaia
+                ? {
+                    raspuns: {
+                      facut: true,
+                      cheie: foaia.key,
+                      cheiePoza: coperta ? coperta.key : null,
+                      versiune: (foaia.httpEtag ?? '').replace(/[^\w-]/g, '') || null,
+                      marime: foaia.size,
+                      plangeri: [],
+                    },
+                  }
+                : {}),
+            }),
+            200,
+            alLui,
+          )
         }
 
         const f = await req.formData()
