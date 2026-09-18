@@ -317,8 +317,11 @@ propunerea automată, ca în V1.
     ce biserica goală s-a măsurat la −67.5 dBFS RMS pe `live.sfantul-ilie.ro/mic`; rămâne **validat la
     slujba de 19.09, ora 18:00**, că vocea trece peste −60 (dacă nu urcă `ultimul_sunet`, pragul e prea
     sus și se coboară spre −65);
-    (2) **verificat pe viu că a sărit primul album** după publicare (contorul semănat cu 24 h în urmă
-    face rotirea scadentă pe loc) — dacă nu, `wrangler tail xc-live-production` pe `alarm`/`roteste`.
+    (2) ✅ **verificat pe viu că a sărit primul album** după publicare — confirmat 18.09.2026, 20:18:19
+    (contorul semănat cu 24 h în urmă face rotirea scadentă pe loc);
+    (3) **de citit graficul de pe `/mic` după slujba de 19.09, ora 18:00**, ca să vedem cu cât trece
+    vocea peste −60 dBFS (fereastra de 6 h, linia RMS și vârful) — de acolo se hotărăște dacă pragul
+    rămâne la −60 sau coboară spre −65.
 
 00c. **CHATUL, PE APLICAȚIE — scris ȘI PUBLICAT pe 18.09.2026, 13:20** (`e74d10d`, `ce7b7e6`).
     Îndrumările și uneltele au ieșit din cheia comună în `modul:chat:<aplicatie>`; rubrica „Chat AI"
@@ -1141,6 +1144,35 @@ acolo, alarma se pune pe `acum`, nu pe capătul albumului (albumul curge în buc
 ar veni la o oră neștiută). Așa prima săritură se vede în ≤20 s de la prima telemetrie de după
 publicare, nu peste o zi. Pe același temei, „necunoscut = nepăzit" și în socoteala pură
 (`scadentaRotirii`/`eScadentaRotirea` cu `ultimaOm` null dau scadență imediată).
+
+**Graficul sunetului pe `/mic`** (cerut 18.09.2026: „să facem grafic"). Fiecare telemetrie cu `nivel`
+măsurat lasă un punct `{la, nivel, varf}` în DO-ul `Aparat`. ⚠️ **Pe chei ORARE**
+(`sunet:AAAA-LL-ZZTHH`, UTC, ≤180 puncte/oră ≈ 7 KB), nu într-un singur șir: o valoare de storage are
+limita de **128 KB**, iar un array de 7 zile ar fi rescris întreg la fiecare 20 s. Ora din cheie e
+UTC fiindcă cheia e un sertar, nu o etichetă — în ora locală, noaptea trecerii la ora de iarnă ar
+amesteca două ore într-una. Cheia poartă ora în ea, deci ordinea alfabetică E ordinea cronologică:
+citirea unei ferestre e un `list({start, end})`, iar mătura celor peste **7 zile** e
+`list({start: 'sunet:', end: limitaVechimii})` + `delete`, făcută o dată pe oră (la schimbarea cheii),
+nu la fiecare bătaie. Socoteala pură, cu probe: `apps/live/src/sunet-istoric.ts` +
+`tests/mic-sunet.test.ts`. Ruta `GET /mic/sunet?ore=6|24|168` (aceeași poartă de super-admin, fără
+cache) întoarce `{prag, puncte, de_la, pana_la, pas_s}`; peste 1200 de puncte se **rarefiază cu
+MAXIMUL** fiecărei bucăți (un monitor de prag caută vârful, nu media), iar `pas_s` spune paginii cât
+de depărtate sunt punctele, ca să rupă linia la goluri și să nu arate 7 zile ca pe o pană continuă.
+Desenul e SVG inline făcut de scriptul paginii (fără biblioteci), după regulile skill-ului `dataviz`:
+o singură axă, linia RMS de 2 px cu vârful ca spălare de 10% în **aceeași** culoare (sunt mărimi
+cuibărite), grilă subțire plină, pragul punctat cu eticheta lui, zonele peste prag ca o bară subțire
+pe talpă, legendă scrisă, cifra doar la capăt, citire la plimbarea mausului ȘI la săgeți. ⚠️ Culorile
+sunt tokenuri proprii (`--graf-nivel`, `--graf-prag` în `STIL_MIC`), nu `--albastru`/`--rosu`: pe temă
+întunecată accentele carcasei sunt prea deschise pentru marcaje de grafic — pașii de acolo trec
+validatorul `dataviz` în amândouă temele.
+
+**`asteaptaComanda` nu mai scoate 500** (18.09.2026). Cele 2–23 de HTTP 500 pe zi de pe
+`GET /intern/aparat/comanda` erau **toate la capătul așteptării de 25 s**: ramura de expirare făcea
+`return this.comanda()`, adică o citire de storage pornită dintr-un `setTimeout` parcat — iar dacă
+între timp obiectul durabil fusese mutat sau repornit, citirea cădea. Acum comanda citită la INTRARE
+se ține în mână și se întoarce la expirare, iar `puneComanda` trezește așteptătorii **cu versiunea
+nouă în braț**: pe drumul ăsta nu mai există nicio citire de după așteptare. Bucata e în
+`apps/live/src/asteptare.ts`, ca să poată fi probată (`tests/mic-sunet.test.ts`).
 
 **⚠️ Depozitul e cel din V1, REFOLOSIT** — hotărâre a utilizatorului (14.09.2026: „cei 11gb poți să
 îi folosești sau să redenumești R2-ul… ca să nu mai faci atâtea operații"). Redenumirea unui bucket
@@ -2357,6 +2389,21 @@ forța antetul `Host`**.
   repornit cât cererea stă parcată în `setTimeout`, `asteaptaComanda` cade pe `return this.comanda()`.
   Aparatul merge mai departe pe ultima comandă, deci n-a pierdut nimic. Tail curat 3 min (0 excepții,
   long-poll-uri de 25 s cu 200), 0 erori pe Pi de la 20:18:45.
+
+- **GRAFICUL NIVELULUI DE SUNET pe `/mic`** (user, 20:35: „să facem grafic"). Istoric în DO-ul
+  `Aparat` pe **chei orare** (`sunet:AAAA-LL-ZZTHH`, UTC, ≤180 puncte/oră), ținut **7 zile** și măturat
+  o dată pe oră — nu un array rescris la fiecare 20 s, fiindcă o valoare de storage are limita de
+  128 KB. Rută nouă `GET /mic/sunet?ore=6|24|168` (aceeași poartă de super-admin), care rarefiază cu
+  maximul peste 1200 de puncte. Pe pagină: SVG desenat de scriptul ei, fără biblioteci, după skill-ul
+  `dataviz` — linia RMS, vârful ca spălare, pragul punctat cu eticheta lui, zonele peste prag pe talpă,
+  trei butoane 6 h / 24 h / 7 zile (ales ținut în localStorage), reîmprospătare la 60 s, citire la maus
+  și la săgeți, culori validate pentru amândouă temele. Socoteala pură: `apps/live/src/sunet-istoric.ts`.
+  Privit pe viu în Chromium, temă deschisă și întunecată, pe toate cele trei ferestre.
+
+- **`asteaptaComanda`, întărită** — 500-urile de mai sus. Ramura de expirare nu mai citește storage-ul:
+  comanda de la intrare se ține în mână, iar `puneComanda` trezește așteptătorii cu versiunea nouă în
+  braț. Bucata scoasă în `apps/live/src/asteptare.ts`, cu proba care ar fi prins-o (un storage care
+  cade după așteptare nu mai poate strica răspunsul). 672 de probe, typecheck 36/36. **live 0.1.9**.
 
 - **„Să nu ținem în două locuri programul"** (15:25–16:00): programul liturgic era tastat a doua oară
   în WordPress-ul de pe apex (articol `program` + ACF, tema `sfantulilie`, `content-single-program.php`).

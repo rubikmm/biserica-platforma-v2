@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers'
 import { pieseDin } from '@xc/comanda'
 import { COMANDA_GOALA, type ComandaAparat, type SelectieRadio, type SunetAparat, type Telemetrie } from '@xc/contracts'
+import { asteaptaSchimbarea } from './asteptare.js'
 import { type EnvRadioDeparte, ceasRadio, indiceRadio, puneCeas } from './radio-departe.js'
 import {
   CINE_CEAS,
@@ -16,6 +17,20 @@ import {
   ultimulSunetNou,
   urmatoareaRotire,
 } from './rotire.js'
+import {
+  CHEIE_ORA_CURENTA,
+  type IstoricSunet,
+  ORE_IMPLICIT,
+  PREFIX_SUNET,
+  type PunctSunet,
+  adaugaPunct,
+  cheiaOrei,
+  cheileDin,
+  compuneIstoric,
+  dupaOra,
+  limitaVechimii,
+  punctDin,
+} from './sunet-istoric.js'
 
 /**
  * APARATUL — legătura aplicației cu daemonul de la biserică.
@@ -28,7 +43,9 @@ import {
  *   - ROTIREA albumelor: de când n-a mai comandat un om și ce albume a ales ceasul (vezi `rotire.ts`);
  *   - ULTIMUL SUNET: cea mai recentă clipă în care microfonul a auzit ceva peste prag — ținută
  *     deoparte fiindcă e MONOTONĂ (nu scade niciodată) și se scrie pe drumul cel mai umblat,
- *     telemetria de la 20 s; înghesuită în `rotire`, fiecare bătaie ar rescrie și contorul omului.
+ *     telemetria de la 20 s; înghesuită în `rotire`, fiecare bătaie ar rescrie și contorul omului;
+ *   - ISTORICUL SUNETULUI: punctele graficului de pe `/mic`, pe chei ORARE (`sunet:…`), ținute 7
+ *     zile — v. pricina cheilor și a măturii în `sunet-istoric.ts`.
  *
  * ⚠️ Numele câmpurilor sunt cele din V1, dinadins: **aparatul e ACELAȘI**, nu-l rescriem odată cu
  * platforma. Contractul e descris și în `aparat/worker.py`, de partea cealaltă.
@@ -54,7 +71,9 @@ export const radioPentruAparat = (sel: SelectieRadio): Schimbare => ({
  * de trei bătăi pierdute: altfel panoul ar striga „legătură ruptă" la prima cerere căzută.
  */
 const APARAT_VIU_S = 75
-const ASTEAPTA_MAX_S = 30
+
+/** Cât de multe chei șterge storage-ul dintr-o dată. Peste atât, se taie în bucăți. */
+const STERGE_ODATA = 128
 
 /**
  * CEASURILE programate, în milisecunde de epocă.
@@ -80,27 +99,28 @@ const MARJA_ALARMA_MS = 1000
 const REINCEARCA_ROTIREA_MS = 60 * 60 * 1000
 
 export class Aparat extends DurableObject {
-  /** Cine așteaptă o comandă nouă (long-poll). Doar în memorie — la trezire nu e nimeni. */
-  private asteptatori = new Set<() => void>()
+  /**
+   * Cine așteaptă o comandă nouă (long-poll). Doar în memorie — la trezire nu e nimeni.
+   * ⚠️ Așteptătorul primește comanda NOUĂ în braț, nu doar un semnal: v. `asteptare.ts`.
+   */
+  private asteptatori = new Set<(c: ComandaAparat) => void>()
 
   async comanda(): Promise<ComandaAparat> {
     return (await this.ctx.storage.get<ComandaAparat>('comanda')) ?? COMANDA_GOALA
   }
 
-  /** Întoarce comanda de îndată ce e altă versiune decât `versiune`, sau după `secunde`. */
+  /**
+   * Întoarce comanda de îndată ce e altă versiune decât `versiune`, sau după `secunde`.
+   *
+   * ⚠️ **După așteptare NU se mai citește storage-ul.** Ce s-a citit la intrare se ține în mână
+   * pentru ramura de expirare, iar `puneComanda` trezește așteptătorii cu versiunea nouă. Citirea de
+   * după cele 25 s era pricina celor 2–23 de HTTP 500 pe zi de pe `/intern/aparat/comanda` (v.
+   * `asteptare.ts`).
+   */
   async asteaptaComanda(versiune: number, secunde: number): Promise<ComandaAparat> {
     const c = await this.comanda()
     if (c.versiune !== versiune) return c
-    await new Promise<void>((gata) => {
-      const trezeste = () => {
-        this.asteptatori.delete(trezeste)
-        clearTimeout(ceas)
-        gata()
-      }
-      const ceas = setTimeout(trezeste, Math.max(1, Math.min(secunde, ASTEAPTA_MAX_S)) * 1000)
-      this.asteptatori.add(trezeste)
-    })
-    return this.comanda()
+    return asteaptaSchimbarea(c, secunde, this.asteptatori)
   }
 
   // --- ceasurile obiectului (una singură, două rosturi) ------------------------
@@ -181,7 +201,8 @@ export class Aparat extends DurableObject {
       de,
     }
     await this.ctx.storage.put('comanda', noua)
-    for (const t of [...this.asteptatori]) t()
+    // Cu comanda în braț: așteptătorul n-are de ce s-o mai citească o dată (v. `asteaptaComanda`).
+    for (const t of [...this.asteptatori]) t(noua)
     return noua
   }
 
@@ -194,13 +215,68 @@ export class Aparat extends DurableObject {
      * ⚠️ Aici NU se atinge alarma: bătaia vine la 20 s, iar rotirea se reprogramează singură când se
      * trezește (vezi `urmatoareaRotire`).
      */
-    const clipa = sunetCurat(t.sunet)?.ultimul_peste_prag ?? null
+    const s = sunetCurat(t.sunet)
+    const clipa = s?.ultimul_peste_prag ?? null
     if (clipa) {
       const vechi = await this.ultimulSunet()
       const nou = ultimulSunetNou(vechi, clipa)
       if (nou !== vechi) await this.ctx.storage.put('ultimul_sunet', nou)
     }
+    await this.scriePunct(s)
   }
+
+  // --- istoricul sunetului, pentru graficul de pe `/mic` (v. `sunet-istoric.ts`) -------
+
+  /**
+   * Un punct în cheia orei lui, și — numai la trecerea într-o oră nouă — curățenia celor vechi.
+   *
+   * ⚠️ Ora se ia de pe ceasul NOSTRU, nu din telemetrie: un aparat repornit cu ceasul dat înapoi ar
+   * scrie în sertarul altei ore și ar împrăștia punctele pe axă (aceeași pricină pentru care
+   * `ultimul_sunet` e monoton).
+   */
+  private async scriePunct(s: SunetAparat | null): Promise<void> {
+    const acum = Date.now()
+    const p = punctDin(acum, s)
+    if (!p) return
+    const cheie = cheiaOrei(acum)
+    const puncte = await this.ctx.storage.get<PunctSunet[]>(cheie)
+    await this.ctx.storage.put(cheie, adaugaPunct(puncte, p))
+    // Curățenia costă o citire de listă, deci se face o dată pe oră, nu la fiecare bătaie de 20 s.
+    if ((await this.ctx.storage.get<string>(CHEIE_ORA_CURENTA)) === cheie) return
+    await this.ctx.storage.put(CHEIE_ORA_CURENTA, cheie)
+    await this.maturaIstoricul(acum)
+  }
+
+  /**
+   * Șterge orele de peste 7 zile. ⚠️ `list` se cere pe interval, nu pe tot prefixul: storage-ul
+   * întoarce și VALORILE, iar o listare a întregului istoric ar citi peste un megaoctet ca să afle
+   * numele unei chei. Cu `end` pus pe marginea vechimii, în mod obișnuit se întoarce o singură oră.
+   */
+  private async maturaIstoricul(acum: number): Promise<void> {
+    const vechi = await this.ctx.storage.list<PunctSunet[]>({ start: PREFIX_SUNET, end: limitaVechimii(acum) })
+    const chei = [...vechi.keys()]
+    for (let i = 0; i < chei.length; i += STERGE_ODATA) {
+      await this.ctx.storage.delete(chei.slice(i, i + STERGE_ODATA))
+    }
+  }
+
+  /**
+   * Punctele din ultimele `ore`, pentru graficul de pe `/mic`. Se citesc DOAR cheile orare din
+   * fereastră (`start`/`end` lexicografic, v. `sunet-istoric.ts`), nu tot istoricul.
+   */
+  async istoricSunet(ore: number = ORE_IMPLICIT): Promise<IstoricSunet> {
+    const panaLa = Date.now()
+    const deLa = panaLa - ore * 60 * 60 * 1000
+    const chei = cheileDin(deLa, panaLa)
+    const [bucati, t] = await Promise.all([
+      this.ctx.storage.list<PunctSunet[]>({ start: chei[0] ?? cheiaOrei(deLa), end: dupaOra(panaLa) }),
+      this.stare(),
+    ])
+    return compuneIstoric(bucati.values(), { deLa, panaLa, prag: sunetCurat(t?.sunet)?.prag ?? null })
+  }
+
+  // --- starea aparatului și sunetul de ACUM ------------------------------------
+
   async stare(): Promise<Telemetrie | null> {
     return (await this.ctx.storage.get<Telemetrie>('stare')) ?? null
   }

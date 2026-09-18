@@ -41,6 +41,7 @@ import { type Ctx, pagina, paginaMesaj, spreCont } from './pagina.js'
 import { ruteazaSetari } from '@xc/setari'
 import type { EnvProgram } from './program.js'
 import { type EnvRadioDeparte, indiceRadio } from './radio-departe.js'
+import { oreCerute } from './sunet-istoric.js'
 import { type EnvCreier, asiguraCeasulRotirii, executaComanda, preiaDecizia, stareEmisie, starePanou } from './stare.js'
 
 export { Direct } from './direct.js'
@@ -207,6 +208,16 @@ export default {
           // citire o folosește și rotirea albumelor, deci pagina arată chiar ceasul liniștii.
           const [canal, sunet] = await Promise.all([stareCanal(env, MIC), aparatul(env).sunet()])
           return Response.json(stareMic(canal, sunet), { headers: JSON_VIU })
+        }
+        if (cale === '/mic/sunet' && req.method === 'GET') {
+          /*
+           * ISTORICUL pentru grafic (18.09.2026). Fereastra vine din adresă și e închisă pe o listă
+           * scurtă (6 / 24 / 168 de ore): altfel „?ore=100000" ar cere obiectului durabil să citească
+           * tot ce are. Fără cache — un monitor arătat cu întârziere nu e monitor.
+           */
+          return Response.json(await aparatul(env).istoricSunet(oreCerute(url.searchParams.get('ore'))), {
+            headers: JSON_VIU,
+          })
         }
         if (cale === '/mic/asculta' && req.method === 'POST') return ascultaIntra(env, MIC)
         const sidMic = sidDin(cale, '/mic/asculta/')
