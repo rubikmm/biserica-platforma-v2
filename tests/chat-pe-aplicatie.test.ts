@@ -32,6 +32,8 @@ import {
   type UnealtaDeBifat,
 } from '../packages/chat/src/index.js'
 import { instructiuni } from '../services/chat-worker/src/creier.js'
+import creier from '../services/chat-worker/src/index.js'
+import { ANTET_ACTOR, ANTET_SECRET } from '../packages/actiuni/src/index.js'
 
 // ---------------------------------------------------------------------------
 // Mediul de probă
@@ -294,6 +296,66 @@ describe('rubrica din Setări', () => {
     })
     expect(h).toContain('nicio unealtă')
     expect(h).not.toContain('type="checkbox"')
+  })
+})
+
+/**
+ * ⚠️ De ruta asta atârnă BIFELE din ecranul de Setări. Dacă tace, adminul vede „nu am putut afla ce
+ * unelte are bula" și nu mai poate alege nimic — o stricăciune care nu dă nicio eroare nicăieri.
+ */
+describe('ruta /unelte a creierului', () => {
+  const actiune = (nume: string, efect: 'citeste' | 'scrie', fundal = false) => ({
+    nume,
+    descriere: `Ce face ${nume}.`,
+    efect,
+    permisiune: null,
+    da: 'date' as const,
+    intrare: { type: 'object', properties: {} },
+    iesire: { type: 'object', properties: {} },
+    exemple: [],
+    fundal,
+    urmare: null,
+  })
+
+  const aplicatieFalsa = (nume: string, actiuni: ReturnType<typeof actiune>[]) =>
+    ({
+      fetch: async () =>
+        new Response(JSON.stringify({ aplicatie: nume, versiune: '1.0.0', actiuni }), {
+          headers: { 'content-type': 'application/json' },
+        }),
+    }) as unknown as Fetcher
+
+  it('dă uneltele aplicației care a întrebat, cu ce fac și ce schimbă — fără cele de fundal', async () => {
+    const env = {
+      MEDIU: 'staging',
+      SECRET_INTERN: 'secret',
+      DB: {} as D1Database,
+      CONFIG: kvFals({ 'modul:chat': GLOBAL }).kv,
+      // ⚠️ Numele aplicațiilor sunt cheia din `CE_VEDE_BULA`: bula buletinului vede numai buletinul.
+      BULETIN: aplicatieFalsa('buletin', [
+        actiune('buletin.compune', 'scrie'),
+        actiune('buletin.socoteala', 'citeste'),
+        actiune('buletin.reguli', 'citeste', true),
+      ]),
+      PROGRAM: aplicatieFalsa('program', [actiune('program.adauga_slujba', 'scrie')]),
+    } as never
+
+    const r = await creier.fetch(
+      new Request('https://chat.intern/unelte?aplicatie=buletin', {
+        headers: {
+          [ANTET_SECRET]: 'secret',
+          [ANTET_ACTOR]: JSON.stringify({ fel: 'utilizator', principal: { userId: 'u1', email: 'a@b.ro', roles: [] } }),
+        },
+      }),
+      env,
+      {} as ExecutionContext,
+    )
+    expect(r.status).toBe(200)
+    const date = (await r.json()) as { unelte: Array<{ nume: string; efect: string; descriere: string; aplicatie: string }> }
+    expect(date.unelte.map((u) => u.nume)).toEqual(['buletin.compune', 'buletin.socoteala'])
+    expect(date.unelte[0]!.efect).toBe('scrie')
+    expect(date.unelte[0]!.aplicatie).toBe('buletin')
+    expect(date.unelte[0]!.descriere).toContain('Ce face')
   })
 })
 
