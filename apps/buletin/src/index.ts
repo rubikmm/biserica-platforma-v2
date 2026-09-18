@@ -58,7 +58,7 @@ import {
   cheiaNumarului,
   compune,
   mottoDinainte,
-  pastreazaCererea,
+  pastreazaNumarul,
   textCurat,
 } from './compune.js'
 import { PAGINI, type NumarCerut, variante } from './masuri.js'
@@ -806,25 +806,14 @@ export default {
 
         const r = await compune(env, { cerut, poze })
         if (r.ok && r.pdf) {
-          const cheie = cheiaNumarului(cerut)
-          const pus = await env.FISIERE.put(cheie, r.pdf, { httpMetadata: { contentType: 'application/pdf' } })
-          // coperta, din aceeași randare: ea se vede pe ecran înainte de validare și merge mai
-          // departe în arhivă, la validare (fără ea rândul ar rămâne cu locul poze desenat)
-          const cheiePoza = cheiaCopertei(cerut)
-          if (r.coperta) await env.FISIERE.put(cheiePoza, r.coperta, { httpMetadata: { contentType: 'image/jpeg' } })
-          // cererea, ca date, lângă PDF — de aici ia numărul următor motto-ul (ce a scris omul, nu proba)
-          await pastreazaCererea(env, cerut)
-          /*
-           * ⚠️ BROȘURILE VECHI ALE NUMĂRULUI SE ARUNCĂ. Ele se țin în depozit sub o cheie scoasă din
-           * cheia PDF-ului, iar la recompunere PDF-ul se schimbă sub același nume: fără ștergerea
-           * asta, „Tipărește" ar da mai departe broșura foii dinainte, așezată din pagini vechi.
-           */
-          ctxExec.waitUntil(
-            env.FISIERE.delete([
-              cheiaBrosurii(cheie, 'a4', false), cheiaBrosurii(cheie, 'a4', true),
-              cheiaBrosurii(cheie, 'a3', false), cheiaBrosurii(cheie, 'a3', true),
-            ]).catch(() => undefined),
+          // Tot ce urmează randării — PDF, copertă, cererea păstrată, broșurile vechi aruncate — stă
+          // într-un singur loc, folosit și de acțiunea prin care lucrează chatul (vezi `pastreazaNumarul`).
+          const pusul = await pastreazaNumarul(
+            env,
+            { cerut, peHartie: r.cerut, pdf: r.pdf, coperta: r.coperta },
+            ctxExec,
           )
+          const cheie = pusul.cheie
           ctxExec.waitUntil(
             scrieAudit(env, {
               action: 'buletin.compune', target: cheie, outcome: 'success',
@@ -837,11 +826,11 @@ export default {
               raspuns: {
                 facut: true,
                 cheie,
-                cheiePoza: r.coperta ? cheiePoza : null,
+                cheiePoza: pusul.cheiePoza,
                 // amprenta randării: ea desparte foaia de acum de cea dinainte în cache-ul
                 // browserului, care altfel ar arăta foaia veche sub aceeași adresă
-                versiune: (pus?.httpEtag ?? '').replace(/[^\w-]/g, '') || String(Date.now()),
-                marime: r.pdf.byteLength,
+                versiune: pusul.versiune,
+                marime: pusul.marime,
                 plangeri: [],
                 atentie: r.atentie,
               },

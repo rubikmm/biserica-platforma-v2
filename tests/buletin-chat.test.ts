@@ -15,7 +15,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import buletin from '../apps/buletin/src/index.js'
 import { actiuniBuletin } from '../apps/buletin/src/actiuni.js'
-import { cheiaCererii, cheiaCopertei, cheiaNumarului } from '../apps/buletin/src/compune.js'
+import { cheiaCererii, cheiaCopertei, cheiaNumarului, pastreazaNumarul } from '../apps/buletin/src/compune.js'
+import { cheiaBrosurii } from '../apps/buletin/src/tipar.js'
 import { buletinulNou } from '../apps/buletin/src/pagini.js'
 import { CE_VEDE_BULA, aplicatiileLegate } from '../services/chat-worker/src/index.js'
 import { uitaConfigChat } from '../packages/chat/src/comutator.js'
@@ -387,5 +388,87 @@ describe('ce aplicații vede bula fiecărei aplicații', () => {
   it('o aplicație fără rând în registru vede tot, ca până acum — un chat nou nu rămâne mut', () => {
     expect(CE_VEDE_BULA['tipic']).toBeUndefined()
     expect(aplicatiileLegate(env, 'tipic').map((a) => a.nume)).toEqual(['program', 'calendar', 'tipic', 'buletin'])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Ce rămâne în depozit după o compunere
+// ---------------------------------------------------------------------------
+
+/**
+ * ⚠️ PĂȚIT PE 18.09.2026 (user: „a zis că Compune buletinul după o modificare și nu se vede nimic —
+ * ar trebui să se regenereze și imaginea… și fișierele PDF").
+ *
+ * Erau DOUĂ drumuri către aceeași treabă: ruta formularului punea PDF-ul, COPERTA, cererea păstrată
+ * și arunca broșurile vechi; acțiunea `buletin.compune` — cea prin care lucrează chatul — punea
+ * numai PDF-ul. Deci un număr recompus din bulă arăta coperta dinainte (ori niciuna), iar
+ * „Tipărește" dădea broșura foii vechi. **Nimic nu dădea vreo eroare.**
+ *
+ * De atunci treaba stă într-un singur loc, `pastreazaNumarul`, iar probele astea îl păzesc.
+ */
+describe('pastreazaNumarul — un singur loc pentru amândouă drumurile', () => {
+  const CERUT = {
+    motto: 'Un motto.',
+    nr: 616,
+    data: '2026-09-20',
+    principal: { autor: 'AUTOR', titlu: 'TITLU', text: 'Text.' },
+    floare: true,
+  } as never
+
+  function depozitCareTineMinte() {
+    const puse = new Map<string, { corp: unknown; tip?: string }>()
+    const sterse: string[] = []
+    const FISIERE = {
+      async put(cheie: string, corp: unknown, o?: { httpMetadata?: { contentType?: string } }) {
+        puse.set(cheie, { corp, tip: o?.httpMetadata?.contentType })
+        return { httpEtag: '"etag-nou"' }
+      },
+      async delete(cheie: string | string[]) {
+        for (const c of Array.isArray(cheie) ? cheie : [cheie]) sterse.push(c)
+      },
+    } as unknown as R2Bucket
+    return { env: { FISIERE }, puse, sterse }
+  }
+
+  const pdf = new ArrayBuffer(1234)
+  const poza = new ArrayBuffer(99)
+
+  it('pune PDF-ul ȘI coperta, păstrează cererea, și aruncă broșurile vechi', async () => {
+    const { env, puse, sterse } = depozitCareTineMinte()
+    const r = await pastreazaNumarul(env, { cerut: CERUT, pdf, coperta: poza })
+
+    expect(puse.get(cheiaNumarului(CERUT))?.tip).toBe('application/pdf')
+    expect(puse.get(cheiaCopertei(CERUT))?.tip).toBe('image/jpeg')
+    expect(puse.has(cheiaCererii(CERUT))).toBe(true)
+    // broșurile: toate patru, ca „Tipărește" să nu dea foaia dinainte
+    expect(sterse).toEqual(
+      expect.arrayContaining([
+        cheiaBrosurii(cheiaNumarului(CERUT), 'a4', false),
+        cheiaBrosurii(cheiaNumarului(CERUT), 'a4', true),
+        cheiaBrosurii(cheiaNumarului(CERUT), 'a3', false),
+        cheiaBrosurii(cheiaNumarului(CERUT), 'a3', true),
+      ]),
+    )
+    // amprenta randării, din etag: fără ea browserul ar arăta foaia veche sub aceeași adresă
+    expect(r.versiune).toBe('etag-nou')
+    expect(r.cheiePoza).toBe(cheiaCopertei(CERUT))
+    expect(r.marime).toBe(1234)
+  })
+
+  it('fără copertă nouă, o ȘTERGE pe cea veche — o poză rămasă ar arăta un număr care nu mai e', async () => {
+    const { env, puse, sterse } = depozitCareTineMinte()
+    const r = await pastreazaNumarul(env, { cerut: CERUT, pdf, coperta: null })
+    expect(puse.has(cheiaCopertei(CERUT))).toBe(false)
+    expect(sterse).toContain(cheiaCopertei(CERUT))
+    expect(r.cheiePoza).toBeNull()
+  })
+
+  it('un depozit fără etag tot dă o amprentă — altfel adresa ar rămâne aceeași', async () => {
+    const FISIERE = {
+      async put() { return undefined },
+      async delete() { return undefined },
+    } as unknown as R2Bucket
+    const r = await pastreazaNumarul({ FISIERE }, { cerut: CERUT, pdf })
+    expect(r.versiune).not.toBe('')
   })
 })

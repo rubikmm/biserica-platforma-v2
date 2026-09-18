@@ -17,6 +17,7 @@ import { dataLunga, pdfCuRaportSiCoperta } from '@xc/ui'
 import { capulTextului, mottoDinText } from './depozit.js'
 import { foaieHtml, textCurat } from './foaie.js'
 import { type NumarCerut, type Socoteala, SECUNDARI_MAXIM, semne, socoteste } from './masuri.js'
+import { cheiaBrosurii } from './tipar.js'
 import { umpleCuProba } from './umplere.js'
 
 export interface EnvCompunere {
@@ -250,6 +251,83 @@ export const cheiaCopertei = (cerut: Pick<NumarCerut, 'nr' | 'data'>): string =>
  */
 export const cheiaCererii = (cerut: Pick<NumarCerut, 'nr' | 'data'>): string =>
   `compus/${cerut.data.slice(0, 4)}/buletin-${cerut.nr}-${cerut.data}.json`
+
+/** Ce rămâne în depozit după o compunere, gata de pus în pagină. */
+export interface NumarulPus {
+  cheie: string
+  /** Coperta, dacă randarea a dat una; `null` înseamnă că numărul n-are poză ACUM. */
+  cheiePoza: string | null
+  /** Amprenta randării, pentru `?v=`: desparte foaia de acum de cea dinainte în cache-ul browserului. */
+  versiune: string
+  marime: number
+}
+
+/**
+ * TOT CE SE ÎNTÂMPLĂ DUPĂ O RANDARE REUȘITĂ, într-un singur loc.
+ *
+ * ⚠️ SCRIS AICI FIINDCĂ ERA ÎN DOUĂ (18.09.2026, pățit): ruta formularului punea PDF-ul, coperta,
+ * cererea și arunca broșurile vechi; acțiunea `buletin.compune` — cea prin care lucrează CHATUL —
+ * punea numai PDF-ul. Deci un număr compus din bulă se recompunea pe tăcute: pagina arăta coperta
+ * dinainte (ori niciuna), iar „Tipărește" dădea broșura foii vechi. Nimic nu dădea vreo eroare.
+ * De acum, amândouă drumurile trec pe aici.
+ *
+ * ⚠️ Coperta se ȘTERGE când randarea n-a dat una: o poză veche lăsată sub aceeași cheie ar arăta un
+ * număr care nu mai există.
+ */
+export async function pastreazaNumarul(
+  env: Pick<EnvCompunere, 'FISIERE'>,
+  o: {
+    /** Ce a scris omul — se păstrează ca date, fără umplerea de probă. */
+    cerut: NumarCerut
+    /** Numărul așa cum a intrat pe hârtie (cu umplerea), pentru numărătoarea semnelor. */
+    peHartie?: NumarCerut
+    pdf: ArrayBuffer
+    coperta?: ArrayBuffer | null
+  },
+  ctxExec?: Pick<ExecutionContext, 'waitUntil'>,
+): Promise<NumarulPus> {
+  const cheie = cheiaNumarului(o.cerut)
+  const pus = await env.FISIERE.put(cheie, o.pdf, {
+    httpMetadata: { contentType: 'application/pdf' },
+    customMetadata: {
+      nr: String(o.cerut.nr),
+      data: o.cerut.data,
+      semne: String(semne(textCurat(o.peHartie ?? o.cerut))),
+    },
+  })
+
+  // Coperta, din ACEEAȘI randare: ea se vede pe ecran înainte de validare și merge mai departe în
+  // arhivă, la validare (fără ea, rândul ar rămâne cu locul pozei desenat).
+  const cheiePoza = cheiaCopertei(o.cerut)
+  if (o.coperta) {
+    await env.FISIERE.put(cheiePoza, o.coperta, { httpMetadata: { contentType: 'image/jpeg' } })
+  } else {
+    await env.FISIERE.delete(cheiePoza).catch(() => undefined)
+  }
+
+  // Cererea, ca date, lângă PDF: de aici pornește numărul următor (motto-ul) și de aici se umple
+  // ecranul `/nou` după reîncărcare.
+  await pastreazaCererea(env, o.cerut)
+
+  /*
+   * ⚠️ BROȘURILE VECHI ALE NUMĂRULUI SE ARUNCĂ. Se țin în depozit sub o cheie scoasă din cheia
+   * PDF-ului, iar la recompunere PDF-ul se schimbă sub același nume: fără ștergerea asta,
+   * „Tipărește" ar da mai departe broșura foii dinainte, așezată din pagini vechi.
+   */
+  const brosurile = env.FISIERE.delete([
+    cheiaBrosurii(cheie, 'a4', false), cheiaBrosurii(cheie, 'a4', true),
+    cheiaBrosurii(cheie, 'a3', false), cheiaBrosurii(cheie, 'a3', true),
+  ]).catch(() => undefined)
+  if (ctxExec) ctxExec.waitUntil(brosurile)
+  else await brosurile
+
+  return {
+    cheie,
+    cheiePoza: o.coperta ? cheiePoza : null,
+    versiune: (pus?.httpEtag ?? '').replace(/[^\w-]/g, '') || String(Date.now()),
+    marime: o.pdf.byteLength,
+  }
+}
 
 export async function pastreazaCererea(env: Pick<EnvCompunere, 'FISIERE'>, cerut: NumarCerut): Promise<string> {
   const cheie = cheiaCererii(cerut)

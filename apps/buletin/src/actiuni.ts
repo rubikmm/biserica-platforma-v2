@@ -27,9 +27,8 @@ import {
   calendarulNumarului,
   cheiaNumarului,
   compune,
-  pastreazaCererea,
+  pastreazaNumarul,
   plangeriDeForma,
-  textCurat,
 } from './compune.js'
 import { SECUNDARI_MAXIM, type NumarCerut, semne, socoteste, variante } from './masuri.js'
 
@@ -287,13 +286,18 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
       if (!r.ok || !r.pdf) {
         return { facut: false, nr: cerut.nr, data: cerut.data, cheie: null, semne_intrate: null, semne_pe_dinafara: null, calendar, program, atentie: r.atentie, plangeri: r.plangeri }
       }
-      const cheie = cheiaNumarului(cerut)
-      await c.env.FISIERE.put(cheie, r.pdf, {
-        httpMetadata: { contentType: 'application/pdf' },
-        customMetadata: { nr: String(cerut.nr), data: cerut.data, semne: String(semne(textCurat(r.cerut))) },
-      })
-      // cererea, ca date, lângă PDF: de aici pornește numărul următor (motto-ul) — ce a scris omul, nu proba
-      await pastreazaCererea(c.env, cerut)
+      /*
+       * ⚠️ TOT ce urmează unei randări reușite stă în `pastreazaNumarul`: PDF-ul, COPERTA, cererea
+       * păstrată și aruncarea broșurilor vechi. Până pe 18.09.2026 aici se punea numai PDF-ul, iar
+       * un număr compus din bulă rămânea pe ecran cu coperta dinainte (ori fără niciuna), cu
+       * „Tipărește" dând broșura foii vechi — fără nicio eroare nicăieri (user: „a zis că Compune
+       * buletinul după o modificare și nu se vede nimic").
+       */
+      const { cheie } = await pastreazaNumarul(
+        c.env,
+        { cerut, peHartie: r.cerut, pdf: r.pdf, coperta: r.coperta },
+        c.ctxExec,
+      )
       return {
         facut: true,
         nr: cerut.nr,
