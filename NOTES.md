@@ -2320,6 +2320,23 @@ forța antetul `Host`**.
   ⚠️ **Validarea săptămânii e NUMAI gest de om** (chat, `program.valideaza_saptamana`, `program.publish`,
   Da/Nu) — nu există cron. Deci „apare luni la 00:00" înseamnă: dacă săptămâna nu e validată până
   atunci, prima pagină ține copia bună de dinainte (cea veche), nu propunerea.
+  **Sincronizarea WP: DIN ORĂ ÎN ORĂ** (user, 16:08) — transient `HOUR_IN_SECONDS` + `wp_schedule_event`
+  orar aliniat la minutul 0 (runbook, secțiunea 3); comunicat sesiunii `biserica-website-12`.
+- ⚠️⚠️ **TRANSMISIUNEA NU MAI PORNEA SINGURĂ DIN 15.09.2026 — găsit la verificarea „ne bazăm doar pe
+  Program"** (15:55–16:40). Aparatul pornește NUMAI slujbele cu `transmisie = 1`
+  (`~/aparat-nou/aparat/program.py:205-231`, `de_pornit()` iterează doar `transmise()`), iar propunerea
+  V2 le năștea pe toate cu `transmisie: false` FIX (`hartii.ts`, ambele mapări) — validarea din chat le
+  scria așa în bază (`depozit.ts:376`), ocolind `DEFAULT 1` din SQL și `default(true)` din contract.
+  Jurnalul Pi-ului: ultima pornire după program 15.09 18:00 (Maslu, din `adauga_slujba`, singura cale
+  care scria `true`); apoi radio neîntrerupt. Userul a văzut semnul pe pagina live: „Următoarea slujbă
+  (nu se transmite)" (`packages/comanda/src/player.ts:210`). **Hotărârea lui: `transmisie` e `true`
+  MEREU în propunere** (16:04: „true mereu") — cine nu vrea transmisiune la o slujbă o stinge din chat
+  (`program.modifica_slujba` acceptă `transmisie`). Făcut: maparea propunere → `Slujba` stă o singură
+  dată în `propunere.ts` (`slujbeDinPropunere`, `transmisie: true`), folosită de ambele locuri din
+  `hartii.ts`; probă `tests/program-transmisie-propunere.test.ts`; program 0.8.3. Rândurile deja
+  scrise (19.09–27.09) au fost puse pe 1 în producție („update", 16:04) — la 16:38 SELECT-ul arăta 6/6.
+  ⚠️ **Regula de ținut minte**: un câmp care pare „de afișare" poate fi comutatorul aparatului —
+  înainte de a scrie o valoare fixă într-o propunere, întreabă-te cine o citește ca pe o comandă.
 - **„Nu am putut trimite mesajul" în bula buletinului — `SECRET_INTERN` lipsea pe
   `xc-buletin-production`** (12:31–12:36). Secretul dintre workeri se pusese la cutover doar pe cei
   patru cu acțiuni (calendar, program, tipic, chat-worker); buletinul a intrat în familia chatului pe

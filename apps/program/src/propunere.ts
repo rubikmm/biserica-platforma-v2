@@ -9,7 +9,7 @@
  * Randurile duminicii (pericope, numele duminicii, sfintii) NU intra in `detalii`: vin din calendar
  * la afisare, mereu la zi. In detalii raman doar numele praznicului care a cerut slujba.
  */
-import type { IntrareVocabular } from '@xc/contracts'
+import type { IntrareVocabular, Slujba } from '@xc/contracts'
 import { adaugaZile, ziuaSaptamanii, LUNI_SCURT } from '@xc/ui'
 import { type CalendarSaptamana, ORDINE_RANG, ziuaMare } from './calendar.js'
 import type { RandIstoricSlujba } from './depozit.js'
@@ -223,4 +223,36 @@ export function propune(luni: string, istoric: RandIstoricSlujba[], vocabular: M
     despre: { saptamani_obicei: ultimele.size, ani_aceeasi_data: aniAceeasiData, calendar: !!cal, versiune_calendar: cal?.versiune ?? null },
     nelamuriri: [...new Set(nelamuriri)],
   }
+}
+
+/**
+ * Propunerea facuta SLUJBE, dintr-un singur loc: si foaia saptamanii, si raspunsul din chat au
+ * nevoie de aceeasi lista. Cat timp maparea era scrisa de doua ori, cuvant cu cuvant, se putea
+ * schimba numai una dintre ele.
+ *
+ * ⚠️ `transmisie` NU e un fleac de afisare: aparatul din biserica porneste transmisiunea numai dupa
+ * campul asta, iar propunerea ajunge in baza exact cum e aici, in clipa in care omul o valideaza din
+ * chat. Cat timp aici scria `false` fix, din 15.09.2026 — prima saptamana validata din propunere —
+ * n-a mai pornit nicio transmisiune, in tacere. Acum e ADEVARAT MEREU, hotarare a userului
+ * (18.09.2026): nu se ghiceste din obiceiul slujbelor trecute. Cine nu vrea transmisiune la o slujba
+ * anume o stinge din chat — `program.modifica_slujba` primeste `transmisie`.
+ *
+ * `curatenie` ramane fals, ca pana acum: nu se propune singura.
+ */
+export function slujbeDinPropunere(p: Propunere): Slujba[] {
+  return p.zile.flatMap((zi) =>
+    zi.slujbe.map((s) => ({
+      id: `${s.data}-${s.cod_nume}`,
+      data: s.data,
+      ora: s.ora,
+      nume: s.nume,
+      cod_nume: s.cod_nume,
+      slujitor: null,
+      loc: 'biserica',
+      observatii: null,
+      detalii: s.detalii,
+      curatenie: false,
+      transmisie: true,
+    })),
+  )
 }

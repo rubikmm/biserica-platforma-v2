@@ -86,7 +86,7 @@ function sfilie_program_bucata() {
 		return $bun;
 	}
 
-	set_transient( $cheie, $bucata, 10 * MINUTE_IN_SECONDS );
+	set_transient( $cheie, $bucata, HOUR_IN_SECONDS ); // ritm orar, hotărât de utilizator (18.09.2026)
 	update_option( 'sfilie_program_ultima_buna', $bucata, true ); // autoload: se citește la fiecare vizită
 	return $bucata;
 }
@@ -103,15 +103,18 @@ se înlocuiește cu:
 
 Restul fișierului (titlul „Programul Liturgic", `the_content()`, subsolul) rămâne neatins.
 
-### 3. Cache-ul paginii (LiteSpeed / Cloudflare) — de hotărât înainte de publicare
+### 3. Sincronizarea: DIN ORĂ ÎN ORĂ, la minutul 0 (user, 18.09.2026, 16:08)
 
-Transientul de 10 minute nu ajută dacă prima pagină stă ore întregi în cache-ul de pagină. Două
-drumuri, la alegerea agentului site-ului:
-
-- un `wp_schedule_event` la 10 minute care cheamă `sfilie_program_bucata()` și, dacă bucata s-a
-  schimbat față de opțiunea salvată, golește cache-ul paginii principale;
-- sau blocul ESI care există deja în temă (`my_esi_block_esi_load`, `litespeed_control_set_ttl`),
-  cu TTL scurt numai pe bucata programului.
+Ritmul e hotărât de utilizator: **o dată pe oră**, nu la 10 minute. Deci transientul din funcția de
+mai sus se ține **`HOUR_IN_SECONDS`** (și cel de 5 minute de la eșec rămâne 5 minute), iar
+reîmprospătarea o face un **`wp_schedule_event` orar, aliniat la minutul 0** — la Monday 00:00
+săptămâna nouă intră exact la ora la care a cerut-o utilizatorul („apare la ora 00.00 luni").
+Cronul cheamă `sfilie_program_bucata()` după ce a șters transientul și, **dacă bucata s-a schimbat**
+față de opțiunea salvată, golește cache-ul paginii principale (LiteSpeed / Cloudflare) — altfel
+transientul nu ajută, prima pagină stă ore întregi în cache-ul de pagină. Alinierea la minutul 0:
+`wp_schedule_event( strtotime( date( 'Y-m-d H:00:00', time() + HOUR_IN_SECONDS ) ), 'hourly', … )`.
+⚠️ WP-Cron bate doar la vizite; dacă site-ul are nopți fără vizitatori, luni 00:00 se ține cu un
+cron de sistem care lovește `wp-cron.php` orar (sau cu cronul deja existent al hostingului).
 
 ## Ce NU s-a atins
 

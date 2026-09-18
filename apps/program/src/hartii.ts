@@ -21,7 +21,7 @@ import {
   vocabularul,
 } from './depozit.js'
 import { foaieHtml, sfintiiHtml, stilTabel, tabelProgram, titluSaptamanii, type OptiuniFoaie } from './foaie.js'
-import { propune } from './propunere.js'
+import { propune, slujbeDinPropunere } from './propunere.js'
 import { sfintiiDinCarti } from './tipic.js'
 import { LATIME_POZA, pozaSaptamaniiHtml, type Ctx } from './pagini.js'
 
@@ -124,21 +124,9 @@ export async function htmlFoaiaSaptamanii(
       harta,
       await calendarulIntervalului(env.CALENDAR, luni, adaugaZile(luni, 7)),
     )
-    slujbe = p.zile.flatMap((zi) =>
-      zi.slujbe.map((s) => ({
-        id: `${s.data}-${s.cod_nume}`,
-        data: s.data,
-        ora: s.ora,
-        nume: s.nume,
-        cod_nume: s.cod_nume,
-        slujitor: null,
-        loc: 'biserica',
-        observatii: null,
-        detalii: s.detalii,
-        curatenie: false,
-        transmisie: false,
-      })),
-    )
+    // maparea propunere → slujbe stă într-un singur loc (`slujbeDinPropunere`), fiindcă aceeași
+    // listă o cere și răspunsul din chat; acolo e scris și de ce `transmisie` e adevărat mereu
+    slujbe = slujbeDinPropunere(p)
   }
 
   // Pe HARTIE intervalul se scrie mereu calculat („7 – 13 septembrie 2026"), ca in V1: titlurile
@@ -275,21 +263,8 @@ export async function saptamanaOriPropunere(
     }
   }
   const p = propune(luni, await istoriculSlujbelor(env.DB, luni), vocabular, cal)
-  const slujbe: Slujba[] = p.zile.flatMap((zi) =>
-    zi.slujbe.map((s) => ({
-      id: `${s.data}-${s.cod_nume}`,
-      data: s.data,
-      ora: s.ora,
-      nume: s.nume,
-      cod_nume: s.cod_nume,
-      slujitor: null,
-      loc: 'biserica',
-      observatii: null,
-      detalii: s.detalii,
-      curatenie: false,
-      transmisie: false,
-    })),
-  )
+  // aceeași mapare ca la foaia săptămânii, din același loc (vezi `slujbeDinPropunere`)
+  const slujbe: Slujba[] = slujbeDinPropunere(p)
   return { rand: null, slujbe, cal, propunere: p, dinCalendar: true }
 }
 
