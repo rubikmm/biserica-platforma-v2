@@ -2296,6 +2296,16 @@ forța antetul `Host`**.
     `APLICATII_CU_BULA`; regulile 8 și 9 rescrise. Amănuntele: „Modulul de Chat (AI)".
   - **Publicat 13:20**: chat-worker 0.3.0, buletin 0.8.1, program 0.8.1, admin 0.5.0. KV însămânțat.
     570 de probe (19 noi), typecheck 36/36.
+- **„Compune buletinul… și nu se vede nimic" — acțiunea chatului punea DOAR PDF-ul** (user, 13:53;
+  buletin **0.8.2**, publicat 14:00). Erau două drumuri către aceeași treabă: ruta formularului
+  (`POST /nou`) punea PDF-ul, **coperta**, cererea păstrată și arunca cele patru broșuri din `tipar/`;
+  acțiunea `buletin.compune` — cea prin care lucrează bula — punea numai PDF-ul și cererea. Deci un
+  număr recompus din chat rămânea pe ecran cu coperta dinainte, iar „Tipărește" dădea broșura foii
+  vechi. **Nimic nu dădea vreo eroare** — amprenta `?v=` se schimba (e etagul PDF-ului), dar fișierul
+  de sub ea era tot cel vechi. Acum totul stă în `pastreazaNumarul()` (`compune.ts`), folosit de
+  amândouă drumurile; coperta se **șterge** când randarea n-a dat una. 3 probe noi (573).
+  ⚠️ **Regula**: când o treabă are și drum de ecran, și drum de acțiune (chat), coada lor se scrie
+  O SINGURĂ dată. Ce nu e în acțiune nu se întâmplă când lucrează chatul — și nu se vede nicăieri.
 - **ADMINI PE APLICAȚIE, la toate aplicațiile + tabelul din Administrare** (user, 10:40 și trei
   lămuriri la 11:06). Cererea: doi oameni admini în aplicații diferite, „admin doar pe aplicația
   respectivă și nu de-a lungul întregii platforme", cu tabel „la mine în Administrator"; capacitatea
