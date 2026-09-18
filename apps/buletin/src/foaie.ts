@@ -38,7 +38,10 @@ import crucePng from '../resurse/cruce.png'
 // program"). Cade prima când textul n-are loc (`socoteste().floare`).
 import floarePng from '../resurse/floare.png'
 
-/** Textul fix din subsolul paginii a patra — al parohiei, nu al nostru: nu se schimbă din API. */
+/**
+ * Textul fix din subsolul paginii a patra — al parohiei, nu al nostru: nu se schimbă din API.
+ * ⚠️ Rândul de pe urmă e ADRESA și se scrie ALDIN (user, 18.09.2026) — vezi `.subsol .adresa`.
+ */
 export const SUBSOL = [
   'Pentru versiunea digitală și extinsă a buletinului, abonați-vă pe sfantul-ilie.ro.',
   'Strada Doamnei, nr. 18, Sector 3, București',
@@ -169,18 +172,33 @@ p.t { margin: 0; text-align: justify; text-indent: 10mm; hyphens: none; }
 .sursa b { font-weight: 700; }
 .sursa .nota { text-align: justify; margin-bottom: .4mm; }
 
-/* Pagina a patra: calendarul peste toată lățimea, sub coloane, și subsolul fix. */
-.jos { position: absolute; left: 15.03mm; right: 15.03mm; bottom: 11mm; z-index: 1; text-align: center; }
-.floare { display: block; margin: 0 auto 1mm; width: 44mm; }
-/* „PROGRAMUL LITURGIC": Trajan Pro 3 Regular, ca titlul foii — nu Caladea aldin (user, 17.09.2026 seara). */
-.cap-calendar { font-family: "Trajan", serif; font-size: 18pt; margin: 0 0 1.8mm; font-weight: 400; letter-spacing: .3pt; }
+/* Pagina a patra: calendarul peste toată lățimea, sub coloane, și subsolul fix.
+   ⚠️ JOSUL NU E ABSOLUT, ȘI NU POATE FI (18.09.2026, „calendarul e tăiat în partea de jos"): un tabel
+   dintr-o cutie position:absolute pierde ULTIMUL rând în Chromium — tabelul își socotește înălțimea
+   fără el, subsolul se lipește de rândul dinainte, iar banda de la piciorul duminicii nu se mai
+   desenează deloc (se vedea ca un tabel retezat, fără linia de jos). Nu ține de rowspan, de conținut,
+   de table-layout sau de fonturi: se face din așezarea absolută singură (repro minim în jurnal,
+   18.09.2026). De aceea pagina a patra e o cutie flex cu justify-content: flex-end, iar josul stă
+   ÎN FLUX, împins la talpă — restul pieselor paginii sunt absolute, deci nu simt schimbarea. */
+.pagina.ultima { display: flex; flex-direction: column; justify-content: flex-end; }
+.jos { position: static; margin: 0 15.03mm 11mm; z-index: 1; text-align: center; }
+/* Golul floare → „PROGRAMUL LITURGIC": 0.5 cm (user, 18.09.2026; era 1 mm). Marginea e 4.9, nu 5:
+   peste ea mai vine aerul de deasupra majusculelor Trajan, iar cei 5 mm se măsoară de la cerneală la
+   cerneală, cum îi măsoară rigla pe hârtie — 4.91 mm pe randarea de la 600 dpi (mai aproape de 5 nu se
+   poate: poza se lipește de rețeaua de pixeli, iar următorul pas o duce la 5.17). */
+.floare { display: block; margin: 0 auto 4.9mm; width: 44mm; }
+/* „PROGRAMUL LITURGIC": Trajan Pro 3 Regular, ca titlul foii — nu Caladea aldin (user, 17.09.2026 seara).
+   24 pt din 18.09.2026, a doua cerere („+4pt mai mare") — era 20, iar înainte 18. */
+.cap-calendar { font-family: "Trajan", serif; font-size: 24pt; margin: 0 0 1.8mm; font-weight: 400; letter-spacing: .3pt; }
 /* Titlul principalului, pe pagina întâi, stă mai jos de pastila numărului — măsurat pe nr. 615:
    trei rânduri de aer între linie și titlu. Titlul e mai mare decât la secundari (pe hârtie ~21 pt)
    și, spre deosebire de ei, NU e aldin (user, 17.09.2026 seara). */
 .pagina[data-pagina="1"] .col.b > .titlu-articol:first-child { margin-top: 9mm; font-size: 21pt; line-height: 1.3; margin-bottom: 2.4mm;
                                                                font-weight: 400; }
-/* Subsolul fix: tot 13 pt, ca sursa (in Word e cu un fir mai mic decat ea, ~12.7 pt). */
+/* Subsolul fix: tot 13 pt, ca sursa (in Word e cu un fir mai mic decat ea, ~12.7 pt).
+   Adresa parohiei, randul de pe urma, e ALDINA (user, 18.09.2026). */
 .subsol { font-family: "Carlito", Calibri, sans-serif; font-size: 13pt; line-height: 1.26; margin-top: 2mm; }
+.subsol .adresa { font-weight: 700; }
 
 /* Ce n-a încăput rămâne aici, nevăzut, și se numără în raport. */
 #rest { position: absolute; left: -9999mm; top: 0; width: 85.06mm; }
@@ -428,7 +446,7 @@ export function foaieHtml(o: OptiuniFoaie): string {
       ? `<div class="jos">
       ${o.floare !== false ? `<img class="floare" src="${dataUri('floare', floarePng, 'image/png')}" alt="">` : ''}
       ${o.calendar ? `<h2 class="cap-calendar">${TITLU_CALENDAR}</h2>${o.calendar.tabel}` : ''}
-      <div class="subsol">${SUBSOL.map((r) => `<div>${esc(r)}</div>`).join('')}</div>
+      <div class="subsol">${SUBSOL.map((r, i) => `<div${i === SUBSOL.length - 1 ? ' class="adresa"' : ''}>${esc(r)}</div>`).join('')}</div>
     </div>`
       : ''
 

@@ -340,7 +340,10 @@ propunerea automată, ca în V1.
       în 0.6.1, `dupaIncarcare()`). **0.6.1 e pe production din 18.09.2026, 01:53** (numai buletinul;
       programul era deja 0.7.9 pe live). Rămâne de confirmat, cu 616 **recompus din `/nou`**, că
       (a) pagina a patra iese curată și (b) `data-raport` ajunge înapoi (siguranța „nimic pe
-      dinafară"). ⚠️ PDF-ul vechi al lui 616 e tot cel defect — nu se repară singur, trebuie refăcut;
+      dinafară"). ⚠️ PDF-ul vechi al lui 616 e tot cel defect — nu se repară singur, trebuie refăcut.
+      ⚠️ **616 de pe live (compus 18.09, 09:01) a arătat al doilea defect al paginii a patra** —
+      calendarul retezat jos —, reparat în **0.6.2**, pe disc, NEPUBLICAT: deci recompunerea lui 616
+      are rost abia **după ce se publică 0.6.2**;
    3. **fonturile din Chromium-ul de laborator**: săgeata `→` din tabelul programului iese strâmbă
       local — **și la foaia programului, care e cod netins de runda asta**, deci e lipsa fonturilor
       din container, nu un defect nou. De verificat totuși cum iese pe producție.
@@ -1744,9 +1747,18 @@ randare. Dacă cineva „îndreaptă" cifra asta, probele din `tests/buletin-soc
   pomenirea, scris alb, centrat; coloana a doua: **titlul** articolului și începutul textului;
 - **paginile 2–3**: patru coloane de text justificat;
 - **pagina 4**: textul se termină, „Sursa: …" cu linie deasupra, apoi **PROGRAMUL LITURGIC** cu
-  tabelul programului și **subsolul fix** (abonarea + adresa parohiei).
+  tabelul programului și **subsolul fix** (abonarea + adresa parohiei, al doilea rând **aldin** din
+  18.09.2026). Deasupra capului, floarea, cu **0.5 cm** până la el (18.09.2026; capul e **24 pt** —
+  18 → 20 → 24, două cereri în aceeași zi).
 
 **Trei lucruri care se încalcă ușor:**
+
+⚠️⚠️ **JOSUL PAGINII A PATRA NU ARE VOIE SĂ FIE `position: absolute`** (18.09.2026): un tabel dintr-o
+cutie absolută **pierde ultimul rând** în Chromium — tabelul își socotește înălțimea fără el, subsolul
+urcă peste el și calendarul iese pe hârtie retezat, fără linia de jos. De aceea `.pagina.ultima` e o
+cutie **flex** cu `justify-content: flex-end`, iar `.jos` stă în flux, împins la talpă cu marginile lui.
+Nu-l muta înapoi „ca la celelalte piese" — celelalte (chenar, coloane) n-au tabel în ele. Amănuntele
+și cum s-a scos din cauze: jurnalul din 18.09.2026.
 
 ⚠️ **CURGEREA O FACEM NOI, ÎN PAGINĂ** (scriptul din `foaie.ts`), nu CSS-ul: cutiile au înălțimi
 diferite (coloana întâi a paginii întâi e plină de poză, cele de pe pagina a patra sunt scurtate de
@@ -2055,6 +2067,45 @@ forța antetul `Host`**.
 ## Jurnal
 
 ### 2026-09-18
+
+- **PATRU ÎNDREPTĂRI LA PAGINA A PATRA (user, 09:11) — buletin 0.6.2, pe disc, NEPUBLICAT.** (1) golul
+  floare → „PROGRAMUL LITURGIC" **0.5 cm** (era 1 mm); (2) capul calendarului **20 pt** (era 18);
+  (3) **„calendarul este în continuare tăiat în partea de jos"** — vezi mai jos, e un defect adevărat,
+  nu o măsură; (4) **adresa din subsol, aldină**. Fișiere: `foaie.ts` (stilul + clasa `.adresa`),
+  `masuri.ts` (`floare` 2.2 → 2.9 rânduri, `titluCalendar` 2.6 → 2.75), probă nouă
+  `tests/buletin-foaie.test.ts` (5 probe care păzesc cele patru hotărâri). 499 de probe trec, tsc curat;
+  `--verifica` BUN pe toate trei variantele, `--gol` 0/1/2 secundari: 0 semne pe dinafară, gol 6 mm.
+  Golul de 0.5 cm e **de la cerneală la cerneală**, cum îl măsoară rigla: marginea CSS e 4.9 mm, fiindcă
+  peste ea vine aerul de deasupra majusculelor Trajan (600 dpi: floarea se termină la 157.40 mm, capul
+  începe la 162.31 → 4.91 mm; pasul următor al rețelei de pixeli ar da 5.17).
+
+- **CAPUL CALENDARULUI, ÎNCĂ O DATĂ: 24 pt (user, 09:48 — „+4pt mai mare PROGRAMUL LITURGIC").**
+  A doua cerere pe aceeași piesă în aceeași zi: 18 → 20 (09:11) → **24**. `foaie.ts` (`.cap-calendar`)
+  și `masuri.ts` (`titluCalendar` 2.75 → **3.05**: capul merge cu ~0.075 rânduri pe punct, 18 → 2.6,
+  20 → 2.75, 24 → 3.05). 499 de probe trec, tsc curat, `--verifica` BUN pe toate trei variantele,
+  `--gol` 0/1/2 secundari: 0 semne pe dinafară, gol 6 mm. Randarea: `outputs/buletin-pagina4-titlu-24pt.png`.
+  Merge pe live odată cu celelalte patru îndreptări, în **0.6.2**.
+
+- **⚠️⚠️ „TĂIAT ÎN PARTEA DE JOS" ERA UN DEFECT DE AȘEZARE, NU O MĂSURĂ: un tabel dintr-o cutie
+  `position: absolute` PIERDE ULTIMUL RÂND în Chromium.** Ce se vedea în nr. 616 de pe live (și,
+  reprodus, pe local): tabelul programului se oprea brusc după ultimul rând scris — fără linia de jos,
+  cu banda gri de la piciorul duminicii nedesenată deloc —, iar subsolul se lipea de rândul dinainte.
+  **Nu e clipping și nu e fragmentare**: tabelul își socotește înălțimea FĂRĂ ultimul rând (măsurat:
+  `table` 358.6 px, dar ultimul `tr` pictat la 4385..4406.9, adică peste subsol), iar `.jos` își așază
+  copiii după înălțimea aceea greșită. Scos din cauze, unul câte unul: **nu** ține de `rowspan`, de
+  conținutul rândului, de `table-layout: fixed`, de `border-collapse`, de `height`-ul benzii, de
+  `overflow: hidden` al paginii, de fonturi (nu e o relayout ratată — e determinist, `--dump-dom` dă
+  aceleași cifre) și nici de `bottom` anume: și `position: absolute` cu `top` greșește la fel.
+  **Singurul lucru care repară: josul să NU fie absolut.** De aceea `.pagina.ultima` e acum o cutie
+  **flex** (`flex-direction: column; justify-content: flex-end`), iar `.jos` stă **în flux**, împins la
+  talpă, cu `margin: 0 15.03mm 11mm`. Restul pieselor paginii (chenarul, cele două coloane) sunt
+  absolute, deci nu simt schimbarea; `scurteaza()` citește tot `jos.offsetTop`, care merge la fel.
+  ⚠️ **Foaia de pe ușă a programului NU e atinsă** — acolo tabelul stă în `.continut`, care e în flux.
+  Laboratorul (repro minim, izolarea cauzei, măsurarea cernelii la 200/600 dpi) a rămas în spațiul
+  agentului, `tmp/foaie-tabel-taiat/`.
+  **Lecția**: când o piesă „lipsește" dintr-o randare, măsoară cutiile înainte să cauți în conținut —
+  aici chiar așezarea mințea, iar toate explicațiile care porneau de la tabel (rowspan, borduri, bandă)
+  erau pe lângă.
 
 - **„CALENDARUL E TĂIAT" (user, 01:37) — buletin 0.6.1: curgerea așteaptă pozele și fonturile.**
   Nr. 616 compus de user pe live la 01:40 (`fisier/2026/buletin-616-2026-09-20.pdf`): pe pagina a

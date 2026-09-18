@@ -100,10 +100,12 @@ export const INALTIMI = {
   sursa: 3,
   /** aerul de cel puțin 1 cm dinaintea fiecărui secundar (user, 17.09.2026 seara) — 10 mm / 5.84 mm pe rând */
   aerIntreArticole: 1.7,
-  /** capul „PROGRAMUL LITURGIC" de pe pagina a patra */
-  titluCalendar: 2.6,
-  /** floarea decorativă de deasupra calendarului — cade prima când nu e loc */
-  floare: 2.2,
+  /** capul „PROGRAMUL LITURGIC" de pe pagina a patra — 24 pt din 18.09.2026 (era 20, înainte 18).
+   *  Merge cu 0.075 rânduri pe punct, măsurat pe randare: 18 pt → 2.6, 20 → 2.75, 24 → 3.05. */
+  titluCalendar: 3.05,
+  /** floarea decorativă de deasupra calendarului — cade prima când nu e loc.
+   *  Din 18.09.2026 poartă și golul de 0.5 cm până la capul calendarului (era 1 mm): +4 mm = +0.69 rânduri. */
+  floare: 2.9,
   /** subsolul fix al paginii a patra: abonarea și adresa parohiei — la 13 pt (era 2.6 la 10.5 pt) */
   subsol: 3.2,
 } as const
