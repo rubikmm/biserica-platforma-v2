@@ -13,7 +13,10 @@ cd "$(dirname "$0")/../.."
 set -a; . /backup/_setup/cloudflare.env; set +a
 
 EMISIE="${1:-/tmp/emisie-v1.env}"
-CU_ACTIUNI="apps/calendar apps/program apps/tipic services/chat-worker"
+# ⚠️ LISTA ASTA CREȘTE ODATĂ CU APLICAȚIILE. `apps/buletin` a intrat pe 18.09.2026 și a lipsit
+# de aici o zi: bula lui trimitea antetul gol, chat-worker răspundea `Not Found`, iar omul citea
+# „Nu am putut trimite mesajul". Când o aplicație capătă bulă sau `/_actiuni`, se scrie AICI.
+CU_ACTIUNI="apps/calendar apps/program apps/tipic apps/buletin services/chat-worker"
 
 pune() { # pune <config> <nume>  (valoarea vine pe stdin)
   printf '%-30s %-18s ' "$1" "$2"

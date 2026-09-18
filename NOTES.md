@@ -312,6 +312,36 @@ propunerea automată, ca în V1.
 
 ## NEXT
 
+00c. **CHATUL, PE APLICAȚIE — scris ȘI PUBLICAT pe 18.09.2026, 13:20** (`e74d10d`, `ce7b7e6`).
+    Îndrumările și uneltele au ieșit din cheia comună în `modul:chat:<aplicatie>`; rubrica „Chat AI"
+    din Setările fiecărei aplicații; Module a rămas cu ale platformei. Amănuntele: „Modulul de Chat
+    (AI)". Publicate: chat-worker 0.3.0, buletin 0.8.1, program 0.8.1, admin 0.5.0 (fără ocol —
+    cercul cere ocolul doar când unul dintre workeri nu există încă). KV însămânțat:
+    `modul:chat:program` = îndrumările vechi + cele 5 unelte ale lui; `modul:chat:buletin` = îndrumări
+    **goale** + `compune`/`socoteala`, ca să nu mai poarte obiceiurile Programului.
+    **Rămâne la user**: scrie îndrumările buletinului la `buletin.sfantul-ilie.ro/setari` → „Chat AI".
+    ⚠️ **Viteza NU e rezolvată**: măsurat azi pe viu, „Pune titlul articolului principal: Smerenia" a
+    luat **2 min 49 s** și s-a sfârșit cu `buletin.compune` → `argumente_invalide` (unealta cere
+    numărul întreg, deci modelul a întrebat înapoi de motto). Instrucțiunile s-au scurtat, dar
+    drumul lung rămâne: fiecare mesaj face 2 apeluri la model, iar propunerea mai adaugă unul.
+    De privit la următoarea rundă, cu `wrangler tail`, pe bucăți.
+
+00d. **URMEAZĂ, cerut de user pe 18.09.2026 (12:38–12:55), în ordinea asta.**
+    (1) **Ciorna ca RÂND CU CÂMPURI** în baza buletinului, nu PDF + cererea păstrată: la prima intrare
+    pe `/nou` se generează singură, cu text **gol** (fără Lorem ipsum), rotiță în locul copertei, iar
+    când e gata apar poza și butoanele active; la intrările următoare se preia ciorna și așteaptă
+    completări. **Formularul nu se mai arată niciodată** — toate modificările trec prin chat.
+    (2) **Unelte de EDITARE PUNCTUALĂ** peste ciornă („Schimbă motto-ul în…"), pe o listă închisă de
+    subiecte = câmpurile ciornei = întrebările rundei de inițiere. Publicarea rămâne a adminului.
+    (3) **Chatul să primească text lung, documente și poze**, și un **link** din care ia textul din
+    web, îl curăță și PROPUNE titlu/text/sursă; textul lung se arată strâns, cu „vezi tot / vezi mai
+    puțin" (userul trimite la aplicația lui de lecții de chineză ca pildă).
+    ⚠️ **Hotărârea care le ține pe toate** (user, 12:45 și 12:54): „prefer o listă de 20 de subiecte pe
+    care pot interacționa cu Chat-ul AI decât o judecată avansată de la un model foarte bun" și
+    „trebuie să construim ceva care merge cu **modelul free** pus acum — nu vreau să trec pe cel cu
+    plată". Deci: partea grea o duce codul, modelul doar potrivește fraza cu un subiect.
+    **Lipsește încă lista subiectelor de la user** — i s-a propus una scoasă din câmpurile foii.
+
 00b. **BULA DE CHAT PE `/nou` LA BULETIN — scrisă, publicată și APRINSĂ pe 18.09.2026, 12:50.**
     Vezi „BULA DE CHAT A BULETINULUI". Cercul s-a publicat cu ocolul (`publica-cu-ocol.mjs --intai
     services/chat-worker --fara BULETIN --apoi apps/buletin`), apoi `admin` 0.4.1; comutatorul și
@@ -1796,15 +1826,41 @@ la chat-worker; local în `services/chat-worker/.dev.vars` (gitignored). Modelul
 `MODEL_CLAUDE` / `EFORT_CLAUDE`. Modelele gratuite (Workers AI, `postpaid`) merg fără credite; lista e
 în `@xc/chat/modele.ts`, `creier` se deduce din id (`@cf/…` = Workers AI).
 
-**Hățurile, toate din panoul de Module, nimic în cod**: `indrumari` (text liber, în instrucțiuni),
+⚠️ **DIN 18.09.2026, HĂȚURILE SUNT ÎN DOUĂ LOCURI** (user, 12:53: „vreau mai întâi să avem
+instrucțiuni diferite per aplicație… din Setări aplicație pe un tab Chat AI să avem câmpurile
+specifice aplicației"):
+
+- **Administrare → Module** (super-admin, `modules.manage`) — ale PLATFORMEI: pornit/stins, în care
+  aplicații, cine-l vede, cu ce model. Lista aplicațiilor vine din `APLICATII_CU_BULA` (`@xc/chat`),
+  registru ținut lângă modul: ecranul nu mai oferă spre bifat aplicații în care bula nu e montată.
+- **Setări aplicație → „Chat AI"** (adminul APLICAȚIEI) — ale ei: `indrumari` și `unelte`, în cheia
+  `modul:chat:<aplicatie>`. Rubrica e scrisă o dată, în `@xc/chat/setari.ts`, și se lipește prin
+  punctul de prindere `rubrici` din `@xc/setari` (care dă acum și jetonul CSRF al paginii — o rubrică
+  ce și-ar face altul ar fi respinsă la prima salvare). Uneltele se arată **cu bifă**, cerute de la
+  chat-worker (`GET /unelte?aplicatie=`); când el tace, bifele nu se desenează deloc și alegerea de
+  acum pleacă înapoi în `hidden` — altfel o salvare ar șterge-o fără ca cineva să bage de seamă.
+  Ruta de salvare (`POST /chat/setari`) stă **înaintea** porții obișnuite, ca îndrumările să se poată
+  scrie și cu chatul stins la aplicația aceea; paza ei: adminul aplicației + CSRF + originea.
+- **Chei separate, nu câmpuri în `modul:chat`**: fiecare aplicație scrie în cheia ei, deci un
+  citește-schimbă-scrie din două locuri deodată nu mai poate pierde scrisul celuilalt.
+- **Moștenirea**: o aplicație fără cheia ei primește vechile `indrumari` + uneltele ei din lista
+  veche (filtrate pe prefix). Câmpurile globale au rămas în KV și nu se mai scriu de nicăieri.
+- **Instrucțiunile**: regula 8 nu mai e harta uneltelor Programului (slujbe, sfinți, calendar), ci una
+  generală („potrivește fraza cu exemplul cel mai apropiat; alege UNA"); regula 9 („AICI POȚI FACE
+  DOAR ATÂT… asta nu pot face aici, nu căuta ocoluri") se pune ACUM ȘI când aplicația n-are nicio
+  unealtă. Cerere a userului: „să răspundă repede la toate cererile, nu să încerce nu știu ce minuni".
+
+**Hățurile de dinainte de 18.09.2026, toate din panoul de Module**: `indrumari` (text liber, în instrucțiuni),
 `unelte` (lista canonică a ce vede modelul — pe program `modifica_slujba`, `adauga_slujba`,
 `valideaza_saptamana`, `sterge_slujba` și, din 15.09.2026, `retrage_validarea`; „fără rapoarte,
 enumerări, arhivă"), exemple cu argumente la
 acțiuni (`{fraza, argumente}`), setul de probe `infrastructure/eval/chat.mjs`. **Dacă cineva lărgește
 lista de unelte, să reruleze probele** — modelele mici cad exact la alegerea între unelte.
 
-⚠️ **Lista din panou e un filtru, nu o listă de dorințe**: o unealtă nouă publicată de aplicație NU
-ajunge la model până nu i se scrie numele acolo (goală = toate; `chat-worker/src/index.ts`, `permis`).
+⚠️ **Lista e un filtru, nu o listă de dorințe**: o unealtă nouă publicată de aplicație NU
+ajunge la model până nu e bifată (goală = toate; `chat-worker/src/index.ts`, `permis`). Din
+18.09.2026 bifele stau în **Setările aplicației → Chat AI**, nu în panoul de Module — și se aleg
+dintr-o listă adusă din manifest, deci un nume scris greșit nu mai poate trece neobservat.
 Așa a stat `program.retrage_validarea` **trei zile** (publicată 12.09.2026, scrisă în panou abia pe
 15.09.2026, după ce omul a lovit lipsa în pagină: a validat din greșeală și chatul i-a răspuns că nu
 poate retrage). ⚠️ **Semnul care trădează filtrul**: chatul spune „nu am cu ce" ori trimite omul la
@@ -2207,6 +2263,39 @@ forța antetul `Host`**.
 
 ### 2026-09-18
 
+- **„Nu am putut trimite mesajul" în bula buletinului — `SECRET_INTERN` lipsea pe
+  `xc-buletin-production`** (12:31–12:36). Secretul dintre workeri se pusese la cutover doar pe cei
+  patru cu acțiuni (calendar, program, tipic, chat-worker); buletinul a intrat în familia chatului pe
+  18.09 și n-a primit niciunul. Fără el, chat-worker răspunde `Not Found` — **text simplu**, pe care
+  bula încearcă să-l citească drept JSON, cade în `catch` și scrie mesajul generic. Semn sigur: în D1
+  nu apărea niciun rând al zilei (ultimul mesaj era din 15.09). Valoarea nu se citește înapoi de la
+  Cloudflare, deci s-a **rotit**: una nouă, pe toți cinci deodată (o pauză de sub un minut în care și
+  celelalte bule dau aceeași eroare). ⚠️ **De reținut**: la orice aplicație nouă care capătă bulă sau
+  `/_actiuni`, secretul se pune ODATĂ cu montarea — și `infrastructure/cutover/secrete-productie.sh`
+  are lista `CU_ACTIUNI` care trebuie să crească odată cu ea.
+  ⚠️ Și: un `Not Found` text simplu ajunge la om ca „nu am putut trimite mesajul" — merită un răspuns
+  care spune ce s-a întâmplat.
+- **Prima încercare vie a bulei buletinului, cu modelul adevărat** (12:37, după reparație): „Pune
+  titlul articolului principal: Smerenia" → modelul a chemat `buletin.compune` cu doar
+  `{principal:{titlu}}`, a primit `argumente_invalide` (unealta cere numărul întreg) și a întrebat
+  înapoi de motto. **A durat 2 min 49 s.** Două învățături, amândouă ale userului: unealta „compune
+  tot" nu poate ține loc de editare punctuală, și viteza e o problemă de drum, nu de model mai bun.
+- **CHATUL, PE APLICAȚIE** (user, 12:53: „vreau mai întâi să avem instrucțiuni diferite per aplicație
+  — să activăm din Administrare / Super-Admin aplicațiile care primesc chat — și din Setări aplicație
+  pe un tab Chat AI să avem câmpurile specifice aplicației. Vreau să răspundă repede la toate
+  cererile, nu să încerce nu știu ce minuni. Dacă nu e ceva ce se potrivește cu ce are voie să facă să
+  răspundă că nu poate face asta"). Pornise de la: „Chat-ul nu trebuie să stea la Program — trebuie
+  să-i găsim alt loc unde să stea toată logica și de unde poate fi cuplat la orice aplicație".
+  - **Ce era de fapt**: logica era deja despărțită (`packages/chat` + `xc-chat`), dar CUNOAȘTEREA era
+    a Programului — o singură pereche `indrumari`+`unelte` pentru toate, iar regula 8 din
+    `instructiuni()` era o hartă scrisă de mână a uneltelor lui. Bula buletinului plătea, la fiecare
+    mesaj, regulile programului.
+  - **Ce s-a făcut**: chei `modul:chat:<aplicatie>`; rubrica „Chat AI" în Setările fiecărei aplicații
+    (scrisă o dată, în `@xc/chat/setari.ts`); unelte cu bifă, aduse din manifest prin ruta nouă
+    `/unelte` a creierului; Module a rămas cu ale platformei și listează aplicațiile din
+    `APLICATII_CU_BULA`; regulile 8 și 9 rescrise. Amănuntele: „Modulul de Chat (AI)".
+  - **Publicat 13:20**: chat-worker 0.3.0, buletin 0.8.1, program 0.8.1, admin 0.5.0. KV însămânțat.
+    570 de probe (19 noi), typecheck 36/36.
 - **ADMINI PE APLICAȚIE, la toate aplicațiile + tabelul din Administrare** (user, 10:40 și trei
   lămuriri la 11:06). Cererea: doi oameni admini în aplicații diferite, „admin doar pe aplicația
   respectivă și nu de-a lungul întregii platforme", cu tabel „la mine în Administrator"; capacitatea
