@@ -251,10 +251,16 @@ export const JS_CHAT = `(function(){
     return d;
   }
 
-  function mesaj(rol, text){
+  /** Rândul, facut dar NEPUS in fir — cine il cere il aseaza singur (vezi nota din duMesajul). */
+  function nodMesaj(rol, text){
     var d = document.createElement('div');
     d.className = 'xc-chat-m ' + rol;
     scrieText(d, text);
+    return d;
+  }
+
+  function mesaj(rol, text){
+    var d = nodMesaj(rol, text);
     fir.appendChild(d); jos(); return d;
   }
 
@@ -451,6 +457,9 @@ export const JS_CHAT = `(function(){
       /** De cand se asteapta, spus de server: ceasul e drept si dupa o reincarcare de pagina. */
       deLa: function(iso){ var t = Date.parse(iso || ''); if (t) { de = t; scrieCeasul(); } },
       laRenunt: function(f){ renunt.hidden = false; renunt.addEventListener('click', f); },
+      /** Un rand asezat INAINTEA semnului: vestea aplicatiei („textul a intrat in schita") s-a
+       *  intamplat deja, deci n-are ce cauta sub punctele care bat pentru raspunsul care abia vine. */
+      inainte: function(nod){ fir.insertBefore(nod, d); jos(); },
       opreste: function(){ clearInterval(bate); d.remove(); }
     };
   }
@@ -671,6 +680,14 @@ export const JS_CHAT = `(function(){
     }).then(function(x){ return x.json(); }).then(function(j){
       atinge();
       if (j && j.conversatieId){ idConv = j.conversatieId; try { localStorage.setItem(CHEIE_ID, idConv); } catch(e){} }
+      /*
+       * CE A FACUT APLICATIA CU TEXTUL, spus INAINTE de raspunsul modelului (19.09.2026). Cand
+       * carligul aplicatiei a luat textul lung in primire — buletinul il scrie in schita — serverul
+       * intoarce pe loc „nota" (fraza scurta) si „unelte" (ce s-a atins). Vestea pleaca acum, nu la
+       * capatul gandirii: schimbarea s-a intamplat deja, iar ecranul de dedesubt trebuie s-o vada.
+       */
+      if (j && j.unelte && j.unelte.length) vesteste(j);
+      if (j && j.nota) semn.inainte(nodMesaj('agent', j.nota));
       // Drumul de-acum: serverul a luat mesajul si lucreaza. Raspunsul il aducem sondand.
       if (j && j.inLucru) { sondeaza(semn); return; }
       semn.opreste();

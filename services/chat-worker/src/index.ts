@@ -74,6 +74,15 @@ const PASI_MAXIM = 3
 const TAIERE_REZULTAT = 2500
 
 /**
+ * De la câte semne un argument de unealtă se ÎNSEMNEAZĂ ca fiind lung (19.09.2026).
+ *
+ * Nu e o limită și nu respinge nimic — e un semn lăsat în date. Când un model mic scrie mii de semne
+ * ca argument, el rescrie ceva ce omul a dat deja; asta ține minute și se poate opri la mijloc. Cifra
+ * din `apeluri` arată unde lipsește un cârlig al aplicației (`laText`, `laFisier`).
+ */
+const PRAG_ARGUMENT_LUNG = 3000
+
+/**
  * BUGETUL DE TIMP AL UNUI MESAJ (18.09.2026).
  *
  * Un mesaj măsurat pe viu a ținut 2 min 49 s: trei ocoluri model → unealtă → model, plus apelul
@@ -423,7 +432,24 @@ async function lucreaza(
   /** Numele CANONICE ale uneltelor chemate, o dată fiecare — doar ca să i le putem spune omului. */
   const apucate = new Set<string>()
   /** Pentru referinta si antrenament: fiecare apel cu argumentele lui si cum a iesit. */
-  const apeluri: Array<{ nume: string; argumente: unknown; rezultat: string }> = []
+  const apeluri: Array<{ nume: string; argumente: unknown; rezultat: string; semneArgument?: number }> = []
+  /**
+   * ÎNSEMNAREA UNUI APEL — cu `semneArgument` când modelul a cărat un text prin context (19.09.2026).
+   *
+   * ⚠️ NU SE RESPINGE NIMIC: un argument lung e valid, iar refuzul l-ar pune pe om să lipească din
+   * nou. Se scrie doar cifra, ca data viitoare boala să se vadă în date, nu să se ghicească dintr-o
+   * discuție care s-a oprit din senin. Ea E semnul că un cârlig (`laText`, `laFisier`) lipsește undeva.
+   */
+  const noteaza = (nume: string, argumente: Record<string, unknown>, rezultat: string) => {
+    let celMaiLung = 0
+    for (const v of Object.values(argumente ?? {})) {
+      if (typeof v === 'string' && v.length > celMaiLung) celMaiLung = v.length
+    }
+    if (celMaiLung > PRAG_ARGUMENT_LUNG) {
+      o.log.warn('argument lung catre unealta', { unealta: nume, semne: celMaiLung })
+    }
+    apeluri.push({ nume, argumente, rezultat, ...(celMaiLung > PRAG_ARGUMENT_LUNG ? { semneArgument: celMaiLung } : {}) })
+  }
   let propunere: RaspunsChat['propunere'] = null
   let textFinal = ''
   let bugetulSaScurs = false
@@ -435,6 +461,15 @@ async function lucreaza(
     }
     await spune(pas === 0 ? 'mă gândesc…' : 'mă gândesc mai departe…')
     const r = await intreabaModelul(env, mesaje, unelte, comutator.creier, { model: comutator.model, pana })
+    /*
+     * ⚠️ APELUL A TRECUT DE CEAS (19.09.2026). Până acum un singur apel lung nu era tăiat de nimic —
+     * bugetul se cântărea doar aici, între pași — și cererea murea cu tot cu lucrul ei, fără să scrie
+     * un rând. Acum ieșim pe ușa obișnuită a bugetului scurs, care SPUNE omului ce a apucat.
+     */
+    if (r.expirat) {
+      bugetulSaScurs = true
+      break
+    }
     textFinal = r.text || textFinal
 
     if (!r.cereri.length) break
@@ -449,7 +484,7 @@ async function lucreaza(
       // totusi cu numele canonic — se cauta si asa, ca sa nu cada cererea degeaba.
       const unde = harta.get(cerut.nume) ?? harta.get(numeUnealta(cerut.nume))
       if (!unde) {
-        apeluri.push({ nume: cerut.nume, argumente: cerut.argumente, rezultat: 'necunoscuta' })
+        noteaza(cerut.nume, cerut.argumente, 'necunoscuta')
         mesaje.push({ rol: 'unealta', text: `Nu există unealta ${cerut.nume}.`, numeUnealta: cerut.nume, idApel: cerut.id })
         continue
       }
@@ -470,7 +505,7 @@ async function lucreaza(
           correlationId: o.cid,
           prin: 'chat',
         })
-        apeluri.push({ nume: unde.nume, argumente: cerut.argumente, rezultat: prev.ok ? 'propusa' : `previzualizare: ${prev.cod}` })
+        noteaza(unde.nume, cerut.argumente, prev.ok ? 'propusa' : `previzualizare: ${prev.cod}`)
         if (!prev.ok) {
           mesaje.push({
             rol: 'unealta',
@@ -502,7 +537,7 @@ async function lucreaza(
         correlationId: o.cid,
         prin: 'chat',
       })
-      apeluri.push({ nume: unde.nume, argumente: cerut.argumente, rezultat: rez.ok ? 'ok' : rez.cod })
+      noteaza(unde.nume, cerut.argumente, rez.ok ? 'ok' : rez.cod)
       if (!rez.ok) {
         mesaje.push({
           rol: 'unealta',

@@ -262,6 +262,13 @@ export const REGULI = [
   'Numărul nou se face dintr-un CHESTIONAR, nu dintr-un formular: comanda „buletin nou" (ori „unde am rămas?") → cheamă `buletin.chestionar`. El îți dă întrebarea următoare, gata scrisă.',
   'Fiecare răspuns al omului → `buletin.raspunde`, cu subiectul cerut de întrebarea de atunci. Răspunsul acțiunii îți dă întrebarea următoare: pune-o și mergi mai departe, până se spune că schița e completă.',
   'Nu inventa câmpuri și nu scrie subiecte din afara listei. Nu rescrie textul omului: trimite-l literă cu literă în `valoare` — el se păstrează pe server, nu în discuția noastră.',
+  /*
+   * ⚠️ REGULA CARE ȚINE MODELUL MIC ÎN VIAȚĂ (19.09.2026). Un articol lipit în bulă intră în schiță
+   * DIN COD, înainte ca modelul să vadă ceva; lui îi ajunge o frază („Am pus textul…"). Fără rândul
+   * ăsta, modelul tot ar încerca să „confirme" scriind textul înapoi ca `valoare` — mii de tokeni de
+   * ieșire la un model gratuit, adică minutele de așteptare din 18.09.2026, 20:50.
+   */
+  'UN TEXT LUNG LIPIT DE OM INTRĂ SINGUR ÎN SCHIȚĂ, prin cod — vei primi o frază care spune câte semne s-au pus și unde. NU-l retrimite niciodată prin `buletin.raspunde` și nu-l repeta în răspunsul tău: e deja scris. Cheamă `buletin.chestionar` și pune întrebarea următoare.',
   'Când schița e completă, cheamă `buletin.compune` FĂRĂ argumente: ia totul din schiță. Abia acolo omul confirmă cu Da/Nu. Apoi el apasă „Validează" pe ecranul „buletin nou" — validarea e publicarea, și e a lui, nu a ta.',
   /*
    * ⚠️ INSTRUCȚIUNILE PUNCTUALE (user, 18.09.2026, 22:20: „instrucțiunile sunt precise, către un
@@ -534,6 +541,7 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
       'secundar 1: …", „autorul e …", „scoate secundarul 2", „pune poza asta la principal"). ' +
       'Subiectul spune CE se scrie, `articol` spune UNDE (lipsă = articolul la care e chestionarul). ' +
       'Textul omului se trimite LITERĂ CU LITERĂ în `valoare` — nu-l rescrie și nu-l scurta. ' +
+      'UN TEXT LUNG LIPIT ÎN CHAT a intrat DEJA în schiță, din cod: nu-l retrimite pe aici. ' +
       'Răspunsul îți dă ce s-a schimbat și, dacă mai e vreuna, întrebarea următoare.',
     efect: 'ciorna',
     permisiune: 'bulletin.write',

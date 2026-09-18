@@ -145,6 +145,21 @@ export interface RaspunsLaFisier {
   unelte?: string[]
 }
 
+/**
+ * CE POATE RĂSPUNDE APLICAȚIA LA UN TEXT LUNG LIPIT ÎN BULĂ. `null` = „nu e al meu, du-l la model
+ * cum îl duci de obicei".
+ *
+ * ⚠️ `mesaj` ÎNLOCUIEȘTE textul omului pe drumul spre model — și în discuție, și în context. Asta e
+ * tot rostul cârligului: textul greu a intrat deja în domeniul aplicației, iar modelului îi rămâne o
+ * frază de citit, nu nouă mii de semne de recitit și de retrimis.
+ */
+export interface RaspunsLaText {
+  /** Fraza scurtă care pleacă spre model în locul textului lung. */
+  mesaj: string
+  /** Ce a atins aplicația, cu numele acțiunilor ei — pentru împrospătarea ecranului de dedesubt. */
+  unelte?: string[]
+}
+
 export interface ContextFisier {
   env: EnvChat
   ctxExec: ExecutionContext
@@ -180,6 +195,21 @@ export function modulChat(cfg: {
    * urcare bula trimite singură mesajul pe drumul obișnuit (`/chat/mesaj`), ca lanțul să fie unul.
    */
   laFisier?: (f: FisierUrcat, c: ContextFisier) => Promise<RaspunsLaFisier | null>
+  /**
+   * CÂRLIGUL APLICAȚIEI LA UN TEXT LUNG LIPIT ÎN CÂMP (19.09.2026) — perechea lui `laFisier`, pentru
+   * textul care vine fără fișier.
+   *
+   * ⚠️ DE CE EXISTĂ. Pe 18.09.2026, 20:50, cineva a lipit în bula buletinului articolul paginii
+   * întâi — 9108 semne. Textul a plecat întreg la model, iar modelului mic i-a rămas de făcut exact
+   * munca pe care schița a fost scrisă s-o ocolească: să-l scrie ÎNAPOI, literă cu literă, ca argument
+   * al unei unelte. N-a mai venit niciun răspuns. Regula casei e alta: „partea grea o duce codul,
+   * modelul doar potrivește fraza cu un subiect".
+   *
+   * Se cheamă ÎNAINTE de a trimite mesajul la creier. Când răspunde cu ceva, în discuție (și deci în
+   * context) intră `mesaj`, nu textul omului — acela a rămas în domeniul aplicației. În fir bula arată
+   * mai departe ce a scris omul, strâns, cu „vezi tot".
+   */
+  laText?: (text: string, c: ContextFisier) => Promise<RaspunsLaText | null>
 }): ModulChat {
   /**
    * Poarta, într-un singur loc: același răspuns și pentru bulă, și pentru rute. Dacă s-ar
@@ -470,7 +500,9 @@ export function modulChat(cfg: {
 
       // Aplicația spune de unde vine întrebarea și cum îl cheamă pe om — chat-worker n-are
       // voie să țină nume, dar modelul se poartă altfel dacă știe cu cine vorbește.
-      const dus = { ...corp, aplicatie: cfg.aplicatie, numeleOmului: ctx.numeleOmului ?? null }
+      // ⚠️ Tipul e scris anume: `text` se poate REAȘEZA aici, când cârligul aplicației ia textul lung
+      // în primire (vezi `laText` mai jos), iar forma dedusă din `corp` n-ar îngădui-o.
+      const dus: Record<string, unknown> = { ...corp, aplicatie: cfg.aplicatie, numeleOmului: ctx.numeleOmului ?? null }
 
       /*
        * MESAJUL, ÎN DOUĂ MIȘCĂRI (18.09.2026). Întâi scrierea mesajului omului, care ține o clipă și
@@ -482,6 +514,29 @@ export function modulChat(cfg: {
        * altceva decât JSON (n-ar trebui) pleacă mai departe așa cum a venit.
        */
       if (cale === '/chat/mesaj') {
+        /*
+         * CÂRLIGUL TEXTULUI, ÎNAINTEA CREIERULUI (19.09.2026). Aplicația poate lua textul în domeniul
+         * ei — buletinul îl scrie în schiță — și atunci spre model pleacă o frază, nu articolul.
+         *
+         * ⚠️ O cădere a cârligului NU pierde mesajul: se merge mai departe cu textul omului, adică pe
+         * drumul de dinainte. Un articol lipit nu are voie să dispară fiindcă s-a împiedicat ceva în
+         * aplicație — e cel mai rău fel de eroare.
+         */
+        let nota = ''
+        let uneltele: string[] = []
+        const scrisDeOm = typeof corp.text === 'string' ? corp.text : ''
+        if (cfg.laText && scrisDeOm.trim()) {
+          try {
+            const alAplicatiei = await cfg.laText(scrisDeOm, { env, ctxExec, ctx })
+            if (alAplicatiei?.mesaj) {
+              dus.text = alAplicatiei.mesaj
+              nota = alAplicatiei.mesaj
+              uneltele = alAplicatiei.unelte ?? []
+            }
+          } catch {
+            // se merge mai departe cu ce a scris omul
+          }
+        }
         const r = await chat.fetch(catre, { method: 'POST', headers: cap, body: JSON.stringify({ ...dus, asincron: true }) })
         const brut = await r.text()
         let date: Record<string, unknown> | null = null
@@ -503,7 +558,16 @@ export function modulChat(cfg: {
             }),
           )
         }
-        return json(date, r.status)
+        /*
+         * ⚠️ `nota` și `unelte` pleacă pe PRIMA mișcare, nu la răspunsul modelului: aplicația a scris
+         * DEJA (schița), iar dacă modelul nu mai cheamă nicio unealtă — n-are de ce, treaba e făcută —
+         * ecranul de dedesubt n-ar afla niciodată că s-a schimbat ceva. Aceeași socoteală ca la urcarea
+         * unui fișier.
+         */
+        return json(
+          { ...date, ...(nota ? { nota } : {}), ...(uneltele.length ? { unelte: uneltele } : {}) },
+          r.status,
+        )
       }
 
       const r = await chat.fetch(catre, {

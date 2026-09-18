@@ -169,6 +169,14 @@ const CHAT = modulChat({
    * Aici CODUL scrie, prin aceeași funcție de domeniu (`scrieRaspuns`), iar modelul primește o frază.
    */
   laFisier: (f, c) => laFisierulBuletinului(f, c.env as unknown as Env),
+  /*
+   * ⚠️ ȘI TEXTUL LIPIT ÎN CÂMP, nu doar fișierul (19.09.2026). Pe 18.09, la 20:50, cineva a lipit
+   * articolul paginii întâi — 9108 semne — la întrebarea „Care este textul principal din acest
+   * buletin?". Textul a plecat întreg la model, care ar fi trebuit să-l scrie ÎNAPOI, literă cu
+   * literă, ca argument al lui `buletin.raspunde`. N-a mai venit niciun răspuns: discuția s-a oprit
+   * la „mă gândesc…". Drumul e același ca la docx — scrie CODUL, prin `scrieRaspuns`.
+   */
+  laText: (text, c) => laTextulBuletinului(text, c.env as unknown as Env),
 })
 
 /** Cifrele mari, cum se citesc: „8 912". */
@@ -176,6 +184,77 @@ const cuMii = (n: number): string => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, 
 
 const hexScurt = (cati: number): string =>
   [...crypto.getRandomValues(new Uint8Array(cati))].map((b) => b.toString(16).padStart(2, '0')).join('')
+
+/**
+ * SCHIȚA ȘI ÎNTREBAREA DE ACUM, plus scrierea unui răspuns în ea — partea comună a celor DOUĂ cârlige
+ * ale bulei (`laFisier` și `laText`).
+ *
+ * ⚠️ Una singură, dinadins: un .docx urcat și un text lipit trebuie să ajungă în ACELAȘI loc, prin
+ * aceeași funcție de domeniu (`scrieRaspuns`). Două drumuri ar fi însemnat două purtări pentru același
+ * lucru — și una dintre ele s-ar fi stricat în tăcere.
+ */
+async function schitaDeAcum(env: Env) {
+  const [{ schita }, intrebari] = await Promise.all([schitaNumarului(env), chestionarul(env)])
+  const deAcum = urmatoareaIntrebare(schita, intrebari)
+  const pastreaza = async (cerut: Parameters<typeof scrieRaspuns>[1]) => {
+    const scris = scrieRaspuns(schita, cerut, intrebari)
+    // autorul se propune din textul proaspăt scris, deci pomenirea lui se caută acum, nu la mesajul următor
+    await cautaPomenirile(env, scris.schita)
+    const urm = urmatoareaIntrebare(scris.schita, intrebari)
+    await scrieSchita(env, scris.schita, { subiect: urm.subiect, articol: urm.articol })
+  }
+  return { schita, deAcum, pastreaza }
+}
+
+/**
+ * TEXTUL UNUI ARTICOL, SCRIS DIRECT ÎN SCHIȚĂ. `null` = „nu e locul lui aici" — atunci textul merge pe
+ * drumul obișnuit și omul spune el unde-l vrea.
+ *
+ * ⚠️ `strict` deosebește cele două cârlige, și deosebirea e cerută de viață:
+ *  - un **.docx urcat** e limpede articolul, oricât de devreme ar fi chestionarul — deci intră și când
+ *    întrebarea de acum e motto-ul (articolul n-are încă text);
+ *  - un **text lipit în câmp** la întrebarea motto-ului e chiar MOTTO-UL dictat, nu articolul. Fără
+ *    `strict`, un motto mai lung de un rând ar fi ajuns tăcut textul paginii întâi.
+ */
+async function textulInSchita(
+  env: Env,
+  text: string,
+  o: { dinFisier?: string; strict?: boolean } = {},
+): Promise<{ mesaj: string; unelte: string[] } | null> {
+  const { schita, deAcum, pastreaza } = await schitaDeAcum(env)
+  const care = deAcum.articol
+  const asteaptaText =
+    deAcum.subiect === 'text' ||
+    (!articolul(schita, care).text && (!o.strict || (deAcum.subiect !== 'motto' && deAcum.subiect !== 'gata')))
+  if (!asteaptaText) return null
+
+  await pastreaza({ subiect: 'text', valoare: text, articol: care })
+  return {
+    // ⚠️ `unelte` e pentru ecranul de dedesubt: schița s-a schimbat ACUM, nu când răspunde modelul.
+    unelte: ['buletin.raspunde'],
+    mesaj:
+      `Am pus textul${o.dinFisier ? ` din ${o.dinFisier}` : ''} (${cuMii(semne(text))} de semne) ` +
+      `ca textul articolului ${NUMELE_ZONEI[care]}. Continuă cu întrebarea următoare.`,
+  }
+}
+
+/**
+ * Cât trebuie să aibă un text lipit în bulă ca să fie luat drept ARTICOL, nu drept răspuns.
+ *
+ * 400 e măsura pe care platforma o dă deja unui câmp scurt al schiței (`MAXIM_CAMP`): un titlu, o
+ * sursă, un „rămâne așa" ori un nume de autor stau toate sub ea, iar un articol de buletin are vreo
+ * nouă mii. Între cele două nu e nicio ambiguitate de care să ne temem.
+ */
+const PRAG_TEXT_ARTICOL = 400
+
+/**
+ * CE FACE BULETINUL CU UN TEXT LUNG LIPIT ÎN BULĂ (19.09.2026): îl scrie în schiță, din cod, și
+ * întoarce modelului o frază. Textul nu mai ajunge niciodată în context — nici la dus, nici la întors.
+ */
+async function laTextulBuletinului(text: string, env: Env): Promise<{ mesaj: string; unelte: string[] } | null> {
+  if (text.trim().length <= PRAG_TEXT_ARTICOL) return null
+  return await textulInSchita(env, text, { strict: true })
+}
 
 /**
  * CE FACE BULETINUL CU UN FIȘIER URCAT ÎN BULĂ.
@@ -191,33 +270,13 @@ async function laFisierulBuletinului(
   f: { nume: string; fel: string; tip: string; text: string; continut: ArrayBuffer },
   env: Env,
 ): Promise<{ text?: string; mesaj?: string; poza?: string; unelte?: string[] } | null> {
-  const [{ schita }, intrebari] = await Promise.all([schitaNumarului(env), chestionarul(env)])
-  const deAcum = urmatoareaIntrebare(schita, intrebari)
-  const care = deAcum.articol
-  const unde = NUMELE_ZONEI[care]
-
-  const pastreaza = async (cerut: Parameters<typeof scrieRaspuns>[1]) => {
-    const scris = scrieRaspuns(schita, cerut, intrebari)
-    // autorul se propune din textul proaspăt scris, deci pomenirea lui se caută acum, nu la mesajul următor
-    await cautaPomenirile(env, scris.schita)
-    const urm = urmatoareaIntrebare(scris.schita, intrebari)
-    await scrieSchita(env, scris.schita, { subiect: urm.subiect, articol: urm.articol })
-  }
-
   if (f.fel === 'docx' || f.fel === 'txt') {
-    const asteaptaText = deAcum.subiect === 'text' || !articolul(schita, care).text
-    if (!asteaptaText) return null
-    await pastreaza({ subiect: 'text', valoare: f.text, articol: care })
-    return {
-      text: f.text,
-      // ⚠️ `unelte` e pentru ecranul de dedesubt: schița s-a schimbat ACUM, nu când răspunde modelul.
-      unelte: ['buletin.raspunde'],
-      mesaj:
-        `Am pus textul din ${f.nume} (${cuMii(semne(f.text))} de semne) ca textul articolului ${unde}. ` +
-        'Continuă cu întrebarea următoare.',
-    }
+    const pus = await textulInSchita(env, f.text, { dinFisier: f.nume })
+    return pus ? { text: f.text, unelte: pus.unelte, mesaj: pus.mesaj } : null
   }
 
+  const { schita, deAcum, pastreaza } = await schitaDeAcum(env)
+  const care = deAcum.articol
   const ext = f.fel === 'png' ? 'png' : f.fel === 'webp' ? 'webp' : 'jpg'
   const cheie = `poze/${schita.nr ?? 0}-${schita.data}/${Date.now().toString(36)}-${hexScurt(3)}.${ext}`
   await env.FISIERE.put(cheie, f.continut, { httpMetadata: { contentType: f.tip } })
@@ -226,7 +285,7 @@ async function laFisierulBuletinului(
   return {
     poza: adresa,
     unelte: ['buletin.raspunde'],
-    mesaj: `Am pus poza ${f.nume} la articolul ${unde}. Dacă o vrei la alt articol, spune-mi.`,
+    mesaj: `Am pus poza ${f.nume} la articolul ${NUMELE_ZONEI[care]}. Dacă o vrei la alt articol, spune-mi.`,
   }
 }
 

@@ -131,6 +131,11 @@ export interface RaspunsModel {
   cereri: CerereUnealta[]
   /** Modelul a fost oprit de `max_tokens` inainte sa termine. */
   taiat: boolean
+  /**
+   * APELUL A TRECUT DE CEAS și l-am lăsat în urmă (19.09.2026). Nu e o eroare și nu e un răspuns: e
+   * semnalul că bucla trebuie să se oprească ACUM și să-i scrie omului ce a apucat. Vezi `cuCeas`.
+   */
+  expirat?: boolean
   /** Drumul Claude: blocurile turei, de pus înapoi în istoric (vezi `MesajModel.brut`). */
   brut?: BlocClaude[]
 }
@@ -158,6 +163,43 @@ function catMaiAstept(o: OptiuniModel): number {
   // Cel puțin cinci secunde: un apel pornit are dreptul să încerce, altfel se anulează pe loc și
   // omul primește o eroare în loc de un răspuns scurt.
   return Math.max(5_000, Math.min(ASTEPTARE_IMPLICITA_MS, o.pana - Date.now()))
+}
+
+/**
+ * UN CEAS PESTE O PROMISIUNE CARE NU ARE UNUL (19.09.2026).
+ *
+ * ⚠️ DE CE EXISTĂ. `env.AI.run` nu primește `AbortSignal` — spre deosebire de drumul Claude, unde
+ * ceasul stă pe `fetch`. Până aici, asta însemna că un apel Workers AI care atârnă nu era tăiat de
+ * NIMIC: bugetul mesajului se cântărește doar ÎNTRE pașii buclei, deci un singur apel lung trecea
+ * peste el nestingherit, iar cererea care-l ținea era tăiată de platformă ÎNAINTE să apuce cineva să
+ * scrie ceva în discuție.
+ *
+ * Pățit pe 18.09.2026, 20:50: un articol de 9108 semne lipit în bula buletinului, un model mic pus
+ * să-l scrie înapoi ca argument de unealtă — niciun mesaj al agentului în bază, omul rămas cu „mă
+ * gândesc…" până i s-a terminat răbdarea bulei. Tăcere, nu eroare.
+ *
+ * Cursa NU oprește apelul de dedesubt (n-avem cum), dar ne lasă să ieșim din buclă la vreme și să
+ * scriem omului ce s-a întâmplat. Un răspuns scurt scris bate o tăcere.
+ *
+ * Exportată pentru probe: e o piesă mică de care atârnă purtarea la capătul răbdării.
+ */
+export async function cuCeas<T>(
+  lucrul: Promise<T>,
+  ms: number,
+): Promise<{ gata: true; date: T } | { gata: false }> {
+  let ceas: ReturnType<typeof setTimeout> | undefined
+  const dus = lucrul.then((date) => ({ gata: true as const, date }))
+  const expira = new Promise<{ gata: false }>((hai) => {
+    ceas = setTimeout(() => hai({ gata: false }), ms)
+  })
+  try {
+    return await Promise.race([dus, expira])
+  } finally {
+    clearTimeout(ceas)
+    // ⚠️ Când ceasul a câștigat, promisiunea rămasă în urmă se poate încheia oricând cu o eroare —
+    // fără prinderea asta ar fi o respingere fără stăpân, care în Workers omoară izolatul.
+    void dus.catch(() => undefined)
+  }
 }
 
 const ROLURI: Record<RolMesaj, string> = {
@@ -500,6 +542,12 @@ export function desface(brut: unknown): RaspunsModel {
   return { text: curataCanalele(text), cereri, taiat }
 }
 
+/** Bugetul de ieșire obișnuit și cel mare — vezi lămurirea din `intreabaWorkersAi`. */
+const PLAFON_OBISNUIT = 2500
+const PLAFON_MARE = 6000
+/** De la câte semne un mesaj al omului face istoricul „greu" (și modelul ispitit să-l care înapoi). */
+const PRAG_ISTORIC_LUNG = 3000
+
 async function intreabaWorkersAi(
   env: EnvCreier,
   mesaje: MesajModel[],
@@ -549,14 +597,36 @@ async function intreabaWorkersAi(
     temperature: 0,
   })
 
-  let r = desface(await env.AI.run(model, cerere(2500), poarta))
+  /** Un apel, cu ceas peste el. `null` = ceasul a câștigat, deci nu mai așteptăm nimic de aici. */
+  const cere = async (maxTokens: number): Promise<RaspunsModel | null> => {
+    const r = await cuCeas(env.AI.run(model, cerere(maxTokens), poarta), catMaiAstept(o))
+    return r.gata ? desface(r.date) : null
+  }
+
+  /*
+   * BUGETUL DE IEȘIRE AL PRIMEI ÎNCERCĂRI (19.09.2026). 2500 ajung pentru o întrebare și un apel de
+   * unealtă. Dar când în istoric stă un mesaj al omului de peste `PRAG_ISTORIC_LUNG` semne, modelul
+   * mic e ispitit să-l care înapoi ca argument, iar 2500 îi taie JSON-ul la mijloc — și atunci se
+   * reîncearcă, cu bugetul dublat, adică încă un apel întreg, cu tot cu așteptarea lui.
+   *
+   * ⚠️ Un plafon NU costă nimic dacă modelul răspunde scurt: se plătesc tokenii scriși, nu cei
+   * îngăduiți. A doua încercare costă sigur. Deci, la un istoric greu, se pleacă de-a dreptul cu
+   * plafonul mare, o singură dată.
+   */
+  const areIstoricGreu = mesaje.some((m) => m.rol === 'om' && m.text.length > PRAG_ISTORIC_LUNG)
+  const intai = areIstoricGreu ? PLAFON_MARE : PLAFON_OBISNUIT
+
+  let r = await cere(intai)
+  if (!r) return { text: '', cereri: [], taiat: false, expirat: true }
   // Taiat, sau ramas fara nimic dupa curatarea gandirii: inca o incercare, cu buget dublat.
   // ⚠️ DAR NUMAI DACĂ MAI E VREME (18.09.2026): reîncercarea dublează și așteptarea, iar pornită
   // când bugetul mesajului s-a scurs nu face decât să mai țină omul un minut degeaba. Mai bine un
   // răspuns scurt acum decât unul întreg peste trei minute.
   const maiEVreme = !o.pana || Date.now() < o.pana
-  if ((r.taiat || !r.text) && !r.cereri.length && maiEVreme) {
-    r = desface(await env.AI.run(model, cerere(6000), poarta))
+  if ((r.taiat || !r.text) && !r.cereri.length && maiEVreme && intai < PLAFON_MARE) {
+    const aDoua = await cere(PLAFON_MARE)
+    if (!aDoua) return { text: '', cereri: [], taiat: false, expirat: true }
+    r = aDoua
   }
   return r
 }

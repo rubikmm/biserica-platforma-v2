@@ -295,6 +295,52 @@ articolul nu mai face drumul prin model și înapoi; o poză intră în depozitu
 `poze/<nr>-<data>/…`, iar în schiță se scrie **adresa publică**, fiindcă Browser Rendering o ia de pe
 internet, dintr-o sesiune care n-are cookie-urile omului.
 
+#### Perechea lui: `laText`, pentru textul lipit în câmp (19.09.2026)
+
+Cârligul de mai sus acoperea fișierul, nu și textul. Pe 18.09.2026, la 20:50, cineva a lipit în bula
+buletinului articolul paginii întâi — **9108 semne** — la întrebarea „Care este textul principal din
+acest buletin?". Textul a plecat întreg la un model mic și gratuit (glm-5.3-flash), căruia îi rămânea
+să-l scrie **înapoi, literă cu literă**, ca argument al lui `buletin.raspunde`. În D1 nu s-a mai scris
+niciun mesaj al agentului: omul a rămas cu „mă gândesc…" până i s-a terminat răbdarea bulei.
+
+Deci textul lung face acum drumul fișierului, prin `modulChat({ …, laText })`:
+
+```
+om lipește 9108 semne ─► POST /chat/mesaj
+                          laText(text, ctx) → { mesaj, unelte }   ← buletinul scrie în SCHIȚĂ
+                          spre creier pleacă `mesaj` (o frază), nu textul
+                       ◄─ { conversatieId, inLucru:true, nota, unelte }
+```
+
+Trei lucruri de ținut minte:
+
+- **`mesaj` înlocuiește textul omului și în discuție, și în context** — acolo e tot câștigul. În fir
+  bula arată mai departe ce a scris omul, strâns, cu „vezi tot";
+- **`nota` și `unelte` pleacă pe PRIMA mișcare**, nu la răspunsul modelului: schița s-a schimbat deja,
+  iar dacă modelul nu mai cheamă nicio unealtă (n-are de ce), ecranul de dedesubt n-ar afla niciodată;
+- **pragul nu e de ajuns singur**. Peste 400 de semne un text e articol, nu răspuns — dar la întrebarea
+  *motto-ului* un text lung e chiar motto-ul dictat. De aceea cârligul textului e mai strict decât cel
+  al fișierului: un `.docx` urcat e limpede articolul, oricât de devreme ar fi chestionarul.
+
+#### Ceasul de sub un apel Workers AI
+
+Aceeași pățanie a scos la iveală o gaură mai adâncă: **`env.AI.run` nu primește `AbortSignal`** — pe
+drumul Claude ceasul stă pe `fetch`, aici nu stătea nicăieri. Iar bugetul de 90 s se cântărește doar
+**între** pașii buclei. Deci un singur apel lung trecea peste el nestingherit, iar cererea care-l ținea
+era tăiată de platformă înainte să apuce cineva să scrie ceva. Boala nu se vedea ca eroare, ci ca
+tăcere — mult mai greu de găsit a doua oară.
+
+`cuCeas` (în `creier.ts`) pune cursa lipsă. Nu oprește apelul de dedesubt — n-avem cum — dar întoarce
+`expirat: true`, iar bucla iese pe ușa obișnuită a bugetului scurs, care **spune omului ce a apucat**.
+
+Tot de aici și bugetul de ieșire: cu un mesaj al omului de peste 3000 de semne în istoric se pleacă
+de-a dreptul cu `max_tokens: 6000`, nu cu 2500 și o reîncercare. Un plafon nu costă nimic dacă modelul
+răspunde scurt (se plătesc tokenii scriși, nu cei îngăduiți), pe când a doua încercare costă sigur și
+dublează tocmai așteptarea de care ne plângem.
+
+Și un semn lăsat în date: un argument de unealtă mai lung de 3000 de semne nu se refuză (e valid), dar
+se scrie în `apeluri` cu `semneArgument`. Cifra aceea arată unde lipsește un cârlig de aplicație.
+
 ### Instrucțiuni punctuale către un obiect al foii (18.09.2026, seara)
 
 Cerere user: *„instrucțiunile sunt precise, către un obiect din lista de obiecte ce formează
