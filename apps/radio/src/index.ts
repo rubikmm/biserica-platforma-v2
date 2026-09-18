@@ -306,6 +306,9 @@ async function starePanouAici(env: Env, eSuperAdmin: boolean): Promise<StarePano
     radio: acum,
     selectie: sel,
     director: sel.director,
+    // Rotirea albumelor e ținută de `live` (contorul și alarma stau în obiectul lui durabil): cât
+    // tace, nu ghicim nimic despre ea — rândul din panou lipsește pur și simplu.
+    rotire: { ales_la: null, urmatoarea: null, activa: false, motiv: null },
     biblioteca: { generat_la: b.generat_la, semnatura: b.semnatura, fisiere: b.fisiere.length },
     aparat: null,
     viu: false,

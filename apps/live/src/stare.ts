@@ -9,11 +9,12 @@ import type {
   StarePanou,
   Telemetrie,
 } from '@xc/contracts'
-import { type EnvAparat, aparatViu, aparatul, treceAparatLin } from './aparat.js'
+import { type Aparat, type EnvAparat, aparatViu, aparatul, radioPentruAparat, treceAparatLin } from './aparat.js'
 import { type EnvAscultatori, numarAscultatori } from './ascultatori.js'
 import { type EnvDirect, stareDirect } from './direct.js'
 import { type EnvProgram, urmatoareaSlujba } from './program.js'
 import { type EnvRadioDeparte, ceasRadio, indiceRadio, puneCeas } from './radio-departe.js'
+import { CINE_CEAS, durataAlbumului, eRotireaPornita, scadentaRotirii } from './rotire.js'
 
 /**
  * CREIERUL emisiei. Aici se hotărăște ce e pus în spate și aici se dau comenzile — atât cele
@@ -100,18 +101,39 @@ export async function asiguraIndicele(env: EnvCreier, semnatura: string): Promis
 
 export async function starePanou(env: EnvCreier, potComanda: boolean, eSuperAdmin: boolean): Promise<StarePanou> {
   const ap = aparatul(env)
-  const [ceas, telemetrie, comanda, direct, ascultatori] = await Promise.all([
+  const [ceas, telemetrie, comanda, direct, ascultatori, rot] = await Promise.all([
     ceasRadio(env),
     ap.stare(),
     ap.comanda(),
     stareDirect(env),
     numarAscultatori(env).catch(() => null),
+    ap.stareRotire(),
   ])
   const b = await asiguraIndicele(env, ceas.biblioteca.semnatura)
+  const acum = Date.now()
+  /*
+   * ROTIREA ALBUMELOR, în două vorbe pentru panou. „Ales de ceas" se citește din `cine`, valoarea
+   * fixă pe care o scrie numai rotirea; ora următoarei schimbări e chiar alarma programată, nu o
+   * socoteală făcută aici — ce se vede în panou e ce se va și întâmpla.
+   *
+   * `motiv` e singura socoteală de aici: care dintre cele două ceasuri (ziua fără comandă, ora de
+   * liniște) vine primul, ca panoul să spună DE CE se schimbă albumul. Cât rotirea e pornită, ora
+   * arătată e capătul albumului, deci n-are nicio pricină de spus.
+   */
+  const aleasaDeCeas = ceas.selectie.pornit && ceas.selectie.cine === CINE_CEAS
+  const pornita = eRotireaPornita({ acum, ultimaOm: rot.ultima_om, ultimulSunet: rot.ultimul_sunet, aleasaDeCeas })
   return {
     radio: ceSeAude(b, ceas.selectie),
     selectie: ceas.selectie,
     director: ceas.selectie.director,
+    rotire: {
+      ales_la: aleasaDeCeas ? ceas.selectie.de : null,
+      urmatoarea: rot.la,
+      activa: pornita,
+      motiv: pornita
+        ? null
+        : scadentaRotirii({ acum, ultimaOm: rot.ultima_om, ultimulSunet: rot.ultimul_sunet }).motiv,
+    },
     biblioteca: ceas.biblioteca,
     aparat: telemetrie,
     viu: aparatViu(telemetrie),
@@ -122,19 +144,36 @@ export async function starePanou(env: EnvCreier, potComanda: boolean, eSuperAdmi
     ascultatori,
     pot_comanda: potComanda,
     super_admin: eSuperAdmin,
-    acum: new Date().toISOString(),
+    acum: new Date(acum).toISOString(),
   }
 }
 
 // --- Comenzile -----------------------------------------------------------------
 
-/** Comanda „radio" pentru aparat (boxele bisericii): selecția cu ceasul ei. */
-const radioPentruAparat = (sel: SelectieRadio) => ({
-  stare: 'radio' as const,
-  director: sel.director,
-  fisier_start: sel.fisier_start,
-  selectie: { versiune: sel.versiune, director: sel.director, fisier_start: sel.fisier_start, de: sel.de },
-})
+/**
+ * Ceasul rotirii albumelor se pune la loc după FIECARE scriere de selecție (vezi `rotire.ts`).
+ * ⚠️ `eOm` e adevărat NUMAI pe drumul omului din panou — el singur repune contorul de o zi la zero.
+ */
+function ceasulRotirii(
+  ap: DurableObjectStub<Aparat>,
+  b: BibliotecaRadio,
+  sel: SelectieRadio,
+  eOm: boolean,
+): Promise<void> {
+  return ap.programeazaRotirea({
+    eOm,
+    pornit: sel.pornit,
+    de: sel.de,
+    totalS: durataAlbumului(b, sel.director),
+    // Cât cântă un album pus de ceas, rotirea e în curs: alarma stă pe capătul lui, nu pe scadențe.
+    aleasaDeCeas: sel.pornit && sel.cine === CINE_CEAS,
+  })
+}
+
+/** Radioul tace (LIVE sau OPRIT): ceasul rotirii se stinge, n-are ce roti. */
+function opresteRotirea(ap: DurableObjectStub<Aparat>, eOm: boolean): Promise<void> {
+  return ap.programeazaRotirea({ eOm, pornit: false, de: '', totalS: 0 })
+}
 
 export interface Raspuns {
   ok: boolean
@@ -157,8 +196,29 @@ export async function executaComanda(
   const ap = aparatul(env)
   const ceas = await ceasRadio(env)
   const b = await asiguraIndicele(env, ceas.biblioteca.semnatura)
-  const sel = ceas.selectie
+  const r = await aplicaComanda(env, ap, b, ceas.selectie, c, cine, eSuperAdmin)
+  /*
+   * ⚠️ AICI e locul în care știm sigur că a atins panoul un OM: drumul ăsta vine de la
+   * `/_intern/comanda`, cerut de `radio` cu dreptul omului verificat. De aceea tot aici se repune
+   * la zero contorul rotirii albumelor (`rotire.ts`) — nu în obiectul durabil, unde n-am mai putea
+   * deosebi apăsarea de hotărârea aparatului, și nu după `cine`, care e text liber.
+   *
+   * O comandă REFUZATĂ (fără drept, aparat mut, director gol) nu e o atingere de panou: rotirea
+   * merge mai departe ca și cum n-ar fi fost.
+   */
+  if (r.ok && r.selectie) await ceasulRotirii(ap, b, r.selectie, true)
+  return r
+}
 
+async function aplicaComanda(
+  env: EnvCreier,
+  ap: DurableObjectStub<Aparat>,
+  b: BibliotecaRadio,
+  sel: SelectieRadio,
+  c: { actiune: ActiunePanou; director?: string; fisier?: string },
+  cine: string | null,
+  eSuperAdmin: boolean,
+): Promise<Raspuns> {
   switch (c.actiune) {
     case 'oprit': {
       /*
@@ -269,11 +329,37 @@ export async function preiaDecizia(env: EnvCreier, t: Telemetrie): Promise<void>
       cine,
     )
     await ap.puneComanda(radioPentruAparat(sel), cine)
+    /*
+     * ⚠️ Întoarcerea la radio după o slujbă NU e o comandă de om (user, 18.09.2026): contorul de o
+     * zi merge mai departe de unde a rămas, doar ceasul se recalculează. Dacă ziua trecuse deja cât
+     * ținea slujba, rotirea reîncepe de la capătul albumului ăstuia, nu peste încă o zi.
+     */
+    const ceas = await ceasRadio(env)
+    await ceasulRotirii(ap, await asiguraIndicele(env, ceas.biblioteca.semnatura), sel, false)
   } else if (d.stare === 'live') {
     await puneCeas(env, { pornit: false }, cine)
     await ap.puneComanda({ stare: 'live' }, cine)
+    await opresteRotirea(ap, false)
   } else if (d.stare === 'oprit') {
     await puneCeas(env, { pornit: false }, cine)
     await ap.puneComanda({ stare: 'oprit' }, cine)
+    await opresteRotirea(ap, false)
   }
+}
+
+/**
+ * Ceasul rotirii, ținut aprins.
+ *
+ * Alarma se pune la fiecare comandă — dar tocmai cazul care ne interesează e cel în care NU se dă
+ * niciuna: dacă de la publicarea aplicației nimeni n-a apăsat nimic, n-ar avea cine s-o pună, iar
+ * rotirea n-ar porni niciodată. De aceea telemetria aparatului (bate la 20 s) se uită dacă ceasul
+ * e programat; când e — adică aproape totdeauna — nu costă decât o citire din obiectul durabil.
+ */
+export async function asiguraCeasulRotirii(env: EnvCreier, t: Telemetrie): Promise<void> {
+  if (t.stare !== 'radio') return
+  const ap = aparatul(env)
+  if ((await ap.stareRotire()).la) return
+  const ceas = await ceasRadio(env)
+  const b = await asiguraIndicele(env, ceas.biblioteca.semnatura)
+  await ceasulRotirii(ap, b, ceas.selectie, false)
 }

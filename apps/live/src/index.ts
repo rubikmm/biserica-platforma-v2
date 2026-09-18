@@ -36,12 +36,12 @@ import pkg from '../package.json' with { type: 'json' }
 import { type EnvAparat, aparatul } from './aparat.js'
 import { type EnvAscultatori, bataiePagina } from './ascultatori.js'
 import { DIRECT, type EnvDirect, MIC, ascultaIntra, ascultaRaspuns, sidDin, stareCanal, whipIese, whipIntra } from './direct.js'
-import { corpMic, jsMic } from './mic.js'
+import { corpMic, jsMic, stareMic } from './mic.js'
 import { type Ctx, pagina, paginaMesaj, spreCont } from './pagina.js'
 import { ruteazaSetari } from '@xc/setari'
 import type { EnvProgram } from './program.js'
 import { type EnvRadioDeparte, indiceRadio } from './radio-departe.js'
-import { type EnvCreier, executaComanda, preiaDecizia, stareEmisie, starePanou } from './stare.js'
+import { type EnvCreier, asiguraCeasulRotirii, executaComanda, preiaDecizia, stareEmisie, starePanou } from './stare.js'
 
 export { Direct } from './direct.js'
 export { Aparat } from './aparat.js'
@@ -203,7 +203,10 @@ export default {
           return html(pagina(ctx, { titluPagina: 'Microfonul', corp: corpMic(), scripturi: jsMic(prefix) }), 200, antete)
         }
         if (cale === '/mic/stare' && req.method === 'GET') {
-          return Response.json(await stareCanal(env, MIC), { headers: JSON_VIU })
+          // Pe lângă starea canalului: ce aude microfonul, măsurat pe aparat (v. `mic.ts`). Aceeași
+          // citire o folosește și rotirea albumelor, deci pagina arată chiar ceasul liniștii.
+          const [canal, sunet] = await Promise.all([stareCanal(env, MIC), aparatul(env).sunet()])
+          return Response.json(stareMic(canal, sunet), { headers: JSON_VIU })
         }
         if (cale === '/mic/asculta' && req.method === 'POST') return ascultaIntra(env, MIC)
         const sidMic = sidDin(cale, '/mic/asculta/')
@@ -317,6 +320,9 @@ async function masini(req: Request, url: URL, cale: string, env: Env): Promise<R
     if (!t || typeof t.stare !== 'string') return json({ motiv: 'astept telemetrie' }, 400)
     await a.puneStare(t)
     await preiaDecizia(env, t)
+    // Bătaia asta e și singurul loc în care ceasul rotirii se poate aprinde fără nicio comandă —
+    // adică exact în zilele în care nimeni nu atinge panoul (vezi `asiguraCeasulRotirii`).
+    await asiguraCeasulRotirii(env, t)
     return json({ ok: true, comanda_versiune: (await a.comanda()).versiune }, 200, JSON_VIU)
   }
   /*

@@ -312,6 +312,13 @@ propunerea automată, ca în V1.
 
 ## NEXT
 
+00e. **ROTIREA ALBUMELOR — scrisă și publicată pe 18.09.2026.** Vezi „Rotirea albumelor" la „LIVE și
+    RADIO". Ce rămâne: (1) **reglarea pragului `PRAG_SUNET_DBFS`** (azi −30 dBFS, în `aparat/sunet.py`,
+    repo `biserica-rpi-v2`), după o zi de citit nivelul pe `live.sfantul-ilie.ro/mic` cu biserica
+    **goală** — microfonul aude și boxele, deci „liniște" nu e zero și pragul de acum e o ghicire;
+    (2) **verificat pe viu că a sărit primul album** după publicare (contorul semănat cu 24 h în urmă
+    face rotirea scadentă pe loc) — dacă nu, `wrangler tail xc-live-production` pe `alarm`/`roteste`.
+
 00c. **CHATUL, PE APLICAȚIE — scris ȘI PUBLICAT pe 18.09.2026, 13:20** (`e74d10d`, `ce7b7e6`).
     Îndrumările și uneltele au ieșit din cheia comună în `modul:chat:<aplicatie>`; rubrica „Chat AI"
     din Setările fiecărei aplicații; Module a rămas cu ale platformei. Amănuntele: „Modulul de Chat
@@ -1110,6 +1117,29 @@ are sens decât pentru mine ca super-admin" — Părintele dă mute).
 4. **Paginile vorbesc numai cu originea lor.** Cele două stau pe subdomenii diferite; dacă un script
    ar cere direct de la celălalt, ar avea nevoie de CORS și de cookie-uri între origini. O probă
    păzește regula (`tests/emisie.test.ts`).
+
+**Rotirea albumelor** (cerută 18.09.2026: „radioul cântă azi la nesfârșit același album"). Ceasul sare
+singur pe alt director, la întâmplare, de la prima lui piesă, apoi iar la capătul albumului, ocolind
+ultimele 3 alese. **Pornește pe două ceasuri**: 24 h fără nicio comandă de OM, SAU o oră de liniște în
+biserică — socotită din `max(ultimul_sunet, ultima_om)`, deci o apăsare cere din nou o oră întreagă.
+Odată pornită, merge la fiecare capăt orice s-ar auzi; o oprește numai o comandă de om. ⚠️ **Contorul e
+al omului, nu al aparatului**: deciziile lui (slujbă, întoarcere la radio) trec prin `preiaDecizia` și
+NU-l repun la zero. Sunetul vine în telemetrie (`sunet: {nivel, varf, prag, ultimul_peste_prag,
+fereastra_s}`, `null` când aparatul nu măsoară): ⚠️ **pragul e al APARATULUI** — microfonul aude și
+boxele, deci „liniște" nu e zero. Workerul ține `ultimul_sunet` ca **maxim monoton** (un `null` ori o
+valoare mai veche nu-l coboară) și-l arată pe `/mic`. Socoteala pură: `apps/live/src/rotire.ts` (probe:
+`tests/rotire.test.ts`); fapta, în DO-ul `Aparat`, pe ACELAȘI drum ca o apăsare din panou (`puneCeas` +
+comandă nouă). Capcane: (1) un DO are **o singură alarmă** — multiplexate în cheia `alarme`, iar
+`puneComanda` nu mai cheamă `deleteAlarm()`; (2) „album" = director cu piese CHIAR în el (`pieseDin`
+numără recursiv); (3) alarma nu se reprogramează la fiecare telemetrie — la trezire se recitește tot și,
+dacă sunetul a mutat scadența, se amână (`asiguraCeasulRotirii` o aprinde când nu e programată).
+⚠️ **Contorul se seamănă cu o zi ÎN URMĂ** (user, 18.09.2026: „să fie deja peste 24h"): la prima
+atingere a DO-ului `ultima_om` = `acum − FARA_OM_MS` (`contorulDeStart`), deci un radio despre care nu
+știm nicio comandă de om se socotește **nepăzit** și rotirea e scadentă pe loc — iar acolo, și numai
+acolo, alarma se pune pe `acum`, nu pe capătul albumului (albumul curge în buclă de zile, capătul lui
+ar veni la o oră neștiută). Așa prima săritură se vede în ≤20 s de la prima telemetrie de după
+publicare, nu peste o zi. Pe același temei, „necunoscut = nepăzit" și în socoteala pură
+(`scadentaRotirii`/`eScadentaRotirea` cu `ultimaOm` null dau scadență imediată).
 
 **⚠️ Depozitul e cel din V1, REFOLOSIT** — hotărâre a utilizatorului (14.09.2026: „cei 11gb poți să
 îi folosești sau să redenumești R2-ul… ca să nu mai faci atâtea operații"). Redenumirea unui bucket
@@ -2297,6 +2327,24 @@ forța antetul `Host`**.
 ## Jurnal
 
 ### 2026-09-18
+
+- **ROTIREA ALBUMELOR RADIOULUI** (user, 16:30–17:30: „radioul cântă azi la nesfârșit același album",
+  apoi „amândouă" la întrebarea care ceas pornește rotirea). Regula: ceasul sare singur pe alt album,
+  la întâmplare, de la prima piesă, apoi la capătul fiecăruia — **pe două ceasuri**, 24 h fără nicio
+  comandă de OM **SAU** o oră de liniște în biserică, socotită din `max(ultimul_sunet, ultima_om)`, ca
+  o apăsare să ceară din nou o oră întreagă. Odată pornită nu se mai uită la sunet; o oprește numai o
+  comandă de om. Făcut: socoteala pură în `apps/live/src/rotire.ts` (+ `tests/rotire.test.ts`), fapta
+  în DO-ul `Aparat` (alarma multiplexată în cheia `alarme`, fiindcă un DO are una singură), rândul de
+  rotire în `packages/comanda/src/panou.ts`, `sunet`/`rotire` în `packages/contracts/src/live.ts`,
+  rândul „Sunet" pe `/mic`. Pe Pi (repo **`biserica-rpi-v2`**): `aparat/sunet.py`, care pune în
+  telemetrie `sunet{nivel, varf, prag, ultimul_peste_prag, fereastra_s}` — ⚠️ **pragul e al
+  aparatului** (microfonul aude și boxele, deci „liniște" nu e zero); workerul ține `ultimul_sunet` ca
+  maxim monoton. **Cererea de la urmă** („să fie deja peste 24h și să înceapă rotirea"): la prima
+  atingere a DO-ului contorul se seamănă cu **o zi în urmă** (`contorulDeStart`), deci un radio despre
+  care nu știm nicio comandă de om se socotește nepăzit și rotirea e scadentă pe loc; tot acolo, și
+  numai acolo, alarma se pune pe `acum` în loc de capătul albumului, ca prima săritură să se vadă în
+  ≤20 s de la prima telemetrie de după publicare. 635 de probe, typecheck 36/36. Versiuni: **live
+  0.1.8**, **radio 0.1.8** (panoul și contractul s-au schimbat), publicate pe producție.
 
 - **„Să nu ținem în două locuri programul"** (15:25–16:00): programul liturgic era tastat a doua oară
   în WordPress-ul de pe apex (articol `program` + ACF, tema `sfantulilie`, `content-single-program.php`).

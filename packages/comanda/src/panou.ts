@@ -80,6 +80,9 @@ export function corpPanou(legaturi: { live: string; radio: string; biblioteca: s
     <p class="ctl-info-durata" id="acum-rec"></p>
     <p class="ctl-info-boxe" id="acum-boxe" hidden></p>
     <p class="ctl-info-program" id="acum-program" hidden></p>
+    <!-- ROTIREA albumelor: dupa o zi fara nicio comanda de om, ceasul sare singur pe alt album.
+         Un rand discret, in acelasi stil cu randul programului — v. apps/live/src/rotire.ts. -->
+    <p class="ctl-info-program" id="acum-rotire" hidden></p>
     <p class="ctl-info-ascultatori" id="acum-ascultatori" hidden></p>
     <div class="ctl-eroare" id="eroare" hidden></div>
   </section>
@@ -476,6 +479,24 @@ export function jsPanou(prefix: string): string {
       else { pg.dataset.fel = "eroare"; pg.textContent = "Programul slujbelor nu e încă pe aparat" + (pr.eroare ? " — " + pr.eroare : "") + "."; }
       if (pr.eroare && pr.slujbe) pg.textContent += " Copia e veche (" + (pr.sincronizat_la ? "din " + cand(pr.sincronizat_la) : "?") + "): " + pr.eroare + ".";
     } else pg.hidden = true;
+
+    // ROTIREA ALBUMELOR: cat radioul canta netulburat, ceasul schimba albumul singur — dupa o zi
+    // fara nicio comanda, SAU dupa o ora de liniste in biserica (masurata de microfonul aparatului).
+    // Orice comanda din panou opreste rotirea. Nu e niciun buton de apasat — doar spunem ce urmeaza
+    // sa se intample SI DIN CE PRICINA, ca Parintele sa nu se mire ca s-a schimbat muzica.
+    const rt = $("acum-rotire"), ro = S.rotire;
+    if (ro && s === "stop" && !tranzitie && (ro.ales_la || ro.urmatoarea)) {
+      rt.hidden = false; rt.dataset.fel = "";
+      const parti = [];
+      if (ro.ales_la) parti.push("Album ales de ceas, la " + cand(ro.ales_la) + ".");
+      // Ceasul linistii e de cel mult o ora, deci ajunge ora; cel al comenzii poate fi si maine.
+      if (ro.urmatoarea) parti.push(ro.activa
+        ? "Schimbă albumul la " + cand(ro.urmatoarea) + "."
+        : ro.motiv === "liniste"
+          ? "Albumul se schimbă la " + cand(ro.urmatoarea) + " dacă rămâne liniște."
+          : "Albumul se schimbă " + candZi(ro.urmatoarea) + " dacă nu se dă nicio comandă.");
+      rt.textContent = parti.join(" ");
+    } else rt.hidden = true;
 
     // CATI ASCULTA ACUM: paginile cu play apasat, batute in ultimul minut si jumatate.
     const asc = $("acum-ascultatori"), n = S.ascultatori;

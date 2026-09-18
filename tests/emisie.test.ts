@@ -272,7 +272,7 @@ describe('panoul — același în amândouă aplicațiile', () => {
   })
 
   it('arată informațiile transmisiunii, nu doar butonul', () => {
-    for (const camp of ['acum-titlu', 'acum-sub', 'acum-rec', 'acum-ascultatori', 'acum-program', 'tehnic-lista']) {
+    for (const camp of ['acum-titlu', 'acum-sub', 'acum-rec', 'acum-ascultatori', 'acum-program', 'acum-rotire', 'tehnic-lista']) {
       expect(html).toContain(camp)
     }
   })

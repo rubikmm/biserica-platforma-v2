@@ -53,6 +53,32 @@ export const COMANDA_GOALA: ComandaAparat = {
   de: null,
 }
 
+/**
+ * CE AUDE microfonul bisericii, măsurat PE APARAT (18.09.2026). Vine în telemetrie, la fiecare
+ * bătaie, și e al doilea ceas al rotirii albumelor: o oră de liniște cântărește cât o zi fără
+ * comenzi (vezi `apps/live/src/rotire.ts`).
+ *
+ * ⚠️ **Pragul e treaba aparatului, nu a noastră.** Microfonul aude și boxele, deci „liniște" nu
+ * înseamnă zero, ci RMS sub pragul potrivit acolo, în biserică; workerul nu-l socotește și nu-l
+ * schimbă — primește doar `ultimul_peste_prag`, clipa în care s-a auzit ultima oară ceva.
+ *
+ * `null` (sau lipsă) = aparatul nu măsoară: versiune veche de daemon, microfon căzut. Atunci
+ * rămâne numai ceasul de 24 h — nicio măsurătoare nu e mai bună decât una închipuită.
+ */
+export const SunetAparat = z.object({
+  /** RMS mediu pe fereastră, dBFS (număr negativ) sau `null` dacă n-a putut fi măsurat. */
+  nivel: z.number().nullable(),
+  /** Vârful pe aceeași fereastră, dBFS sau `null`. */
+  varf: z.number().nullable(),
+  /** Pragul de „activitate" configurat pe aparat, dBFS sau `null`. */
+  prag: z.number().nullable(),
+  /** ISO UTC — ultima clipă în care sunetul a trecut de prag; `null` dacă n-a trecut niciodată. */
+  ultimul_peste_prag: z.string().nullable(),
+  /** Cât ține fereastra pe care s-a făcut măsurătoarea (secunde). */
+  fereastra_s: z.number().nullable(),
+})
+export type SunetAparat = z.infer<typeof SunetAparat>
+
 /** O slujbă din program, cât păstrează aparatul ca etichetă a înregistrării. */
 export const SlujbaScurta = z.object({
   id: z.string(),
@@ -107,6 +133,8 @@ export const Telemetrie = z.object({
     })
     .nullable()
     .optional(),
+  /** Ce aude microfonul (18.09.2026). Lipsă sau `null`: aparatul nu măsoară — vezi `SunetAparat`. */
+  sunet: SunetAparat.nullable().optional(),
   disc: z.object({ liber_gb: z.number(), total_gb: z.number() }).nullable(),
   ultima_eroare: z.string().nullable(),
   ultimul_mesaj: z.string().nullable(),
@@ -185,6 +213,27 @@ export const StarePanou = z.object({
   radio: AcumRadio,
   selectie: SelectieRadio,
   director: z.string().nullable(),
+  /**
+   * ROTIREA ALBUMELOR (18.09.2026): când radioul cântă nesupravegheat, ceasul sare singur pe alt
+   * album, apoi pe altul la capătul fiecăruia. Pornește pe DOUĂ ceasuri — o zi fără nicio comandă
+   * de om, SAU o oră de liniște în biserică (microfonul, vezi `SunetAparat`). În panou e un singur
+   * rând, discret — nu un buton: rotirea nu se aprinde și nu se stinge cu mâna, se oprește dând o
+   * comandă. Socoteala stă în `apps/live/src/rotire.ts`.
+   */
+  rotire: z.object({
+    /** ISO — de când cântă albumul pus de CEAS; `null` dacă selecția e a unui om sau a aparatului. */
+    ales_la: z.string().nullable(),
+    /** ISO — când sună ceasul: capătul albumului, sau clipa în care începe rotirea. */
+    urmatoarea: z.string().nullable(),
+    /** `true`: rotirea e în curs (cântă un album pus de ceas, ori a venit vremea); `false`: abia urmează. */
+    activa: z.boolean(),
+    /**
+     * Din ce pricină ar porni rotirea la `urmatoarea`, ca panoul să spună de ce se schimbă albumul:
+     * `liniste` = nu se mai aude nimic în biserică, `comanda` = nu s-a mai apăsat nimic de o zi.
+     * `null` cât rotirea e deja pornită (atunci `urmatoarea` e capătul albumului) sau nu se știe.
+     */
+    motiv: z.enum(['liniste', 'comanda']).nullable(),
+  }),
   biblioteca: z.object({ generat_la: z.string(), semnatura: z.string(), fisiere: z.number().int() }),
   aparat: Telemetrie.nullable(),
   viu: z.boolean(),

@@ -1,4 +1,5 @@
 import { butonPlayStop } from '@xc/comanda'
+import type { StareDirect, SunetAparat } from '@xc/contracts'
 
 /**
  * MICROFONUL din biserică — pagina cea mai strânsă din toată emisia.
@@ -18,6 +19,27 @@ import { butonPlayStop } from '@xc/comanda'
  * nimic, doar ascultă.
  */
 
+/**
+ * Ce citește pagina la fiecare 3 s (`GET /mic/stare`): starea canalului din SFU, ca până acum, plus
+ * MONITORUL de sunet (18.09.2026) — ultima măsurătoare a aparatului și clipa în care s-a auzit
+ * ultima oară ceva peste prag. E același `ultimul_sunet` monoton pe care se sprijină rotirea
+ * albumelor (`rotire.ts`), deci pagina arată chiar ceasul după care se schimbă muzica.
+ */
+export interface StareMic extends StareDirect {
+  /** Ultima măsurătoare, curățată; `null` = aparatul nu măsoară (daemon vechi, microfon căzut). */
+  sunet: SunetAparat | null
+  /** ISO — cea mai recentă activitate știută; `null` = n-am auzit niciodată nimic. */
+  ultimul_sunet: string | null
+}
+
+/** Răspunsul rutei, compus din cele două citiri. Restul răspunsului rămâne neatins. */
+export function stareMic(
+  canal: StareDirect,
+  sunet: { sunet: SunetAparat | null; ultimul_sunet: string | null },
+): StareMic {
+  return { ...canal, ...sunet }
+}
+
 export function corpMic(): string {
   return `<h1 class="direct-titlu">Microfonul din biserică</h1>
 <p class="direct-stare" id="stare" data-stare="necunoscut">Verific microfonul…</p>
@@ -25,6 +47,14 @@ export function corpMic(): string {
   ${butonPlayStop('direct-btn')}
 </div>
 <audio id="audio" playsinline></audio>
+<!-- SUNETUL masurat pe aparat (nu in pagina): nivel, varf, pragul lui si cand s-a auzit ultima
+     oara ceva peste prag. Dupa acelasi ceas se roteste si albumul radioului — v. rotire.ts.
+     Sta in DL-ul lui, FARA hidden, deasupra cifrelor de legatura: e un MONITOR, nu o cifra de
+     ascultare. Omul care doar deschide pagina trebuie sa vada daca se aude ceva in biserica,
+     chiar daca nu apasa play — de-aia nu-l atinge hidden-ul de la play/stop. -->
+<dl class="mic-cifre mic-sunet" id="sunet">
+  <dt>Sunet</dt><dd id="c-sunet">–</dd>
+</dl>
 <dl class="mic-cifre" id="cifre" hidden>
   <dt>Emite de la</dt><dd id="c-de">–</dd>
   <dt>Legătura</dt><dd id="c-legatura">–</dd>
@@ -44,6 +74,7 @@ export const STIL_MIC = `
   border-left:3px solid var(--rule); padding-left:16px; margin:0 0 24px }
 .mic-cifre dt { font-weight:600 } .mic-cifre dd { margin:0 }
 .mic-cifre[hidden] { display:none }   /* display:grid ar bate atributul hidden */
+.mic-sunet { margin-bottom:12px }     /* monitorul sta lipit de cifrele de dedesubt, nu la 24px */
 .marunt { font-size:14px; color:var(--faint) }
 `
 
@@ -67,6 +98,32 @@ export function jsMic(prefix: string): string {
   function spune(text, cod) { stare.textContent = text; stare.dataset.stare = cod; }
   function fmt(n, u) { return (Math.round(n * 10) / 10) + " " + u; }
   const oraDin = (iso) => { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" }); };
+  // „acum 12 min" / „acum 3 h". In @xc/ui orele sunt absolute (momentLizibil, oraBucuresti), deci
+  // pentru vechimea unei clipe nu era nimic de imprumutat — e mica si sta aici.
+  const deCand = (iso) => {
+    const t = Date.parse(iso || ""); if (!isFinite(t)) return "niciodată";
+    const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+    if (s < 60) return "acum " + s + " s";
+    const m = Math.floor(s / 60); if (m < 60) return "acum " + m + " min";
+    const h = Math.floor(m / 60); if (h < 24) return "acum " + h + " h";
+    const z = Math.floor(h / 24); return "acum " + (z === 1 ? "o zi" : z + " zile");
+  };
+  const dB = (x) => Math.round(x) + "";
+
+  /*
+   * MONITORUL DE SUNET: cifrele vin masurate PE APARAT (RMS, varf, pragul lui), nu din pagina —
+   * WebRTC-ul de aici aude doar ce a apucat sa curga pana la browser. „Ultima activitate" e ceasul
+   * monoton dupa care se roteste si albumul radioului cand in biserica e liniste.
+   */
+  function sunetul(s) {
+    const x = s && s.sunet;
+    if (!x) { cifra("c-sunet", "— aparatul nu măsoară"); return; }
+    const parti = [x.nivel === null || x.nivel === undefined ? "nemăsurat" : dB(x.nivel) + " dBFS"];
+    if (x.varf !== null && x.varf !== undefined) parti.push("vârf " + dB(x.varf));
+    if (x.prag !== null && x.prag !== undefined) parti.push("prag " + dB(x.prag));
+    parti.push("ultima activitate " + (s.ultimul_sunet ? deCand(s.ultimul_sunet) : "niciodată"));
+    cifra("c-sunet", parti.join(" · "));
+  }
 
   async function leaga(de) {
     if (legand || pc) return; legand = true; sunet = false;
@@ -136,6 +193,10 @@ export function jsMic(prefix: string): string {
     citind = false;
     if (!s) return;
     ultima = s;
+    // Randul de sunet se scrie la fiecare citire (3 s), fie ca ascultam sau nu — si se si VEDE tot
+    // timpul: sta in DL-ul lui (#sunet), pe care nu-l atinge nimeni. Doar lista de dedesubt
+    // (#cifre — legatura, debit, jitter) ramane ascunsa pana curge sunetul, ca pana acum.
+    sunetul(s);
     if (!vreau) {
       if (s.configurat === false) { spune("Transmisiunea nu e configurată (lipsesc cheile SFU).", "neconfigurat"); buton("play", false); }
       else if (s.direct) { spune("Microfonul emite — apasă play.", "gata"); buton("play", true); }
