@@ -312,13 +312,17 @@ propunerea automată, ca în V1.
 
 ## NEXT
 
-00b. **BULA DE CHAT PE `/nou` LA BULETIN — scrisă 18.09.2026.** Vezi „BULA DE CHAT A BULETINULUI".
-    La publicare: **cercul se publică cu ocolul** (`publica-cu-ocol.mjs --intai services/chat-worker
-    --fara BULETIN --apoi apps/buletin`), apoi `admin` (comutatorul din Module). Pe urmă, în Module:
-    bifa `buletin` **și** `buletin.compune` + `buletin.socoteala` în lista de unelte.
-    ⚠️ Nici asta nu s-a încercat viu: probele merg cu servicii de probă, iar modelul adevărat (glm
-    flash, workers-ai) n-a fost pus să compună niciodată un buletin. Prima încercare e a userului, și
-    primul lucru de privit e dacă modelul chiar LASĂ GOALE nr. și data.
+00b. **BULA DE CHAT PE `/nou` LA BULETIN — scrisă, publicată și APRINSĂ pe 18.09.2026, 12:50.**
+    Vezi „BULA DE CHAT A BULETINULUI". Cercul s-a publicat cu ocolul (`publica-cu-ocol.mjs --intai
+    services/chat-worker --fara BULETIN --apoi apps/buletin`), apoi `admin` 0.4.1; comutatorul și
+    uneltele scrise în KV. Probat pe viu doar de afară: `/nou` dă 403 fără cont, prima pagină e 200 și
+    **nu** poartă bula.
+    ⚠️ **Lanțul cu modelul n-a fost încercat**: probele merg cu servicii de probă, iar modelul adevărat
+    (glm flash, workers-ai) n-a fost pus niciodată să compună un buletin. Prima încercare e a userului.
+    De privit atunci, în ordine: (1) **lasă modelul goale nr. și data?** (dacă le scrie, compune peste
+    alt număr — se vede în rezumatul propunerii, care spune numărul adevărat); (2) refuzul cu cifre la
+    text prea lung îl face să scurteze și să încerce iar, ori se oprește?; (3) după „Da, fă-o", pagina
+    se reîncarcă și formularul vine umplut.
 
 00. **ADMINII PE APLICAȚIE — scris ȘI PUBLICAT pe 18.09.2026, 11:20.** Vezi „ADMINII PE APLICAȚIE".
     Ordinea publicării, care rămâne regula la orice atingere a cheilor: **`xc-authz-production` ÎNTÂI**
@@ -893,9 +897,10 @@ nedorite: bula programului ar fi căpătat uneltele buletinului, iar **regulile 
 (cunoștințe de FUNDAL, cerute la fiecare mesaj) ar fi intrat în contextul programului** — plătite la
 fiecare apăsare. O aplicație fără rând în tabel vede tot, ca până acum.
 
-**De aprins din Administrare → Module**: bifa `buletin` (comutatorul l-a căpătat) **și** cele două
-unelte în lista de unelte permise (`buletin.compune`, `buletin.socoteala`) — dacă lista e scrisă, ce nu
-e în ea nu se vede. Fără ele bula răspunde, dar n-are ce chema.
+**APRINS pe producție la 18.09.2026, 12:50** (KV `modul:chat`): `aplicatii: {program, buletin}` și
+uneltele `buletin.compune` + `buletin.socoteala` adăugate în listă, lângă cele cinci ale programului.
+⚠️ **Lista de unelte e o poartă**: dacă e scrisă, ce nu e în ea nu se vede — o bulă bifată fără uneltele
+ei răspunde frumos și nu poate face nimic. Se stinge oricând din Administrare → Module.
 
 **⚠️ CERC DE LEGĂTURI**: `xc-buletin` → `CHAT`, `xc-chat` → `BULETIN`. Se publică cu
 `infrastructure/cutover/publica-cu-ocol.mjs --intai services/chat-worker --fara BULETIN --apoi apps/buletin`
