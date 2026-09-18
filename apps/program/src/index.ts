@@ -13,6 +13,7 @@
  * „nu vreau să fac nimic manual").
  */
 import { SCOPE_GLOBAL, SESIUNE_ANONIMA, type IntrareVocabular, type Slujba } from '@xc/contracts'
+import { eAdminulAplicatiei } from '@xc/authorization'
 import { principalDin, sesiuneCurenta, verificaCsrf } from '@xc/auth'
 import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
 import { golesteOutbox } from '@xc/events'
@@ -169,7 +170,18 @@ export default {
     const sesiune = await sesiuneCurenta(env.IDENTITATE, req).catch(() => SESIUNE_ANONIMA)
     const principal = principalDin(sesiune)
     const eSuperAdminReal = sesiune.roles.some((r) => r.role === 'super-admin')
-    const eAdminReal = eSuperAdminReal || sesiune.roles.some((r) => r.role === 'admin')
+    /**
+     * ⚠️ DOUA LUCRURI DEOSEBITE, din 18.09.2026:
+     *  - `eAdminPlatforma` — rolul global. Din el iese DOAR randul „Administrare" din meniul contului
+     *    (panoul platformei), unde un administrator de Program n-are ce face.
+     *  - `eAdminProgram` — administratorul ACESTEI aplicatii, venit de la autorizare pe cheia ei
+     *    (`program.write`). Pe el atarna tot ce e al Programului: arhiva, hartiile, sfintii zilei.
+     * Pana atunci amandoua erau acelasi rol, deci nimeni nu putea fi admin numai la Program (cerere
+     * user, 18.09.2026: „sa aiba toate capacitatea de a avea setat administratori… nu doar super-admin").
+     * Adminul global si super-adminul nu pierd nimic: cheia vine cu rolul lor.
+     */
+    const eAdminPlatforma = eSuperAdminReal || sesiune.roles.some((r) => r.role === 'admin')
+    const eAdminProgram = await eAdminulAplicatiei(env.AUTORIZARE, cid, principal, 'program')
     const utilizatorReal = sesiune.user?.displayName ?? sesiune.user?.email ?? null
     // Cine esti si ce poti vine DOAR din sesiune — la fel pe local si pe public. Rolurile sosesc
     // deja trecute prin masca „vezi ca", asa ca aici nu mai e nimic de deosebit (user, 11.09.2026:
@@ -181,7 +193,8 @@ export default {
       // adresa contului, pentru fereastra de abonare: acolo se scrie in camp si se incuie, fiindca
       // abonarea platformei sta pe adresa contului, nu pe una scrisa de mana
       emailulContului: sesiune.user?.email ?? null,
-      eAdmin: eAdminReal,
+      eAdmin: eAdminProgram,
+      eAdminPlatforma,
       eSuperAdmin: eSuperAdminReal,
       versiune: pkg.version,
       modificata: dataVersiunii(env.VERSIUNE),

@@ -8,6 +8,7 @@
  */
 import { SESIUNE_ANONIMA } from '@xc/contracts'
 import { principalDin, sesiuneCurenta, verificaCsrf } from '@xc/auth'
+import { eAdminulAplicatiei } from '@xc/authorization'
 import { ruteazaSetari, STIL_SETARI } from '@xc/setari'
 import { adresaPaginii, citesteConfig, navigatieDin, type Navigatie } from '@xc/config'
 import { correlationId, Logger } from '@xc/observability'
@@ -225,7 +226,16 @@ export default {
 
     const sesiune = await sesiuneCurenta(env.IDENTITATE, req).catch(() => SESIUNE_ANONIMA)
     const utilizator = sesiune.user?.displayName ?? sesiune.user?.email ?? null
-    const eAdmin = sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin')
+    const principal = principalDin(sesiune)
+    /*
+     * ⚠️ DOUA LUCRURI DEOSEBITE, din 18.09.2026:
+     *  - `eAdmin` — administratorul WEBSITE-ului, venit din cheia lui (`website.manage`). De el atarna
+     *    chenarele de stare de pe usa (insemnarile noastre de santier, user 17.09.2026), ca si pana
+     *    acum — se schimba doar de unde se afla raspunsul, ca sa poata fi cineva admin numai aici.
+     *  - `eAdminPlatforma` — rolul global; din el iese DOAR randul „Administrare" din meniul contului.
+     */
+    const eAdmin = await eAdminulAplicatiei(env.AUTORIZARE, cid, principal, 'home')
+    const eAdminPlatforma = sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin')
     const comune = {
       // Titlul din antet: WEBSITE, nu PLATFORMA (user, 17.09.2026) — `home` E website-ul parohiei.
       nume: 'WEBSITE',
@@ -238,7 +248,8 @@ export default {
       cont: {
         intrat: !!utilizator,
         nume: utilizator ?? 'Cont',
-        admin: eAdmin,
+        // ⚠️ Randul „Administrare" e al PLATFORMEI: rolul global, nu adminul Website-ului.
+        admin: eAdminPlatforma,
         urlCont: nav.cont,
         urlAdmin: nav.admin,
         // Setarile APLICATIEI (user, 15.09.2026). Home-ul n-are abonare si n-are echipa, deci aici

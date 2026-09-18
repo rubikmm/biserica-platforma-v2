@@ -1,6 +1,6 @@
 {
   "name": "@xc/app-biblia",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@xc/auth": "workspace:*",
+    "@xc/authorization": "workspace:*",
     "@xc/config": "workspace:*",
     "@xc/contracts": "workspace:*",
     "@xc/observability": "workspace:*",

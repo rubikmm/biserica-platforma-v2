@@ -1,6 +1,6 @@
 {
   "name": "@xc/app-newsletter",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,6 +12,7 @@
   "dependencies": {
     "@xc/abonare": "workspace:*",
     "@xc/auth": "workspace:*",
+    "@xc/authorization": "workspace:*",
     "@xc/config": "workspace:*",
     "@xc/contracts": "workspace:*",
     "@xc/observability": "workspace:*",

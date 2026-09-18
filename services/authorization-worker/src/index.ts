@@ -273,6 +273,54 @@ export default {
         }
 
         // -------------------------------------------------------------------
+        /*
+         * HARTA ADMINILOR — cine e administrator pe ce aplicatie, pentru TOATE cheile deodata.
+         * Cerut de tabelul din Administrare (user, 18.09.2026: „un tabel cu oamenii si aplicatiile si
+         * bulina la intersectie"). E `/cine-are` pus la plural: cu unsprezece aplicatii, ecranul ar
+         * fi pus unsprezece intrebari si ar fi citit de unsprezece ori aceleasi doua tabele.
+         *
+         * ⚠️ Cele doua feluri de drept rămân DEOSEBITE, ca in `/cine-are`: `prinGrant` e numirea pe
+         * aplicatie (se poate retrage de acolo), `prinRol` e dreptul care vine din rolul global (nu
+         * se poate retrage din aplicatie — ar trebui coborat rolul). Un tabel care le-ar amesteca ar
+         * arata un buton „Scoate" care n-are ce scoate.
+         */
+        case '/harta-admini': {
+          const date = z
+            .object({ chei: z.array(z.string().min(1)).min(1).max(50) })
+            .parse(await req.json())
+          const chei = [...new Set(date.chei)]
+          const semne = chei.map(() => '?').join(', ')
+          const granturi = await toate<{ user_id: string; permission: string }>(
+            env.DB,
+            `SELECT DISTINCT user_id, permission FROM permission_grants
+              WHERE permission IN (${semne}) AND revoked_at IS NULL AND scope = 'global'`,
+            chei,
+          )
+          const roluriDate = await toate<{ user_id: string; role: string }>(
+            env.DB,
+            `SELECT DISTINCT user_id, role FROM role_assignments
+              WHERE revoked_at IS NULL AND scope = 'global'`,
+            [],
+          )
+          const harta: Record<string, { prinGrant: string[]; prinRol: string[] }> = {}
+          for (const cheie of chei) harta[cheie] = { prinGrant: [], prinRol: [] }
+          for (const g of granturi) harta[g.permission]?.prinGrant.push(g.user_id)
+          for (const r of roluriDate) {
+            const rol = Rol.safeParse(r.role)
+            if (!rol.success) continue
+            for (const cheie of chei) {
+              if ((PERMISIUNI_IMPLICITE[rol.data] as readonly string[]).includes(cheie)) {
+                harta[cheie]!.prinRol.push(r.user_id)
+              }
+            }
+          }
+          for (const c of chei) {
+            harta[c]!.prinRol = [...new Set(harta[c]!.prinRol)]
+          }
+          return json({ harta })
+        }
+
+        // -------------------------------------------------------------------
         // Rolurile mai multor oameni deodata — pentru ecranul de numiri, ca sa nu punem o
         // intrebare pe fiecare rand din lista.
         case '/roluri-multi': {

@@ -23,6 +23,7 @@
  * in depozitul propriu (`xc-biblia-staging`).
  */
 import { principalDin, sesiuneCurenta, verificaCsrf } from "@xc/auth"
+import { eAdminulAplicatiei } from "@xc/authorization"
 import { SESIUNE_ANONIMA } from "@xc/contracts"
 import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from "@xc/config"
 import { Logger, correlationId } from "@xc/observability"
@@ -316,7 +317,11 @@ export default {
       prefix,
       nav,
       utilizator: sesiune.user?.displayName ?? sesiune.user?.email ?? null,
-      eAdmin: sesiune.roles.some((r) => r.role === "admin" || r.role === "super-admin"),
+      // ⚠️ Adminul BIBLIEI vine din cheia ei (`bible.manage`), nu din rolul global (18.09.2026).
+      // Azi nu deschide nimic — Biblia n-are nicio fapta de admin — dar cheia si numirea exista, ca
+      // aplicatia sa nu fie deosebita de celelalte cand va avea una.
+      eAdmin: await eAdminulAplicatiei(env.AUTORIZARE, cid, principal, "biblia"),
+      eAdminPlatforma: sesiune.roles.some((r) => r.role === "admin" || r.role === "super-admin"),
       versiune: pkg.version,
       modificata: dataVersiunii(env.VERSIUNE),
       veziCa: sesiune.veziCa,

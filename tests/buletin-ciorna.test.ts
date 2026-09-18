@@ -32,7 +32,7 @@ const NOU = buletinulNou(ULTIMUL, '2026-09-17')
 
 /** Ecranul `/nou` după o compunere izbutită. */
 const dupaCompunere = (v: string | null = 'abc123') =>
-  paginaNou(CTX, { nou: true, ani: ['2026'] }, ULTIMUL, NOU, {
+  paginaNou(CTX, { nou: true, ani: ['2026'] }, NOU, {
     variante: VARIANTE,
     calendar: { titlu: '21 – 27 septembrie 2026', slujbe: 6 },
     raspuns: {
@@ -115,7 +115,7 @@ describe('numărul compus, arătat în pagină ca unul gata de validat', () => {
   })
 
   it('nu se arată deloc până nu s-a compus ceva', () => {
-    const h = paginaNou(CTX, { nou: true }, ULTIMUL, NOU, {
+    const h = paginaNou(CTX, { nou: true }, NOU, {
       variante: VARIANTE,
       calendar: { titlu: '21 – 27 septembrie 2026', slujbe: 6 },
     })

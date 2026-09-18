@@ -31,6 +31,7 @@
  *  - carcasa (antet, subsol, tema) vine din `@xc/ui`, nu din `src/comun/` copiat in aplicatie.
  */
 import { SESIUNE_ANONIMA, SCOPE_GLOBAL } from '@xc/contracts'
+import { eAdminulAplicatiei } from '@xc/authorization'
 import { principalDin, sesiuneCurenta, verificaCsrf } from '@xc/auth'
 import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
 import { Logger, correlationId } from '@xc/observability'
@@ -232,7 +233,11 @@ export default {
       // adresa contului, pentru fereastra de abonare: acolo se scrie in camp si se incuie, fiindca
       // abonarea platformei sta pe adresa contului, nu pe una scrisa de mana
       emailulContului: sesiune.user?.email ?? null,
-      eAdmin: sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin'),
+      // ⚠️ Adminul NEWSLETTERULUI vine din cheia lui (`newsletter.manage`), nu din rolul global
+      // (18.09.2026): asa poate fi cineva admin numai aici. De el atarna sageata spre `/nou` si
+      // rubrica sablonului din Setari. Rolul global rămâne pentru randul „Administrare" din meniu.
+      eAdmin: await eAdminulAplicatiei(env.AUTORIZARE, cid, principal, 'newsletter'),
+      eAdminPlatforma: sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin'),
       versiune: pkg.version,
       modificata: dataVersiunii(env.VERSIUNE),
       veziCa: sesiune.veziCa,
@@ -281,8 +286,10 @@ export default {
        * 16.09.2026). Se cer din depozit DOAR cand chiar se scrie pagina, nu la fiecare cerere.
        * ⚠️ Numai adminii: bucatile astea intra in ce pleaca pe email catre toata parohia.
        */
-      rubrici: async ({ eAdmin }) =>
-        eAdmin ? rubricaSablon(await citesteSablon(env.ARHIVA), true) : '',
+      // ⚠️ `eAdminApp`, nu `eAdmin` (18.09.2026): sablonul e treaba NEWSLETTERULUI, deci atarna de
+      // cheia lui, nu de cheia abonatilor, care e a platformei si vine cu rolul global.
+      rubrici: async ({ eAdminApp }) =>
+        eAdminApp ? rubricaSablon(await citesteSablon(env.ARHIVA), true) : '',
     })
     if (raspunsSetari) return raspunsSetari
 
@@ -293,9 +300,9 @@ export default {
        * BULETIN NOU — ecranul adaugarii manuale, tinta sagetii din pastila (user, 15.09.2026:
        * „săgeată pentru buletin nou (adăugare manuală - actualizare program sau altceva)").
        *
-       * ⚠️ NUMAI ADMINII, si poarta e ROLUL, nu o cheie noua de permisiune: una noua ar fi cerut si
-       * republicarea lui `xc-authz` (vezi repere). Cand ecranul va scrie chiar in depozit, aici se
-       * pune cheia potrivita — atunci poarta rolului nu mai e destula.
+       * ⚠️ NUMAI ADMINII NEWSLETTERULUI. Poarta a fost ROLUL global pana pe 18.09.2026; de atunci e
+       * CHEIA aplicatiei (`newsletter.manage`, din `ctx.eAdmin`), ca sa poata fi cineva administrator
+       * numai aici. Pentru adminul global si super-admin nu s-a schimbat nimic: cheia vine cu rolul.
        * ⚠️ Pagina e personala (se vede altfel dupa rol si dupa masca „vezi ca"), deci NU se tine in
        * cache-ul de muchie, oricat ar fi mediul.
        */

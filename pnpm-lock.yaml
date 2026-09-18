@@ -187,6 +187,9 @@ importers:
       '@xc/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@xc/authorization':
+        specifier: workspace:*
+        version: link:../../packages/authorization
       '@xc/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -244,6 +247,9 @@ importers:
       '@xc/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@xc/authorization':
+        specifier: workspace:*
+        version: link:../../packages/authorization
       '@xc/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -343,6 +349,9 @@ importers:
       '@xc/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@xc/authorization':
+        specifier: workspace:*
+        version: link:../../packages/authorization
       '@xc/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -397,6 +406,9 @@ importers:
       '@xc/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@xc/authorization':
+        specifier: workspace:*
+        version: link:../../packages/authorization
       '@xc/config':
         specifier: workspace:*
         version: link:../../packages/config

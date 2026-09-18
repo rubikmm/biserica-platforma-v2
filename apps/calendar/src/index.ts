@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { SCOPE_GLOBAL, SESIUNE_ANONIMA, type ZiLiturgica } from '@xc/contracts'
-import { ClientAutorizare, EroareAutorizare } from '@xc/authorization'
+import { ClientAutorizare, eAdminulAplicatiei, EroareAutorizare } from '@xc/authorization'
 import { NUME_COOKIE_CSRF, citesteCookie, construiesteCookie, principalDin, sesiuneCurenta, verificaCsrf, verificaTokenCsrf } from '@xc/auth'
 import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
 import { construiesteEnvelope, declaratieOutbox, golesteOutbox } from '@xc/events'
@@ -231,6 +231,13 @@ export default {
     }
     const sesiune = await sesiuneCurenta(env.IDENTITATE, req).catch(() => SESIUNE_ANONIMA)
     const principal = principalDin(sesiune)
+    /*
+     * ⚠️ Adminul CALENDARULUI vine din cheia aplicatiei (`calendar.manage`), nu din rolul global
+     * (18.09.2026): asa poate fi cineva administrator numai aici. De el atarna mai departe si filtrul
+     * evlaviei (`poateFiltra`) — se schimba doar de unde se afla raspunsul, nu regula. Rolul global
+     * rămâne numai pentru randul „Administrare" din meniul contului.
+     */
+    const eAdminCalendar = await eAdminulAplicatiei(env.AUTORIZARE, cid, principal, 'calendar')
     const ctx: Ctx = {
       prefix,
       nav,
@@ -238,7 +245,8 @@ export default {
       // adresa contului, pentru fereastra de abonare: acolo se scrie in camp si se incuie, fiindca
       // abonarea platformei sta pe adresa contului, nu pe una scrisa de mana
       emailulContului: sesiune.user?.email ?? null,
-      eAdmin: sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin'),
+      eAdmin: eAdminCalendar,
+      eAdminPlatforma: sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin'),
       versiune: pkg.version,
       modificata: dataVersiunii(env.VERSIUNE),
       anCurent: Number(azi.slice(0, 4)),

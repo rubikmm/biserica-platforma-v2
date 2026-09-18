@@ -44,7 +44,13 @@ export interface Ctx {
   utilizator: string | null
   /** Adresa contului — fereastra de abonare o scrie in camp si o incuie; `null` la neautentificat. */
   emailulContului?: string | null
+  /**
+   * Administratorul BULETINULUI. ⚠️ Din 18.09.2026 vine din cheia aplicatiei (`bulletin.write`), nu
+   * din rolul global: un om poate fi admin numai aici.
+   */
   eAdmin: boolean
+  /** Rolul global — DOAR randul „Administrare" din meniul contului atarna de el. */
+  eAdminPlatforma?: boolean
   versiune: string
   modificata: string
   veziCa?: string | null
@@ -107,7 +113,8 @@ function contDin(ctx: Ctx) {
   return {
     intrat: !!ctx.utilizator,
     nume: ctx.utilizator ?? 'Cont',
-    admin: ctx.eAdmin,
+    // ⚠️ Panoul PLATFORMEI — rolul global, nu adminul Buletinului (18.09.2026).
+    admin: ctx.eAdminPlatforma ?? false,
     urlCont: ctx.nav.cont,
     urlAdmin: ctx.nav.admin,
     // Setarile APLICATIEI, nu ale platformei (user, 15.09.2026) — de aceea adresa e a noastra.
@@ -889,7 +896,6 @@ function ciornaPeEcran(
     sursa: 'ciorna',
   }
   return `<section class="ciorna">
-  <p class="veste bine">Numărul e compus — uită-te la el și, dacă e bun, validează-l.</p>
   ${coperta(ctx, ciorna, v)}
   <nav class="btns hartii">${butoaneleNumarului(ctx, ciorna, v)}<button type="button" class="btn intreg" data-rasfoit
     title="Răsfoiește numărul, pagină cu pagină">${IC_CARTE} Răsfoiește</button></nav>
@@ -899,8 +905,7 @@ function ciornaPeEcran(
     <input type="hidden" name="data" value="${esc(nou.data)}">
     <button type="submit" class="btn mare bun">Validează și publică nr. ${nou.nr}</button>
   </form>
-  <p class="marunt">Validarea îl publică: numărul intră în arhivă și devine numărul curent al parohiei.
-    Până atunci, foaia e doar a ecranului ăstuia.</p>
+  <p class="marunt">Validarea îl publică: numărul intră în arhivă și devine numărul curent al parohiei.</p>
 ${fereastraRasfoit(ctx, ciorna, v)}
 </section>`
 }
@@ -908,7 +913,6 @@ ${fereastraRasfoit(ctx, ciorna, v)}
 export function paginaNou(
   ctx: Ctx,
   m: Meniu,
-  curent: BuletinScurt | null,
   nou: { nr: number | null; data: string },
   stare: StareaCompunerii,
 ): string {
@@ -920,24 +924,16 @@ export function paginaNou(
 </div>`
 
   /*
-   * ⚠️ PROPUS SE SPUNE LA ÎNCEPUT (user, 17.09.2026, seara: „să se folosească fără probleme programul
-   * propus dacă nu este validat — doar trebuie atrasă atenția la început PROPUS"). Chenarul stă
-   * ÎNAINTE de orice altceva de pe ecran, nu la piciorul paginii, ca să nu se poată compune un număr
-   * fără să-l fi văzut.
+   * ⚠️ FĂRĂ AVERTISMENTE ÎN PAGINĂ (user, 18.09.2026: „scoate toate avertismentele — e clar ce scrie
+   * aici și e prea multă vorbărie"). Au ieșit chenarul PROPUS al programului nevalidat și lista
+   * roșie cu ce s-a umplut cu text de probă: omul vede oricum ciorna și programul în ea, iar
+   * `atentie` rămâne în răspunsul API-ului, pentru cine cere compunerea din afara paginii.
+   * Ce NU s-a scos: plângerile care chiar opresc compunerea — fără ele n-ar ști de ce n-a ieșit.
    */
-  const propus = stare.calendar?.stare === 'propus'
-    ? `<div class="veste rau atentie propus"><b>PROPUS.</b> Programul săptămânii <b>${esc(stare.calendar.titlu)}</b> nu e încă validat — ` +
-      'numărul se compune cu ce e disponibil (propunerea). Validează-l în aplicația Programul înainte de tipar.</div>'
-    : ''
-
-  // ce nu oprește compunerea, dar se spune la vedere — înaintea rezultatului, nu după
-  const atentii = stare.raspuns?.atentie?.length
-    ? `<ul class="atentie lista">${stare.raspuns.atentie.map((a) => `<li>${esc(a)}</li>`).join('')}</ul>`
-    : ''
   const veste = stare.raspuns
     ? stare.raspuns.facut
-      ? `${atentii}${ciornaPeEcran(ctx, nou, stare.raspuns)}`
-      : `${atentii}<div class="veste rau"><p>Nu s-a compus:</p><ul>${stare.raspuns.plangeri.map((p) => `<li>${esc(p)}</li>`).join('')}</ul></div>`
+      ? ciornaPeEcran(ctx, nou, stare.raspuns)
+      : `<div class="veste rau"><p>Nu s-a compus:</p><ul>${stare.raspuns.plangeri.map((p) => `<li>${esc(p)}</li>`).join('')}</ul></div>`
     : ''
 
   const cati = Number(scris.secundari ?? '0')
@@ -951,19 +947,24 @@ export function paginaNou(
    * Nu sunt câmpuri — nici ascunse: serverul le ia tot din arhivă, nu din formular.
    * ⚠️ MOTTO-UL VINE PRECOMPLETAT cu cel al numărului trecut (aceeași cerere) — omul îl schimbă dacă
    * vrea altul; ce a scris el (`scris`) bate precompletarea.
+   * ⚠️ CÂTE ARTICOLE SECUNDARE se alege ÎNAINTEA articolului principal (user, 18.09.2026: totalul și
+   * butonul „să fie sub câmpul de text de mai sus, cu care este asociat"). Cu selectul între textul
+   * principal și total, socoteala cădea sub o listă derulantă când numărul n-avea secundare; mutat
+   * sus, ultimul lucru dinaintea totalului e mereu un câmp de text. Se citește și mai bine: întâi
+   * spui din câte articole e numărul, apoi le scrii.
    */
   const motto = scris.motto ?? stare.motto?.motto ?? ''
   const motoAutor = scris.moto_autor ?? stare.motto?.motoAutor ?? ''
   const formular = `<form method="post" action="${ctx.prefix}/nou" class="compunere">
   ${camp('motto', 'Motto', motto, { lung: true, ajutor: stare.motto && scris.motto === undefined ? 'precompletat cu motto-ul numărului trecut — schimbă-l dacă e altul' : 'citatul de sub antet, pe cel mult două rânduri' })}
   ${camp('moto_autor', 'Cine a spus-o', motoAutor)}
-  ${campuriArticol('p', 'Articolul principal', scris, 'Poza mare (adresă)')}
   <p class="cati-secundari">
     <label for="c-secundari">Articole secundare</label>
     <select id="c-secundari" name="secundari">
       ${[0, 1, 2].map((i) => `<option value="${i}"${i === cati ? ' selected' : ''}>${i === 0 ? 'niciunul' : i === 1 ? 'unul' : 'două'}</option>`).join('')}
     </select>
   </p>
+  ${campuriArticol('p', 'Articolul principal', scris, 'Poza mare (adresă)')}
   ${secundare}
   <p class="total" data-total></p>
   <p class="butoane">
@@ -971,8 +972,13 @@ export function paginaNou(
   </p>
 </form>`
 
+  /*
+   * Rândul care spunea ce program intră pe pagina a patra a ieșit odată cu avertismentele (user,
+   * 18.09.2026: „șterge de tot textul acesta"). Rămâne doar vorba când programul N-A RĂSPUNS: acolo
+   * pagina a patra chiar iese goală, și nu se vede din nimic altceva de pe ecran de ce.
+   */
   const calendar = stare.calendar
-    ? `<p class="marunt">Pe pagina a patra intră programul liturgic pentru <b>${esc(stare.calendar.titlu)}</b>${stare.calendar.stare === 'propus' ? ' <b>(PROPUS)</b>' : ''} — ${stare.calendar.slujbe} ${stare.calendar.slujbe === 1 ? 'slujbă' : 'de slujbe'}, cerute de la aplicația Programul.</p>`
+    ? ''
     : `<p class="marunt rau">Programul n-a răspuns pentru săptămâna tipărită, deci pagina a patra n-are ce tipări. Vezi aplicația Programul.</p>`
 
   return sablon(
@@ -980,15 +986,9 @@ export function paginaNou(
     m,
     'Buletin nou',
     `${capul}
-${propus}
 ${veste}
 ${calendar}
 ${formular}
-<p class="marunt sub-nou">${
-      curent
-        ? `Ultimul apărut: <a href="${adresa(ctx, curent)}">nr. ${curent.nr}</a>, ${dataLunga(curent.data)}.`
-        : ''
-    }</p>
 <script>window.XC_MASURI = ${JSON.stringify(stare.variante)};</script>
 <script>${SOCOTESTE_IN_PAGINA}</script>`,
   )

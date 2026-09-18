@@ -1,4 +1,5 @@
 export * from './permisiuni.js'
+export * from './admini.js'
 export * from './evenimente.js'
 export * from './identitate.js'
 export * from './asocieri.js'

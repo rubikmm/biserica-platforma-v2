@@ -31,9 +31,13 @@ export interface Ctx {
   userId: string | null
   /** Are dreptul de imprumut (`library.borrow`) — hotarat de autorizarea centrala. */
   poateImprumuta: boolean
-  /** Tine ecranul pangarului (`library.manage`). */
+  /** Tine ecranul pangarului (`library.manage`) — ADMINUL APLICATIEI, dintotdeauna pe cheie. */
   ePangar: boolean
-  eAdmin: boolean
+  /**
+   * Rolul global (admin ori super-admin). ⚠️ Din 18.09.2026 se numeste asa, nu `eAdmin`, ca sa nu se
+   * creada ca tine de Biblioteca: din el iese DOAR randul „Administrare" din meniul contului.
+   */
+  eAdminPlatforma?: boolean
   /** Jetonul CSRF pereche cu cookie-ul, scris in fiecare formular al paginii. */
   csrf: string
   versiune: string
@@ -133,7 +137,8 @@ function contul(ctx: Ctx): OptiuniPagina["cont"] {
   return {
     intrat: !!ctx.utilizator,
     nume: ctx.utilizator ?? undefined,
-    admin: ctx.eAdmin,
+    // ⚠️ Panoul PLATFORMEI — rolul global, nu pangarul (18.09.2026).
+    admin: ctx.eAdminPlatforma ?? false,
     href: ctx.nav.cont,
     urlCont: ctx.nav.cont,
     urlAdmin: ctx.nav.admin,

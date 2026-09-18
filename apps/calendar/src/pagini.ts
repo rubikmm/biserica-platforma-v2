@@ -19,7 +19,14 @@ export interface Ctx {
   utilizator: string | null
   /** Adresa contului — fereastra de abonare o scrie in camp si o incuie; `null` la neautentificat. */
   emailulContului?: string | null
+  /**
+   * Administratorul CALENDARULUI. ⚠️ Din 18.09.2026 vine din cheia aplicatiei (`calendar.manage`),
+   * nu din rolul global: un om poate fi admin numai aici. Tot ce vedea pana acum „adminul" in
+   * Calendar (filtrul evlaviei, uneltele) atarna de el si mai departe.
+   */
   eAdmin: boolean
+  /** Rolul global — DOAR randul „Administrare" din meniul contului atarna de el. */
+  eAdminPlatforma?: boolean
   versiune: string
   modificata: string
   /** Anul curent la Bucuresti: sirul lunilor nu iese din el (afara de ianuarie anul viitor). */
@@ -59,7 +66,9 @@ function contDin(ctx: Ctx) {
   return {
     intrat: !!ctx.utilizator,
     nume: ctx.utilizator ?? 'Cont',
-    admin: ctx.eAdmin,
+    // ⚠️ Randul „Administrare" duce la panoul PLATFORMEI, deci atarna de rolul global, nu de adminul
+    // Calendarului (18.09.2026): acolo un admin de aplicatie n-are ce face.
+    admin: ctx.eAdminPlatforma ?? false,
     urlCont: ctx.nav.cont,
     urlAdmin: ctx.nav.admin,
     // Setarile APLICATIEI, nu ale platformei (user, 15.09.2026) — de aceea adresa e a noastra.

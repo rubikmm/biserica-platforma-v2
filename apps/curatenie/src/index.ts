@@ -113,6 +113,13 @@ export default {
     // Dreptul îl hotărăște autorizarea, și îl hotărăște SUB MASCĂ, dacă omul poartă una: `principal`
     // o duce cu el, deci „vezi ca utilizator" stinge panoul, cum se cuvine.
     const eAdmin = principal ? (await authz.can(principal, "cleaning.manage", SCOPE_GLOBAL)).allowed : false
+    /*
+     * ⚠️ Rolul GLOBAL, numai pentru randul „Administrare" din meniul contului (18.09.2026). Pana atunci
+     * randul se scria pentru `eAdmin`, adica pentru cheia Curateniei — deci un administrator al
+     * curateniei vedea o legatura spre panoul PLATFORMEI, care il intampina cu 403. Regula de acum, la
+     * fel in toate aplicatiile: panoul platformei e al rolului global, panoul aplicatiei e al cheii ei.
+     */
+    const eAdminPlatforma = sesiune.roles.some((r) => r.role === "admin" || r.role === "super-admin")
 
     const numeCont = sesiune.user?.displayName ?? null
     const userId = sesiune.user?.id ?? null
@@ -138,6 +145,7 @@ export default {
       userId,
       voluntar: voluntar ? numeScurt(voluntar) : null,
       eAdmin,
+      eAdminPlatforma,
       versiune: pkg.version,
       modificata: dataVersiunii(env.VERSIUNE),
       veziCa: sesiune.veziCa,

@@ -312,6 +312,20 @@ propunerea automată, ca în V1.
 
 ## NEXT
 
+00. **ADMINII PE APLICAȚIE — scris 18.09.2026, NEPUBLICAT.** Vezi „ADMINII PE APLICAȚIE".
+    Codul e întreg și sub probe (532 trec, typecheck curat pe 36), dar **nimic nu e pe producție**.
+    De făcut, în ordine:
+    1. **`xc-authz-production` întâi** (0.3.0): are cheile noi și `/harta-admini`. Publicat după
+       aplicații, ele ar cere chei pe care el nu le cunoaște, iar el le-ar refuza — deci adminii
+       globali ar pierde pe loc Newsletterul, Tipicul, Biblia și Website-ul.
+    2. apoi aplicațiile atinse: program 0.8.0, calendar 0.8.1, buletin 0.7.2, newsletter 0.6.2,
+       tipic 0.3.7, biblia 0.1.5, biblioteca 0.1.5, home 0.7.4, curatenie 0.2.3, admin 0.4.0.
+    3. **userul numește cele două persoane** din Setările aplicațiilor (acum: Programul liturgic,
+       `program.sfantul-ilie.ro/setari`), apoi se vede tabelul la `admin.sfantul-ilie.ro/admini`.
+    ⚠️ **Nimic din asta nu s-a încercat viu** (`pnpm dev` nu rula în timpul lucrului): probele merg
+    prin `fetch` la workeri, cu servicii de probă. Prima încercare vie e a userului.
+    ⚠️ De hotărât cu el: bula de **chat** din Program atârnă acum de adminul Programului (cheltuială).
+
 0a. **COMPUNEREA BULETINULUI — făcută pe 17.09.2026, seara; ce a rămas de probat și de făcut.**
 
    API-ul care creează foaia tipărită (cerere user: antet fix + motto/nr/dată, două coloane pe
@@ -834,6 +848,68 @@ parohiei trăiesc încă aplicațiile V1. Mutarea rutelor rămâne pas explicit,
   respins → SSO pe a doua aplicație → intrare repetată fără dublarea contului → publicare
   eveniment → outbox → coadă → automatizare → livrare simulată. 31 de teste unitare, typecheck
   curat pe 20 de pachete.
+
+## ADMINII PE APLICAȚIE (18.09.2026) — „admin doar pe aplicația respectivă"
+
+**Cererea userului**: „Am nevoie să fac admini două persoane în aplicații diferite — să fie admin doar
+pe aplicația respectivă și nu de-a lungul întregii platforme. Vreau apoi să am un tabel la mine în
+Administrator." Apoi, lămurind: „vreau să fie valabilă la toate aplicațiile — să aibă toate capacitatea
+de a avea setat administratori — **eu îi setez la fiecare aplicație în parte**"; „este vorba fix de
+rolul pe care simulez acum din meniul de Cont pe toate aplicațiile, **Intră ca administrator**"; „dar
+este vorba de acei admini ai aplicației — nu admini generali ca mine, super-admin". Concret, acum:
+**numai Programul liturgic**.
+
+**⚠️ AXA E CHEIA, nu rolul și nu `scope`.** Un administrator de aplicație e un om cu rolul `user` care
+a primit punctual cheia aplicației (`permission_grants`, `/acorda` la autorizare). `Scope` există în
+contracte (`parish:`, `team:`, `audience:`), dar **toate cele 34 de verificări din aplicații întreabă
+cu `global`**, deci un rol cu scope îngust ar fi fost refuzat peste tot. Tiparul nu e nou: așa se dă
+`library.borrow`, și așa numește Curățenia adminii ei de pe 14.09.2026.
+
+**Registrul: `packages/contracts/src/admini.ts`** (`APLICATII_ADMINISTRABILE`) — cod, nume, cheia de
+admin, cheile însoțitoare, ce poate face adminul. Unsprezece aplicații. Cheile: program `program.write`
+(+`program.publish`), calendar `calendar.manage`, buletin `bulletin.write` (+`bulletin.publish`),
+newsletter `newsletter.manage` **(nouă)**, curățenie `cleaning.manage`, bibliotecă `library.manage`,
+tipic `typicon.manage` **(nouă)**, biblia `bible.manage` **(nouă)**, live+radio `broadcast.manage`,
+website `website.manage` **(nouă)**. Cele patru noi sunt și în `PERMISIUNI_IMPLICITE.admin`, ca
+adminul global să nu pierdă în tăcere o aplicație.
+
+**Ce s-a schimbat în fiecare aplicație** (o linie, același tipar peste tot):
+- `eAdmin` nu se mai citește din `sesiune.roles`, ci din cheia aplicației —
+  `eAdminulAplicatiei(env.AUTORIZARE, cid, principal, '<cod>')` din `@xc/authorization`;
+- **rândul „Administrare" din meniul contului rămâne al ROLULUI GLOBAL** (`eAdminPlatforma`): acolo un
+  admin de aplicație n-are ce face, panoul cere cheile lui. ⚠️ La `live`/`radio` rândul duce dinadins
+  la panoul EMISIEI, nu al platformei — acolo cheia e cea potrivită și n-a fost atins nimic.
+  ⚠️ La `curatenie` rândul se scria pentru cheia curățeniei, deci un admin al ei vedea o legătură care
+  îl întâmpina cu 403. Acum e pe rolul global, ca peste tot.
+- adminul global și super-adminul **nu pierd nimic** (cheile vin cu rolul), iar masca „vezi ca" coboară
+  singură, fiindcă întrebarea trece prin autorizare. Citit din roluri, masca n-ar fi coborât nimic.
+
+**Numirea: în Setările fiecărei aplicații** (`<app>/setari` → rubrica „Administratorii aplicației"),
+scrisă **o singură dată** în `@xc/setari`, deci toate aplicațiile au capacitatea deodată. Poarta e
+**cheia aplicației**, nu `roles.manage`: cine ține aplicația poate lua pe cineva alături (tiparul
+Curățeniei; super-adminul le are pe toate). Rutele: `POST /setari/admin-numeste` și
+`/setari/admin-scoate`. Trei lucruri care se încalcă ușor: **cheile se acordă TOATE odată** (un admin
+de Program care poate scrie dar nu valida n-ar duce nimic la capăt) — dacă una cade, fapta se
+socotește nereușită; **poarta se cere în rută**, nu pe credit de la pagina care a desenat butonul;
+**cine are contul închis nu apare** în lista de numit.
+
+**Tabelul: Administrare → `/admini`** („un tabel cu oamenii și aplicațiile și bulina la intersecție").
+Poarta `roles.manage` (super-admin). E de **VEDERE**: numirea stă în aplicații, iar numele din capul
+tabelului sunt legături spre Setările lor. **Bulina are două feluri**, fiindcă dreptul vine pe două
+drumuri și numai unul se poate lua din aplicație: **plină** = numit acolo (se poate scoate),
+**conturată** = din rolul global (se schimbă din Oameni). În tabel intră numai cine are măcar o bulină.
+Datele vin într-o singură întrebare: `POST /harta-admini` la authz (cheile toate deodată; `/cine-are`
+la plural). Prima coloană rămâne lipită la derularea în lateral — la a șaptea aplicație nu se mai știe
+al cui e rândul.
+
+**Probe**: `tests/admini-pe-aplicatie.test.ts` (23) — registrul, decizia pe aplicație, masca, numirea
+cu poarta și auditul ei, tabelul randat prin `admin.fetch`. Plus `tests/usa-website.test.ts`, care
+acum răspunde ca autorizarea adevărată (înainte avea un `{}` care însemna „refuz la orice") și are
+două probe noi: adminul Website-ului vede chenarele cu rolul `user`, adminul Programului nu.
+
+⚠️ **Deschis, de hotărât cu userul**: bula de **chat** din Program se aprinde pe `ctx.eAdmin`, care de
+acum înseamnă „adminul Programului" — deci un admin de aplicație poate cheltui pe modelul de limbaj.
+Se poate întoarce la rolul global cu o linie (`ctxChat`), dacă nu e ce vrea.
 
 ## DISPECERATUL — ce a rămas din A7 „comunicări" (14.09.2026)
 
@@ -2068,6 +2144,24 @@ forța antetul `Host`**.
 ## Jurnal
 
 ### 2026-09-18
+
+- **ADMINI PE APLICAȚIE, la toate aplicațiile + tabelul din Administrare** (user, 10:40 și trei
+  lămuriri la 11:06). Cererea: doi oameni admini în aplicații diferite, „admin doar pe aplicația
+  respectivă și nu de-a lungul întregii platforme", cu tabel „la mine în Administrator"; capacitatea
+  la **toate** aplicațiile, numirea **în fiecare aplicație în parte**; „este vorba fix de rolul pe care
+  simulez din meniul de Cont — **Intră ca administrator**", „nu admini generali ca mine, super-admin".
+  Concret acum: **Programul liturgic**.
+  - Inventarul dinainte: mecanismul EXISTA pe jumătate — grantul punctual (`/acorda`), folosit deja de
+    Curățenie (în producție sunt 2 granturi `cleaning.manage`). Piedica era că jumătate din aplicații
+    își citeau adminul din ROLUL global, deci un grant nu deschidea nimic la ele.
+  - Făcut: registrul `APLICATII_ADMINISTRABILE` (11 aplicații) + 4 chei noi (`newsletter.manage`,
+    `typicon.manage`, `bible.manage`, `website.manage`); `eAdminulAplicatiei()` în `@xc/authorization`;
+    `eAdmin` din cheie în program, calendar, buletin, newsletter, tipic, biblia, home (+ `eAdminPlatforma`
+    pentru rândul „Administrare" din meniu, inclusiv la biblioteca și curatenie); rubrica de numire
+    scrisă o dată în `@xc/setari`; `/harta-admini` la authz; tabelul cu buline la `admin/admini`.
+  - 532 de probe trec (23 noi), typecheck curat pe 36. **Nepublicat**: vezi NEXT, punctul 00 — authz
+    ÎNAINTEA aplicațiilor, altfel adminul global pierde pe loc 4 aplicații.
+  - Deschis: bula de chat din Program atârnă acum de adminul Programului (cheltuială la fiecare mesaj).
 
 - **NUMĂRUL COMPUS SE VEDE ÎN PAGINĂ, CU BUTON DE VALIDARE — buletin 0.7.0** (user, 09:52, două
   mesaje: „să faci ceva cu cache-ul când afișezi buletinul generat — să-l afișezi direct în pagină ca

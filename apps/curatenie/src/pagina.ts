@@ -26,6 +26,8 @@ export interface Ctx {
   voluntar: string | null
   /** `cleaning.manage` — hotarat de autorizarea centrala, nu de `is_admin` din tabel. */
   eAdmin: boolean
+  /** Rolul global — DOAR randul „Administrare" din meniul contului atarna de el (18.09.2026). */
+  eAdminPlatforma?: boolean
   /** Jetonul CSRF pereche cu cookie-ul, scris in fiecare formular al paginii. */
   csrf: string
   versiune: string
@@ -54,7 +56,9 @@ function contDin(ctx: Ctx): Cont {
   return {
     nume: ctx.utilizator ?? 'Cont',
     intrat: !!ctx.userId,
-    admin: ctx.eAdmin,
+    // ⚠️ Panoul PLATFORMEI: rolul global, nu cheia Curateniei (18.09.2026) — altfel un admin al
+    // curateniei ar vedea o legatura care il intampina cu 403.
+    admin: ctx.eAdminPlatforma ?? false,
     urlCont: ctx.nav.cont,
     urlAdmin: ctx.nav.admin,
     // Setarile APLICATIEI, nu ale platformei (user, 15.09.2026) — de aceea adresa e a noastra.

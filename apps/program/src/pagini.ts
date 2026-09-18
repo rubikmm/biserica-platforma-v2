@@ -50,7 +50,16 @@ export interface Ctx {
   utilizator: string | null
   /** Adresa contului — fereastra de abonare o scrie in camp si o incuie; `null` la neautentificat. */
   emailulContului?: string | null
+  /**
+   * Administratorul PROGRAMULUI. ⚠️ Din 18.09.2026 vine din cheia aplicatiei (`program.write`), nu
+   * din rolul global: un om poate fi admin numai aici. Pe el atarna tot ce e al Programului.
+   */
   eAdmin: boolean
+  /**
+   * Rolul global (admin ori super-admin). ⚠️ Din el iese DOAR randul „Administrare" din meniul
+   * contului, care duce la panoul PLATFORMEI — nu se pune nicio unealta a Programului pe el.
+   */
+  eAdminPlatforma?: boolean
   /** super-adminul vede hartiile pe tot istoricul, adminul doar pe saptamanile din navigare */
   eSuperAdmin?: boolean
   versiune: string
@@ -773,7 +782,9 @@ function contDin(ctx: Ctx) {
   return {
     intrat: !!ctx.utilizator,
     nume: ctx.utilizator ?? 'Cont',
-    admin: ctx.eAdmin,
+    // ⚠️ Randul „Administrare" e al PLATFORMEI: se scrie pentru rolul global, nu pentru adminul
+    // Programului (18.09.2026). Acolo n-ar avea ce face — panoul cere cheile lui.
+    admin: ctx.eAdminPlatforma ?? false,
     urlCont: ctx.nav.cont,
     urlAdmin: ctx.nav.admin,
     // Setarile APLICATIEI, nu ale platformei (user, 15.09.2026) — de aceea adresa e a noastra.

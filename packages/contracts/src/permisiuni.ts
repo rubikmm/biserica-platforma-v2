@@ -21,6 +21,18 @@ export const CHEI_PERMISIUNI = [
   'library.manage',
   'library.borrow',
   /*
+   * Cheile de administrare ale aplicatiilor care pana pe 18.09.2026 nu aveau niciuna: ele isi
+   * citeau adminul din ROLUL global (`sesiune.roles`), deci un om nu putea fi facut administrator
+   * NUMAI acolo — trebuia rol de admin pe toata platforma. Utilizatorul a cerut atunci ca „toate
+   * aplicatiile sa aiba capacitatea de a avea setat administratori", iar el sa-i numeasca la fiecare
+   * aplicatie in parte. Vezi registrul din `admini.ts`: acolo scrie care cheie face pe cineva
+   * administratorul carei aplicatii.
+   */
+  'newsletter.manage',
+  'typicon.manage',
+  'bible.manage',
+  'website.manage',
+  /*
    * Emisia parohiei — LIVE-ul din biserica si radioul. O SINGURA cheie pentru amandoua
    * aplicatiile (`live` si `radio`), fiindca panoul e unul singur si comanda un singur aparat:
    * cine poate porni directul poate schimba si muzica. In V1 poarta era rolul `admin` verificat
@@ -85,6 +97,13 @@ export const PERMISIUNI_IMPLICITE: Record<Rol, readonly Permisiune[]> = {
     'bulletin.publish',
     'cleaning.manage',
     'library.manage',
+    // ⚠️ Cheile aplicatiilor adaugate pe 18.09.2026 vin CU rolul de admin, ca pana atunci: adminul
+    // global (parintele) trebuie sa poata face in Newsletter, Tipic, Biblia si Website exact ce
+    // facea inainte prin rol. Daca una din ele lipseste de aici, el pierde in tacere o aplicatie.
+    'newsletter.manage',
+    'typicon.manage',
+    'bible.manage',
+    'website.manage',
     // Parintele comanda emisia din panou — in V1 `/control` cerea chiar rolul `admin`.
     'broadcast.manage',
     'communication.create',

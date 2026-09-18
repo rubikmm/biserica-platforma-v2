@@ -40,7 +40,12 @@ export interface AplicatieCuMembri {
   /** Adresa paginii aplicatiei, ca omul sa ajunga acolo de pe contul lui. Cheia din `URL_*`. */
   cheieUrl: string
   etichete: readonly { cod: string; nume: string; explicatie: string }[]
-  /** Eticheta care inseamna „administrator" + cheia de permisiune pe care o acorda. */
+  /**
+   * Eticheta care inseamna „administrator" + cheia de permisiune pe care o acorda.
+   * ⚠️ Cheia trebuie sa fie ACEEASI cu `cheieAdmin` din registrul `APLICATII_ADMINISTRABILE`
+   * (`admini.ts`), altfel eticheta din panoul aplicatiei si bulina din tabelul Administrarii ar
+   * vorbi despre doua drepturi diferite. Pazit de probe (`tests/admini-pe-aplicatie.test.ts`).
+   */
   etichetaAdmin?: { cod: string; permisiune: string }
 }
 

@@ -27,6 +27,7 @@
  * exista nici in V1; ramane de facut, ca acolo.
  */
 import { SCOPE_GLOBAL, SESIUNE_ANONIMA } from '@xc/contracts'
+import { eAdminulAplicatiei } from '@xc/authorization'
 import { principalDin, sesiuneCurenta, verificaCsrf } from '@xc/auth'
 import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
 import { Logger, correlationId } from '@xc/observability'
@@ -79,6 +80,8 @@ export interface Env {
   DB: D1Database
   FISIERE: R2Bucket
   IDENTITATE: Fetcher
+  /** Autorizarea centrala: de la ea se afla daca omul e administratorul BULETINULUI (18.09.2026). */
+  AUTORIZARE: Fetcher
   AUDIT: Fetcher
   COMUNICARE: Fetcher
   /** Programul: de la el se cere tabelul tiparit de pe pagina a patra (`/v1/tabel-tipar`). */
@@ -485,7 +488,11 @@ export default {
       // adresa contului, pentru fereastra de abonare: acolo se scrie in camp si se incuie, fiindca
       // abonarea platformei sta pe adresa contului, nu pe una scrisa de mana
       emailulContului: sesiune.user?.email ?? null,
-      eAdmin: sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin'),
+      // ⚠️ Adminul BULETINULUI vine din cheia aplicatiei (`bulletin.write`), nu din rolul global
+      // (18.09.2026): asa poate fi cineva admin numai aici. De el atarna `/nou`, compunerea si
+      // validarea — care la buletin E publicarea. Rolul global rămâne pentru randul „Administrare".
+      eAdmin: await eAdminulAplicatiei(env.AUTORIZARE, cid, principal, 'buletin'),
+      eAdminPlatforma: sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin'),
       versiune: pkg.version,
       modificata: dataVersiunii(env.VERSIUNE),
       veziCa: sesiune.veziCa,
@@ -589,7 +596,7 @@ export default {
         const masuri = variante('eroare' in cal ? undefined : { slujbe: cal.slujbe, detalii: cal.detalii })
 
         if (req.method !== 'POST') {
-          return html(paginaNou(ctx, m, b, nou, { variante: masuri, calendar, motto }), 200, alLui)
+          return html(paginaNou(ctx, m, nou, { variante: masuri, calendar, motto }), 200, alLui)
         }
 
         const f = await req.formData()
@@ -613,7 +620,7 @@ export default {
           const cerData = scris.data ?? ''
           if (!nou.nr || cerNr !== nou.nr || cerData !== nou.data) {
             return html(
-              paginaNou(ctx, m, b, nou, {
+              paginaNou(ctx, m, nou, {
                 variante: masuri, calendar, motto,
                 raspuns: {
                   facut: false,
@@ -630,7 +637,7 @@ export default {
           const ciorna = await ciornaDinDepozit(env, nou.nr, nou.data)
           if (!ciorna?.cheie_pdf) {
             return html(
-              paginaNou(ctx, m, b, nou, {
+              paginaNou(ctx, m, nou, {
                 variante: masuri, calendar, motto,
                 raspuns: { facut: false, plangeri: ['numărul nu e compus — compune-l întâi, apoi validează-l'] },
               }),
@@ -717,7 +724,7 @@ export default {
             }),
           )
           return html(
-            paginaNou(ctx, m, b, nou, {
+            paginaNou(ctx, m, nou, {
               variante: masuri, calendar, scris, motto,
               raspuns: {
                 facut: true,
@@ -736,7 +743,7 @@ export default {
           )
         }
         return html(
-          paginaNou(ctx, m, b, nou, {
+          paginaNou(ctx, m, nou, {
             variante: masuri, calendar, scris, motto,
             raspuns: { facut: false, plangeri: r.plangeri, atentie: r.atentie },
           }),

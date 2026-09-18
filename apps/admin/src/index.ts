@@ -1,4 +1,4 @@
-import { ROLURI, Rol, SCOPE_GLOBAL, SESIUNE_ANONIMA, type SesiuneCurenta } from '@xc/contracts'
+import { APLICATII_ADMINISTRABILE, ROLURI, Rol, SCOPE_GLOBAL, SESIUNE_ANONIMA, type SesiuneCurenta } from '@xc/contracts'
 import { ClientAutorizare } from '@xc/authorization'
 import { asiguraCsrf, principalDin, sesiuneCurenta, verificaCsrf, verificaTokenCsrf } from '@xc/auth'
 import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
@@ -260,6 +260,110 @@ ${cautarea(o.prefix, o.q)}
     }</p>
 ${o.oameni.length ? `<table class="oameni"><tbody>${randuri}</tbody></table>` : '<p class="ajutor">Nimeni.</p>'}`,
   })
+}
+
+/**
+ * TABELUL ADMINILOR PE APLICAȚII (user, 18.09.2026: „vreau la zona mea generală de administrare un
+ * tabel cu oamenii și aplicațiile și bulina la intersecție — unde sunt ei admini").
+ *
+ * Oamenii pe rânduri, aplicațiile pe coloane, bulina la intersecție. ⚠️ Tabelul e de VEDERE: numirea
+ * se face în fiecare aplicație, în Setările ei („eu îi setez la fiecare aplicație în parte"). De aceea
+ * fiecare nume de aplicație din cap e o legătură spre Setările ei — de acolo se umblă.
+ *
+ * ⚠️ BULINA ARE DOUĂ FELURI, fiindcă dreptul vine pe două drumuri și numai unul se poate lua din
+ * aplicație: plină = numit anume la aplicația aceea (grant punctual, se poate scoate); conturată =
+ * îi vine din rolul lui pe platformă (se schimbă doar coborând rolul, din Oameni). Un tabel cu o
+ * singură bulină ar fi arătat un drept care pare al aplicației, dar nu e.
+ *
+ * ⚠️ În tabel intră numai oamenii care au măcar o bulină. Restul conturilor n-au ce căuta aici — la
+ * 29 de conturi ar fi fost 29 de rânduri goale, iar la 300 ar fi fost o pagină de nimic.
+ */
+function paginaAdmini(o: {
+  comune: ReturnType<typeof comune>
+  oameni: Om[]
+  /** cheia aplicației → cine o are, pe cele două drumuri */
+  harta: Record<string, { prinGrant: string[]; prinRol: string[] }>
+  roluri: Record<string, { role: string; scope: string }[]>
+  nav: ReturnType<typeof navigatieDin>
+  prefix: string
+}): string {
+  const numele = (u: Om) => (u.displayName ?? '').trim() || u.email
+  const are = (cheie: string, userId: string, fel: 'prinGrant' | 'prinRol') =>
+    (o.harta[cheie]?.[fel] ?? []).includes(userId)
+  const areCeva = (u: Om) =>
+    APLICATII_ADMINISTRABILE.some(
+      (a) => are(a.cheieAdmin, u.userId, 'prinGrant') || are(a.cheieAdmin, u.userId, 'prinRol'),
+    )
+  const rolulLui = (u: Om) => {
+    const ale = o.roluri[u.userId] ?? []
+    if (ale.some((r) => r.role === 'super-admin')) return 'super-admin'
+    if (ale.some((r) => r.role === 'admin')) return 'admin'
+    return 'utilizator'
+  }
+
+  const randuri = o.oameni
+    .filter(areCeva)
+    .sort((x, y) => numele(x).localeCompare(numele(y), 'ro'))
+    .map((u) => {
+      const celule = APLICATII_ADMINISTRABILE.map((a) => {
+        const numit = are(a.cheieAdmin, u.userId, 'prinGrant')
+        const dinRol = are(a.cheieAdmin, u.userId, 'prinRol')
+        const spune = numit
+          ? `${numele(u)} e numit administrator la ${a.nume}`
+          : dinRol
+            ? `${numele(u)} are ${a.nume} din rolul lui pe platformă`
+            : `${numele(u)} nu e administrator la ${a.nume}`
+        const semn = numit
+          ? '<span class="bul plina"></span>'
+          : dinRol
+            ? '<span class="bul din-rol"></span>'
+            : '<span class="bul nimic"></span>'
+        return `<td class="mij" title="${esc(spune)}"><span class="ascuns-vizual">${esc(spune)}</span>${semn}</td>`
+      }).join('')
+      return `<tr>
+        <th scope="row">${esc(numele(u))}<div class="ajutor">${esc(u.email)}</div></th>
+        <td class="mij"><span class="eticheta">${esc(rolulLui(u))}</span></td>
+        ${celule}
+      </tr>`
+    })
+    .join('')
+
+  const cap = APLICATII_ADMINISTRABILE.map((a) => {
+    const adresa = o.nav[codNavigatie(a.cod)] ?? ''
+    const nume = esc(a.nume)
+    return `<th scope="col">${
+      adresa ? `<a href="${esc(adresa)}/setari" title="Setările ${nume} — de acolo se numesc adminii ei">${nume}</a>` : nume
+    }</th>`
+  }).join('')
+
+  return pagina({
+    ...o.comune,
+    titluPagina: 'Administratori pe aplicații',
+    corp: `<h2>Administratori pe aplicații</h2>
+<p class="ajutor">Cine ține fiecare aplicație. Un administrator de aplicație are drepturile <em>acolo</em>
+și nimic în plus pe restul platformei. Numirea se face în <strong>Setările fiecărei aplicații</strong> —
+numele din cap sunt legături spre ele.</p>
+${
+  randuri
+    ? `<div class="matrice-cadru"><table class="matrice">
+  <thead><tr><th scope="col">Cine</th><th scope="col">Rolul pe platformă</th>${cap}</tr></thead>
+  <tbody>${randuri}</tbody>
+</table></div>`
+    : '<p class="ajutor">Nimeni nu e administrator nicăieri încă.</p>'
+}
+<p class="ajutor legenda">
+  <span class="bul plina"></span> numit la aplicația aceea — se poate scoate din Setările ei &nbsp;·&nbsp;
+  <span class="bul din-rol"></span> îi vine din rolul lui pe platformă — se schimbă din
+  <a href="${o.prefix}/oameni">Oameni</a>
+</p>
+<p class="ajutor">⚠️ <strong>LIVE și Radio au o singură cheie</strong> (<code>broadcast.manage</code>):
+panoul e unul și comandă un singur aparat, deci cele două buline se aprind și se sting împreună.</p>`,
+  })
+}
+
+/** Cheia din navigație pentru codul aplicației (`home` → `home`, `buletin` → `buletin`…). */
+function codNavigatie(cod: string): keyof ReturnType<typeof navigatieDin> {
+  return cod as keyof ReturnType<typeof navigatieDin>
 }
 
 /**
@@ -589,6 +693,43 @@ ${SCHEMA_CORP}`,
       )
     }
 
+    // ------------------------------------------------------------- admini pe aplicații
+    /*
+     * TABELUL ADMINILOR PE APLICAȚII (user, 18.09.2026). Poarta e `roles.manage` — cheia care vine
+     * numai cu super-adminul, ca la Oameni: „la zona mea generală de administrare".
+     *
+     * ⚠️ Se citește DOAR, nu se scrie nimic de aici: numirea stă în Setările fiecărei aplicații.
+     * O întrebare la autorizare pentru toate cheile deodată (`/harta-admini`), nu una pe aplicație.
+     */
+    if (cale === '/admini') {
+      const comuneAici = comune(env, nav, eAdmin, sesiune, adresaPaginii(cfg, url))
+      const potVedea = await authz.can(principal, 'roles.manage', SCOPE_GLOBAL)
+      if (!potVedea.allowed) {
+        return html(
+          pagina({ ...comuneAici, corp: `<h2>Administratori pe aplicații</h2>${alerta('rea', 'Tabelul e al super-administratorilor (<code>roles.manage</code>).')}` }),
+          403,
+        )
+      }
+      const chei = APLICATII_ADMINISTRABILE.map((a) => a.cheieAdmin)
+      const [oameni, raspunsHarta] = await Promise.all([
+        listaOamenilor(env, cid),
+        apelAutorizare(env, '/harta-admini', { chei }, cid),
+      ])
+      const harta = raspunsHarta.ok
+        ? ((await raspunsHarta.json()) as { harta: Record<string, { prinGrant: string[]; prinRol: string[] }> }).harta
+        : {}
+      if (!raspunsHarta.ok) {
+        log.error('harta adminilor nu a venit', { stare: raspunsHarta.status })
+      }
+      const roluri = await roluriPentru(env, oameni.map((u) => u.userId), cid)
+      return html(
+        raspunsHarta.ok
+          ? paginaAdmini({ comune: comuneAici, oameni, harta, roluri, nav, prefix })
+          : pagina({ ...comuneAici, corp: `<h2>Administratori pe aplicații</h2>${alerta('rea', 'Autorizarea nu a răspuns — tabelul nu s-a putut aduce.')}` }),
+        raspunsHarta.ok ? 200 : 502,
+      )
+    }
+
     // ------------------------------------------------------------- dispecerat
     /**
      * DISPECERATUL (user, 14.09.2026). Din A7 „comunicari" al V1 nu se porteaza aplicatia, ci
@@ -762,6 +903,7 @@ ${SCHEMA_CORP}`,
 
 <p>${[
     chei.oameni ? `<a href="${prefix}/oameni">Oameni — rolurile pe platformă</a>` : '',
+    chei.oameni ? `<a href="${prefix}/admini">Administratori pe aplicații — cine ține ce</a>` : '',
     chei.comunica ? `<a href="${prefix}/dispecerat">Dispecerat — e-mailul și WhatsApp-ul parohiei</a>` : '',
     chei.module ? `<a href="${prefix}/module">Module — pornirea și oprirea chatului</a>` : '',
     chei.jurnal ? `<a href="${prefix}/schema">Schema platformei — cum sunt legate toate pe Cloudflare</a>` : '',
@@ -880,4 +1022,28 @@ form.cauta-oameni a { flex:0 0 auto }
 /* ⚠️ Linia dintre cete e un RAND al tabelului, gol, cu chenar sus — nu un chenar pus pe primul om
    al cetei urmatoare: asa o ceata goala nu lasa doua linii lipite. Randul n-are inaltime proprie. */
 table.oameni tr.rupe td { padding:0; height:0; border-top:2px solid var(--rule) }
+
+/* ADMINII PE APLICATII: oamenii pe randuri, aplicatiile pe coloane, bulina la intersectie
+   (user, 18.09.2026). Unsprezece coloane nu incap pe un telefon, deci tabelul se deruleaza in cadrul
+   lui — nu se strange scrisul si nu se ascund coloane, fiindca fiecare e o aplicatie intreaga. */
+.matrice-cadru { overflow-x:auto; margin:14px 0 6px; -webkit-overflow-scrolling:touch }
+table.matrice { border-collapse:collapse; width:auto; min-width:100% }
+table.matrice th, table.matrice td { padding:8px 10px; border-bottom:1px solid var(--rule);
+                                     text-align:left; vertical-align:middle; white-space:nowrap }
+table.matrice thead th { font:600 12px/1.3 ui-sans-serif,system-ui; letter-spacing:.03em;
+                         color:var(--faint); border-bottom:2px solid var(--rule); vertical-align:bottom }
+table.matrice tbody th { font:600 14px/1.3 ui-sans-serif,system-ui; color:var(--ink) }
+table.matrice td.mij { text-align:center }
+/* ⚠️ Prima coloana (numele omului) rămâne la vedere cat se deruleaza in lateral: fara ea, la a saptea
+   aplicatie nu se mai stie al cui e randul. */
+table.matrice thead th:first-child, table.matrice tbody th { position:sticky; left:0;
+                                                             background:var(--paper) }
+.bul { display:inline-block; width:12px; height:12px; border-radius:50% }
+.bul.plina { background:var(--rosu); border:1px solid var(--rosu) }
+.bul.din-rol { background:transparent; border:2px solid var(--soft) }
+.bul.nimic { background:transparent; border:1px dashed var(--rule) }
+.legenda .bul { vertical-align:-1px; margin-right:2px }
+/* Spusul pentru cititorul de ecran: bulina singura n-ar spune nimic la voce. */
+.ascuns-vizual { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0);
+                 white-space:nowrap; border:0; padding:0; margin:-1px }
 `

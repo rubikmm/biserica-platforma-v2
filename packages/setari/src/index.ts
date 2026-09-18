@@ -27,10 +27,14 @@ import { asiguraCsrf, verificaTokenCsrf } from '@xc/auth'
 import { ClientAutorizare } from '@xc/authorization'
 import { abonamentul, ABONAMENTE, type Abonament } from '@xc/abonare'
 import {
+  aplicatiaAdministrabila,
   aplicatieCuMembri,
+  cheileAdminului,
   SCOPE_GLOBAL,
+  type AplicatieAdministrabila,
   type AplicatieCuMembri,
   type Asociere,
+  type Permisiune,
   type Principal,
 } from '@xc/contracts'
 import { alerta, esc, html, momentLizibil } from '@xc/ui'
@@ -77,8 +81,12 @@ export interface UneltleSetarilor {
    *
    * Primește treptele deja socotite, ca aplicația să nu întrebe a doua oară autorizarea. Cine nu-l
    * dă nu pierde nimic — pagina arată exact ca până acum.
+   *
+   * ⚠️ `eAdminApp` (administratorul ACESTEI aplicații, din 18.09.2026) e treapta pe care se pun
+   * rubricile care țin de treaba aplicației — șablonul newsletterului, de pildă. `eAdmin` a rămas
+   * ce era: cheia abonaților, care e a platformei și e comună tuturor aplicațiilor.
    */
-  rubrici?: (t: { eAdmin: boolean; eSuper: boolean }) => Promise<string> | string
+  rubrici?: (t: { eAdmin: boolean; eSuper: boolean; eAdminApp: boolean }) => Promise<string> | string
 }
 
 /** Un abonat, așa cum îl întoarce comunicarea. */
@@ -87,6 +95,14 @@ interface Abonat {
   channel: string
   adresa: string
   created_at: string
+}
+
+/** Un om cu cont pe platformă, așa cum îl întoarce identitatea. */
+interface OmulPlatformei {
+  userId: string
+  email: string
+  displayName: string | null
+  disabledAt: string | null
 }
 
 /** Un rând de jurnal, așa cum îl întoarce auditul. */
@@ -143,9 +159,16 @@ export const STIL_SETARI = `
 .set-grup form + form { margin-top:10px }
 .set-grup form.set-rand { display:inline; margin:0 }
 .set-jos { margin-top:14px }
+/* Numirea unui administrator: eticheta deasupra, alegerea si butonul pe un rand, ca sa nu para doua
+   fapte deosebite. Nu se sprijina pe clasele carcasei (.camp): nu toate aplicatiile le au. */
+.set-numeste { margin-top:14px !important }
+.set-numeste label { display:block; margin:0 0 6px;
+                     font:600 13px/1.3 ui-sans-serif,system-ui; color:var(--ink) }
+.set-numeste select { max-width:100%; margin:0 10px 0 0 }
 @media (max-width:520px) {
   .set-grup { padding:14px }
   .set-randuri .set-cod { display:none }
+  .set-numeste select { display:block; width:100%; margin:0 0 10px }
 }
 `
 
@@ -223,11 +246,52 @@ async function are(
   env: MediuSetari,
   cid: string,
   principal: Principal,
-  cheie: 'audience.manage' | 'audit.read',
+  cheie: Permisiune,
 ): Promise<boolean> {
   if (!env.AUTORIZARE) return false
   const decizie = await new ClientAutorizare(env.AUTORIZARE, cid).can(principal, cheie, SCOPE_GLOBAL)
   return decizie.allowed
+}
+
+/**
+ * Oamenii platformei. ⚠️ Se cer de la IDENTITATE, ca în panoul Administrării: aplicația nu ține
+ * nume și adrese (structura mare — „datele personale nu se copiază"). La scara parohiei lista e
+ * mică (sub 50 de conturi), deci alegerea se face dintr-un `select`, fără căutare.
+ */
+async function oameniiPlatformei(env: MediuSetari): Promise<OmulPlatformei[]> {
+  const r = await cere<{ utilizatori?: OmulPlatformei[] }>(
+    env.IDENTITATE,
+    'identitate',
+    '/utilizatori/lista',
+    {},
+  )
+  return r?.utilizatori ?? []
+}
+
+/**
+ * Conturile din spatele unor `user_id`, în ordinea în care au venit. ⚠️ Cine nu se găsește în listă
+ * NU se pierde din tabel: rămâne cu codul lui în loc de nume — un drept dat unui cont șters trebuie
+ * să se VADĂ, ca să poată fi retras.
+ */
+function oameniiDupaId(oameni: OmulPlatformei[], ids: string[]): OmulPlatformei[] {
+  const dupaId = new Map(oameni.map((u) => [u.userId, u]))
+  return ids.map(
+    (id) => dupaId.get(id) ?? { userId: id, email: id, displayName: '(cont necunoscut)', disabledAt: null },
+  )
+}
+
+/**
+ * Cine are cheia asta, și pe ce drum: numit la aplicație (`prinGrant`, se poate retrage de aici) ori
+ * din rolul lui global (`prinRol`, nu se poate). `null` = autorizarea n-a răspuns.
+ */
+async function cineAreCheia(
+  env: MediuSetari,
+  cheie: Permisiune,
+): Promise<{ prinGrant: string[]; prinRol: string[] } | null> {
+  return cere<{ prinGrant: string[]; prinRol: string[] }>(env.AUTORIZARE, 'authz', '/cine-are', {
+    permission: cheie,
+    scope: SCOPE_GLOBAL,
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -405,6 +469,94 @@ function rubricaAbonati(o: {
 }
 
 /**
+ * ADMINISTRATORII APLICAȚIEI — treapta administratorului, cerută de user pe 18.09.2026: „să aibă
+ * toate capacitatea de a avea setat administratori — eu îi setez la fiecare aplicație în parte ca
+ * administrator (deci nu doar super-admin)".
+ *
+ * ⚠️ Scrisă O SINGURĂ DATĂ, aici: de aceea **toate** aplicațiile o capătă deodată, fără să se atingă
+ * niciuna. Ce e deosebit de la una la alta stă în registrul `APLICATII_ADMINISTRABILE` din contracte
+ * (numele, cheia, faptele) — aplicația nu dă nimic în plus.
+ *
+ * ⚠️ Numirea e un GRANT PUNCTUAL, nu un rol: omul rămâne `user` pe platformă și nu capătă nimic în
+ * celelalte aplicații. Tiparul e cel al Curățeniei din 14.09.2026 (eticheta „Admin" acordă
+ * `cleaning.manage`), mutat aici ca să fie al tuturor.
+ *
+ * ⚠️ Cele două feluri de drept se scriu DEOSEBIT, fiindcă numai unul se poate lua de aici: cine e
+ * numit pe aplicație are „Scoate", cine îl are din rolul global nu — acela se coboară din
+ * Administrare → Oameni, și e altceva.
+ */
+function rubricaAdmini(o: {
+  app: AplicatieAdministrabila
+  prinGrant: OmulPlatformei[]
+  prinRol: OmulPlatformei[]
+  /** cine mai poate fi numit: oamenii platformei, fără cei care sunt deja admini aici */
+  deNumit: OmulPlatformei[]
+  /** `null` = autorizarea n-a răspuns; atunci nu se desenează o listă care ar minți */
+  areRaspuns: boolean
+  prefix: string
+  csrf: string
+}): string {
+  const numele = (u: OmulPlatformei) => (u.displayName ?? '').trim() || u.email
+  const chei = [o.app.cheieAdmin, ...o.app.cheiInsotitoare]
+  const corp = !o.areRaspuns
+    ? alerta('rea', 'Autorizarea nu a răspuns — lista administratorilor nu s-a putut aduce.')
+    : `${
+        o.prinGrant.length || o.prinRol.length
+          ? `<table class="set-randuri">
+  <thead><tr><th>Cine</th><th>De unde are dreptul</th><th class="la-dreapta">&nbsp;</th></tr></thead>
+  <tbody>${o.prinGrant
+    .map(
+      (u) => `
+    <tr>
+      <td>${esc(numele(u))}${u.disabledAt ? ' <span class="set-iesit">(cont închis)</span>' : ''}<br><span class="set-mic">${esc(u.email)}</span></td>
+      <td>Numit la această aplicație</td>
+      <td class="la-dreapta"><form class="set-rand" method="post" action="${esc(o.prefix)}/setari/admin-scoate">
+        ${ascunse(o.csrf)}<input type="hidden" name="userId" value="${esc(u.userId)}">
+        <button type="submit" class="btn mic">Scoate</button>
+      </form></td>
+    </tr>`,
+    )
+    .join('')}${o.prinRol
+    .map(
+      (u) => `
+    <tr>
+      <td>${esc(numele(u))}<br><span class="set-mic">${esc(u.email)}</span></td>
+      <td>Din rolul lui pe platformă</td>
+      <td class="la-dreapta"><span class="set-mic">se schimbă din Administrare</span></td>
+    </tr>`,
+    )
+    .join('')}
+  </tbody>
+</table>`
+          : `<p class="set-gol">Nimeni nu e administrator aici — în afară de administratorii platformei.</p>`
+      }
+${
+  o.deNumit.length
+    ? `<form class="set-numeste" method="post" action="${esc(o.prefix)}/setari/admin-numeste">
+  ${ascunse(o.csrf)}
+  <label for="set-pe-cine">Numește un administrator</label>
+  <select id="set-pe-cine" name="userId">
+    <option value="">— alege un om —</option>
+    ${o.deNumit
+      .map((u) => `<option value="${esc(u.userId)}">${esc(numele(u))} — ${esc(u.email)}</option>`)
+      .join('')}
+  </select>
+  <button type="submit" class="btn-plin">Numește administrator</button>
+</form>`
+    : `<p class="set-mic set-jos">Toți cei care au cont sunt deja administratori aici.</p>`
+}
+<p class="set-mic set-jos">Numirea dă exact ${chei.length === 1 ? 'cheia' : 'cheile'}
+<span class="set-cod">${chei.map((c) => esc(c)).join(' · ')}</span> și nimic altceva: în celelalte
+aplicații omul rămâne ce era.</p>`
+  return grup({
+    titlu: 'Administratorii aplicației',
+    treapta: 'Administrator',
+    spune: `Cine ține ${esc(o.app.nume)}. ${esc(o.app.faptele)} Dreptul e numai aici — nu se întinde peste platformă.`,
+    corp,
+  })
+}
+
+/**
  * Jurnalul aplicației — treapta super-adminului, cerută anume: „vor putea vizualiza toate acțiunile
  * făcute de admini și de utilizatorii simpli" (user, 15.09.2026).
  *
@@ -483,6 +635,14 @@ function corpulSetarilor(o: {
   areComunicare: boolean
   eAdmin: boolean
   abonati: Abonat[] | null
+  /** rândul aplicației din registrul celor administrabile; `null` = n-are unul (Contul) */
+  appAdmin: AplicatieAdministrabila | null
+  /** e omul administratorul ACESTEI aplicații (cheia ei), fie numit, fie prin rolul global */
+  eAdminApp: boolean
+  /** cine ține aplicația acum, pe cele două drumuri; `null` = autorizarea n-a răspuns */
+  adminii: { prinGrant: string[]; prinRol: string[] } | null
+  /** oamenii platformei, din care se alege cine să fie numit */
+  oameni: OmulPlatformei[]
   eSuper: boolean
   areAudit: boolean
   jurnal: RandJurnal[] | null
@@ -509,6 +669,26 @@ ${o.mesaj ? alerta('buna', esc(o.mesaj)) : ''}
 ${o.mesajRau ? alerta('rea', esc(o.mesajRau)) : ''}
 ${mele}
 ${o.eAdmin ? rubricaAbonati({ a: o.a, abonati: o.abonati, prefix: o.prefix, csrf: o.csrf }) : ''}
+${
+  o.eAdminApp && o.appAdmin
+    ? rubricaAdmini({
+        app: o.appAdmin,
+        prinGrant: oameniiDupaId(o.oameni, o.adminii?.prinGrant ?? []),
+        prinRol: oameniiDupaId(o.oameni, o.adminii?.prinRol ?? []),
+        // cine mai poate fi numit: fără cei care au deja cheia (pe oricare drum) și fără conturile
+        // închise — o numire pe un cont închis n-ar face nimic pentru nimeni
+        deNumit: o.oameni.filter(
+          (u) =>
+            !u.disabledAt &&
+            !(o.adminii?.prinGrant ?? []).includes(u.userId) &&
+            !(o.adminii?.prinRol ?? []).includes(u.userId),
+        ),
+        areRaspuns: !!o.adminii,
+        prefix: o.prefix,
+        csrf: o.csrf,
+      })
+    : ''
+}
 ${o.eSuper ? rubricaJurnal({ nume: o.nume, areAudit: o.areAudit, randuri: o.jurnal }) : ''}
 ${o.rubriciApp}
 <nav class="vecini"><a href="${esc(o.prefix)}/">← Înapoi în ${esc(o.nume)}</a></nav>`
@@ -525,6 +705,9 @@ const CAI = new Set([
   '/setari/email',
   '/setari/apartenenta',
   '/setari/abonat-scoate',
+  // numirea și scoaterea unui administrator AL APLICAȚIEI (18.09.2026)
+  '/setari/admin-numeste',
+  '/setari/admin-scoate',
 ])
 
 /** Rândul din registru, dacă aplicația are unul. Fără abonament, pagina rămâne întreagă. */
@@ -570,6 +753,8 @@ export async function ruteazaSetari(
 
   const a = abonamentulSau(o.cod)
   const app = aplicatieCuMembri(o.cod) ?? null
+  /** Rândul aplicației din registrul celor administrabile — de el atârnă rubrica adminilor. */
+  const appAdmin = aplicatiaAdministrabila(o.cod) ?? null
 
   // ------------------------------------------------------------------ faptele
   if (req.method === 'POST') {
@@ -657,13 +842,64 @@ export async function ruteazaSetari(
       return new Response(null, { status: 303, headers: { location: spune(r ? 'scos' : 'rau') } })
     }
 
+    /*
+     * NUMIREA și SCOATEREA unui administrator AL APLICAȚIEI (user, 18.09.2026).
+     *
+     * ⚠️ Poarta e cheia APLICAȚIEI, nu `roles.manage`: cine ține aplicația poate lua pe cineva
+     * alături (tiparul Curățeniei — „se poate apăsa doar de cine o are deja, sau de un super-admin",
+     * iar super-adminul o are pe toate). Cheia se cere AICI, nu pe credit de la pagina care a
+     * desenat butonul: cine trimite formularul de mână ajunge tot pe drumul ăsta.
+     *
+     * ⚠️ Cheile se acordă TOATE, într-un singur gest: un administrator al Programului care ar putea
+     * scrie dar nu valida n-ar putea duce nimic la capăt. Dacă una din ele nu trece, fapta se
+     * socotește nereușită și se scrie așa în jurnal — nu spunem că am numit pe cineva pe jumătate.
+     */
+    if ((cale === '/setari/admin-numeste' || cale === '/setari/admin-scoate') && appAdmin) {
+      const numeste = cale === '/setari/admin-numeste'
+      const fapta = `${o.cod}.admin.${numeste ? 'grant' : 'revoke'}`
+      if (!(await are(env, o.cid, principal, appAdmin.cheieAdmin))) {
+        await scrie(env, o.cid, { action: fapta, target: String(formular.get('userId') ?? ''), outcome: 'failure', actorId: principal.userId, summary: { motiv: `fara ${appAdmin.cheieAdmin}` } })
+        return new Response(null, { status: 303, headers: { location: spune('fara-drept-admin') } })
+      }
+      const cine = String(formular.get('userId') ?? '')
+      if (!cine) return new Response(null, { status: 303, headers: { location: spune('rau') } })
+      const chei = cheileAdminului(appAdmin.cod)
+      let ok = true
+      for (const cheie of chei) {
+        const r = await cere<{ ok: boolean }>(env.AUTORIZARE, 'authz', numeste ? '/acorda' : '/retrage', {
+          userId: cine,
+          permission: cheie,
+          scope: SCOPE_GLOBAL,
+        })
+        if (!r) ok = false
+      }
+      await scrie(env, o.cid, { action: fapta, target: cine, outcome: ok ? 'success' : 'failure', actorId: principal.userId, summary: { aplicatie: appAdmin.cod, chei: [...chei] } })
+      return new Response(null, { status: 303, headers: { location: spune(ok ? (numeste ? 'admin-numit' : 'admin-scos') : 'rau') } })
+    }
+
     return new Response(null, { status: 303, headers: { location: `${p}/setari` } })
   }
 
   // ------------------------------------------------------------------ pagina
-  const [eAdmin, eSuper] = await Promise.all([
+  /*
+   * ⚠️ TREI trepte, nu două, de pe 18.09.2026: `eAdmin` (abonații — cheia platformei
+   * `audience.manage`) și `eAdminApp` (administratorul ACESTEI aplicații — cheia ei din registru)
+   * NU sunt același lucru. Un om numit admin numai la Program are a doua, nu pe prima: el ține
+   * programul, dar nu vede lista abonaților, care e a comunicării și e comună tuturor aplicațiilor.
+   */
+  const [eAdmin, eSuper, eAdminApp] = await Promise.all([
     are(env, o.cid, principal, 'audience.manage'),
     are(env, o.cid, principal, 'audit.read'),
+    appAdmin ? are(env, o.cid, principal, appAdmin.cheieAdmin) : Promise.resolve(false),
+  ])
+
+  /*
+   * Lista administratorilor și oamenii dintre care se alege: se cer NUMAI pentru cine are cheia
+   * aplicației. Pentru un enoriaș pagina rămâne exact cât era, fără două întrebări în plus.
+   */
+  const [cineAre, oameni] = await Promise.all([
+    eAdminApp && appAdmin ? cineAreCheia(env, appAdmin.cheieAdmin) : Promise.resolve(null),
+    eAdminApp && appAdmin ? oameniiPlatformei(env) : Promise.resolve([] as OmulPlatformei[]),
   ])
 
   const [alMeu, preferinta, asocieri, abonati, jurnal] = await Promise.all([
@@ -676,7 +912,7 @@ export async function ruteazaSetari(
 
   const csrf = asiguraCsrf(req, o.cfg.DOMENIU_COOKIE)
   // rubricile aplicației: se cer DUPĂ ce se știu treptele, ca să nu întrebe și ele autorizarea
-  const rubriciApp = o.rubrici ? await o.rubrici({ eAdmin, eSuper }) : ''
+  const rubriciApp = o.rubrici ? await o.rubrici({ eAdmin, eSuper, eAdminApp }) : ''
   const felul = new URL(req.url).searchParams.get('f') ?? ''
   const vorbe: Record<string, [bun: boolean, text: string]> = {
     abonat: [true, 'Gata — ești abonat.'],
@@ -688,6 +924,9 @@ export async function ruteazaSetari(
     scos: [true, 'Abonatul a fost scos din listă.'],
     'fara-termeni': [false, 'Abonarea se face numai după ce ești de acord cu termenii și condițiile.'],
     'fara-drept': [false, 'Îți trebuie permisiunea audience.manage ca să scoți pe cineva din listă.'],
+    'admin-numit': [true, 'Gata — e administrator al acestei aplicații. Dreptul se vede la următoarea pagină pe care o deschide.'],
+    'admin-scos': [true, 'I-am luat dreptul de administrator al acestei aplicații.'],
+    'fara-drept-admin': [false, 'Numai un administrator al acestei aplicații poate numi altul.'],
     rau: [false, 'Nu a mers. Încearcă din nou.'],
   }
   const vorba = vorbe[felul]
@@ -709,6 +948,10 @@ export async function ruteazaSetari(
         areComunicare: !!env.COMUNICARE,
         eAdmin,
         abonati: abonati ? abonati.membri : eAdmin && a ? null : [],
+        appAdmin,
+        eAdminApp,
+        adminii: cineAre,
+        oameni,
         eSuper,
         areAudit: !!env.AUDIT,
         jurnal: jurnal ? jurnal.intrari : null,

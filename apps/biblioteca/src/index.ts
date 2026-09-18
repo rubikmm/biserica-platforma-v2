@@ -133,7 +133,12 @@ export default {
       userId: sesiune.user?.id ?? null,
       poateImprumuta,
       ePangar,
-      eAdmin: sesiune.roles.some((r) => r.role === "admin" || r.role === "super-admin"),
+      /*
+       * ⚠️ La Biblioteca adminul APLICATIEI era deja pe cheie: `ePangar` (`library.manage`) e chiar el,
+       * si pe el atarna pangarul. `eAdmin` era rolul global si a rămas atat: din 18.09.2026 se numeste
+       * pe fata `eAdminPlatforma`, fiindca din el iese DOAR randul „Administrare" din meniul contului.
+       */
+      eAdminPlatforma: sesiune.roles.some((r) => r.role === "admin" || r.role === "super-admin"),
       versiune: pkg.version,
       modificata: dataVersiunii(env.VERSIUNE),
       veziCa: sesiune.veziCa,

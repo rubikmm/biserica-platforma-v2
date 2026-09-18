@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import home, { corp } from '../apps/home/src/index.js'
 import { navigatieDin } from '../packages/config/src/index.js'
-import { SCOPE_GLOBAL } from '../packages/contracts/src/index.js'
+import { PERMISIUNI_IMPLICITE, SCOPE_GLOBAL } from '../packages/contracts/src/index.js'
 
 /**
  * UȘA WEBSITE-ULUI — semnele de stare de pe butoanele aplicațiilor.
@@ -53,7 +53,33 @@ function sesiune(roluri: string[], intrat = true) {
   }
 }
 
-function mediu(raspunsSesiune: unknown) {
+/**
+ * AUTORIZAREA, ca la adevărat.
+ *
+ * ⚠️ Din 18.09.2026 chenarele NU mai atârnă de rolul citit din sesiune, ci de cheia Website-ului
+ * (`website.manage`), hotărâtă de autorizarea centrală — așa poate fi cineva administrator numai
+ * aici. Deci proba trebuie să răspundă ca serviciul: din rolurile EFECTIVE ale sesiunii (deci și
+ * masca) plus granturile punctuale. Un `{}` întors de-a valma ar fi însemnat „refuz" la orice și ar
+ * fi făcut proba să cadă pe o cauză greșită.
+ */
+function autorizare(roluri: string[], granturi: string[] = []) {
+  return {
+    fetch: async (_adresa: string, init?: RequestInit) => {
+      const cerere = JSON.parse(String(init?.body ?? '{}')) as { permission?: string }
+      const cheie = cerere.permission ?? ''
+      const dinRol = roluri.some((r) =>
+        (PERMISIUNI_IMPLICITE[r as keyof typeof PERMISIUNI_IMPLICITE] ?? []).includes(cheie as never),
+      )
+      const allowed = dinRol || granturi.includes(cheie)
+      return new Response(JSON.stringify({ allowed, reason: 'probă', matchedScopes: [] }), {
+        headers: { 'content-type': 'application/json' },
+      })
+    },
+  }
+}
+
+function mediu(raspunsSesiune: unknown, granturi: string[] = []) {
+  const roluri = ((raspunsSesiune as { roles?: { role: string }[] }).roles ?? []).map((r) => r.role)
   return {
     ...CONFIG,
     IDENTITATE: {
@@ -62,7 +88,7 @@ function mediu(raspunsSesiune: unknown) {
     },
     // Ușa merge și fără bază: `rezumate` cade, e prinsă, iar cele două categorii lipsesc.
     DB: undefined,
-    AUTORIZARE: { fetch: async () => new Response('{}') },
+    AUTORIZARE: autorizare(roluri, granturi),
     COMUNICARE: { fetch: async () => new Response('{}') },
     AUDIT: { fetch: async () => new Response('{}') },
   }
@@ -122,6 +148,23 @@ describe('ușa Website-ului — semnele de stare sunt numai ale adminului', () =
       expect(text, rol).toContain('class="bine"')
       expect(text, rol).toContain('class="urgent"')
     }
+  })
+
+  /*
+   * ⚠️ ADMINII PE APLICAȚIE (18.09.2026). Chenarele sunt ale Website-ului, deci le vede cine ține
+   * Website-ul: un om cu rolul `user` și cheia `website.manage` dată punctual. Iar un administrator
+   * al altei aplicații NU le vede — altfel „admin doar pe aplicația respectivă" ar fi o vorbă.
+   */
+  it('un om numit admin NUMAI la Website le vede, cu rolul `user`', async () => {
+    const text = await (await usa(mediu(sesiune(['user']), ['website.manage']))).text()
+    expect(text).toContain('class="bine"')
+    expect(text).toContain('class="urgent"')
+  })
+
+  it('adminul altei aplicații (Programul) nu le vede', async () => {
+    const text = await (await usa(mediu(sesiune(['user']), ['program.write', 'program.publish']))).text()
+    expect(text).not.toContain('class="bine"')
+    expect(text).not.toContain('class="urgent"')
   })
 
   /*

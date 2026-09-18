@@ -42,7 +42,13 @@ export interface Ctx {
   utilizator: string | null
   /** adresa contului — fereastra de abonare o scrie in camp si o incuie; `null` la neautentificat */
   emailulContului?: string | null
+  /**
+   * Administratorul NEWSLETTERULUI. ⚠️ Din 18.09.2026 vine din cheia aplicatiei
+   * (`newsletter.manage`), nu din rolul global: un om poate fi admin numai aici.
+   */
   eAdmin: boolean
+  /** Rolul global — DOAR randul „Administrare" din meniul contului atarna de el. */
+  eAdminPlatforma?: boolean
   versiune: string
   modificata: string
   veziCa?: string | null
@@ -97,7 +103,8 @@ function contDin(ctx: Ctx) {
   return {
     intrat: !!ctx.utilizator,
     nume: ctx.utilizator ?? 'Cont',
-    admin: ctx.eAdmin,
+    // ⚠️ Panoul PLATFORMEI — rolul global, nu adminul Newsletterului (18.09.2026).
+    admin: ctx.eAdminPlatforma ?? false,
     urlCont: ctx.nav.cont,
     urlAdmin: ctx.nav.admin,
     // Setarile APLICATIEI, nu ale platformei (user, 15.09.2026) — de aceea adresa e a noastra.

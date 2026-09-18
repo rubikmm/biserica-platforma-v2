@@ -90,7 +90,7 @@ async function main() {
   mkdirSync(iesire, { recursive: true })
   const { buletinulNou, paginaNou } = await modulPagini()
   const nou = buletinulNou(ULTIMUL, '2026-09-17')
-  let html = paginaNou(CTX, { nou: true, ani: ['2026', '2025'] }, ULTIMUL, nou, {
+  let html = paginaNou(CTX, { nou: true, ani: ['2026', '2025'] }, nou, {
     variante: [{ varianta: 'un singur autor, cu poză mare', semne: 9028, zone: [{ cine: 'principal', semne: 9028 }] }],
     calendar: { titlu: '21 – 27 septembrie 2026', slujbe: 6 },
     raspuns: {

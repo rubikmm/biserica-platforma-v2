@@ -281,7 +281,10 @@ describe('rubricile aplicației în Setări', () => {
   })
 
   it('primește treptele gata socotite, nu le întreabă singură', async () => {
-    let vazut: { eAdmin: boolean; eSuper: boolean } | null = null
+    // ⚠️ TREI trepte din 18.09.2026: `eAdminApp` (administratorul APLICAȚIEI, cheia ei din registru)
+    // s-a adăugat lângă `eAdmin` (cheia abonaților, a platformei) și `eSuper`. Rubricile care țin de
+    // treaba aplicației — șablonul newsletterului — atârnă de a treia, nu de prima.
+    let vazut: { eAdmin: boolean; eSuper: boolean; eAdminApp: boolean } | null = null
     await ruteazaSetari(new Request('https://calendar.test/setari'), '/setari', mediu([], { poate: true }), {
       ...unelte(OM),
       rubrici: (t) => {
@@ -289,7 +292,7 @@ describe('rubricile aplicației în Setări', () => {
         return ''
       },
     })
-    expect(vazut).toEqual({ eAdmin: true, eSuper: true })
+    expect(vazut).toEqual({ eAdmin: true, eSuper: true, eAdminApp: true })
   })
 
   it('aplicația care nu dă nimic are pagina neschimbată', async () => {

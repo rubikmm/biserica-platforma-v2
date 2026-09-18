@@ -284,7 +284,6 @@ export const LOCAL = `
    acum asa cum va arata cu numarul in ea. */
 .chenar-nou { max-width:460px; margin:0 auto; aspect-ratio:460/650;
               border:1px dashed var(--rule); border-radius:6px; background:var(--tinta) }
-.sub-nou { text-align:center; margin:14px 0 0 }
 
 /* ── FORMULARUL DE COMPUNERE (17.09.2026). Un singur șir de câmpuri, larg cât coloana de citit:
    textul buletinului se scrie seara, dintr-o bucată, nu se completează ca o cerere la ghișeu.
@@ -304,14 +303,10 @@ export const LOCAL = `
 .doua { display:grid; grid-template-columns:1fr 1fr; gap:0 14px }
 .socoteala { font:13px ui-sans-serif,system-ui; color:var(--faint); margin:0 0 10px }
 .socoteala.peste { color:var(--rosu); font-weight:600 }
-/* ATENȚIA DE LA ÎNCEPUT (17.09.2026, seara): programul propus (nevalidat) și textul de probă se spun
-   ÎNAINTEA formularului și a rezultatului, într-un chenar roșu — nu e o eroare, dar nu se trece pe
-   lângă el. Aceleași culori ale carcasei, deci merge și pe tema întunecată. */
-.atentie.propus { max-width:760px; margin:0 auto 14px; padding:10px 14px; border:1px solid var(--rosu);
-                  border-radius:8px; background:color-mix(in srgb, var(--rosu) 9%, transparent); color:var(--ink) }
-.atentie.propus b:first-child { color:var(--rosu); letter-spacing:.06em }
-ul.atentie.lista { max-width:760px; margin:0 auto 10px; padding:0 0 0 20px; font:14px/1.5 ui-sans-serif,system-ui; color:var(--rosu) }
-.total { font:600 14px ui-sans-serif,system-ui; text-align:center; margin:4px 0 14px }
+/* TOTALUL ȘI BUTONUL stau pe mijloc, sub ultimul articol scris (user, 18.09.2026: „să fie sub câmpul
+   de text de mai sus, cu care este asociat"). Alegerea câtor secundare sunt s-a urcat deasupra
+   articolului principal tocmai ca între ultimul text și total să nu mai cadă o listă derulantă. */
+.total { font:600 14px ui-sans-serif,system-ui; text-align:center; margin:0 0 12px }
 .cati-secundari { margin:0 0 16px }
 .cati-secundari label { display:block; font:600 13px ui-sans-serif,system-ui; margin:0 0 4px }
 .butoane { text-align:center; margin:0 0 8px }

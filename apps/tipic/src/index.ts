@@ -16,6 +16,7 @@
  * Aplicația e numai de citit: cărțile intră prin `infrastructure/import/tipic-din-v1.mjs`.
  */
 import { principalDin, sesiuneCurenta, verificaCsrf } from '@xc/auth'
+import { eAdminulAplicatiei } from '@xc/authorization'
 import { SESIUNE_ANONIMA } from '@xc/contracts'
 import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
 import { Logger, correlationId } from '@xc/observability'
@@ -211,7 +212,10 @@ export default {
       // adresa contului, pentru fereastra de abonare: acolo se scrie in camp si se incuie, fiindca
       // abonarea platformei sta pe adresa contului, nu pe una scrisa de mana
       emailulContului: sesiune.user?.email ?? null,
-      eAdmin: sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin'),
+      // ⚠️ Adminul TIPICULUI vine din cheia lui (`typicon.manage`), nu din rolul global
+      // (18.09.2026): asa poate fi cineva admin numai aici.
+      eAdmin: await eAdminulAplicatiei(env.AUTORIZARE, cid, principal, 'tipic'),
+      eAdminPlatforma: sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin'),
       versiune: pkg.version,
       modificata: dataVersiunii(env.VERSIUNE),
       veziCa: sesiune.veziCa,
