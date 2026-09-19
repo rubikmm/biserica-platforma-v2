@@ -339,6 +339,10 @@ describe('(b) fantoma: numai rezervări în calendar', () => {
     // ⚠️ Antetul rămâne cel de NEintrat: capul meniului scrie „Cont" și duce la intrare.
     expect(html).not.toContain('>Ieșire<')
     expect(html).not.toContain('>Profil<')
+    // ⚠️ Și n-are rândul de unelte de altădată: ușa spre platformă e una singură, meniul contului
+    // (user, 19.09.2026). Butonul „Intră" al paginii era chiar excepția fantomei — a ieșit și el.
+    expect(html).not.toContain('Contul meu')
+    expect(html).not.toContain('btnAutentificare')
   })
 
   it('își ia o poziție la o duminică — rezervarea trece', async () => {
@@ -399,11 +403,14 @@ describe('(b) fantoma: numai rezervări în calendar', () => {
     expect((await r.json()) as unknown).toMatchObject({ error: 'Pentru asta intră în cont.' })
   })
 
-  it('panoul de administrare o trimite la intrarea cu contul, ca pe oricine fără sesiune', async () => {
+  it('panoul o trimite la intrarea cu contul, ca pe oricine fără sesiune', async () => {
     const b = echipa()
     const r = await cere(mediu(b.DB), ceruta('/admin', CA_FANTOMA))
     expect(r.status).toBe(303)
-    expect(r.headers.get('location')).toContain('https://cont.test/intra')
+    const unde = r.headers.get('location') ?? ''
+    expect(unde).toContain('https://cont.test/intra')
+    // Întoarcerea e în Setări: acolo se vede panoul de pe 19.09.2026, nu la `/admin`.
+    expect(unde).toContain(encodeURIComponent('/setari'))
   })
 
   it('„Nu ești tu?" uită numele, fără să atingă altceva', async () => {
@@ -430,6 +437,15 @@ describe('(c) fără sesiune și fără nume ales', () => {
     expect(html).toContain('Calendar')
     expect(html).toContain('doar vizualizare')
     expect(html).not.toContain('data-sunday=')
+    /*
+     * ⚠️ Pagina n-are nici rând de unelte, nici panou de intrare al ei (user, 19.09.2026). Cele
+     * două uși ale vizitatorului sunt lista de nume și meniul contului din antet; „Intră" din
+     * fereastra „doar vizualizare" e o legătură spre intrarea platformei, nu un buton.
+     */
+    expect(html).not.toContain('Contul meu')
+    expect(html).not.toContain('btnAutentificare')
+    expect(html).not.toContain('authPanel')
+    expect(html).toContain('<a class="btn-auth" href="https://cont.test/intra?spre=')
   })
 
   it('`POST /api` de rezervare cere contul — nimic nu se scrie', async () => {

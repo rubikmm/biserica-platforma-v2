@@ -1,5 +1,5 @@
 /**
- * Panoul curățeniei — `admin/index.php` din V1, la `/admin`.
+ * Panoul curățeniei — `admin/index.php` din V1.
  *
  * Filele:
  *   - **Voluntari**: cartelele echipei, adăugare și editare (fereastră), comutatoarele
@@ -7,6 +7,12 @@
  *   - **Newsletter**: Alertă · Săptămânal · Lunar · Arhivă — cu previzualizarea scrisorii, ziua și
  *     ora la care pleacă, și „Trimite acum" cu bife pe destinatari;
  *   - **Mesaje de sistem**: ultimele 200 de rânduri din jurnal, filtrabile pe fel.
+ *
+ * ⚠️ **PANOUL NU MAI ARE PAGINA LUI** (user, 19.09.2026: „administrarea devine setări"). El se VEDE
+ * ca rubrică a aplicației în `/setari` (`corpulPanoului`, dat lui `@xc/setari` prin `rubrici`) și se
+ * SCRIE pe `POST /admin` (`scriePanou`), de unde omul se întoarce la `/setari?tab=<fila lui>`.
+ * `GET /admin` a rămas numai ca redirect spre Setări, pentru favoritele vechi. Deosebirea contează:
+ * un formular fără `action` ar posta pe `/setari`, unde `@xc/setari` îl înghite tăcut.
  *
  * ⚠️ **Poarta e permisiunea centrală `cleaning.manage`**, nu parola locală din V1. Au ieșit cu
  * totul: pagina de autentificare cu parolă, hash-urile bcrypt, resetarea prin email, fila „Schimbă
@@ -24,9 +30,9 @@ import {
   puneSetarea, toate, totiVoluntarii, unu, slugUnic, valoare, idVacantaInLuna, numeScurt,
   type Voluntar,
 } from "../depozit.js";
-import { esc, html, json } from "@xc/ui";
+import { esc, json } from "@xc/ui";
 import { duTe, eAjax } from "../html.js";
-import { type Ctx, campCsrf, pagina, paginaMesaj } from "../pagina.js";
+import { type Ctx, campCsrf } from "../pagina.js";
 import {
   allActiveVolunteerEmails, newsletterBuildData, newsletterBuildMonthlyData, newsletterMonthlyNextSchedule,
   newsletterRenderHtml, newsletterRenderHtmlMonthly, newsletterSend, newsletterSendMonthly, nextSundayDate,
@@ -315,47 +321,46 @@ export interface MediuAdmin {
   cid: string;
 }
 
+/** Fila cerută, cu numele vechi al secțiunii („newsletter") adus la prima ei sub-filă. */
+function filaCeruta(url: URL): string {
+  const tab = url.searchParams.get("tab") ?? "voluntari";
+  return tab === "newsletter" ? "alert" : tab;
+}
+
 /**
- * Panoul. Cine n-are `cleaning.manage` nu ajunge până aici — poarta o ține `index.ts`, ca la toate
- * aplicațiile V2. Un POST vine deja cu jetonul CSRF verificat.
+ * CE SE SCRIE din panou — `POST /admin`. Cine n-are `cleaning.manage` nu ajunge până aici, iar
+ * jetonul CSRF vine verificat: amândouă le ține `index.ts`, ca la toate rutele aplicației.
+ *
+ * ⚠️ La capăt e mereu un PRG spre `/setari?tab=<fila de unde s-a apăsat>`: panoul se VEDE acolo,
+ * deci acolo trebuie să se întoarcă omul, nu pe ruta de scriere.
  */
-export async function paginaAdmin(
+export async function scriePanou(
   ctx: Ctx,
   env: MediuAdmin,
   request: Request,
   url: URL,
-  postDat: { post: Record<string, string>; recipients: string[] | null } | null,
+  postDat: { post: Record<string, string>; recipients: string[] | null },
 ): Promise<Response> {
   const db = env.DB;
   const posta = env.posta;
 
   const isAjax = eAjax(request);
   const isPost = request.method === "POST";
-  const { post, recipients } = postDat ?? { post: {} as Record<string, string>, recipients: null };
+  const { post, recipients } = postDat;
   const action = post.action ?? "";
-  /** Toate filele sunt deschise: poarta a fost trecută deja, nu mai există o a doua parolă. */
-  const adminAuthed = true;
 
-  let tab = url.searchParams.get("tab") ?? "voluntari";
-  // Backward compat: vechiul ?tab=newsletter redirectează la prima sub-pagină.
-  if (tab === "newsletter") tab = "alert";
-  // Tab-urile care fac parte din secțiunea „Newsletter" (afișează sub-meniu).
-  const isNewsletterSection = ["alert", "weekly", "monthly", "archive"].includes(tab);
+  const tab = filaCeruta(url);
   let flash: Flash | null = null;
 
   /*
-   * Toți oamenii platformei, cu starea asocierii lor. De aici iese lista „+ Adaugă": cei cu
-   * `stare: null` sunt neasociați cu curățenia. Se cere o singură dată, și numai pe fila echipei
-   * ori la o primire — celelalte file (rapoarte, arhivă) n-au ce face cu ea.
+   * Toți oamenii platformei, cu starea asocierii lor: îi cer numai faptele care au nevoie de ei.
+   * „Primește" caută contul care intră în echipă, „Refuză" doar numele, pentru mesaj.
    */
-  const areNevoieDeOameni = tab === "voluntari" || action === "add_volunteer";
-  const totiOamenii: MembruAplicatie[] = areNevoieDeOameni ? await totiUtilizatorii(env) : [];
+  const totiOamenii: MembruAplicatie[] =
+    action === "add_volunteer" || action === "refuza_cererea" ? await totiUtilizatorii(env) : [];
 
   // ----- Acțiuni POST ------------------------------------------------------
   if (isPost) {
-    const cereAdmin = (): void => {
-      if (!adminAuthed) throw new Error("Trebuie să fii autentificat ca admin.");
-    };
     const idDin = (): number => parseInt(post.id ?? "0", 10) || 0;
 
     try {
@@ -369,7 +374,6 @@ export async function paginaAdmin(
          * exact aceeași acțiune. De asta n-are nevoie să știe dacă omul a cerut sau nu.
          */
         case "add_volunteer": {
-          cereAdmin();
           const userId = (post.user_id ?? "").trim();
           if (userId === "") throw new Error("Alege un utilizator din listă.");
           const om = db.oameni.om(userId) ?? totiOamenii.find((u) => u.userId === userId);
@@ -399,7 +403,6 @@ export async function paginaAdmin(
          * pe contul lui: asocierea se șterge cu totul. Poate cere din nou oricând.
          */
         case "refuza_cererea": {
-          cereAdmin();
           const userId = (post.user_id ?? "").trim();
           if (userId === "") throw new Error("Cerere incompletă.");
           await scoateDinEchipa(env, userId, env.actor ?? userId);
@@ -412,7 +415,6 @@ export async function paginaAdmin(
 
         /** Refuzul unei cereri, ori scoaterea cuiva din echipă. Rândul local rămâne: istoricul e al lui. */
         case "remove_volunteer": {
-          cereAdmin();
           const id = idDin();
           const target = await voluntarDupaId(db, id);
           if (!target) throw new Error("Voluntar inexistent.");
@@ -442,7 +444,6 @@ export async function paginaAdmin(
          * sau de un super-admin, care o are din rol.
          */
         case "toggle_admin": {
-          cereAdmin();
           const id = idDin();
           const target = await voluntarDupaId(db, id);
           if (!target) throw new Error("Voluntar inexistent.");
@@ -490,7 +491,6 @@ export async function paginaAdmin(
          * cheia contului, iar schimbarea lui e a omului, de pe pagina lui.
          */
         case "update_volunteer": {
-          cereAdmin();
           const id = idDin();
           const target = await voluntarDupaId(db, id);
           if (!target) throw new Error("Voluntar inexistent.");
@@ -530,7 +530,6 @@ export async function paginaAdmin(
         }
 
         case "clear_log": {
-          cereAdmin();
           const r = await ruleaza(db, "DELETE FROM notifications_log");
           const n = Number(r.meta?.changes ?? 0);
           flash = ["ok", `Log golit (${n} mesaje șterse).`];
@@ -538,7 +537,6 @@ export async function paginaAdmin(
         }
 
         case "send_alert_now": {
-          cereAdmin();
           // Filtru din checkboxes. Dacă lipsește → trimite la toți voluntarii activi.
           let filter: string[] | null = recipients;
           if (filter !== null && filter.length === 0) {
@@ -566,7 +564,6 @@ export async function paginaAdmin(
         }
 
         case "send_newsletter_now": {
-          cereAdmin();
           const filter = recipients;
           if (filter !== null && filter.length === 0) {
             throw new Error("Nu ai bifat niciun destinatar.");
@@ -586,7 +583,6 @@ export async function paginaAdmin(
         }
 
         case "save_newsletter_schedule": {
-          cereAdmin();
           const wd = parseInt(post.weekday ?? "6", 10);
           const hr = parseInt(post.hour ?? "16", 10);
           if (!(wd >= 0 && wd <= 6)) throw new Error("Zi invalidă.");
@@ -598,7 +594,6 @@ export async function paginaAdmin(
         }
 
         case "send_monthly_newsletter_now": {
-          cereAdmin();
           const filter = recipients;
           if (filter !== null && filter.length === 0) {
             throw new Error("Nu ai bifat niciun destinatar.");
@@ -617,7 +612,6 @@ export async function paginaAdmin(
         }
 
         case "save_monthly_newsletter_schedule": {
-          cereAdmin();
           const mhr = parseInt(post.hour ?? "9", 10);
           if (!(mhr >= 0 && mhr <= 23)) throw new Error("Oră invalidă.");
           await puneSetarea(db, "newsletter_monthly_hour", String(mhr));
@@ -626,7 +620,6 @@ export async function paginaAdmin(
         }
 
         case "save_alert_newsletter_schedule": {
-          cereAdmin();
           const awd = parseInt(post.weekday ?? "5", 10);
           const ahr = parseInt(post.hour ?? "9", 10);
           if (!(awd >= 0 && awd <= 6)) throw new Error("Zi invalidă.");
@@ -638,7 +631,6 @@ export async function paginaAdmin(
         }
 
         case "purge_test_newsletters": {
-          cereAdmin();
           const r = await ruleaza(db, "DELETE FROM newsletter_history WHERE is_test = 1");
           const n = Number(r.meta?.changes ?? 0);
           if (n === 0) {
@@ -650,7 +642,6 @@ export async function paginaAdmin(
         }
 
         case "purge_newsletter_history": {
-          cereAdmin();
           // Acceptă: 'weekly' | 'monthly' | 'all'
           const purgeKind = post.purge_kind ?? "weekly";
           if (!["weekly", "monthly", "all"].includes(purgeKind)) {
@@ -695,12 +686,38 @@ export async function paginaAdmin(
       qs.set("flash", flash[0]);
       qs.set("msg", flash[1]);
     }
-    return duTe(`${ctx.prefix}/admin?` + qs.toString());
+    return duTe(`${ctx.prefix}/setari?` + qs.toString());
   }
 
+  // Ruta e chemată numai pe POST; orice altceva nimerit pe ea duce acolo unde se vede panoul.
+  return duTe(`${ctx.prefix}/setari`);
+}
+
+/**
+ * CE SE VEDE din panou: filele lui, gata de pus în pagina Setărilor (rubrica aplicației).
+ *
+ * ⚠️ Nu e o pagină: n-are carcasă și n-are antet propriu. Stilul (`STIL_ADMIN`) și lățimea le pune
+ * `index.ts` pe carcasa Setărilor, o dată, pentru cine are cheia.
+ */
+export async function corpulPanoului(ctx: Ctx, env: MediuAdmin, url: URL): Promise<string> {
+  const db = env.DB;
+  const posta = env.posta;
+
+  const tab = filaCeruta(url);
+  // Tab-urile care fac parte din secțiunea „Newsletter" (afișează sub-meniu).
+  const isNewsletterSection = ["alert", "weekly", "monthly", "archive"].includes(tab);
+
+  let flash: Flash | null = null;
   if (url.searchParams.has("flash") && url.searchParams.has("msg")) {
     flash = [url.searchParams.get("flash") ?? "", url.searchParams.get("msg") ?? ""];
   }
+
+  /*
+   * Toți oamenii platformei, cu starea asocierii lor. De aici ies cererile în așteptare și lista
+   * „+ Adaugă" (cei cu `stare: null`, neasociați cu curățenia). Se cer numai pe fila echipei —
+   * celelalte (rapoarte, arhivă, jurnal) n-au ce face cu ele.
+   */
+  const totiOamenii: MembruAplicatie[] = tab === "voluntari" ? await totiUtilizatorii(env) : [];
 
   // ----- Date pentru render ------------------------------------------------
   const mo = acum();
@@ -746,24 +763,31 @@ export async function paginaAdmin(
   let continut = "";
   if (tab === "voluntari") {
     continut = tabVoluntari(volunteers, campCsrf(ctx), cereri, neasociati);
-  } else if (tab === "alert" && adminAuthed) {
+  } else if (tab === "alert") {
     continut = await tabAlert(db, posta, mo, campCsrf(ctx));
-  } else if (tab === "weekly" && adminAuthed) {
+  } else if (tab === "weekly") {
     continut = await tabWeekly(db, posta, mo, campCsrf(ctx));
-  } else if (tab === "monthly" && adminAuthed) {
+  } else if (tab === "monthly") {
     continut = await tabMonthly(db, posta, mo, campCsrf(ctx));
-  } else if (tab === "archive" && adminAuthed) {
+  } else if (tab === "archive") {
     continut = await tabArchive(db, url, campCsrf(ctx));
-  } else if (tab === "faq" && adminAuthed) {
+  } else if (tab === "faq") {
     continut = tabFaq();
   } else if (tab === "log") {
-    continut = tabLog(logs, logEventTypes, adminAuthed, campCsrf(ctx));
+    continut = tabLog(logs, logEventTypes, campCsrf(ctx));
   }
 
   const updRaw = await ultimaMiscare(db);
   const upd = updRaw ? formatDtLocal(updRaw, "d.m.Y") : null;
 
-  const corp = `${flash ? `<div class="flash ${esc(flash[0])}">
+  const corp = `<section class="set-grup">
+            <span class="set-treapta">Administrator</span>
+            <h2>Echipa și rapoartele</h2>
+            <p class="set-spune">Cine e în echipă și cine a cerut să intre, scrisorile care pleacă
+            singure și jurnalul mesajelor.</p>
+        </section>
+
+        ${flash ? `<div class="flash ${esc(flash[0])}">
                 ${esc(flash[1])}
             </div>` : ""}
 
@@ -788,13 +812,17 @@ export async function paginaAdmin(
             &middot; <a href="${esc(ctx.prefix)}/admin/faq">FAQ administratori</a>
         </p>`;
 
-  // Rândul personal al antetului: unde ești și cu ce drept. „Schimbă parola" și „Ieși din admin"
-  // au ieșit — parola nu mai există, iar ieșirea e a contului platformei, din meniul lui.
-  const personal = `<p class="cine">Administrare &middot; ${esc(ctx.utilizator ?? "prin contul platformei")}</p>`;
-
-  return html(
-    pagina(ctx, { titluPagina: "Administrare", personal, corp, local: STIL_ADMIN, lat: true }),
-  );
+  /*
+   * ⚠️ FIECARE FORMULAR AL PANOULUI SE TRIMITE LA RUTA LUI DE SCRIERE, nu la pagina în care se
+   * vede. `action` se pune într-un singur loc, aici, fiindcă sunt cincisprezece formulare risipite
+   * prin file: unul uitat ar posta pe `/setari`, unde `@xc/setari` l-ar înghite tăcut, fără eroare
+   * și fără faptă. (Legăturile `?tab=…` NU se ating: relative, ele duc chiar la pagina de acum.)
+   *
+   * ⚠️ Fila merge CU adresa, nu se subînțelege: scrierea se întoarce la `?tab=` de pe ea, iar fără
+   * ea omul care salvează ora raportului lunar s-ar trezi aruncat înapoi pe lista echipei.
+   */
+  const scrie = `${esc(ctx.prefix)}/admin?tab=${encodeURIComponent(tab)}`;
+  return corp.replace(/<form method="post"/g, `<form method="post" action="${scrie}"`);
 }
 
 
@@ -1053,7 +1081,9 @@ function tabVoluntari(
                     <button type="button" class="vol-modal-close" id="volModalClose" aria-label="Închide">×</button>
                     <h2 class="card-title" id="volModalTitle">Editează fișa</h2>
                     <div class="vol-modal-error" id="volModalError" hidden></div>
-                    <form id="volModalForm">
+                    <!-- method="post" nu e o podoabă: de el atârnă action-ul pus la ieșirea din
+                         corpulPanoului, iar JS-ul de mai jos trimite chiar acolo. -->
+                    <form method="post" id="volModalForm">
                         <input type="hidden" name="action" id="volModalAction" value="update_volunteer">${CSRF}
                         <input type="hidden" name="id" id="volModalId" value="">
                         <p class="ajutor" style="margin:0 0 10px;color:var(--text-muted);font-size:0.85rem">
@@ -1211,7 +1241,9 @@ function tabVoluntari(
                         submitBtn.disabled = true;
                         try {
                             const fd = new FormData(formEl);
-                            const res = await fetch(window.location.href, {
+                            // ⚠️ formEl.action, nu adresa paginii: panoul se vede în Setări, dar
+                            // se scrie pe ruta lui. Un POST pe /setari n-ar face nimic.
+                            const res = await fetch(formEl.action, {
                                 method: 'POST',
                                 body: fd,
                                 credentials: 'same-origin',
@@ -1270,7 +1302,7 @@ function tabVoluntari(
                             const action = form.querySelector('[name="action"]').value;
                             try {
                                 const fd = new FormData(form);
-                                const res = await fetch(window.location.href, {
+                                const res = await fetch(form.action, {
                                     method: 'POST',
                                     body: fd,
                                     credentials: 'same-origin',
@@ -2357,7 +2389,7 @@ interface LogRow {
   last_name: string | null;
 }
 
-function tabLog(logs: LogRow[], logEventTypes: { event_type: string; cnt: number }[], adminAuthed: boolean, CSRF: string): string {
+function tabLog(logs: LogRow[], logEventTypes: { event_type: string; cnt: number }[], CSRF: string): string {
   const modText = NOTIFICATIONS_MODE === "log"
     ? "Mod: log (mesajele nu se trimit încă)"
     : "Mod: WhatsApp activ";
@@ -2431,7 +2463,7 @@ function tabLog(logs: LogRow[], logEventTypes: { event_type: string; cnt: number
                 <span style="font-size:0.85rem; color:var(--text-muted);">
                     ${modText}
                 </span>
-                ${logs.length > 0 && adminAuthed ? `<form method="post" style="display:inline;"
+                ${logs.length > 0 ? `<form method="post" style="display:inline;"
                           onsubmit="return confirm('Ștergi tot logul de mesaje? Acțiunea nu se poate anula.');">
                         <input type="hidden" name="action" value="clear_log">${CSRF}
                         <button type="submit" class="btn danger small">Șterge tot logul</button>
@@ -2454,9 +2486,10 @@ function tabLog(logs: LogRow[], logEventTypes: { event_type: string; cnt: number
 }
 
 // =========================================================================================
-// CSS-ul inline al paginii de admin (copiat ca atare din admin/index.php)
+// CSS-ul panoului (copiat ca atare din admin/index.php). Îl pune `index.ts` pe carcasa
+// Setărilor, pentru cine are cheia — panoul se vede acolo, nu într-o pagină a lui.
 
-const STIL_ADMIN = `
+export const STIL_ADMIN = `
         .tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--border); margin-bottom: 16px; }
         .tabs a {
             padding: 10px 16px;

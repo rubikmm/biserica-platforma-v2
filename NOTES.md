@@ -81,7 +81,9 @@ Ce s-a schimbat față de V1, și de ce:
 - **parola locală de admin a ieșit cu totul** — cele trei hash-uri bcrypt, sesiunea semnată, resetarea
   prin email, fila „Schimbă parola" și „modul de inițializare". Panoul cere `cleaning.manage`, cheie
   care exista deja în contracte (deci **fără republicarea lui authz**). `is_admin` din tabel a rămas
-  **etichetă a echipei**: cine e „Admin" pe cartelă și primește rapoartele din oficiu;
+  **etichetă a echipei**: cine e „Admin" pe cartelă și primește rapoartele din oficiu. **Din 19.09**
+  panoul nu mai e pagină la `/admin`, ci rubrică în Setări („Echipa și rapoartele"), iar rândul de
+  unelte cu contul („Intră · Contul meu · Administrare") a ieșit din pagini;
 - **scrisorile pleacă prin `communication-worker`** (`/trimite`), nu prin SMTP propriu către
   `no-reply@`. Cheia de idempotență e `curatenie:<fel>:<duminică>`, iar trimiterile de probă din panou
   au cheia lor, ca să nu blocheze plecarea celei adevărate. ⚠️ **Un raport pleacă acum întreg sau
@@ -659,7 +661,8 @@ propunerea automată, ca în V1.
    înapoi în pagină. A rămas: **Mineiul pe celelalte 11 luni** n-are scanare (lunile vin de pe sit),
    deci acolo cardul lipsește pe drept.
 4. **Curățenia (A6), ce a rămas după portare** (14.09.2026):
-   - ⚠️ **panoul n-a fost umblat cu un om adevărat**, iar de pe 14.09 seara are ecrane NOI (cererile,
+   - ⚠️ **panoul n-a fost umblat cu un om adevărat** (din 19.09 se ajunge la el prin `/setari`, nu prin
+     `/admin`), iar de pe 14.09 seara are ecrane NOI (cererile,
      „+ Adaugă", comutatorul de admin care acordă cheia): cer sesiune cu `cleaning.manage`, iar prin
      curl nu se poate intra (cookie-uri `Secure`). Probate sunt schema, interogările, `tsc`, cele
      196 de probe și pagina publică (poze la 390 și 1100 px); **de mers o dată cap-coadă din browser**:
@@ -2483,6 +2486,15 @@ forța antetul `Host`**.
 - **Abatere de la structura mare, asumată de user**: un cookie de om și scriere în date fără să treacă prin permisiunea centrală (authz). Aceeași alegere o făcuse pe 13.09, răsturnată pe 14.09 (voluntarii = conturi); acum se întoarce, dar strâmtată la o singură acțiune.
 - Texte noi față de V1: „Cine ești?" (titlul pickerului) și fraza din fereastra „mod vizualizare" — „…trebuie să-ți alegi numele din lista de sus — ori să intri cu contul parohiei, dacă vrei și restul aplicației".
 - Probe: `tests/curatenie-fantoma.test.ts` (nou, 16 probe), typecheck curat, 1013/1013 la vitest. Publicare în producție: `xc-curatenie-production`, Version ID `6e466358-a189-4bbf-9d2c-dbcc2cf0b21f`; verificat pe viu că `/` scoate `pickerFantoma`, `picker-list` și `0.3.0` în subsol. Commit `085728b`.
+
+**CURĂȚENIA — meniul de cont ca la toate aplicațiile; administrarea devine Setări** (curatenie **0.4.0**, publicat în producție). Cererea userului, cuvânt cu cuvânt: „Meniul de cont trebuie să se vadă ca la celelalte aplicații. Cele 3 butoane dispar din zona de meniu — administrarea devine setări".
+
+- **Rândul de unelte a ieșit din ambele pagini** — „Intră · Contul meu · Administrare" nu mai există nici ca funcție (`unelte()`), nici ca slot `unelte` al carcasei. Curățenia poartă acum exact meniul de cont al celorlalte aplicații, fără adaos propriu. A ieșit și **panoul de intrare din pagină** (`#authPanel`): „Intră" din fereastra „mod vizualizare" și `?intra=1` duc la **intrarea platformei**, nu la un formular local.
+- **Panoul de administrare e RUBRICĂ în `/setari`**, prin cârligul `rubrici` din `@xc/setari`, arătat doar celui cu `cleaning.manage`: titlu „Echipa și rapoartele", filele Voluntari / Newsletter / Mesaje de sistem. `GET /admin[?tab]` → **303 spre `/setari[?tab]`**. Scrierile au rămas pe `POST /admin?tab=` (cu `action` injectat pe formulare, `scriePanou`) și se întorc în `/setari?tab=`; **CSRF-ul e cel al paginii Setărilor**. `/admin/faq` și `/admin/curatare-arhiva` rămân pagini de sine stătătoare, cu „Înapoi" la Setări.
+- Cod mort scos în aceeași trecere: `cereAdmin`/`adminAuthed`, CSS-ul `.auth-close`, `.btn-platforma`, `.picker-last*`.
+- Probe: `tests/curatenie-setari.test.ts` (nou, 7 probe), `tests/curatenie-fantoma.test.ts` adaptat; **1020/1020** la vitest.
+- Publicare în producție: `xc-curatenie-production`, Version ID `e5af0bf3-87d8-4c28-866b-ce9e8d17340b`. Verificat pe viu, doar GET: `/` scoate `pickerFantoma` (×3) și `0.4.0`, iar `btnAutentificare`/`authPanel`/„Contul meu" **nu apar deloc**; `/admin?tab=alert` → 303 `https://cont.sfantul-ilie.ro/intra?spre=…%2Fadmin` (neintrat; **`tab` se pierde la poarta de intrare**, se recapătă doar după autentificare); `/?intra=1` → 303 `https://cont.sfantul-ilie.ro/intra?spre=…%2F`. Commit `PLACEHOLDER_HASH`.
+- Deschis: **FAQ-ul adminilor** (`apps/curatenie/src/admin/faq.ts:21`) spune încă, greșit, că bifa Admin nu dă `cleaning.manage`; **titlul rubricii** („Echipa și rapoartele") e de confirmat cu userul.
 
 ### 2026-09-18
 

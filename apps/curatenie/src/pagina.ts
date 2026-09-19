@@ -11,6 +11,11 @@
  * antet acelasi „Cont" ca un necunoscut — acolo e usa spre platforma, iar numele ales n-a deschis-o.
  * Ca sa stie totusi cine e socotit, numele lui scrie pe randul personal al antetului (`.cine`,
  * slotul `personal`), impreuna cu „Nu ești tu?" — vezi `pagini/index.ts`.
+ *
+ * ⚠️ Paginile curateniei NU folosesc slotul `unelte` al carcasei (user, 19.09.2026: „meniul de cont
+ * trebuie să se vadă ca la celelalte aplicații"). Randul cu „Intră · Contul meu · Administrare" a
+ * iesit cu totul: contul se tine dintr-un singur loc, meniul din antet, iar panoul aplicatiei se
+ * vede in `/setari`. Carcasa are slotul mai departe, pentru cand va fi nevoie de NAVIGATIE.
  */
 import { type Navigatie, adresaPaginii } from '@xc/config'
 import { type Cont, esc, pagina as carcasa } from '@xc/ui'
@@ -73,7 +78,6 @@ function contDin(ctx: Ctx): Cont {
 export interface OptiuniPaginaApp {
   titluPagina?: string
   corp: string
-  unelte?: string
   personal?: string
   /** Stil in plus, peste cel al aplicatiei (panoul de admin isi are stilul lui). */
   local?: string
@@ -90,7 +94,6 @@ export function pagina(ctx: Ctx, o: OptiuniPaginaApp): string {
     urlPlatforma: ctx.nav.home,
     local: LOCAL + (o.local ?? ''),
     cont: contDin(ctx),
-    unelte: o.unelte,
     personal: o.personal,
     corp: o.corp,
     versiune: pkg.version,

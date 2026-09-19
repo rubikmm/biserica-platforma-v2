@@ -11,7 +11,9 @@
  *   POST /alege                 numele ales din listă, fără cont („fantoma")
  *   POST /iesi                  uită numele ales (contul platformei nu se atinge)
  *   POST /api                   ocuparea / eliberarea unui slot, vacanța pe o lună
- *   /admin                      panoul: echipa, cererile, rapoarte, jurnal    (cleaning.manage)
+ *   /setari                     setările omului ȘI panoul: echipa, rapoarte, jurnal (`@xc/setari`)
+ *   GET  /admin                 redirect la `/setari` (favoritele vechi), cu tot cu `?tab=`
+ *   POST /admin                 scrierile panoului; se întorc la `/setari?tab=…`  (cleaning.manage)
  *   /admin/faq                  întrebările administratorilor                (cleaning.manage)
  *   /admin/curatare-arhiva      subțierea arhivei de rapoarte                (cleaning.manage)
  *   /cron                       pornirea ceasului cu mâna, pentru probe      (cleaning.manage)
@@ -43,7 +45,7 @@ import { Logger, correlationId } from "@xc/observability"
 import { dataVersiunii, html, json } from "@xc/ui"
 import pkg from "../package.json"
 import { api, type CineApasa } from "./api.js"
-import { citestePostAdmin, paginaAdmin } from "./admin/index.js"
+import { citestePostAdmin, corpulPanoului, scriePanou, STIL_ADMIN, type MediuAdmin } from "./admin/index.js"
 import { paginaFaqAdmin } from "./admin/faq.js"
 import { paginaCuratareArhiva } from "./admin/cleanup.js"
 import { numeleDuminicilor } from "./calendar.js"
@@ -179,6 +181,23 @@ export default {
     if (stergeFantoma) raspuns.headers.append("set-cookie", uitaFantoma(cfg.DOMENIU_COOKIE))
     return raspuns
 
+    /**
+     * Ce-i trebuie panoului din mediu, în afară de bază. Se face abia când panoul chiar se desenează
+     * ori scrie ceva: poșta cere numele duminicilor de la calendar, iar paginile celorlalți n-au ce
+     * face cu ele.
+     */
+    async function mediulPanoului(): Promise<MediuAdmin> {
+      return {
+        DB: db,
+        posta: await postaDin(env, cfg.ORIGINE_PUBLICA, prefix),
+        IDENTITATE: env.IDENTITATE,
+        AUTORIZARE: env.AUTORIZARE,
+        /** Cine apasă — se scrie pe asocierile pe care le primește sau le stinge. */
+        actor: userId,
+        cid,
+      }
+    }
+
     async function ruteaza(): Promise<Response> {
     try {
       if (req.method === "POST") {
@@ -217,6 +236,9 @@ export default {
        * SETARILE — un singur loc, `@xc/setari` (user, 15.09.2026). Curatenia e singura aplicatie
        * unde apare si rubrica APARTENENTEI: ea e singurul rand din `APLICATII_CU_MEMBRI`, deci omul
        * isi vede aici cererea de intrare in echipa si poate iesi din ea fara sa ceara voie.
+       *
+       * ⚠️ Si tot aici e PANOUL, de pe 19.09.2026 (user: „administrarea devine setări"): pagina
+       * asta e singurul loc unde omul cauta ce tine de el in curatenie, oricare i-ar fi treapta.
        */
       const raspunsSetari = await ruteazaSetari(req, cale, env, {
         cod: "curatenie",
@@ -227,7 +249,25 @@ export default {
         principal,
         urlCont: nav.cont,
         urlTermeni: `${nav.home || ""}/termeni`,
-        carcasa: (p) => pagina(ctx, { titluPagina: p.titluPagina, corp: p.corp, ...(p.scripturi ? { scripturi: p.scripturi } : {}) }),
+        // Carcasa poarta si stilul PANOULUI, pentru cine are cheia: filele lui au CSS-ul lor
+        // (`STIL_ADMIN`), iar cartelele si tabelele cer latimea mare.
+        carcasa: (p) =>
+          pagina(ctx, {
+            titluPagina: p.titluPagina,
+            corp: p.corp,
+            ...(p.scripturi ? { scripturi: p.scripturi } : {}),
+            ...(eAdmin ? { local: STIL_ADMIN, lat: true } : {}),
+          }),
+        /*
+         * PANOUL, ca rubrica a aplicatiei: dupa cele ale platformei (apartenenta, e-mailul,
+         * administratorii numiti), fiindca acelea sunt ale oricui, iar el e al celui cu cheia.
+         *
+         * ⚠️ Jetonul CSRF e AL PAGINII SETARILOR, nu cel din `ctx`: `@xc/setari` isi face unul la
+         * randare, si cookie-ul care pleaca odata cu pagina e al aceluia. Cu jetonul din `ctx`,
+         * prima apasare din panou ar fi respinsa ca „token nepotrivit".
+         */
+        rubrici: async ({ eAdminApp, csrf }) =>
+          eAdminApp ? corpulPanoului({ ...ctx, csrf }, await mediulPanoului(), url) : "",
       })
       if (raspunsSetari) return raspunsSetari
 
@@ -255,9 +295,18 @@ export default {
       }
 
       // ------------------------------------------------------- panoul
+      /*
+       * ⚠️ PANOUL NU MAI ARE PAGINA LUI (user, 19.09.2026). Ce a rămas sub `/admin`: ruta de
+       * SCRIERE (acolo trimit formularele lui, oriunde s-ar vedea), cele două pagini cu viața lor
+       * și un redirect spre Setări, ca favoritele și legăturile vechi să nu cadă.
+       */
       if (cale === "/admin" || cale.startsWith("/admin/")) {
         if (!eAdmin) {
-          if (!userId) return duTe(spreCont(ctx, cfg.ORIGINE_PUBLICA, cale))
+          // Neintrat: la intrarea platformei, cu întoarcere în Setări — acolo e panoul acum.
+          if (!userId) return duTe(spreCont(ctx, cfg.ORIGINE_PUBLICA, "/setari"))
+          // Intrat, dar fără cheie: Setările îi arată ce e al lui, fără o pagină de refuz. Refuzul
+          // rămâne întreg pe SCRIERE: cine trimite formularul de mână se lovește de el.
+          if (req.method !== "POST") return duTe(`${prefix}/setari`)
           return html(
             paginaMesaj(ctx, "Numai pentru administratori", "Panoul curățeniei cere permisiunea „cleaning.manage”."),
             403,
@@ -271,21 +320,15 @@ export default {
         }
 
         if (cale === "/admin") {
-          const postDat = req.method === "POST" ? await citestePostAdmin(req) : null
-          if (postDat) {
-            const problema = verificaTokenCsrf(req, postDat.post.csrf ?? "")
-            if (problema) return html(paginaMesaj(ctx, "Verificare de securitate", problema), 403, antete)
+          if (req.method !== "POST") {
+            // Aceeași filă, în pagina în care se vede acum panoul.
+            const tab = url.searchParams.get("tab")
+            return duTe(`${prefix}/setari${tab ? `?tab=${encodeURIComponent(tab)}` : ""}`)
           }
-          const mediu = {
-            DB: db,
-            posta: await postaDin(env, cfg.ORIGINE_PUBLICA, prefix),
-            IDENTITATE: env.IDENTITATE,
-            AUTORIZARE: env.AUTORIZARE,
-            /** Cine apasă — se scrie pe asocierile pe care le primește sau le stinge. */
-            actor: userId,
-            cid,
-          }
-          return paginaAdmin(ctx, mediu, req, url, postDat)
+          const postDat = await citestePostAdmin(req)
+          const problema = verificaTokenCsrf(req, postDat.post.csrf ?? "")
+          if (problema) return html(paginaMesaj(ctx, "Verificare de securitate", problema), 403, antete)
+          return scriePanou(ctx, await mediulPanoului(), req, url, postDat)
         }
 
         return html(paginaMesaj(ctx, "Pagina nu există", "Adresa aceasta nu duce nicăieri în panou."), 404, antete)
@@ -303,6 +346,14 @@ export default {
       }
 
       // ------------------------------------------------------- programarea
+      /*
+       * `?intra=1` deschidea panoul de intrare din pagină, scos pe 19.09.2026: ușa spre platformă e
+       * una singură, meniul contului. Adresa a stat la favorite, deci duce chiar unde ducea butonul.
+       */
+      if ((cale === "/" || cale === "") && url.searchParams.has("intra")) {
+        return duTe(spreCont(ctx, cfg.ORIGINE_PUBLICA, "/"))
+      }
+
       if (cale === "/" || cale === "") {
         // Numele duminicilor pentru cele trei luni care se pot vedea deodată (arhiva cerută, luna
         // curentă, luna viitoare) — o singură întrebare la calendar.

@@ -13,6 +13,11 @@
  * duminicii se cere de la calendar (A1); dreptul de administrare e cel central, nu o parolă locală;
  * fiecare apăsare de slot poartă jetonul CSRF. Restul — clasele, cuvintele, așezarea — e din V1.
  *
+ * ⚠️ PAGINA N-ARE RÂND DE UNELTE (user, 19.09.2026: „meniul de cont trebuie să se vadă ca la
+ * celelalte aplicații"). Au ieșit din ea cele trei butoane („Intră", „Contul meu", „Administrare")
+ * și panoul de intrare pe care îl deschidea primul: contul se ține dintr-un singur loc, meniul din
+ * antet, iar panoul curățeniei se vede în `/setari`, ca la orice altă aplicație a platformei.
+ *
  * ⚠️ Pickerul a lipsit între 14 și 19.09.2026, iar la întoarcere NU mai e o autentificare: e doar
  * un nume pentru calendar (user, 19.09.2026). Cine a intrat cu contul nu-l vede niciodată — dacă
  * ajunge vreodată să se vadă la un om cu sesiune, ceva s-a stricat la etajul de deasupra.
@@ -53,8 +58,8 @@ export async function paginaIndex(
 
   /*
    * Calendarul editabil e al celor din ECHIPĂ (asociere acceptată) și al administratorilor.
-   * Cine are cont dar n-a fost primit încă vede tot pagina de vizitator — cu deosebirea că
-   * panoul îi spune ce-i lipsește, iar rândul de unelte îl duce la contul lui.
+   * Cine are cont dar n-a fost primit încă vede tot pagina de vizitator — cererea de intrare în
+   * echipă și-o face din Setări, ca peste tot pe platformă.
    */
   const inEchipa = voluntar !== null && voluntar.is_active === 1;
 
@@ -65,7 +70,7 @@ export async function paginaIndex(
      * (e a adminului), vacanța (e a contului) și panoul. Toate trei se refuză și în `api.ts`.
      */
     if (fantoma) return renderCalendarPage(ctx, db, url, mo, fantoma, false, nume);
-    return renderVizitatorPage(ctx, db, request, url, mo, nume, voluntar);
+    return renderVizitatorPage(ctx, db, request, url, mo, nume);
   }
 
   // Adminul intrat cu contul platformei, care n-are rând al lui, vede tot calendarul.
@@ -145,15 +150,15 @@ function butonArhiva(id: string, barId: string, open: boolean): string {
 
 // =========================================================================
 /**
- * Pagina celui care nu s-a arătat DELOC: nici cont, nici nume ales. Are două uși, și amândouă se
- * văd de la început:
+ * Pagina celui care nu s-a arătat DELOC: nici cont, nici nume ales. Are două uși:
  *   - PICKERUL, deasupra calendarului — își alege numele și de atunci poate rezerva (atât);
- *   - panoul de INTRARE, ascuns ca în V1 — contul parohiei, cu tot ce ține de el.
+ *   - meniul contului din ANTET, ca în toate aplicațiile platformei — pentru tot restul.
  * Calendarul rămâne dedesubt, de citit, pentru cine n-o vrea pe niciuna.
+ *
+ * ⚠️ Panoul de intrare al paginii (`#authPanel`, cu butonul „Intră" al rândului de unelte) a ieșit
+ * pe 19.09.2026: era a doua ușă spre același loc, și tocmai asta se abătea de la celelalte aplicații.
  */
-async function renderVizitatorPage(ctx: Ctx, db: Baza, _request: Request, url: URL, mo: Moment, nume: NumeDuminici, _voluntarAcum: Voluntar | null): Promise<string> {
-  /** Panoul de intrare se deschide de la început numai dacă a fost cerut anume (`?intra=1`). */
-  const cereListaAcum = url.searchParams.has("intra");
+async function renderVizitatorPage(ctx: Ctx, db: Baza, _request: Request, url: URL, mo: Moment, nume: NumeDuminici): Promise<string> {
   const admins = (await totiVoluntarii(db)).filter((v) => v.is_active === 1 && v.is_admin === 1);
 
   const [cy, cm] = lunaCurenta(mo);
@@ -279,8 +284,8 @@ async function renderVizitatorPage(ctx: Ctx, db: Baza, _request: Request, url: U
 
                 <div class="note">
                     Alege-ți numele ca să te poți înscrie la o duminică — rămâne ținut minte pe
-                    acest dispozitiv. Pentru orice altceva (vacanță, setările tale, panoul
-                    administratorilor) intră cu <strong>contul parohiei</strong>.
+                    acest dispozitiv. Pentru orice altceva (vacanța, intrarea în echipă, setările
+                    tale) intră cu <strong>contul parohiei</strong>, din meniul de sus.
                 </div>
 
                 ${deAles.length === 0
@@ -299,48 +304,21 @@ async function renderVizitatorPage(ctx: Ctx, db: Baza, _request: Request, url: U
                     </ul>
                     <div class="note">
                         Dacă nu te regăsești în listă, vorbește cu un admin ca să te adauge.
+                        ${admins.length > 0 ? `<div style="margin-top:6px;">
+                                Admini:
+                                ${adminLinks.join(", ")}
+                            </div>
+                            <div style="margin-top:6px;">
+                                Grup:
+                                <a href="${GRUP_WHATSAPP}"
+                                   target="_blank" rel="noopener" class="wa-link">Albinele Sfântului Ilie</a>
+                            </div>` : ""}
                     </div>`}
             </section>`;
 
-  /*
-   * Panoul de INTRARE cu contul platformei. Stă ascuns, ca lista de nume în V1: se deschide din
-   * butonul „Intră" al rândului de unelte ori din fereastra „doar vizualizare". Cu `?intra=1` se
-   * deschide de la început.
-   */
-  const corp = `<section id="authPanel" class="auth-panel"${cereListaAcum ? "" : " hidden"}>
-                <button type="button" class="auth-close" id="authClose" aria-label="Închide" title="Închide">×</button>
-                <div class="section-header">
-                    <h2 class="section-title">Intră ca să te înscrii</h2>
-                </div>
+  const corp = `${pickerHtml}
 
-                <div class="note">
-                    Programarea la curățenie se face cu <strong>contul parohiei</strong>. Intri cu
-                    adresa de e-mail și un cod de șase cifre — fără parolă.
-                </div>
-
-                <p style="margin:14px 0 0">
-                    <a class="btn-platforma" href="${esc(ctx.nav.cont)}/intra?spre=${encodeURIComponent(ctx.spre ?? "")}">Intră cu contul platformei</a>
-                </p>
-
-                <div class="note">
-                    După ce intri, cere intrarea în echipă de pe pagina contului tău, de la
-                    <strong>„Aplicațiile mele" → Curățenia bisericii</strong>. Un administrator al
-                    curățeniei te primește, și de atunci poți apăsa pe sloturi.
-                    ${admins.length > 0 ? `<div style="margin-top:6px;">
-                            Admini:
-                            ${adminLinks.join(", ")}
-                        </div>
-                        <div style="margin-top:6px;">
-                            Grup:
-                            <a href="${GRUP_WHATSAPP}"
-                               target="_blank" rel="noopener" class="wa-link">Albinele Sfântului Ilie</a>
-                        </div>` : ""}
-                </div>
-
-                ${vacantaHtml}
-            </section>
-
-            ${pickerHtml}
+            ${vacantaHtml}
 
             <div id="calendarSection">
             <div class="section-header">
@@ -380,7 +358,10 @@ async function renderVizitatorPage(ctx: Ctx, db: Baza, _request: Request, url: U
                    dacă vrei și restul aplicației.</p>
                 <div class="viewonly-actions">
                     <button type="button" class="btn-secondary" id="viewOnlyClose">Închide</button>
-                    <button type="button" class="btn-auth" id="viewOnlyAuth">Intră</button>
+                    <!-- ⚠️ Legătură adevărată, nu buton: din 19.09.2026 nu mai există un panou de
+                         intrare în pagină pe care să-l deschidă. Duce unde duce și capul meniului
+                         de cont, cu întoarcere aici. -->
+                    <a class="btn-auth" href="${esc(ctx.nav.cont)}/intra?spre=${encodeURIComponent(ctx.spre ?? "")}">Intră</a>
                 </div>
             </dialog>
 
@@ -388,53 +369,6 @@ async function renderVizitatorPage(ctx: Ctx, db: Baza, _request: Request, url: U
 
   const scripturi = `
                 (function () {
-                    // Panoul de intrare: se deschide din butonul „Intră" al rândului de
-                    // unelte ori din fereastra „doar vizualizare".
-                    const authPanel = document.getElementById('authPanel');
-                    const authClose = document.getElementById('authClose');
-                    const authBtn = document.getElementById('btnAutentificare');
-
-                    function getCalendar() { return document.getElementById('calendarSection'); }
-                    // Lista de nume pleacă și ea când se deschide panoul contului: sunt două uși
-                    // pentru același lucru, iar una deschisă o acoperă pe cealaltă.
-                    function getPicker() { return document.getElementById('pickerFantoma'); }
-                    function ascunde(el, da) {
-                        if (!el) return;
-                        if (da) el.setAttribute('hidden', ''); else el.removeAttribute('hidden');
-                    }
-
-                    function openAuth() {
-                        if (!authPanel) return;
-                        authPanel.removeAttribute('hidden');
-                        ascunde(getCalendar(), true);
-                        ascunde(getPicker(), true);
-                        authPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        const intra = authPanel.querySelector('.btn-platforma');
-                        if (intra) intra.focus();
-                    }
-                    function closeAuth() {
-                        if (!authPanel) return;
-                        authPanel.setAttribute('hidden', '');
-                        ascunde(getCalendar(), false);
-                        ascunde(getPicker(), false);
-                    }
-
-                    // Butonul „Intră" din rândul de unelte. În V1 chema carcasa lui, care avea
-                    // „Autentificare" în locul contului; în V2 antetul e al platformei, deci ușa
-                    // spre intrare stă în rândul de unelte al paginii.
-                    function comutaAuth() {
-                        if (!authPanel) return;
-                        if (authPanel.hasAttribute('hidden')) openAuth(); else closeAuth();
-                    }
-                    if (authBtn) authBtn.addEventListener('click', comutaAuth);
-                    if (authClose) authClose.addEventListener('click', closeAuth);
-                    // Când pagina se deschide cu panoul cerut anume (?intra=1), calendarul și
-                    // lista de nume stau ascunse de la început, ca la deschiderea din buton.
-                    if (authPanel && !authPanel.hasAttribute('hidden')) {
-                        ascunde(getCalendar(), true);
-                        ascunde(getPicker(), true);
-                    }
-
                     // Toggle pentru tab-urile lună (delegated).
                     document.addEventListener('click', e => {
                         const tab = e.target.closest('.month-tab[data-month-view]');
@@ -460,13 +394,15 @@ async function renderVizitatorPage(ctx: Ctx, db: Baza, _request: Request, url: U
                     document.addEventListener('click', e => {
                         if (!e.target.closest('.slot.view-slot')) return;
                         if (viewDialog && typeof viewDialog.showModal === 'function') viewDialog.showModal();
-                        else openAuth();   // fallback: browsere fără <dialog>
+                        // Browser fără <dialog>: lista de nume e chiar sus, acolo îl ducem.
+                        else {
+                            const picker = document.getElementById('pickerFantoma');
+                            if (picker) picker.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
                     });
                     if (viewDialog) {
                         const vClose = document.getElementById('viewOnlyClose');
-                        const vAuth  = document.getElementById('viewOnlyAuth');
                         if (vClose) vClose.addEventListener('click', () => viewDialog.close());
-                        if (vAuth)  vAuth.addEventListener('click', () => { viewDialog.close(); openAuth(); });
                         viewDialog.addEventListener('click', e => { if (e.target === viewDialog) viewDialog.close(); });
                     }
 
@@ -509,43 +445,7 @@ async function renderVizitatorPage(ctx: Ctx, db: Baza, _request: Request, url: U
                 })();
 `;
 
-  return pagina(ctx, { corp, scripturi, unelte: unelte(ctx, _voluntarAcum) });
-}
-
-/**
- * Rândul de unelte al paginii.
- *
- * ⚠️ Pe 14.09.2026 au ieșit din el trei butoane, cerut anume de utilizator: „Autentificare"
- * (funcția lui o face **Cont**, din antet), „Schimbă numele" și „Ieși" (n-au ce schimba și de unde
- * ieși când numele vine din cont — ieșirea stă în meniul contului, ca în toate aplicațiile V2).
- *
- * A rămas o singură ușă a paginii, plus „Administrare" pentru cine are cheia. Butoanele se sting,
- * nu se ascund (regula platformei, 11–12.09.2026): cine e deja în echipă vede „Intră" pălit, ca
- * rândul să aibă aceeași formă pentru toți.
- *
- * ⚠️ FANTOMA face excepție: la ea „Intră" e APRINS și e o legătură adevărată spre intrarea
- * platformei (user, 19.09.2026: „dacă vrea acces în platformă trebuie să intre pe Cont normal").
- * Un buton n-ar avea ce deschide — panoul de intrare stă numai pe pagina vizitatorului, iar
- * fantoma vede pagina de calendar.
- */
-function unelte(ctx: Ctx, voluntarAcum: Voluntar | null): string {
-  const intrat = !!ctx.userId;
-  const eFantoma = !intrat && !!ctx.fantoma;
-  const inEchipa = !eFantoma && voluntarAcum !== null && voluntarAcum.is_active === 1;
-  const gol = (da: boolean) => (da ? " gol" : "");
-  const titluIntra = inEchipa
-    ? ' title="Ești în echipă — te poți înscrie la duminici"'
-    : intrat
-      ? ' title="Ai cont, dar nu ești încă în echipă: cere intrarea de pe pagina contului"'
-      : "";
-  const usaIntra = eFantoma
-    ? `<a class="btn" href="${esc(ctx.nav.cont)}/intra?spre=${encodeURIComponent(ctx.spre ?? "")}"` +
-      ` title="Numele ales e doar pentru calendar — intră cu contul ca să ai și restul aplicației">Intră</a>`
-    : `<button type="button" class="btn${gol(inEchipa)}" id="btnAutentificare"${titluIntra}>Intră</button>`;
-  return `${usaIntra}
-      <a class="btn${gol(!intrat)}" href="${esc(ctx.nav.cont)}/"${!intrat ? ' title="Întâi intră cu contul"' : ' title="Datele tale și echipele din care faci parte"'}>Contul meu</a>${
-    ctx.eAdmin ? `\n      <a class="btn" href="${esc(ctx.prefix)}/admin">Administrare</a>` : ""
-  }`;
+  return pagina(ctx, { corp, scripturi });
 }
 
 // =========================================================================
@@ -855,7 +755,6 @@ ${JS_SLOTURI}
   return pagina(ctx, {
     corp,
     scripturi,
-    unelte: unelte(ctx, me.id > 0 ? me : null),
     // „Ești Mihai P. · Nu ești tu?" — gol pentru oricine are cont.
     personal: randulFantomei(ctx),
   });

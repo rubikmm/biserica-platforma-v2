@@ -134,7 +134,7 @@ export async function paginaCuratareArhiva(
 
     <p class="info-jos" style="text-align:left">
         <strong>⚠ Pagină de unică folosință</strong> — se folosește doar când arhiva trebuie subțiată.
-        <a href="${esc(ctx.prefix)}/admin?tab=archive">← Înapoi la Arhivă</a>
+        <a href="${esc(ctx.prefix)}/setari?tab=archive">← Înapoi la Arhivă</a>
     </p>`;
 
   return new Response(

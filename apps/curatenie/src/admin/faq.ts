@@ -68,7 +68,7 @@ export const ADMIN_FAQ: { q: string; a: string }[] = [
 ];
 
 export function paginaFaqAdmin(ctx: Ctx): string {
-  const corp = `<a href="${esc(ctx.prefix)}/admin" class="back-btn">← Înapoi la Administrare</a>
+  const corp = `<a href="${esc(ctx.prefix)}/setari" class="back-btn">← Înapoi la Setări</a>
 
             <section class="faq-group">
                 <h2 class="section-title">FAQ pentru Administratori</h2>

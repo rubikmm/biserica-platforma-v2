@@ -60,6 +60,8 @@ main form { display: block; gap: 0; margin: 0 }
 
 [hidden] { display: none !important; }
 
+/* Cutia listei de nume (#pickerFantoma). Purta si panoul de intrare al paginii, scos pe 19.09.2026
+   odata cu randul de unelte — cu el a plecat si .auth-close, butonul lui de inchidere. */
 .auth-panel {
     position: relative;
     background: var(--surface);
@@ -68,22 +70,6 @@ main form { display: block; gap: 0; margin: 0 }
     padding: 14px;
     margin-bottom: 16px;
 }
-.auth-close {
-    position: absolute;
-    top: 6px;
-    right: 8px;
-    width: 32px;
-    height: 32px;
-    border: none;
-    background: transparent;
-    color: var(--text-muted);
-    font-size: 1.4rem;
-    line-height: 1;
-    cursor: pointer;
-    border-radius: 50%;
-    padding: 0;
-}
-.auth-close:hover { background: var(--tinta); color: var(--text); }
 
 .section-header {
     display: flex;
@@ -509,24 +495,6 @@ main form { display: block; gap: 0; margin: 0 }
     border-color: var(--accent);
     background: var(--tinta);
 }
-.picker-list button.picker-last {
-    border: 2px solid var(--accent);
-    background: var(--tinta);
-    box-shadow: 0 0 0 3px rgba(107, 142, 78, 0.15);
-    position: relative;
-    font-weight: 600;
-}
-.picker-last-hint {
-    display: inline-block;
-    margin-left: 6px;
-    padding: 1px 6px;
-    background: var(--accent);
-    color: white;
-    border-radius: 10px;
-    font-size: 0.7rem;
-    font-weight: 600;
-    vertical-align: middle;
-}
 
 .note {
     background: #fff8e6;
@@ -600,7 +568,10 @@ main form { display: block; gap: 0; margin: 0 }
     justify-content: flex-end;
     flex-wrap: wrap;
 }
+/* „Intră" din fereastra „doar vizualizare" e o LEGATURA spre intrarea platformei, nu un buton
+   (19.09.2026): pagina n-are ce deschide, usa e a contului. De aici display si text-decoration. */
 .viewonly-actions .btn-auth {
+    display: inline-block;
     padding: 8px 16px;
     background: var(--accent);
     color: #fff;
@@ -608,6 +579,7 @@ main form { display: block; gap: 0; margin: 0 }
     border-radius: 6px;
     font-size: 0.9rem;
     font-weight: 600;
+    text-decoration: none;
     cursor: pointer;
 }
 .viewonly-actions .btn-auth:hover { background: var(--accent-dark); }
@@ -851,14 +823,9 @@ body:not(.cu-platforma) .cont-lista a[href^="https://cont."] { display: none }
 .cont-lista a.intra-platforma { color: var(--rosu); font-weight: 600;
                                 border-bottom: 1px solid var(--rule); margin-bottom: 4px }
 
-/* Acelasi buton, mare, in panoul de autentificare al paginii de programare. */
-.btn-platforma { display: inline-block; margin-top: 4px; padding: 10px 16px;
-                 border: 1px solid var(--rule); border-radius: 8px; background: var(--tinta);
-                 color: var(--text); text-decoration: none; font-size: 0.95rem; font-weight: 600 }
-.btn-platforma:hover { border-color: var(--rosu); color: var(--rosu) }
-
-/* Regula de mai jos a apartinut butonului „Autentificare" din antet, scos pe 14.09.2026 odata cu
-   pickerul: antetul are de acum numai „Cont", al platformei, si el se poarta la fel peste tot. */
+/* Aici a stat .btn-platforma, butonul mare „Intră cu contul platformei" din panoul de intrare al
+   paginii de programare. Panoul a iesit pe 19.09.2026 odata cu randul de unelte: usa spre platforma
+   e meniul de cont din antet, ca la toate aplicatiile. */
 
 /* Mesajul de jos (toast): fundalul ia culoarea scrisului temei, deci scrisul ia hartia. */
 .toast { background: var(--ink); color: var(--paper) }
