@@ -53,11 +53,14 @@ import {
 } from './depozit.js'
 import { type Coala, brosura, cheiaBrosurii, numeBrosura } from './tipar.js'
 import {
+  amprentaFoii,
   calendarulNumarului,
   cheiaCererii,
   cheiaCopertei,
   cheiaNumarului,
+  citesteCererea,
   mottoDinainte,
+  programulSaSchimbat,
   textCurat,
 } from './compune.js'
 import { PAGINI, type NumarCerut, semne, socoteste } from './masuri.js'
@@ -977,9 +980,15 @@ export default {
            * să poți genera varianta 0 de buletin"). `schitaPastrata` o și SCRIE în depozit dacă n-a
            * fost: așa ecranul, butonul „Compune numărul" și bula văd aceeași variantă zero.
            */
-          const [foaia, schita] = await Promise.all([
+          /*
+           * ⚠️ ȘI CEREREA PĂSTRATĂ (19.09.2026): în ea stă amprenta PROGRAMULUI cu care s-a tipărit
+           * foaia de pe ecran. Din ea se află, fără nicio randare, dacă între timp s-a schimbat
+           * programul săptămânii — vezi `programulSaSchimbat`.
+           */
+          const [foaia, schita, cerereaVeche] = await Promise.all([
             nou.nr ? env.FISIERE.head(cheiaNumarului({ nr: nou.nr, data: nou.data })) : Promise.resolve(null),
             schitaPastrata(env),
+            nou.nr ? citesteCererea(env, { nr: nou.nr, data: nou.data }) : Promise.resolve(null),
           ])
           const coperta = foaia ? await env.FISIERE.head(cheiaCopertei({ nr: nou.nr!, data: nou.data })) : null
           // măsura fiecărui articol, socotită aici: ecranul n-o mai socotește singur, fiindcă n-are
@@ -998,6 +1007,16 @@ export default {
            * randare despre care se știe dinainte că va fi refuzată de socoteală.
            */
           const compuneAcum = !foaia && nou.nr !== null && eSchitaNeatinsa(schita)
+          /*
+           * ⚠️ SEMNUL, NU RECOMPUNEREA (user, 19.09.2026: „nu neapărat să îl regenereze automat de la
+           * zero"). Foaia de pe ecran e cea din depozit; dacă programul s-a schimbat după ce s-a
+           * tipărit ea, ecranul o SPUNE, lângă butonul „Compune numărul", și atât. Apăsarea rămâne a
+           * omului — mai ales că o recompunere poate fi refuzată de socoteală, iar o recompunere
+           * pornită singură la fiecare intrare ar face din asta o buclă fără sfârșit.
+           */
+          const programSchimbat = foaia
+            ? programulSaSchimbat(cerereaVeche?.program, 'eroare' in cal ? null : cal)
+            : null
           return html(
             paginaNou(ctx, m, nou, {
               calendar,
@@ -1005,13 +1024,14 @@ export default {
               schita,
               compuneAcum,
               ...(masura ? { masura } : {}),
+              ...(programSchimbat ? { programSchimbat } : {}),
               ...(foaia
                 ? {
                     raspuns: {
                       facut: true,
                       cheie: foaia.key,
                       cheiePoza: coperta ? coperta.key : null,
-                      versiune: (foaia.httpEtag ?? '').replace(/[^\w-]/g, '') || null,
+                      versiune: amprentaFoii(foaia.httpEtag, cerereaVeche?.program?.amprenta),
                       marime: foaia.size,
                       plangeri: [],
                     },

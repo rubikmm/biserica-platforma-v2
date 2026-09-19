@@ -42,6 +42,57 @@ export interface Calendar {
    * atenția atrasă LA ÎNCEPUT, la vedere: un număr compus pe o propunere nu tace despre asta.
    */
   stare: 'validat' | 'propus'
+  /**
+   * AMPRENTA PROGRAMULUI — aceeași la orice treaptă de strângere, fiindcă se ia pe tabelul întreg
+   * (vezi `tabelulSaptamanii` în program). Se păstrează lângă numărul compus, ca ecranul `/nou` să
+   * poată spune „programul s-a schimbat de la ultima compunere".
+   * ⚠️ `undefined` la un program mai vechi decât 19.09.2026 (înainte să existe câmpul) — atunci nu
+   * se compară nimic, nu se strigă „s-a schimbat" în gol.
+   */
+  amprenta?: string
+  /** ultima atingere a săptămânii, ISO 8601; `null` când săptămâna nu e în baza programului */
+  modificat_la?: string | null
+}
+
+/**
+ * PROGRAMUL CU CARE S-A TIPĂRIT UN NUMĂR — se scrie lângă cerere, în `compus/…json`.
+ *
+ * ⚠️ De ce se păstrează (user, 19.09.2026: „să verifice dacă buletinul a suferit vreo modificare…
+ * se poate și cu un flag pentru dată"): programul se citește proaspăt la FIECARE compunere, dar
+ * foaia rămasă pe ecran poate fi de dinaintea unei schimbări — mai ales când compunerea de după
+ * schimbare s-a oprit la socoteală și n-a scris nimic. Fără amprenta asta, nimic din `/nou` nu
+ * deosebește o foaie la zi de una rămasă în urmă.
+ */
+export interface ProgramulFolosit {
+  amprenta?: string
+  modificat_la?: string | null
+  stare?: 'validat' | 'propus'
+}
+
+/** Cererea păstrată lângă PDF: numărul ca date și programul cu care s-a tipărit. */
+export interface CerereaPastrata extends NumarCerut {
+  program?: ProgramulFolosit
+}
+
+/** Programul unui calendar primit, în forma în care se păstrează. */
+export const programulFolosit = (c: Calendar | null | undefined): ProgramulFolosit | undefined =>
+  c ? { amprenta: c.amprenta, modificat_la: c.modificat_la ?? null, stare: c.stare } : undefined
+
+/**
+ * S-A SCHIMBAT PROGRAMUL DE LA ULTIMA COMPUNERE?
+ *
+ * ⚠️ Se răspunde NUMAI când amândouă amprentele se știu. Lipsa uneia (număr compus înainte de
+ * 19.09.2026, ori program care n-a răspuns acum) NU e o schimbare: un semn roșu pus din
+ * necunoaștere ar învăța omul să nu se mai uite la el.
+ */
+export function programulSaSchimbat(
+  folosit: ProgramulFolosit | null | undefined,
+  acum: Pick<Calendar, 'amprenta' | 'modificat_la'> | null | undefined,
+): { modificat_la: string | null } | null {
+  const a = folosit?.amprenta
+  const b = acum?.amprenta
+  if (!a || !b || a === b) return null
+  return { modificat_la: acum?.modificat_la ?? null }
 }
 
 /**
@@ -66,7 +117,21 @@ export async function calendarulNumarului(env: EnvCompunere, dataNumarului: stri
   const aDouaZi = new Date(`${dataNumarului}T12:00:00Z`)
   aDouaZi.setUTCDate(aDouaZi.getUTCDate() + 1)
   const cerut = aDouaZi.toISOString().slice(0, 10)
-  const r = await env.PROGRAM.fetch(`https://xc-program/v1/tabel-tipar?data=${cerut}&strans=${strans}`)
+  /*
+   * ⚠️ PROASPĂT LA FIECARE CERERE, SPUS RĂSPICAT (user, 19.09.2026: „am modificat programul și nu
+   * mi-l citește"). Legătura de serviciu nu trece azi prin niciun cache, iar tabelul iese din D1 la
+   * fiecare cerere — dar răspunsul programului poartă `cache-control: public, max-age=300` și chiar
+   * E ȚINUT la muchie pe ruta lui publică (probat pe 19.09.2026: aceeași adresă dădea răspunsul
+   * dinainte, iar cu o întrebare în plus pe ea venea cel nou). Ziua în care drumul ăsta ar ajunge să
+   * treacă pe hostname în loc de binding, foaia ar purta cinci minute programul vechi, fără ca nimic
+   * să dea vreo eroare. Cererea spune deci ea însăși că nu primește nimic ținut.
+   *
+   * ⚠️ Numai ANTETE, nu `cf: { cacheTtl }`: `cf` nu are ce căuta pe o legătură de serviciu, iar de
+   * aruncat aici ar însemna un `/nou` care nu se mai deschide deloc — tocmai ecranul pe care-l reparăm.
+   */
+  const r = await env.PROGRAM.fetch(`https://xc-program/v1/tabel-tipar?data=${cerut}&strans=${strans}`, {
+    headers: { 'cache-control': 'no-cache', pragma: 'no-cache' },
+  })
   if (!r.ok) {
     const corp = (await r.json().catch(() => ({}))) as { cod?: string; mesaj?: string }
     return {
@@ -263,6 +328,20 @@ export interface NumarulPus {
 }
 
 /**
+ * AMPRENTA FOII, pentru `?v=` — etag-ul PDF-ului ȘI amprenta programului tipărit în el.
+ *
+ * Etag-ul R2 e suma de control a fișierului, deci se schimbă oricum la orice randare. Amprenta
+ * programului intră totuși în adresă dinadins: ea face schimbarea VIZIBILĂ în legătură (`?v=` sare
+ * în ochi când se compară două foi) și leagă adresa de întrebarea care a pornit toată treaba —
+ * „e programul din foaia asta cel de acum?". Fără niciuna din ele rămâne ceasul, ca adresa să nu
+ * iasă goală.
+ */
+export const amprentaFoii = (etag: string | null | undefined, amprentaProgramului?: string | null): string =>
+  [(etag ?? '').replace(/[^\w-]/g, ''), (amprentaProgramului ?? '').replace(/[^\w-]/g, '').slice(0, 10)]
+    .filter(Boolean)
+    .join('-') || String(Date.now())
+
+/**
  * TOT CE SE ÎNTÂMPLĂ DUPĂ O RANDARE REUȘITĂ, într-un singur loc.
  *
  * ⚠️ SCRIS AICI FIINDCĂ ERA ÎN DOUĂ (18.09.2026, pățit): ruta formularului punea PDF-ul, coperta,
@@ -283,6 +362,8 @@ export async function pastreazaNumarul(
     peHartie?: NumarCerut
     pdf: ArrayBuffer
     coperta?: ArrayBuffer | null
+    /** Programul care a intrat pe pagina a patra — se păstrează lângă cerere, pentru `/nou`. */
+    program?: ProgramulFolosit
   },
   ctxExec?: Pick<ExecutionContext, 'waitUntil'>,
 ): Promise<NumarulPus> {
@@ -305,9 +386,9 @@ export async function pastreazaNumarul(
     await env.FISIERE.delete(cheiePoza).catch(() => undefined)
   }
 
-  // Cererea, ca date, lângă PDF: de aici pornește numărul următor (motto-ul) și de aici se umple
-  // ecranul `/nou` după reîncărcare.
-  await pastreazaCererea(env, o.cerut)
+  // Cererea, ca date, lângă PDF: de aici pornește numărul următor (motto-ul), de aici se umple
+  // ecranul `/nou` după reîncărcare și de aici se află cu ce PROGRAM s-a tipărit foaia asta.
+  await pastreazaCererea(env, o.cerut, o.program)
 
   /*
    * ⚠️ BROȘURILE VECHI ALE NUMĂRULUI SE ARUNCĂ. Se țin în depozit sub o cheie scoasă din cheia
@@ -324,18 +405,33 @@ export async function pastreazaNumarul(
   return {
     cheie,
     cheiePoza: o.coperta ? cheiePoza : null,
-    versiune: (pus?.httpEtag ?? '').replace(/[^\w-]/g, '') || String(Date.now()),
+    versiune: amprentaFoii(pus?.httpEtag, o.program?.amprenta),
     marime: o.pdf.byteLength,
   }
 }
 
-export async function pastreazaCererea(env: Pick<EnvCompunere, 'FISIERE'>, cerut: NumarCerut): Promise<string> {
+export async function pastreazaCererea(
+  env: Pick<EnvCompunere, 'FISIERE'>,
+  cerut: NumarCerut,
+  program?: ProgramulFolosit,
+): Promise<string> {
   const cheie = cheiaCererii(cerut)
-  await env.FISIERE.put(cheie, JSON.stringify(cerut), {
+  const deScris: CerereaPastrata = program ? { ...cerut, program } : { ...cerut }
+  await env.FISIERE.put(cheie, JSON.stringify(deScris), {
     httpMetadata: { contentType: 'application/json; charset=utf-8' },
     customMetadata: { nr: String(cerut.nr), data: cerut.data },
   })
   return cheie
+}
+
+/** Cererea păstrată a unui număr; `null` dacă n-a fost compus aici (numerele aduse din V1). */
+export async function citesteCererea(
+  env: Pick<EnvCompunere, 'FISIERE'>,
+  n: Pick<NumarCerut, 'nr' | 'data'>,
+): Promise<CerereaPastrata | null> {
+  const obiect = await env.FISIERE.get(cheiaCererii(n))
+  if (!obiect) return null
+  return await obiect.json<CerereaPastrata>().catch(() => null)
 }
 
 /**

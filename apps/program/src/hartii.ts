@@ -9,7 +9,7 @@
  * Fără fișierul ăsta, `program.foaia_sfintilor` ar fi trebuit să repete cum se cer sfinții de la
  * tipic și cum se așază pe foaie — adică exact duplicarea din V1, mutată cu un etaj mai sus.
  */
-import { adaugaZile, dataCuZi, dataLunga, luneaSaptamanii } from '@xc/ui'
+import { adaugaZile, amprenta, dataCuZi, dataLunga, luneaSaptamanii } from '@xc/ui'
 import type { IntrareVocabular, Saptamana, Slujba } from '@xc/contracts'
 import { calendarulIntervalului, texteleZilei, ziuaCalendarului } from './calendar.js'
 import {
@@ -17,6 +17,7 @@ import {
   saptamana,
   slujbaDin,
   slujbeleSaptamanii,
+  ultimaSchimbareaSaptamanii,
   vecinele,
   vocabularul,
 } from './depozit.js'
@@ -219,11 +220,29 @@ export async function tabelulSaptamanii(
       strans: 0 | 1 | 2
       /** `validat` = săptămâna confirmată; `propus` = ce era disponibil, neconfirmat — de scris la vedere */
       stare: 'validat' | 'propus'
+      /**
+       * AMPRENTA PROGRAMULUI SĂPTĂMÂNII — semnul după care cine l-a tipărit odată poate afla, ieftin,
+       * dacă s-a schimbat de atunci (buletinul, pe ecranul `/nou`).
+       *
+       * ⚠️ Se ia pe tabelul ÎNTREG (treapta 0) + `stare`, NU pe cel strâns: altfel un buletin compus
+       * cu programul micșorat (`strans=1`) ar părea veșnic „schimbat" față de tabelul întreg cerut de
+       * ecran. Așa amprenta spune un singur lucru — ce are săptămâna de spus —, nu și cât loc a găsit
+       * buletinul pentru ea. `stare` intră în ea fiindcă validarea unei săptămâni propuse SCHIMBĂ
+       * foaia: dispare atenția „PROPUS".
+       */
+      amprenta: string
+      /** ultima atingere a săptămânii (rând sau slujbă), ISO 8601; `null` la propunerea din istoric */
+      modificat_la: string | null
     }
   | { ok: false; cod: string; mesaj: string; detalii?: unknown }
 > {
   const { o, stare } = await materiaSaptamanii(env, data, vocabularDat, strans)
   const tabel = tabelProgram(o)
+  const intreg = strans === 0 ? tabel : tabelProgram({ ...o, strans: 0 })
+  const [amp, modificatLa] = await Promise.all([
+    amprenta(`${stare}\n${intreg}`),
+    ultimaSchimbareaSaptamanii(env.DB, o.luni),
+  ])
   return {
     ok: true,
     tabel,
@@ -237,6 +256,8 @@ export async function tabelulSaptamanii(
     detalii: (tabel.match(/class="det/g) ?? []).length,
     strans,
     stare,
+    amprenta: amp,
+    modificat_la: modificatLa,
   }
 }
 

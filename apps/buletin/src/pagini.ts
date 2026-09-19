@@ -828,6 +828,13 @@ export interface StareaCompunerii {
    * compunerea rămâne a omului (butonul ori chatul).
    */
   compuneAcum?: boolean
+  /**
+   * PROGRAMUL S-A SCHIMBAT DE LA ULTIMA COMPUNERE (user, 19.09.2026: „ar trebui ca, de fiecare dată
+   * când se compune, să verifice dacă buletinul a suferit vreo modificare… nu neapărat să îl
+   * regenereze automat de la zero"). `null`/lipsă = foaia e la zi, ori nu se poate ști.
+   * `modificat_la` e ceasul schimbării (ISO), `null` când săptămâna nu e în baza programului.
+   */
+  programSchimbat?: { modificat_la: string | null } | null
 }
 
 /* ─────────────────── SCHIȚA NUMĂRULUI, ARĂTATĂ (nu editată) ─────────────────── */
@@ -1001,11 +1008,48 @@ const IMPROSPATEAZA = `
  * ⚠️ `data-auto` = compune singur la încărcare (varianta zero, prima intrare). Tot butonul ăsta, doar
  * apăsat de pagină — nu un al doilea drum.
  */
-function butonulCompunerii(auto: boolean): string {
+function butonulCompunerii(auto: boolean, schimbat?: { modificat_la: string | null } | null): string {
   return `<section class="compunerea">
+  ${schimbat ? chenarulProgramuluiSchimbat(schimbat) : ''}
   <nav class="btns"><button type="button" class="btn" id="b-compune"${auto ? ' data-auto' : ''}>Compune numărul</button></nav>
   <p class="marunt" id="compune-veste">${auto ? 'Se compune varianta de probă a numărului…' : ''}</p>
 </section>`
+}
+
+/**
+ * CHENARUL „PROGRAMUL S-A SCHIMBAT" — singurul avertisment rămas pe `/nou`.
+ *
+ * ⚠️ De ce se întoarce un chenar pe un ecran de pe care avertismentele au fost scoase anume
+ * (18.09.2026: „scoate toate avertismentele"): acelea spuneau lucruri care se VEDEAU oricum pe
+ * ecran (programul propus, textul de probă — amândouă tipărite în ciorna de deasupra). Ăsta spune
+ * singurul lucru care NU se vede din nimic: foaia de pe ecran e de dinaintea unei schimbări a
+ * programului. Fără el, omul care tocmai a mutat o slujbă se uită la foaia veche și crede că
+ * aplicația nu i-a citit programul — exact pățania din 19.09.2026.
+ *
+ * ⚠️ Stă LÂNGĂ BUTON, nu în capul paginii: e o îndemnare la o faptă („recompune"), iar fapta e
+ * butonul de dedesubt. În capul paginii ar fi fost încă o vorbă de sărit peste.
+ */
+function chenarulProgramuluiSchimbat(schimbat: { modificat_la: string | null }): string {
+  const ora = schimbat.modificat_la ? ceasScurt(schimbat.modificat_la) : null
+  return `<p class="atentie-program">Programul s-a schimbat de la ultima compunere${
+    ora ? `, la ora ${esc(ora)}` : ''
+  } — recompune numărul ca pagina a patra să-l arate pe cel de acum.</p>`
+}
+
+/**
+ * Ceasul unei clipe ISO, ora Bucureștiului: „14:32" azi, „19.09, 14:32" în altă zi. Scris scurt
+ * dinadins — rândul e o îndemnare, nu un raport.
+ */
+function ceasScurt(iso: string, acum: Date = new Date()): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const zi = (x: Date): string => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Bucharest' }).format(x)
+  const ora = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Bucharest', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(d)
+  if (zi(d) === zi(acum)) return ora
+  const [, l, z] = zi(d).split('-') as [string, string, string]
+  return `${z}.${l}, ${ora}`
 }
 
 /**
@@ -1164,7 +1208,7 @@ export function paginaNou(
 ${veste}
 ${calendar}
 ${schitaPeEcran(stare.schita, stare.masura)}
-${butonulCompunerii(stare.compuneAcum === true)}
+${butonulCompunerii(stare.compuneAcum === true, stare.programSchimbat)}
 <script>${VEZI_TOT}</script>
 <script>${JS_COMPUNE}</script>
 ${ctx.chat ? `<script>${IMPROSPATEAZA}</script>` : ''}`,

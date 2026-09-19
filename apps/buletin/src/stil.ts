@@ -320,6 +320,13 @@ export const LOCAL = `
 .compunerea .btns { justify-content:center }
 .compunerea .btn[disabled] { opacity:.5; cursor:default }
 .compunerea .marunt { margin:8px 0 0 }
+/* PROGRAMUL S-A SCHIMBAT DE LA ULTIMA COMPUNERE (19.09.2026): singurul chenar de atentie ramas pe
+   /nou. Rosul platformei, care e peste tot aici al lucrului nefacut, si un fundal palid cat sa se
+   desprinda de rand — nu o banda tipatoare: nimic nu s-a stricat, doar foaia a ramas in urma. */
+.atentie-program { max-width:560px; margin:0 auto 12px; padding:10px 14px;
+                   border:1px solid var(--rosu); border-radius:10px;
+                   background:color-mix(in srgb, var(--rosu) 7%, transparent);
+                   color:var(--rosu); font:14px/1.45 ui-sans-serif,system-ui; text-align:center }
 
 /* ── CIORNA: numarul proaspat compus, aratat CHIAR IN PAGINA, ca un buletin gata de validat
    (user, 18.09.2026). Un chenar in jurul lui, ca sa se vada ca e altceva decat formularul de

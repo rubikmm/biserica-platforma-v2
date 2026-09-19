@@ -86,6 +86,27 @@ export async function saptamana(db: D1Database, luni: string): Promise<RandSapta
   return unul<RandSaptamana>(db, `SELECT * FROM saptamani WHERE luni = ?`, [luni])
 }
 
+/**
+ * CÂND S-A ATINS ULTIMA OARĂ SĂPTĂMÂNA — rândul ei sau oricare dintre slujbele ei.
+ *
+ * ⚠️ De ce amândouă tabelele: o slujbă mutată de la 18:00 la 17:00 nu atinge rândul săptămânii, iar
+ * o validare nu atinge slujbele. Cine întreabă „s-a schimbat programul de când am tipărit?" (azi
+ * buletinul, pe pagina a patra) are nevoie de cea mai nouă dintre ele, nu de una singură.
+ * `null` = săptămâna nu e în bază (se lucrează pe propunerea din istoric), deci nu există ceas.
+ */
+export async function ultimaSchimbareaSaptamanii(db: D1Database, luni: string): Promise<string | null> {
+  const r = await unul<{ modificat: string | null }>(
+    db,
+    `SELECT MAX(m) AS modificat FROM (
+       SELECT modificat AS m FROM saptamani WHERE luni = ?1
+       UNION ALL
+       SELECT modificat AS m FROM slujbe WHERE luni = ?1
+     )`,
+    [luni],
+  )
+  return r?.modificat ?? null
+}
+
 export async function slujbeleSaptamanii(db: D1Database, luni: string): Promise<RandSlujba[]> {
   return toate<RandSlujba>(db, `SELECT * FROM slujbe WHERE luni = ? ORDER BY data, ora, ordine`, [luni])
 }

@@ -30,6 +30,7 @@ import {
   mottoDinainte,
   pastreazaNumarul,
   plangeriDeForma,
+  programulFolosit,
 } from './compune.js'
 import { CUPRINS, type StareHarta, potriveste, traduFapta } from './harta.js'
 import { SECUNDARI_MAXIM, type NumarCerut, semne, socoteste, variante } from './masuri.js'
@@ -242,7 +243,11 @@ export async function compuneNumarul(
    * „Tipărește" dând broșura foii vechi — fără nicio eroare nicăieri (user: „a zis că Compune
    * buletinul după o modificare și nu se vede nimic").
    */
-  const { cheie } = await pastreazaNumarul(env, { cerut, peHartie: r.cerut, pdf: r.pdf, coperta: r.coperta }, ctxExec)
+  const { cheie } = await pastreazaNumarul(
+    env,
+    { cerut, peHartie: r.cerut, pdf: r.pdf, coperta: r.coperta, program: programulFolosit(r.calendar) },
+    ctxExec,
+  )
   return {
     facut: true,
     nr: cerut.nr,

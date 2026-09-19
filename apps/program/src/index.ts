@@ -352,7 +352,7 @@ async function api(req: Request, env: Env, ctxExec: ExecutionContext, cale: stri
         { adresa: '/v1/slujbe/vocabular', ce_da: 'cele 29 de nume, cu cod_nume, categorie, activ' },
         { adresa: '/v1/foaie/<data>.pdf|.jpg|.html', ce_da: 'foaia A4 de pe ușă — numai săptămâni validate' },
         { adresa: '/v1/propunere/<data>.pdf|.jpg|.html', ce_da: 'aceeași foaie, din propunerea săptămânii' },
-        { adresa: '/v1/tabel-tipar?data=&strans=0|1|2', ce_da: 'tabelul săptămânii ca bucată de pagină (buletinul, pagina a patra): validat dacă e, altfel ce e disponibil — `stare` spune „validat" sau „propus"' },
+        { adresa: '/v1/tabel-tipar?data=&strans=0|1|2', ce_da: 'tabelul săptămânii ca bucată de pagină (buletinul, pagina a patra): validat dacă e, altfel ce e disponibil — `stare` spune „validat" sau „propus"; `amprenta` și `modificat_la` spun dacă s-a schimbat de la ultima tipărire' },
         { adresa: '/v1/bucata-site?data=', ce_da: 'lista săptămânii în formatul primei pagini a site-ului parohiei (temporar, până trece apexul pe V2)' },
         { adresa: '/v1/poza/saptamana/<data>.jpg|.html?coloane=1|2', ce_da: 'poza paginii: programul singur (coloane=1) sau programul și calendarul, în două coloane (implicit)' },
         { adresa: '/v1/sfintii-zilei/<data>.pdf|.html', ce_da: 'sfinții zilei, din datele calendarului' },
