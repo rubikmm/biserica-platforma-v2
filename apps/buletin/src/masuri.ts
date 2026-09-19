@@ -26,7 +26,7 @@
  * ghicit decât din tăcut, iar toleranța ei (pragul `INALTIMI.titlu`, rotunjirile în sus) acoperă
  * cele câteva procente de la un cuvânt-două îngroșate.
  */
-import { curatDeMarcaje } from './marcaje.js'
+import { bucatiPeRanduri, curatDeMarcaje } from './marcaje.js'
 
 // ---------------------------------------------------------------------------
 // Măsurile hârtiei, în puncte tipografice (1 pt = 1/72")
@@ -181,9 +181,18 @@ const RIGLA_PT = 0.5 + 1.6 * MM
  * Câte RÂNDURI DE TITLU ia un titlu, la lățimea coloanei — cu ruperea pe cuvinte, ca în pagină.
  * Un cuvânt mai lat decât coloana se rupe oricum (Chromium îl lasă să dea pe dinafară, dar noi
  * socotim rândurile pe care le-ar cere: tot în partea sigură).
+ *
+ * ⚠️ BARA RUPE RÂNDUL (19.09.2026). „CHIPUL BLÂND / AL DUHOVNICULUI" e scurt cât să încapă pe un
+ * rând, dar omul a cerut două, iar pagina i le dă (`<br>`, vezi `randNou`). Socoteala măsoară deci
+ * fiecare bucată deoparte și le adună — altfel ar promite un rând întreg de text care nu există.
  */
 export function liniileTitlului(titlu: string, corp: number): number {
-  const vorbe = curatDeMarcaje(titlu ?? '').toUpperCase().replace(/\s+/g, ' ').trim().split(' ').filter(Boolean)
+  return bucatiPeRanduri(curatDeMarcaje(titlu ?? '')).reduce((n, b) => n + liniileBucatii(b, corp), 0)
+}
+
+/** Rândurile unei singure bucăți de titlu — fără bare, doar ruperea firească pe cuvinte. */
+function liniileBucatii(bucata: string, corp: number): number {
+  const vorbe = bucata.toUpperCase().replace(/\s+/g, ' ').trim().split(' ').filter(Boolean)
   if (!vorbe.length) return 1
   const lat = (s: string): number =>
     [...s].reduce((n, c) => n + (LATIMI_TRAJAN[c] ?? LATIME_TRAJAN_MEDIE), 0) * corp
@@ -240,7 +249,8 @@ export const SEMNATURA = { corp: CORP_TEXT, pas: 1.3, jos: 1.4 } as const
 export function inaltimeaSemnaturii(semnatura: string | undefined): number {
   const s = curatDeMarcaje(semnatura ?? '').replace(/\s+/g, ' ').trim()
   if (!s) return 0
-  const linii = Math.max(1, Math.ceil(s.length / SEMNE_PE_RAND))
+  // ⚠️ Bara rupe rândul și aici (ca la titlu): fiecare bucată își cere rândurile ei, cel puțin unul.
+  const linii = bucatiPeRanduri(s).reduce((n, b) => n + Math.max(1, Math.ceil(b.length / SEMNE_PE_RAND)), 0)
   return (linii * SEMNATURA.corp * SEMNATURA.pas + SEMNATURA.jos * MM) / RAND
 }
 

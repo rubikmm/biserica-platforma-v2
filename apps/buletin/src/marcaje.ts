@@ -63,3 +63,41 @@ export const marcaj = (escapat: string): string =>
  */
 export const curatDeMarcaje = (text: string): string =>
   (text ?? '').replace(ALDIN, '$1').replace(CURSIV, '$1')
+
+/**
+ * BARA = RÂND NOU, dar NUMAI ÎN TITLU ȘI ÎN SEMNĂTURĂ (user, 19.09.2026, 18:07: „am vrut să scriu
+ * și la titlu principal așa CHIPUL BLÂND/ AL DUHOVNICULUI și nu a mers… `/` să fie rând următor").
+ * Cu sau fără aer în jur: „A/ B", „A / B", „A/B" se rup la fel, iar spațiile din jurul barei nu mai
+ * ajung pe hârtie.
+ *
+ * ⚠️ NU e un marcaj al întregului text, de aceea stă în funcția lui și nu în `marcaj()`: bara e
+ * literă cinstită în paragrafe („și/sau"), în sursă („http://x.ro/a/b") și în motto. Se cheamă doar
+ * acolo unde omul desenează un rând: titlul articolului și semnătura de sub el. Zona neagră își are
+ * despărțirea ei, mai veche și cu alt înțeles (`despartAutor` din `foaie.ts`).
+ *
+ * ⚠️ `curatDeMarcaje` NU o scoate: ea nu e un semn de stil, ci o rupere de rând. Unde se numără
+ * semnele unui rând (`masuri.ts`) se desparte la ea și se măsoară fiecare bucată.
+ *
+ * ⚠️ ORDINEA: `randNou` se cheamă pe textul ESCAPAT, ÎNAINTE de `marcaj()` — pe două temeiuri.
+ * Întâi, după marcaje în text umblă tagurile noastre, iar `</b>` are și el o bară: „DESPRE *POST*"
+ * ar ieși „DESPRE <b>POST<br>b>". Al doilea, bara nu e printre semnele înaintea cărora un marcaj
+ * are voie să se închidă, deci într-un titlu cu bara lipită de steluță aldinul nu s-ar pune; prefăcută
+ * întâi în `<br>`, ea devine chiar `<`, semn de închidere primit (vezi `INCHIDERE`).
+ */
+export const BARA_RAND_NOU = /\s*\/\s*/
+
+/**
+ * Textul escapat, cu barele prefăcute în `<br>`. Bucățile goale („A /", „//") nu lasă rânduri.
+ * Se cheamă ÎNTRE `esc()` și `marcaj()`.
+ */
+export const randNou = (escapat: string): string =>
+  (escapat ?? '').split(BARA_RAND_NOU).filter((b) => b !== '').join('<br>')
+
+/**
+ * Aceleași bucăți, pentru socoteală: rândurile pe care le-a cerut omul cu bara. Niciodată listă
+ * goală — un text fără bară e o singură bucată, el însuși.
+ */
+export const bucatiPeRanduri = (text: string): string[] => {
+  const bucati = (text ?? '').split(BARA_RAND_NOU).map((b) => b.trim()).filter(Boolean)
+  return bucati.length ? bucati : ['']
+}

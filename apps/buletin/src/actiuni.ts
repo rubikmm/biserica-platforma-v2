@@ -413,7 +413,7 @@ export const REGULI = [
    * reguli pe care un model mic le încurca. Acum e una singură, scrisă global, și de asta a ieșit de
    * pe câmpuri.
    */
-  'MARCAJELE TEXTULUI, la toate câmpurile de text ale foii (text, titlu, semnatura, sursa, nota, motto): `_între liniuțe de jos_` = cursiv, `*între steluțe*` = aldin, amândouă (`_*așa*_`) = aldin cursiv. Se trimit literă cu literă, cu semnele omului: nu adăuga marcaje de la tine și nu scoate marcajele lui.',
+  'MARCAJELE TEXTULUI, la toate câmpurile de text ale foii (text, titlu, semnatura, sursa, nota, motto): `_între liniuțe de jos_` = cursiv, `*între steluțe*` = aldin, amândouă (`_*așa*_`) = aldin cursiv. Se trimit literă cu literă, cu semnele omului: nu adăuga marcaje de la tine și nu scoate marcajele lui. În titlu și în semnătură, `/` = trecere la rândul următor (ex. «CHIPUL BLÂND / AL DUHOVNICULUI»); se trimite literă cu literă.',
   'Câte semne încap e scris în `buletin.masura` — cere-o înainte să scrii. Textul care nu încape NU se taie de API: `buletin.compune` refuză și spune cu cât e peste. Scurtează cu atât și încearcă iar.',
   'Calendarul de pe pagina 4 e programul săptămânii care începe a doua zi după data numărului; dacă textul nu încape, API-ul îl strânge singur (întâi fără sfinții duminicii, apoi fără pericopă) și spune ce treaptă a folosit.',
   'Dacă programul săptămânii nu e validat, se folosește ce e disponibil (propunerea) și răspunsul spune la început „PROPUS", în `atentie`. Nu e o greșeală, dar trebuie spus omului.',

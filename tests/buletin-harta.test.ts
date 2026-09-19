@@ -175,6 +175,21 @@ describe('sintaxa strictă — instrucțiune liberă, deci CU confirmare și cu 
     const p = potriveste('sursa: ziarullumina.ro', la('titlu', 's2'))
     expect(p).toMatchObject({ nivel: 'sigur', subiect: 's2', actiune: 'sursa', valoare: 'ziarullumina.ro' })
   })
+
+  /**
+   * ⚠️ BARA TRECE ÎNTREAGĂ (user, 19.09.2026, 18:07). În titlu ea înseamnă „rândul următor", deci
+   * harta n-are voie să o piardă: `curatat` lucrează numai pe partea din STÂNGA celor două puncte,
+   * iar valoarea se ia brută. Dacă cineva ar cutățui și dreapta, titlul ar ajunge pe un rând.
+   */
+  it('lasă bara și majusculele neatinse în valoarea de după două puncte', () => {
+    const p = potriveste('titlul la principal: CHIPUL BLÂND/ AL DUHOVNICULUI', la('text'))
+    expect(p).toMatchObject({
+      nivel: 'sigur',
+      subiect: 'principal',
+      actiune: 'titlu',
+      valoare: 'CHIPUL BLÂND/ AL DUHOVNICULUI',
+    })
+  })
 })
 
 describe('comenzile scurte', () => {

@@ -22,7 +22,7 @@
  */
 import { esc } from '@xc/ui'
 import { type ArticolCerut, type NumarCerut, PAGINI } from './masuri.js'
-import { curatDeMarcaje, marcaj } from './marcaje.js'
+import { curatDeMarcaje, marcaj, randNou } from './marcaje.js'
 // Trajan Pro 3 Regular: fontul Adobe original (v1.012, cu kerning), din familia trimisă de user pe
 // 17.09.2026 (abonament Adobe, liber din Adobe Fonts). Până atunci aveam un Regular extras dintr-un PDF,
 // fără kerning.
@@ -255,10 +255,15 @@ p.t i { font-style: italic; }
  * `marcaje.ts`; de aici se văd, fiindcă asta e ușa pe care le caută restul codului și probele.
  * Se aplică DUPĂ escapare, deci în pagină nu ajunge niciodată alt HTML decât al nostru.
  */
-export { curatDeMarcaje, marcaj }
+export { curatDeMarcaje, marcaj, randNou }
 
-/** Titlul, gata marcat — se cere de două ori: o dată pentru foaie, o dată ca să știm de Trajan Bold. */
-const titluMarcat = (titlu: string): string => marcaj(esc(titlu))
+/**
+ * Titlul, gata marcat — se cere de două ori: o dată pentru foaie, o dată ca să știm de Trajan Bold.
+ * ⚠️ Bara trece la rândul următor DOAR aici și la semnătură (`randNou`, vezi `marcaje.ts`): în
+ * paragrafe și în sursă e literă. Ordinea e `esc` → `randNou` → `marcaj`, cu temeiul scris la
+ * `BARA_RAND_NOU`: așa un titlu cu bara lipită de steluța de închidere iese totuși aldin și rupt.
+ */
+const titluMarcat = (titlu: string): string => marcaj(randNou(esc(titlu)))
 
 const paragrafe = (text: string): string[] =>
   text.split(/\n\s*\n|\r\n\r\n/).map((p) => p.replace(/\s+/g, ' ').trim()).filter(Boolean)
@@ -294,7 +299,7 @@ function zonaNeagra(a: ArticolCerut, mica: boolean, incepeArticol = false): stri
  */
 const titluArticol = (a: ArticolCerut): string =>
   `<h2 class="titlu-articol">${titluMarcat(a.titlu)}</h2>` +
-  (a.semnatura ? `<div class="semnatura">${marcaj(esc(a.semnatura))}</div>` : '') +
+  (a.semnatura ? `<div class="semnatura">${marcaj(randNou(esc(a.semnatura)))}</div>` : '') +
   '<div class="rigla"></div>'
 
 /*
@@ -639,8 +644,12 @@ function masuriDeSus(o: OptiuniFoaie): string {
 `
 }
 
-/** Aceleași bucăți, dar ca text curat — pentru arhivă și căutare. */
+/**
+ * Aceleași bucăți, dar ca text curat — pentru arhivă și căutare.
+ * ⚠️ FĂRĂ MARCAJE (19.09.2026): în arhivă se caută cuvinte, iar `*aldin*` ar rupe căutarea după
+ * „aldin". Steluțele și liniuțele nu se tipăresc, deci n-au ce căuta nici în textul de căutat.
+ */
 export const textCurat = (cerut: NumarCerut): string =>
-  [cerut.principal, ...(cerut.secundari ?? [])]
+  curatDeMarcaje([cerut.principal, ...(cerut.secundari ?? [])]
     .map((a) => `${a.autor}\n${a.titlu}\n${a.text}${a.sursa ? `\nSursa: ${a.sursa}` : ''}`)
-    .join('\n\n')
+    .join('\n\n'))

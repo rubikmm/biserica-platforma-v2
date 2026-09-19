@@ -205,6 +205,58 @@ describe('marcajele textului: _cursiv_ și *aldin*', () => {
 })
 
 /**
+ * BARA = RÂND NOU ÎN TITLU ȘI ÎN SEMNĂTURĂ (user, 19.09.2026, 18:07: „am vrut să scriu și la titlu
+ * principal așa CHIPUL BLÂND/ AL DUHOVNICULUI și nu a mers… `/` să fie rând următor").
+ *
+ * Probele păzesc și marginea regulii: bara e literă în paragrafe („și/sau") și în sursă („x.ro/a/b"),
+ * unde o rupere de rând ar strica un link. De asta nu e marcaj de text, ci funcție chemată anume.
+ */
+describe('bara care rupe rândul, în titlu și în semnătură', () => {
+  const cuTitlu = (titlu: string): string =>
+    foaieHtml({ cerut: { ...cerut, principal: { ...cerut.principal, titlu } }, dataScrisa: '20 septembrie 2026', calendar: null })
+
+  it('rupe titlul la bară și nu lasă nici bara, nici aerul din jurul ei', () => {
+    expect(cuTitlu('CHIPUL BLÂND/ AL DUHOVNICULUI'))
+      .toContain('<h2 class="titlu-articol">CHIPUL BLÂND<br>AL DUHOVNICULUI</h2>')
+    expect(cuTitlu('CHIPUL BLÂND / AL DUHOVNICULUI'))
+      .toContain('<h2 class="titlu-articol">CHIPUL BLÂND<br>AL DUHOVNICULUI</h2>')
+  })
+
+  /** ⚠️ Marcajul se pune întâi, bara pe urmă: altfel steluța ar cădea peste `<br>`-ul deja scris. */
+  it('merge împreună cu aldinul, pe aceeași bucată', () => {
+    expect(cuTitlu('*CHIPUL BLÂND*/ AL DUHOVNICULUI'))
+      .toContain('<h2 class="titlu-articol"><b>CHIPUL BLÂND</b><br>AL DUHOVNICULUI</h2>')
+  })
+
+  it('lasă neatins titlul fără bară', () => {
+    expect(cuTitlu('UN TITLU')).toContain('<h2 class="titlu-articol">UN TITLU</h2>')
+  })
+
+  it('rupe și semnătura', () => {
+    const html = foaieHtml({
+      cerut: { ...cerut, principal: { ...cerut.principal, semnatura: 'Text de: Părintele Mihail / Mănăstirea Antim' } },
+      dataScrisa: '20 septembrie 2026',
+      calendar: null,
+    })
+    expect(html).toContain('<div class="semnatura">Text de: Părintele Mihail<br>Mănăstirea Antim</div>')
+  })
+
+  it('NU rupe textul articolului: acolo bara e literă', () => {
+    const html = foaieHtml({
+      cerut: { ...cerut, principal: { ...cerut.principal, text: 'despre post și/sau rugăciune' } },
+      dataScrisa: '20 septembrie 2026',
+      calendar: null,
+    })
+    expect(html).toContain('despre post și/sau rugăciune')
+    expect(html).not.toContain('și<br>sau')
+  })
+
+  it('NU rupe sursa: un URL cu bare rămâne întreg', () => {
+    expect(sursaMarcata('http://x.ro/a/b')).toBe('<b>http://x.ro/a/b</b>')
+  })
+})
+
+/**
  * RÂNDUL „Sursa:" (user, 19.09.2026, 17:30: „să meargă și un link care e pus doar ca domeniu… sau o
  * carte în care folosim bold italic și scris normal… dar și combinație").
  *

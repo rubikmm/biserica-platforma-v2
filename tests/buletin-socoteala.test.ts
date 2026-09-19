@@ -16,6 +16,8 @@ import {
   SEMNE_PE_RAND,
   inaltimeaCalendarului,
   inaltimeaSemnaturii,
+  inaltimeaTitlului,
+  liniileTitlului,
   randuriPentru,
   semne,
   socoteste,
@@ -23,6 +25,7 @@ import {
   type ArticolCerut,
   type NumarCerut,
 } from '../apps/buletin/src/masuri.js'
+import { textCurat } from '../apps/buletin/src/foaie.js'
 
 const text = (n: number): string => 'a'.repeat(n)
 
@@ -140,6 +143,35 @@ describe('socoteala unui număr', () => {
     const faraS = socoteste(numar({ secundari: [articol(800, { poza: false })] }))
     const cuS = socoteste(numar({ secundari: [articol(800, { poza: false, semnatura })] }))
     expect(cuS.semneCuTot).toBeLessThan(faraS.semneCuTot)
+  })
+
+  /**
+   * BARA CERE UN RÂND, chiar dacă bucățile ar fi încăput pe unul singur (user, 19.09.2026, 18:07).
+   * „CHIPUL BLÂND / AL DUHOVNICULUI" intră pe un rând de Trajan 21 pt, dar pe hârtie stă pe două —
+   * iar socoteala trebuie să plătească rândul al doilea, altfel promite text care nu mai încape.
+   */
+  it('numără rândurile cerute cu bara, în titlu și în semnătură', () => {
+    expect(liniileTitlului('CHIPUL BLÂND', 21)).toBe(1)
+    expect(liniileTitlului('CHIPUL BLÂND / AL DUHOVNICULUI', 21)).toBe(2)
+    expect(liniileTitlului('CHIPUL BLÂND/ AL DUHOVNICULUI', 21)).toBe(2)
+    expect(liniileTitlului('CHIPUL BLÂND / AL DUHOVNICULUI', 17)).toBe(2)
+    // aceeași vorbă fără bară încape pe un rând: bara e cea care cere al doilea
+    expect(liniileTitlului('CHIPUL BLÂND AL', 21)).toBe(1)
+    expect(liniileTitlului('CHIPUL BLÂND / AL', 21)).toBe(2)
+    expect(inaltimeaTitlului('CHIPUL BLÂND / AL', true))
+      .toBeGreaterThan(inaltimeaTitlului('CHIPUL BLÂND AL', true))
+    expect(inaltimeaSemnaturii('Text de: Ion / Mănăstirea Antim'))
+      .toBeGreaterThan(inaltimeaSemnaturii('Text de: Ion Mănăstirea Antim'))
+  })
+
+  /** Textul pus în arhivă e pentru CĂUTARE: marcajele l-ar rupe („*răspicat*" ≠ „răspicat"). */
+  it('trimite în arhivă textul fără marcaje', () => {
+    const curat = textCurat(numar({
+      principal: { autor: 'SFÂNTUL IERARH NICOLAE', titlu: '*a* _b_', text: 'a spus *răspicat* și _blând_' },
+    }))
+    expect(curat).toContain('a b')
+    expect(curat).toContain('a spus răspicat și blând')
+    expect(curat).not.toContain('*')
   })
 
   it('refuză mai mult de doi secundari', () => {
