@@ -5,7 +5,7 @@
  * `apps/buletin/unelte/proba-foaie.mjs`), ci păzesc stilul de o „îndreptare" nevinovată.
  */
 import { describe, expect, it } from 'vitest'
-import { SUBSOL, foaieHtml } from '../apps/buletin/src/foaie.js'
+import { SUBSOL, foaieHtml, sursaMarcata } from '../apps/buletin/src/foaie.js'
 import type { NumarCerut } from '../apps/buletin/src/masuri.js'
 
 const cerut: NumarCerut = {
@@ -117,5 +117,55 @@ describe('măsurile cerute de user pe 18.09.2026', () => {
     expect(html).toMatch(/\.subsol \.adresa \{ font-weight: 700; \}/)
     expect(html).toContain(`<div class="adresa">${SUBSOL[SUBSOL.length - 1]}</div>`)
     expect(html).toContain(`<div>${SUBSOL[0]}</div>`)
+  })
+})
+
+/**
+ * RÂNDUL „Sursa:" (user, 19.09.2026, 17:30: „să meargă și un link care e pus doar ca domeniu… sau o
+ * carte în care folosim bold italic și scris normal… dar și combinație").
+ *
+ * Reperul e nr. 615, singurul număr vechi rămas pe disc: acolo „Sursa: " e scris normal (Calibri
+ * regular), iar „ziarullumina.ro" aldin (Calibri-Bold) — deci domeniul rămâne aldin ca atunci.
+ */
+describe('marcajul rândului „Sursa:"', () => {
+  const cuSursa = (s: string): string =>
+    foaieHtml({ cerut: { ...cerut, principal: { ...cerut.principal, sursa: s } }, dataScrisa: '20 septembrie 2026', calendar: null })
+
+  it('scrie aldin un domeniu pus singur, ca în nr. 615', () => {
+    expect(sursaMarcata('doxologia.ro')).toBe('<b>doxologia.ro</b>')
+    expect(cuSursa('doxologia.ro')).toContain('Sursa: <b>doxologia.ro</b>')
+  })
+
+  it('scrie titlul cărții aldin cursiv, iar editura, anul și pagina normal', () => {
+    const scris = sursaMarcata('*Cuvinte de folos*, Editura Doxologia, 2020, p. 12')
+    expect(scris).toBe('<b><i>Cuvinte de folos</i></b>, Editura Doxologia, 2020, p. 12')
+    // ⚠️ „p. 12" și anul NU sunt domenii: un TLD deschis le-ar fi făcut aldine
+    expect(scris).not.toContain('<b>p')
+    expect(scris).not.toContain('<b>2020')
+  })
+
+  it('le ține pe amândouă în același rând: cartea aldin cursiv, domeniul aldin, restul normal', () => {
+    expect(sursaMarcata('*Cuvinte de folos*, Iași, 2020; doxologia.ro'))
+      .toBe('<b><i>Cuvinte de folos</i></b>, Iași, 2020; <b>doxologia.ro</b>')
+  })
+
+  /** Fără regula asta, toate numerele deja compuse și-ar schimba fața la o recompunere. */
+  it('lasă aldină ÎNTREAGĂ o sursă fără steluțe și fără domeniu, ca până acum', () => {
+    expect(sursaMarcata('Părintele X, predică')).toBe('<b>Părintele X, predică</b>')
+    expect(cuSursa('Părintele X, predică')).toContain('Sursa: <b>Părintele X, predică</b>')
+  })
+
+  it('nu se încrede în prescurtările unei trimiteri de carte („vol.II", „Ed.IBMBOR")', () => {
+    expect(sursaMarcata('*Omilii la Matei*, vol.II, Ed.IBMBOR, p.45'))
+      .toBe('<b><i>Omilii la Matei</i></b>, vol.II, Ed.IBMBOR, p.45')
+  })
+
+  it('prinde și un URL întreg, dar lasă punctul de la capăt în afara aldinei', () => {
+    expect(sursaMarcata('vezi https://doxologia.ro/cuvinte-de-folos.'))
+      .toBe('vezi <b>https://doxologia.ro/cuvinte-de-folos</b>.')
+  })
+
+  it('escapează înainte să pună marcajele, deci din sursă nu iese alt HTML', () => {
+    expect(sursaMarcata('*<b>x</b>*')).toBe('<b><i>&lt;b&gt;x&lt;/b&gt;</i></b>')
   })
 })

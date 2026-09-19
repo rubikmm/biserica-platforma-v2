@@ -70,7 +70,8 @@ export const INTREBARI_SIMPLE: Partial<Record<CheieIntrebare, string>> = {
   motto: 'Care este motto-ul numărului?',
   autor: 'Cine e autorul {articol}?',
   ani: 'Știi anii vieții? (sau „nu")',
-  sursa: 'Care e sursa textului? (sau „nu")',
+  // titlul de carte se dă între steluțe: pe foaie iese aldin cursiv (vezi `sursaMarcata`, foaie.ts)
+  sursa: 'Care e sursa textului? Un domeniu („doxologia.ro") sau o carte, cu titlul *între steluțe*. (sau „nu")',
 }
 
 /** Cheia din KV `CONFIG` sub care stau întrebările schimbate de adminul buletinului. */

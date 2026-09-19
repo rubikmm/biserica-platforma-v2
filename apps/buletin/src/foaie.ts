@@ -181,7 +181,10 @@ p.t { margin: 0; text-align: justify; text-indent: 10mm; hyphens: none; }
    10.5 pt, „text scris prea mic" (user, 23:07). */
 .sursa { font-family: "Carlito", Calibri, sans-serif; font-size: 13pt; line-height: 1.26; border-top: .5pt solid #000;
          margin-top: 1.4mm; padding-top: .8mm; text-align: left; }
+/* Aldinul sursei si titlul de carte din ea: *intre stelute* iese aldin CURSIV (user, 19.09.2026).
+   ⚠️ Stilul e un template literal: fara accente grave in comentariile astea, inchid sirul. */
 .sursa b { font-weight: 700; }
+.sursa i { font-style: italic; }
 .sursa .nota { text-align: justify; margin-bottom: .4mm; }
 
 /* Pagina a patra: calendarul peste toată lățimea, sub coloane, și subsolul fix.
@@ -263,10 +266,60 @@ const titluArticol = (a: ArticolCerut): string =>
   (a.semnatura ? `<div class="semnatura">${esc(a.semnatura)}</div>` : '') +
   '<div class="rigla"></div>'
 
+/*
+ * MARCAJUL SURSEI (user, 19.09.2026, 17:30: „să meargă și un link care e pus doar ca domeniu
+ * (ex.: doxologia.ro) sau o carte în care folosim bold italic și scris normal (ex. Vezi buletinele
+ * trecute) dar și combinație").
+ *
+ * ⚠️ Lista TLD-urilor e ÎNCHISĂ, nu un `[a-z]{2,}` oarecare, și e aceeași cu `TLD_CUNOSCUT` din
+ * `schita.ts`: tot ea hotărăște ce e domeniu și când sursa se PROPUNE din text. Într-o trimitere de
+ * carte stau „p.12", „vol.II", „Ed.IBMBOR" — cu un TLD deschis, toate trei ar ieși aldine. Un
+ * `http(s)://` scris pe față trece oricum, cu orice terminație.
+ */
+const TLD_SURSA = 'ro|com|org|net|md|eu|info|gr|ru|it|fr|de|uk|tv'
+const DOMENIU_SURSA = new RegExp(
+  `\\bhttps?:\\/\\/\\S+|\\b(?:www\\.)?[a-z0-9-]+(?:\\.[a-z0-9-]+)*\\.(?:${TLD_SURSA})\\b(?:\\/\\S*)?`,
+  'gi',
+)
+/** Titlul cărții sau al articolului, scris de om între steluțe — ca marcajul `cursiv` al corpului. */
+const TITLU_SURSA = /\*([^*\n]{1,400})\*/g
+
+/**
+ * CUM SE SCRIE SURSA pe foaie. Trei feluri de scris pe același rând:
+ *
+ *   - `*între steluțe*` → **aldin cursiv** (`<b><i>`): titlul cărții sau al articolului;
+ *   - un domeniu ori un URL de sine stătător → **aldin**, cum a fost dintotdeauna (nr. 615:
+ *     „Sursa: " scris normal, „ziarullumina.ro" aldin);
+ *   - restul (autor, editură, oraș, an, pagină) → **scris normal**.
+ *
+ * ⚠️ O sursă FĂRĂ steluțe și FĂRĂ domeniu rămâne ALDINĂ ÎNTREAGĂ, ca până acum — altfel toate
+ * numerele deja compuse („Părintele X, predică") și-ar schimba fața la o recompunere.
+ *
+ * Marcajele se pun DUPĂ escapare, ca la `cursiv`: în pagină nu ajunge alt HTML decât al nostru.
+ */
+export function sursaMarcata(text: string): string {
+  const escapat = esc(text)
+  // split cu grup prins: bucățile pare sunt scrisul normal, cele impare au stat între steluțe
+  const bucati = escapat.split(TITLU_SURSA)
+  let marcat = bucati.length > 1
+  const scris = bucati
+    .map((b, i) => {
+      if (i % 2 === 1) return `<b><i>${b}</i></b>`
+      return b.replace(DOMENIU_SURSA, (gasit) => {
+        marcat = true
+        // punctul sau virgula de după adresă nu fac parte din ea, deci rămân în afara aldinei
+        const coada = /[.,;:]+$/.exec(gasit)?.[0] ?? ''
+        return `<b>${coada ? gasit.slice(0, -coada.length) : gasit}</b>${coada}`
+      })
+    })
+    .join('')
+  return marcat ? scris : `<b>${escapat}</b>`
+}
+
 /** Rândul sursei; deasupra lui, dacă e, mențiunea (de unde e luat textul, în cuvinte). */
 const sursa = (a: ArticolCerut): string =>
   a.sursa
-    ? `<div class="sursa">${a.nota ? `<div class="nota">${esc(a.nota)}</div>` : ''}Sursa: <b>${esc(a.sursa)}</b></div>`
+    ? `<div class="sursa">${a.nota ? `<div class="nota">${esc(a.nota)}</div>` : ''}Sursa: ${sursaMarcata(a.sursa)}</div>`
     : ''
 
 /**

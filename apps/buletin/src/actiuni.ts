@@ -84,7 +84,7 @@ const Articol = z.object({
   titlu: z.string().optional().describe('titlul articolului, cu majuscule, scurt — intră pe cel mult trei rânduri; lipsă = „TITLU ARTICOL", de probă'),
   semnatura: z.string().optional().describe('rândul de sub titlu, aldin, cu corpul textului: „Text de: Părintele Mihail Stanciu, fost stareț al Mănăstirii Antim". Se scrie întreg, cum l-a spus omul — „Text de:" nu se adaugă din cod'),
   text: z.string().optional().describe('textul articolului; paragrafele se despart cu rând gol; *între steluțe* = cursive (citatele din Scriptură); lipsă = Lorem ipsum, exact cât încape'),
-  sursa: z.string().optional().describe('de unde e luat: „ziarullumina.ro"; lipsă = „-"'),
+  sursa: z.string().optional().describe('de unde e luat, literă cu literă cum a scris omul: un domeniu simplu („doxologia.ro") sau o trimitere de carte, cu titlul *între steluțe* („*Cuvinte de folos*, Editura Doxologia, Iași, 2020, p. 12"); lipsă = „-"'),
   nota: z.string().optional().describe('mențiunea de deasupra sursei, în cuvinte: „Mesajul Patriarhului Daniel la proclamarea locală a canonizării…"'),
   poza: z.boolean().optional().describe('are poză? la principal e poza mare de pe pagina întâi, la secundar una mică'),
 })
@@ -443,6 +443,12 @@ export const REGULI = [
    */
   'OBIECTELE FOII, pe care le poți schimba oricând, și numele lor: motto, moto_autor, iar la fiecare articol text, autor, ani, pomenire, titlu, semnatura, sursa, nota, poza. Articolele sunt trei: `principal`, `s1` (secundar 1), `s2` (secundar 2).',
   'semnatura (rândul de sub titlu, aldin, de ex. «Text de: Părintele Mihail Stanciu, fost stareț al Mănăstirii Antim») se dă oricând, ca `nota`. Trimite-o literă cu literă, cum a spus-o omul: nu adăuga tu „Text de:" și nu o confunda cu `autor`, care e scrisul alb din zona neagră.',
+  /*
+   * ⚠️ MARCAJUL SURSEI (user, 19.09.2026, 17:30). Steluțele din `sursa` nu înseamnă același lucru ca
+   * în `text` — acolo sunt cursive, aici titlu de carte, aldin cursiv. De asta regula e scrisă pe
+   * câmp, nu global: un model care duce regula lui `text` peste tot ar crede că strică ceva.
+   */
+  'sursa se scrie CUM A SPUS-O OMUL, literă cu literă, cu steluțele lui: un domeniu se dă simplu, «doxologia.ro» (iese aldin pe foaie, ca dintotdeauna); la o carte, titlul stă *între steluțe* și iese aldin cursiv, iar autorul, editura, orașul, anul și pagina rămân scrise normal — «*Cuvinte de folos*, Editura Doxologia, Iași, 2020, p. 12»; merg și amândouă în același rând. Nu adăuga și nu scoate steluțe, nu rescrie sursa și nu pune „Sursa:" în valoare — cuvântul îl scrie foaia.',
   'O instrucțiune care numește un obiect al foii și (dacă spune) un articol se traduce DIRECT în `buletin.raspunde`, fără să întrebi nimic: „schimbă motto-ul în X" → {subiect:"motto", valoare:"X"}; „titlul articolului secundar 1: Y" → {subiect:"titlu", valoare:"Y", articol:"s1"}; „scoate secundarul 2" → {subiect:"sterge_secundar"}. Valoarea e literă cu literă ce a scris omul.',
   'Lasă `articol` GOL când omul răspunde la întrebarea pe care tocmai i-ai pus-o. Scrie-l numai când omul spune el despre care articol e vorba. Dacă `intrebare` vine `null`, nu mai întreba nimic — spune doar ce s-a schimbat.',
 ]
