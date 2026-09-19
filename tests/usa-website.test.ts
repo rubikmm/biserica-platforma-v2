@@ -4,16 +4,17 @@ import { navigatieDin } from '../packages/config/src/index.js'
 import { PERMISIUNI_IMPLICITE, SCOPE_GLOBAL } from '../packages/contracts/src/index.js'
 
 /**
- * UȘA WEBSITE-ULUI — semnele de stare de pe butoanele aplicațiilor.
+ * UȘA WEBSITE-ULUI — butoanele aplicațiilor arată TOATE LA FEL, pentru toată lumea.
  *
- * ⚠️ Regula, cerută de user pe 17.09.2026, seara („voiam doar admin"): chenarele verzi și roșii
- * sunt însemnările NOASTRE de șantier și se văd NUMAI la admin. Pe ușa publică butoanele arată
- * toate la fel, ca până pe 17.09.
+ * ⚠️ Regula de azi (user, 18.09.2026: „scoate bordurile și pentru admini — nu mai sunt relevante").
+ * Semnele de stare — chenar verde `bine`, chenar roșu `urgent` — au trăit o zi (cerute pe 17.09,
+ * restrânse seara la admin) și au fost scoase cu totul. Ușa se întoarce la regula veche, a userului
+ * din 10.09.2026: butoanele se deosebesc numai prin nume.
  *
- * De ce merită probe: e o scurgere tăcută. Dacă poarta cade, nimic nu se strică și nicio eroare nu
- * apare — doar că enoriașul citește pe ușa parohiei un chenar roșu la „Curățenia bisericii" și
- * înțelege că aplicația e stricată. Iar cealaltă direcție (chenarele dispărute și la admin) trece
- * la fel de nevăzută, fiindcă totul arată curat.
+ * De ce merită probe: întoarcerea ar fi tăcută. Chenarele nu strică nimic și nu dau nicio eroare —
+ * doar că enoriașul citește pe ușa parohiei un chenar roșu la „Curățenia bisericii" și înțelege că
+ * aplicația e stricată. Probele astea păzesc și faptul că ușa e ACEEAȘI pentru oricine intră:
+ * aceleași butoane, în aceeași ordine, cu aceleași adrese, cu cont sau fără.
  */
 
 const CONFIG = {
@@ -54,13 +55,14 @@ function sesiune(roluri: string[], intrat = true) {
 }
 
 /**
- * AUTORIZAREA, ca la adevărat.
+ * AUTORIZAREA, ca la adevărat: răspunde din rolurile EFECTIVE ale sesiunii (deci și masca) plus
+ * granturile punctuale. Un `{}` întors de-a valma ar însemna „refuz" la orice și ar face probele să
+ * treacă ori să cadă pe o cauză greșită.
  *
- * ⚠️ Din 18.09.2026 chenarele NU mai atârnă de rolul citit din sesiune, ci de cheia Website-ului
- * (`website.manage`), hotărâtă de autorizarea centrală — așa poate fi cineva administrator numai
- * aici. Deci proba trebuie să răspundă ca serviciul: din rolurile EFECTIVE ale sesiunii (deci și
- * masca) plus granturile punctuale. Un `{}` întors de-a valma ar fi însemnat „refuz" la orice și ar
- * fi făcut proba să cadă pe o cauză greșită.
+ * ⚠️ Ușa nu mai întreabă ea însăși autorizarea de nimic (chenarele, singurul lucru care atârna de
+ * cheia `website.manage`, s-au scos pe 18.09.2026) — dar pagina trece prin `@xc/setari`, care o
+ * poate întreba. Și tocmai de-aia probele cu `website.manage` rămân: ele arată că nici cheia de
+ * administrator al Website-ului nu mai schimbă ușa.
  */
 function autorizare(roluri: string[], granturi: string[] = []) {
   return {
@@ -107,85 +109,87 @@ const usa = (env: unknown, cuCont = true) =>
     env as never,
   )
 
-describe('ușa Website-ului — semnele de stare sunt numai ale adminului', () => {
-  it('fără admin, niciun buton nu poartă stare', () => {
+/** Butoanele aplicațiilor din pagina întreagă: numele și adresa fiecăruia, în ordine. */
+function butoaneleUsii(pagina: string): string[] {
+  const nav = pagina.match(/<nav class="apps"[\s\S]*?<\/nav>/)
+  expect(nav, 'lipsește <nav class="apps"> din pagină').toBeTruthy()
+  return [...(nav?.[0] ?? '').matchAll(/<a href="([^"]*)"[^>]*><b>([^<]+)<\/b>/g)]
+    .map((m) => `${m[2]} → ${m[1]}`)
+}
+
+/** Clasele de stare de odinioară — niciuna nu mai are voie să apară nicăieri. */
+function claseDeStare(pagina: string): string[] {
+  return [...pagina.matchAll(/class="(bine|urgent)"/g)].map((m) => m[0])
+}
+
+describe('ușa Website-ului — butoanele arată la fel pentru toată lumea', () => {
+  it('`corp` nu pune nicio clasă pe butoane', () => {
     const html = corp(NAV)
-    expect(html).not.toContain('class="bine"')
-    expect(html).not.toContain('class="urgent"')
-    // …dar butoanele sunt toate acolo: poarta e pe CULOARE, nu pe ce se vede.
+    expect(claseDeStare(html)).toEqual([])
+    // niciun `<a ... class=...>` în lista de aplicații, oricum s-ar chema clasa
+    expect(html).not.toMatch(/<a href="[^"]*"\s+class=/)
+    // …dar butoanele sunt toate acolo
     expect(html).toContain('Curățenia bisericii')
     expect(html).toContain('Calendarul')
-  })
-
-  it('la admin, chenarele apar — verde și roșu', () => {
-    const html = corp(NAV, true)
-    expect(html).toContain('class="bine"')
-    expect(html).toContain('class="urgent"')
-  })
-
-  it('ușa arată aceleași butoane, în aceeași ordine, la amândoi', () => {
-    const nume = (h: string) => [...h.matchAll(/<b>([^<]+)<\/b>/g)].map((m) => m[1])
-    expect(nume(corp(NAV))).toEqual(nume(corp(NAV, true)))
+    expect(butoaneleUsii(html)).toHaveLength(12)
   })
 
   it('enoriașul neautentificat primește ușa fără chenare', async () => {
     const raspuns = await usa(mediu(sesiune([], false)), false)
     const text = await raspuns.text()
     expect(raspuns.status).toBe(200)
-    expect(text).not.toContain('class="bine"')
-    expect(text).not.toContain('class="urgent"')
+    expect(claseDeStare(text)).toEqual([])
   })
 
-  it('utilizatorul cu cont, dar fără rol de admin, tot nu le vede', async () => {
+  it('utilizatorul cu cont nu vede chenare', async () => {
     const text = await (await usa(mediu(sesiune(['user'])))).text()
-    expect(text).not.toContain('class="bine"')
-    expect(text).not.toContain('class="urgent"')
+    expect(claseDeStare(text)).toEqual([])
   })
 
-  it('adminul și super-adminul le văd', async () => {
+  it('nici adminul, nici super-adminul nu mai văd chenare', async () => {
     for (const rol of ['admin', 'super-admin']) {
       const text = await (await usa(mediu(sesiune([rol])))).text()
-      expect(text, rol).toContain('class="bine"')
-      expect(text, rol).toContain('class="urgent"')
+      expect(claseDeStare(text), rol).toEqual([])
     }
   })
 
   /*
-   * ⚠️ ADMINII PE APLICAȚIE (18.09.2026). Chenarele sunt ale Website-ului, deci le vede cine ține
-   * Website-ul: un om cu rolul `user` și cheia `website.manage` dată punctual. Iar un administrator
-   * al altei aplicații NU le vede — altfel „admin doar pe aplicația respectivă" ar fi o vorbă.
+   * ⚠️ ADMINII PE APLICAȚIE. Cheia Website-ului (`website.manage`) era singurul lucru de care
+   * atârnau chenarele; proba rămâne ca să arate că nici ea nu mai schimbă nimic pe ușă.
    */
-  it('un om numit admin NUMAI la Website le vede, cu rolul `user`', async () => {
+  it('nici omul numit admin NUMAI la Website nu vede chenare', async () => {
     const text = await (await usa(mediu(sesiune(['user']), ['website.manage']))).text()
-    expect(text).toContain('class="bine"')
-    expect(text).toContain('class="urgent"')
+    expect(claseDeStare(text)).toEqual([])
   })
 
-  it('adminul altei aplicații (Programul) nu le vede', async () => {
-    const text = await (await usa(mediu(sesiune(['user']), ['program.write', 'program.publish']))).text()
-    expect(text).not.toContain('class="bine"')
-    expect(text).not.toContain('class="urgent"')
-  })
-
-  /*
-   * ⚠️ Masca „vezi ca": identitatea întoarce în `roles` MASCA, nu rolurile adevărate, deci
-   * super-adminul care se uită „ca utilizator" vede ușa exact ca omul. Proba ține legătura asta:
-   * dacă vreodată `eAdmin` s-ar calcula din altceva (rolurile reale, un câmp nou), chenarele ar
-   * reapărea sub mască și previzualizarea ar minți.
-   */
-  it('sub masca „vezi ca utilizator", super-adminul vede ușa omului', async () => {
+  it('sub masca „vezi ca utilizator", ușa e tot cea a omului', async () => {
     const subMasca = { ...sesiune(['user']), veziCa: 'user', poateVedeaCa: true }
     const text = await (await usa(mediu(subMasca))).text()
-    expect(text).not.toContain('class="bine"')
-    expect(text).not.toContain('class="urgent"')
+    expect(claseDeStare(text)).toEqual([])
   })
 
   /*
-   * ⚠️ Ușa anonimă se ține în cache-ul public 300 s. Dacă pagina adminului ar căpăta vreodată
-   * același antet, chenarele ar putea fi servite de cache oricui — de aceea proba stă aici, lângă
-   * regula pe care o apără, nu în `securitate.test.ts`.
+   * ⚠️ MIEZUL REGULII: ușa nu se schimbă după cine intră. Aceleași butoane, în aceeași ordine, cu
+   * aceleași adrese — la anonim, la om cu cont și la adminul Website-ului.
    */
-  it('pagina care poartă chenare nu se ține în niciun cache', async () => {
+  it('aceleași butoane, în aceeași ordine, cu aceleași adrese, la toți', async () => {
+    const alOmului = butoaneleUsii(await (await usa(mediu(sesiune([], false)), false)).text())
+    expect(alOmului.length).toBeGreaterThan(0)
+    for (const [cine, env] of [
+      ['cu cont', mediu(sesiune(['user']))],
+      ['admin platformă', mediu(sesiune(['admin']))],
+      ['admin Website', mediu(sesiune(['user']), ['website.manage'])],
+    ] as const) {
+      expect(butoaneleUsii(await (await usa(env)).text()), cine).toEqual(alOmului)
+    }
+  })
+
+  /*
+   * ⚠️ Ușa anonimă se ține în cache-ul public 300 s, iar cea a omului intrat deloc: pagina poartă
+   * numele lui în antet (user, 11.09.2026). Proba stă aici fiindcă apără cealaltă jumătate a
+   * regulii — ce e al unuia să nu ajungă prin cache la altul.
+   */
+  it('pagina omului intrat nu se ține în niciun cache, cea anonimă da', async () => {
     const alAdminului = await usa(mediu(sesiune(['admin'])))
     expect(alAdminului.headers.get('cache-control')).toBe('private, no-store')
     const alOmului = await usa(mediu(sesiune([], false)), false)

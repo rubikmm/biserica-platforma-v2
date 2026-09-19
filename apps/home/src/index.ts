@@ -8,7 +8,6 @@
  */
 import { SESIUNE_ANONIMA } from '@xc/contracts'
 import { principalDin, sesiuneCurenta, verificaCsrf } from '@xc/auth'
-import { eAdminulAplicatiei } from '@xc/authorization'
 import { ruteazaSetari, STIL_SETARI } from '@xc/setari'
 import { adresaPaginii, citesteConfig, navigatieDin, type Navigatie } from '@xc/config'
 import { correlationId, Logger } from '@xc/observability'
@@ -56,26 +55,20 @@ export interface Env {
  * Aplicatiile platformei. Se adauga aici pe masura ce se poarta — dar NUMAI dupa ce adresa
  * lor raspunde: un buton care n-ar duce nicaieri n-are cum sa se deosebeasca de unul bun.
  *
- * ⚠️ `stare` e SEMNUL DE LUCRU cerut de user (17.09.2026): chenar verde „aici stam bine, am
- * avansat destul", chenar rosu „aici e urgent de rezolvat". Rastoarna regula veche „toate
- * butoanele arata la fel" (user, 10.09.2026) — de atunci butoanele se deosebeau doar prin nume.
- * Cine n-are `stare` ramane cu chenarul obisnuit.
- *
- * ⚠️⚠️ SE VAD NUMAI LA ADMIN (user, 17.09.2026, seara: „voiam doar admin"). Sunt insemnarile
- * NOASTRE de santier, nu o informatie pentru enorias: pe usa publica, rosul de la Curatenie ori
- * de la Transmisiune ar citi „aplicatia asta e stricata". Poarta e `eAdmin` din sesiunea
- * EFECTIVA, deci masca „vezi ca" le stinge singura — super-adminul vede usa exact ca omul.
+ * ⚠️ TOATE BUTOANELE ARATA LA FEL (user, 10.09.2026, intarit pe 18.09.2026: „scoate bordurile si
+ * pentru admini — nu mai sunt relevante"). Semnele de stare — chenar verde/rosu, tinute o zi doar
+ * pentru admini — au fost scoase cu totul: butoanele se deosebesc numai prin nume.
  */
-const APLICATII: Array<{ cheie: keyof Navigatie; nume: string; stare?: 'bine' | 'urgent' }> = [
-  { cheie: 'calendar', nume: 'Calendarul', stare: 'bine' },
-  { cheie: 'program', nume: 'Programul liturgic', stare: 'bine' },
+const APLICATII: Array<{ cheie: keyof Navigatie; nume: string }> = [
+  { cheie: 'calendar', nume: 'Calendarul' },
+  { cheie: 'program', nume: 'Programul liturgic' },
   // Tipicul a luat locul transmisiunii in direct (user, 17.09.2026); directul a coborat in locul lui.
   { cheie: 'tipic', nume: 'Tipicul' },
   // Emisia parohiei, doua butoane fiindca sunt doua aplicatii (user, 14.09.2026): radioul si
   // directul slujbei. Radioul a ramas langa program, de unde vin slujbele care se transmit.
-  { cheie: 'radio', nume: 'Radioul parohiei', stare: 'bine' },
-  { cheie: 'curatenie', nume: 'Curățenia bisericii', stare: 'urgent' },
-  { cheie: 'live', nume: 'Transmisiunea în direct', stare: 'urgent' },
+  { cheie: 'radio', nume: 'Radioul parohiei' },
+  { cheie: 'curatenie', nume: 'Curățenia bisericii' },
+  { cheie: 'live', nume: 'Transmisiunea în direct' },
   { cheie: 'biblia', nume: 'Biblia' },
   { cheie: 'biblioteca', nume: 'Biblioteca' },
   { cheie: 'buletin', nume: 'Buletinul parohial' },
@@ -92,13 +85,6 @@ const LOCAL_APP = `
           border:1px solid var(--rule); border-radius:10px; color:var(--ink);
           text-decoration:none; font:15px/1.2 ui-sans-serif,system-ui }
 .apps a:hover { border-color:var(--rosu); color:var(--rosu) }
-/* Semnele de stare (user, 17.09.2026). Culorile sunt cele ale carcasei, deci se schimba singure la
-   tema intunecata: --azi e verdele ei, --rosu rosul ei. Chenar SUBTIRE, de 1px, ca al celorlalte
-   casute (user, 17.09.2026) — se deosebeste numai culoarea, nu si grosimea. Regulile stau DUPA
-   :hover si repeta starea si pe hover — altfel hover-ul ar spala culoarea.
-   ⚠️ Fara backtick-uri in comentariu: stilul e un template literal, un backtick il taie in doua. */
-.apps a.bine, .apps a.bine:hover { border-color:var(--azi) }
-.apps a.urgent, .apps a.urgent:hover { border-color:var(--rosu) }
 .apps b { display:block; font-weight:400 }
 .apps .adr { display:block; margin-top:4px; font:11.5px/1.2 ui-sans-serif,system-ui;
              color:var(--faint); letter-spacing:.01em }
@@ -181,21 +167,20 @@ scrieți-ne și le ștergem, fără să vă cerem o pricină.</p>
 <p>Dacă schimbăm ceva aici, scriem data de mai sus. Nu schimbăm în tăcere la ce folosim datele.</p>
 </div>`
 
-function buton(nume: string, url: string, stare?: 'bine' | 'urgent'): string {
+function buton(nume: string, url: string): string {
   const adresa = url.replace(/^https:\/\/|\/$/g, '') || 'aici'
-  const clasa = stare ? ` class="${stare}"` : ''
-  return `    <a href="${esc(url)}${url.startsWith('/') ? '/' : ''}"${clasa}><b>${esc(nume)}</b><span class="adr">${esc(adresa)}</span></a>`
+  return `    <a href="${esc(url)}${url.startsWith('/') ? '/' : ''}"><b>${esc(nume)}</b><span class="adr">${esc(adresa)}</span></a>`
 }
 
 /**
- * Butoanele aplicatiilor. `eAdmin` hotaraste DOAR semnele de stare (user, 17.09.2026): butoanele,
- * numele si adresele sunt aceleasi pentru toata lumea — usa nu se schimba dupa cine intra.
+ * Butoanele aplicatiilor. Usa e ACEEASI pentru toata lumea — butoanele, numele si adresele nu se
+ * schimba dupa cine intra (user, 18.09.2026, dupa scoaterea semnelor de stare).
  *
  * ⚠️ Exportata ca s-o poata proba `tests/usa-website.test.ts` fara sa ridice tot workerul.
  */
-export function corp(nav: Navigatie, eAdmin = false): string {
+export function corp(nav: Navigatie): string {
   return `<nav class="apps" aria-label="Aplicațiile platformei">
-${APLICATII.map((a) => buton(a.nume, nav[a.cheie] || '/', eAdmin ? a.stare : undefined)).join('\n')}
+${APLICATII.map((a) => buton(a.nume, nav[a.cheie] || '/')).join('\n')}
   </nav>`
 }
 
@@ -226,15 +211,11 @@ export default {
 
     const sesiune = await sesiuneCurenta(env.IDENTITATE, req).catch(() => SESIUNE_ANONIMA)
     const utilizator = sesiune.user?.displayName ?? sesiune.user?.email ?? null
-    const principal = principalDin(sesiune)
     /*
-     * ⚠️ DOUA LUCRURI DEOSEBITE, din 18.09.2026:
-     *  - `eAdmin` — administratorul WEBSITE-ului, venit din cheia lui (`website.manage`). De el atarna
-     *    chenarele de stare de pe usa (insemnarile noastre de santier, user 17.09.2026), ca si pana
-     *    acum — se schimba doar de unde se afla raspunsul, ca sa poata fi cineva admin numai aici.
-     *  - `eAdminPlatforma` — rolul global; din el iese DOAR randul „Administrare" din meniul contului.
+     * `eAdminPlatforma` — rolul GLOBAL; din el iese DOAR randul „Administrare" din meniul contului.
+     * ⚠️ Usa nu mai intreaba autorizarea de nimic (18.09.2026): cheia Website-ului (`website.manage`)
+     * se cerea numai pentru chenarele de stare, iar ele s-au scos cu totul.
      */
-    const eAdmin = await eAdminulAplicatiei(env.AUTORIZARE, cid, principal, 'home')
     const eAdminPlatforma = sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin')
     const comune = {
       // Titlul din antet: WEBSITE, nu PLATFORMA (user, 17.09.2026) — `home` E website-ul parohiei.
@@ -378,7 +359,7 @@ export default {
     }
 
     if (url.pathname !== '/' && url.pathname !== '') {
-      return html(pagina({ ...comune, titluPagina: 'Pagina nu există', corp: `<h2>Pagina nu există</h2>${corp(nav, eAdmin)}` }), 404)
+      return html(pagina({ ...comune, titluPagina: 'Pagina nu există', corp: `<h2>Pagina nu există</h2>${corp(nav)}` }), 404)
     }
 
     log.info('home')
@@ -399,7 +380,7 @@ export default {
       rezumate(env.DB, 'buletin').catch(() => []),
     ])
     return html(
-      pagina({ ...comune, corp: corp(nav, eAdmin) + bucataDeAcasa(aleChinonicului, aleBuletinului) }),
+      pagina({ ...comune, corp: corp(nav) + bucataDeAcasa(aleChinonicului, aleBuletinului) }),
       200,
       { 'cache-control': cachePagina },
     )

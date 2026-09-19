@@ -126,10 +126,20 @@ summary { cursor:pointer; color:var(--soft) }
 details[open] summary { margin-bottom:8px }
 .sus { position:sticky; top:0; z-index:6; background:var(--paper); margin:0 -20px;
        padding:8px 20px 10px; border-bottom:1px solid var(--rule) }
+/* sfantul-ilie.ro sta la MIJLOC intre baza titlului si marginea de sus a meniului (user,
+   18.09.2026: „să fie chiar la mijloc între titlu și meniu — acum e mai jos"). Margini egale
+   nu dau mijloc, fiindca sub literele titlului ramane un gol invizibil: h1 mosteneste
+   line-height 1.55 din body, deci cutia lui e 55.8px la 36px de litera, cu ~15.8px de gol sub
+   baza literelor; la .mic (19px) golul e doar ~8.4px, de aceea starea micsorata era aproape
+   dreapta iar cea normala nu. Marginea de sus scade cu cat e golul in plus, iar cea de jos
+   creste la loc cu aceeasi valoare — inaltimea antetului si locul titlului si al meniului raman
+   neschimbate, se muta doar randul din mijloc. Masurat in Chromium (metrici Palatino/SF Pro):
+   inainte 19.1px deasupra / 12.0px dedesubt, dupa 15.6/15.5; la .mic inainte 11.5/9.5, dupa
+   10.5/10.5. */
 .sus h1 { margin:12px 0 0; transition:font-size .15s ease }
-.sus .eyebrow { margin:2px 0 10px; transition:font-size .15s ease }
+.sus .eyebrow { margin:-1.5px 0 13.5px; transition:font-size .15s ease }
 .sus.mic h1 { font-size:19px; margin-top:6px }
-.sus.mic .eyebrow { font-size:8.5px; margin-bottom:8px }
+.sus.mic .eyebrow { font-size:8.5px; margin:1px 0 9px }
 .btns { display:flex; gap:10px; margin:0 0 4px; flex-wrap:wrap }
 .btn { flex:1; text-align:center; padding:9px 6px; border:1px solid var(--rule);
        border-radius:10px; background:var(--tinta); color:var(--ink);
