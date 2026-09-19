@@ -323,6 +323,31 @@ describe('mașina de stări e deterministă', () => {
     expect(urmatoareaIntrebare(s, intrebari).subiect).toBe('titlu')
   })
 
+  /**
+   * ⚠️ PĂZITORUL DE LA UȘA SCRIERII (19.09.2026, după „Niciunul" ajuns titlu în PDF). Un model care
+   * cheamă `buletin.raspunde` de-a dreptul, sărind peste hartă, tot nu poate scrie o vorbă de refuz
+   * într-un câmp cu variante propuse: ea se întoarce în `sari`, la ÎNTREBAREA DE ACUM.
+   */
+  it('„Niciunul" trimis ca răspuns la întrebarea titlului nu se scrie ca titlu', () => {
+    let s = goala()
+    s = scrieRaspuns(s, { subiect: 'pastreaza' }, intrebari).schita
+    s = scrieRaspuns(s, { subiect: 'text', valoare: ARTICOL }, intrebari).schita
+    s = scrieRaspuns(s, { subiect: 'autor', valoare: 'Părintele Arsenie Papacioc' }, intrebari).schita
+    s.principal.pomenireCautata = ''
+    s = scrieRaspuns(s, { subiect: 'ani', valoare: '1914-2011' }, intrebari).schita
+    expect(urmatoareaIntrebare(s, intrebari).subiect).toBe('titlu')
+
+    const r = scrieRaspuns(s, { subiect: 'titlu', valoare: 'Niciunul' }, intrebari)
+    expect(r.schita.principal.titlu).toBeUndefined()
+    // și omul află pe loc că poate scrie el titlul
+    expect(r.scris).toContain('titlu: …')
+    expect(urmatoareaIntrebare(r.schita, intrebari).subiect).toBe('sursa')
+
+    // ⚠️ dar „titlul secundarului… : Niciunul", cu articolul spus anume, rămâne titlu
+    const anume = scrieRaspuns(s, { subiect: 'titlu', valoare: 'Niciunul', articol: 'principal' }, intrebari)
+    expect(anume.schita.principal.titlu).toBe('Niciunul')
+  })
+
   /** „Nu" ținut minte: altfel chestionarul ar întreba la nesfârșit același lucru. */
   it('un subiect sărit nu se mai întreabă', () => {
     let s = goala()

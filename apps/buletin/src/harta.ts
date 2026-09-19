@@ -25,6 +25,7 @@
  * rămâne unde era: `scrieRaspuns` din `schita.ts`, chemată prin acțiunile de azi.
  */
 import type { ActiuneHarta, HartaAplicatie, SubiectHarta } from '@xc/actiuni'
+import { CAMPURI_CU_VARIANTE, eRefuz } from './refuz.js'
 import type { Articol } from './schita.js'
 
 // ---------------------------------------------------------------------------
@@ -185,6 +186,11 @@ export type Potrivire =
       articol?: Articol
       confirma: boolean
       raspuns?: boolean
+      /**
+       * Omul a NUMIT câmpul el însuși („titlu: Niciunul"), nu i s-a dedus din întrebarea pendinte.
+       * Atunci valoarea se scrie cum a spus-o, chiar dacă e o vorbă care altminteri ar fi refuz.
+       */
+      numit?: boolean
     }
   /** Știu ce vrea, dar nu cu ce: „Ce titlu pui la secundarul 1?". */
   | { nivel: 'valoare'; subiect: string; actiune: string; articol?: Articol }
@@ -368,12 +374,19 @@ export function potriveste(mesaj: string, stare: StareHarta): Potrivire {
   if (pendinte) {
     const subiectPendinte = subiectulIntrebarii(pendinte.subiect, pendinte.articol)
     const actiunePendinte = actiuneaIntrebarii(pendinte.subiect)
-    if (DA.test(t) || NU.test(t)) {
+    /*
+     * ⚠️ „NICIUNUL" E UN NU, NU UN TITLU (19.09.2026, 11:03 — a ajuns așa în PDF). La întrebările la
+     * care chatul PROPUNE ceva (titlu, autor, ani, pomenire, sursă), vorbele de refuz se prind AICI,
+     * determinist: altfel cad la pasul 7, unde orice text e chiar valoarea întrebării. Lista e în
+     * `refuz.ts`, fiindcă aceeași vorbă mai poate veni și pe drumul modelului.
+     */
+    const refuz = NU.test(t) || (CAMPURI_CU_VARIANTE.has(pendinte.subiect) && eRefuz(t))
+    if (DA.test(t) || refuz) {
       return {
         nivel: 'sigur',
         subiect: subiectPendinte,
         actiune: actiunePendinte,
-        valoare: DA.test(t) ? 'da' : 'nu',
+        valoare: refuz ? 'nu' : 'da',
         ...(eArticol(subiectPendinte) ? { articol: pendinte.articol } : {}),
         confirma: false,
         raspuns: true,
@@ -493,7 +506,7 @@ function actiuneaIntrebarii(subiect: string): string {
 function sigur(
   subiect: string,
   actiuneId: string,
-  o: { stare: StareHarta; valoare?: string; articol?: Articol },
+  o: { stare: StareHarta; valoare?: string; articol?: Articol; numit?: boolean },
 ): Potrivire {
   const a = actiunea(subiect, actiuneId)
   if (!a) return { nivel: 'necunoscut' }
@@ -508,6 +521,7 @@ function sigur(
     actiune: actiuneId,
     ...(valoare ? { valoare } : {}),
     ...(articol ? { articol } : {}),
+    ...(o.numit ? { numit: true } : {}),
     confirma: a.confirma,
   }
 }
@@ -546,7 +560,8 @@ function sintaxaStricta(brut: string, stare: StareHarta): Potrivire | null {
       intre: actiuni.map((id) => ({ id, nume: actiunea(subiect, id)?.nume ?? id })),
     }
   }
-  return sigur(subiect, actiuneId, { stare, valoare: dreapta })
+  // ⚠️ `numit`: omul a scris chiar numele câmpului, deci valoarea e a lui, oricare ar fi ea
+  return sigur(subiect, actiuneId, { stare, valoare: dreapta, numit: true })
 }
 
 /** La ce articol se scrie o acțiune numită fără subiect: cel al întrebării de acum. */
@@ -589,6 +604,16 @@ const numeleArticolului = (a: Articol | undefined): string => (a ? LA_GENITIV[a]
 const scurtat = (v: string, cat = 70): string => (v.length <= cat ? v : `${v.slice(0, cat).trim()}…`)
 
 /**
+ * Ce se spune omului când s-a sărit peste un câmp. La TITLU se adaugă drumul înapoi: el tocmai a
+ * refuzat niște propuneri, deci trebuie să afle pe loc că îl poate scrie singur oricând — altfel
+ * „am sărit peste titlu" sună a ușă închisă.
+ */
+const amSarit = (actiune: string): string =>
+  actiune === 'titlu'
+    ? 'Niciunul dintre titlurile propuse — trecem mai departe. Scrie tu titlul când vrei: „titlu: …".'
+    : 'Nu, trecem mai departe.'
+
+/**
  * TRADUCEREA — din `{subiect, acțiune, valoare}` în apelul acțiunii EXISTENTE a buletinului.
  *
  * ⚠️ Aici e tot ce leagă harta de codul de până acum, și nicăieri altundeva: `buletin.raspunde`,
@@ -606,6 +631,8 @@ export function traduFapta(alegere: {
   valoare?: string
   articol?: Articol
   raspuns?: boolean
+  /** Omul a numit câmpul el însuși („titlu: Niciunul") — atunci valoarea nu se mai citește ca refuz. */
+  numit?: boolean
 }): Fapta | null {
   const a = actiunea(alegere.subiect, alegere.actiune)
   if (!a) return null
@@ -634,7 +661,15 @@ export function traduFapta(alegere: {
       argumente: { subiect, ...(v ? { valoare: v } : {}) } as Record<string, unknown>,
     })
     if (/^da$/i.test(valoare)) return gata(cuValoare('pastreaza'), 'Da, rămâne așa.', false)
-    if (/^nu$/i.test(valoare)) return gata(cuValoare('sari'), 'Nu, trecem mai departe.', false)
+    if (/^nu$/i.test(valoare)) return gata(cuValoare('sari'), amSarit(alegere.actiune), false)
+    /*
+     * ⚠️ AL DOILEA PĂZITOR, pentru drumul MODELULUI: nivelul 2 întoarce `{actiune, valoare}` cu ce a
+     * scris omul, deci „Niciunul" ar ajunge aici ca valoare a titlului. O vorbă de refuz, singură,
+     * nu poate deveni conținutul unui câmp cu variante propuse.
+     */
+    if (CAMPURI_CU_VARIANTE.has(alegere.actiune) && eRefuz(valoare)) {
+      return gata(cuValoare('sari'), amSarit(alegere.actiune), false)
+    }
     const camp = campulLui(alegere.subiect, alegere.actiune)
     if (!camp) return null
     return gata(cuValoare(camp, valoare), `${numeleCampului(camp, articol)} → „${scurtat(valoare)}"`, false)
@@ -686,6 +721,15 @@ export function traduFapta(alegere: {
 
   // ---------------------------------------------------------------- articolele
   if (!eArticol(alegere.subiect)) return null
+  /*
+   * ⚠️ Aceeași vorbă de refuz, venită de la model FĂRĂ semnul că omul ar fi numit câmpul: modelul
+   * pune `{subiect: 's1', actiune: 'titlu', valoare: 'Niciunul'}` și fără păzitorul ăsta ea s-ar
+   * scrie ca instrucțiune punctuală. Cu `numit` (sintaxa `titlu: Niciunul`) rămâne valoare — omul a
+   * spus-o anume.
+   */
+  if (!alegere.numit && CAMPURI_CU_VARIANTE.has(alegere.actiune) && eRefuz(valoare)) {
+    return gata({ actiune: 'buletin.raspunde', argumente: { subiect: 'sari' } }, amSarit(alegere.actiune), false)
+  }
   if (alegere.actiune === 'sterge') {
     return gata(
       { actiune: 'buletin.raspunde', argumente: { subiect: 'sterge_secundar' } },

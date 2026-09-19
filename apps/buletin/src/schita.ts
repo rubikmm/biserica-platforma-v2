@@ -29,6 +29,7 @@
  */
 import { LUNI } from '@xc/ui'
 import { SECUNDARI_MAXIM, type NumarCerut, semne, socoteste } from './masuri.js'
+import { CAMPURI_CU_VARIANTE, eRefuz } from './refuz.js'
 import { DE_PROBA, TEXT_IMPLICIT, eDeProba } from './umplere.js'
 
 // ---------------------------------------------------------------------------
@@ -496,7 +497,7 @@ const CUM_RASPUNDE: Record<CheieIntrebare, string> = {
   autor: '„da" / „corect" → `pastreaza`; alt nume → `autor` cu numele; „nu" / „nu se știe" → `sari`.',
   ani: '„da" → `pastreaza`; alți ani → `ani` (forma 1661-1729); „nu" → `sari`.',
   pomenire: '„da" → `pastreaza`; altă zi → `pomenire` (ex. 16 august); „nu" → `sari`.',
-  titlu: 'trimite `titlu` cu TEXTUL titlului ales; un număr (1, 2, 3) merge numai pentru titlurile din lista de mai sus. Dacă lista are sub trei titluri, completeaz-o tu cu propuneri scurte scoase din text, numerotate mai departe.',
+  titlu: 'trimite `titlu` cu TEXTUL titlului ales; un număr (1, 2, 3) merge numai pentru titlurile din lista de mai sus. Dacă lista are sub trei titluri, completeaz-o tu cu propuneri scurte scoase din text, numerotate mai departe. ⚠️ Un REFUZ („niciunul", „nu-mi place", „altul", „nu știu") NU e un titlu → `sari`, și spune-i că poate scrie titlul oricând, cu „titlu: …".',
   sursa: '„da" → `pastreaza`; altă sursă → `sursa`; „nu" / „nu are" → `sari`.',
   mai_adaugam: '„da" → `pastreaza` (se deschide un articol secundar); „nu" → `sari` (se încheie numărul).',
 }
@@ -662,7 +663,7 @@ export interface Scris {
  */
 export function scrieRaspuns(
   vechea: Schita,
-  cerut: { subiect: Subiect; valoare?: string; articol?: Articol },
+  cerutBrut: { subiect: Subiect; valoare?: string; articol?: Articol },
   intrebari: Record<CheieIntrebare, string>,
 ): Scris {
   const s: Schita = {
@@ -672,6 +673,20 @@ export function scrieRaspuns(
     gata: [...(vechea.gata ?? [])],
   }
   const acum = urmatoareaIntrebare(vechea, intrebari)
+  /*
+   * ⚠️ AL TREILEA PĂZITOR AL REFUZULUI, cel de la ușa scrierii (19.09.2026, după „Niciunul" ajuns
+   * titlu în PDF). Aici ajunge și modelul care cheamă `buletin.raspunde` de-a dreptul, sărind peste
+   * hartă. Poarta e îngustă dinadins: numai un RĂSPUNS la întrebarea de acum (fără `articol`, pe
+   * chiar subiectul ei, la un câmp cu variante propuse) se poate întoarce în `sari`. „titlu:
+   * Niciunul" vine cu `articol` spus, deci trece neatins și rămâne titlul „Niciunul".
+   */
+  const cerut: { subiect: Subiect; valoare?: string; articol?: Articol } =
+    cerutBrut.articol === undefined &&
+    cerutBrut.subiect === acum.subiect &&
+    CAMPURI_CU_VARIANTE.has(acum.subiect) &&
+    eRefuz(cerutBrut.valoare ?? '')
+      ? { subiect: 'sari' }
+      : cerutBrut
   /*
    * ⚠️ Un articol cerut ANUME se și DESCHIDE dacă nu există: „titlul secundarului 1: …" înaintea
    * întrebării „mai adăugăm?" trebuie să lucreze, nu să scrie în gol. Peste `SECUNDARI_MAXIM` nu se
@@ -732,7 +747,13 @@ export function scrieRaspuns(
     const a = scrieIn(s, care)
     a.gata = marcheaza(a.gata, acum.subiect)
     if (!pastrez) {
-      return { schita: s, scris: `am sărit peste ${acum.subiect} la ${NUMELE_ZONEI[care]}`, articol: care }
+      /*
+       * ⚠️ La TITLU, „am sărit" nu e destul: omul tocmai a refuzat niște propuneri, deci trebuie să
+       * afle pe loc că îl poate scrie singur oricând. Altfel numărul rămâne fără titlu, iar el crede
+       * că nu mai are ce face.
+       */
+      const indemn = acum.subiect === 'titlu' ? '; spune-i că poate scrie titlul oricând, cu „titlu: …"' : ''
+      return { schita: s, scris: `am sărit peste ${acum.subiect} la ${NUMELE_ZONEI[care]}${indemn}`, articol: care }
     }
     // „da, îl folosim": se scrie CE A PROPUS CODUL la întrebarea de acum
     const propus =

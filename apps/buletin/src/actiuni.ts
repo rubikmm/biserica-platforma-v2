@@ -445,6 +445,8 @@ const PotrivireIesire = z.object({
   confirma: z.boolean().optional(),
   /** Omul a RĂSPUNS la întrebarea pusă (nu a dat o instrucțiune liberă). */
   raspuns: z.boolean().optional(),
+  /** Omul a NUMIT câmpul („titlu: …"), deci valoarea e a lui chiar dacă sună a refuz. */
+  numit: z.boolean().optional(),
   ce: z.enum(['subiect', 'actiune']).optional(),
   intre: z.array(OptiuneHarta).optional(),
 })
@@ -490,6 +492,7 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
         valoare: z.string().optional(),
         articol: z.enum(ARTICOLE).optional(),
         raspuns: z.boolean().optional(),
+        numit: z.boolean().optional(),
       }).optional().describe('subiectul și acțiunea hotărâte — se traduc în apelul de făcut'),
       asteapta: z.object({
         subiect: z.string(),
@@ -546,6 +549,7 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
               valoare: potrivire.valoare,
               articol: potrivire.articol,
               raspuns: potrivire.raspuns,
+              numit: potrivire.numit,
             }
           : null)
 

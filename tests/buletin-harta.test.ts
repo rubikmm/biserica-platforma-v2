@@ -75,6 +75,84 @@ describe('răspunsurile la întrebarea pendinte — fără confirmare, fiindcă 
   })
 })
 
+/**
+ * REFUZUL VARIANTELOR — proba faptei din 19.09.2026, 11:03: chatul a propus trei titluri, omul a
+ * scris „Niciunul", iar titlul numărului a ieșit pe hârtie chiar „Niciunul".
+ *
+ * Ce se poate strica tăcut aici: nimic nu dă eroare. Un refuz necitit se scrie liniștit în câmp și
+ * se vede abia în PDF — de aceea fiecare formă a lui stă scrisă mai jos, una câte una.
+ */
+describe('„niciunul" la variantele propuse înseamnă NU, nu valoarea câmpului', () => {
+  const titluri = ['DESPRE POST', 'POSTUL MARE', 'CUM POSTIM']
+
+  const FORME = [
+    'nu', 'Niciunul', 'niciuna', 'Nici unul', 'NICIUNUL!', 'nu-mi place', 'Nu îmi place niciunul',
+    'altul', 'Alta', 'altceva', 'nu am', 'nu știu', 'Nu ştiu.',
+  ]
+
+  it('fiecare formă de refuz, la întrebarea titlului, se prinde DETERMINIST ca „sari"', () => {
+    for (const forma of FORME) {
+      const p = potriveste(forma, la('titlu', 's1', titluri))
+      expect(p, forma).toMatchObject({
+        nivel: 'sigur', subiect: 's1', actiune: 'titlu', valoare: 'nu', raspuns: true, confirma: false,
+      })
+      // și traducerea: `sari`, niciodată `titlu` cu vorba omului în el
+      expect(traduFapta({ subiect: 's1', actiune: 'titlu', valoare: 'nu', raspuns: true }), forma)
+        .toMatchObject({ apel: { actiune: 'buletin.raspunde', argumente: { subiect: 'sari' } }, confirma: false })
+    }
+  })
+
+  it('la „sari" pe titlu, omul află că poate scrie el titlul oricând', () => {
+    const f = traduFapta({ subiect: 's1', actiune: 'titlu', valoare: 'nu', raspuns: true })
+    expect(f?.rezumat).toContain('titlu: …')
+  })
+
+  it('și celelalte întrebări cu variante iau refuzul drept „sari"', () => {
+    for (const camp of ['autor', 'ani', 'pomenire', 'sursa']) {
+      const p = potriveste('niciunul', la(camp, 'principal'))
+      expect(p, camp).toMatchObject({ nivel: 'sigur', actiune: camp, valoare: 'nu', raspuns: true })
+    }
+  })
+
+  /**
+   * ⚠️ AL DOILEA DRUM: modelul (nivel 2) întoarce `{actiune, valoare}` cu vorba omului, fără să
+   * știe că e un refuz. Traducerea îl oprește și acolo — altfel harta ar fi curată, iar foaia tot
+   * greșită.
+   */
+  it('nici pe drumul modelului o vorbă de refuz nu ajunge valoare de titlu', () => {
+    expect(traduFapta({ subiect: 's1', actiune: 'titlu', valoare: 'Niciunul' }))
+      .toMatchObject({ apel: { actiune: 'buletin.raspunde', argumente: { subiect: 'sari' } }, confirma: false })
+    expect(traduFapta({ subiect: 'principal', actiune: 'autor', valoare: 'nu știu', raspuns: true }))
+      .toMatchObject({ apel: { argumente: { subiect: 'sari' } } })
+  })
+
+  /**
+   * ⚠️ EXCEPȚIA, la fel de importantă: „titlu: Niciunul" e o instrucțiune, nu un refuz — omul a
+   * numit câmpul și a spus ce pune în el. Fără `numit`, păzitorul de mai sus i-ar fi luat dreptul
+   * de a-și intitula articolul cum vrea.
+   */
+  it('„titlu: Niciunul" rămâne chiar titlul „Niciunul"', () => {
+    const p = potriveste('s1 titlu: Niciunul', la('titlu', 's1', titluri))
+    expect(p).toMatchObject({
+      nivel: 'sigur', subiect: 's1', actiune: 'titlu', valoare: 'Niciunul', articol: 's1', numit: true, confirma: true,
+    })
+    const f = traduFapta({ subiect: 's1', actiune: 'titlu', valoare: 'Niciunul', articol: 's1', numit: true })
+    expect(f?.apel?.argumente).toEqual({ subiect: 'titlu', valoare: 'Niciunul', articol: 's1' })
+    expect(f?.rezumat).toBe('Titlul secundarului 1 → „Niciunul"')
+  })
+
+  it('o cifră rămâne titlul ales, nu un refuz', () => {
+    expect(potriveste('2', la('titlu', 's1', titluri)))
+      .toMatchObject({ nivel: 'sigur', subiect: 's1', actiune: 'titlu', valoare: '2', raspuns: true })
+  })
+
+  /** Un titlu adevărat care doar SEAMĂNĂ cu un refuz nu se pierde: lista e închisă, nu un tipar larg. */
+  it('un titlu care începe cu „nu" se scrie ca titlu', () => {
+    const p = potriveste('NU JUDECA', la('titlu', 'principal', titluri))
+    expect(p).toMatchObject({ nivel: 'sigur', actiune: 'titlu', valoare: 'NU JUDECA', raspuns: true })
+  })
+})
+
 describe('sintaxa strictă — instrucțiune liberă, deci CU confirmare și cu interpretarea scrisă', () => {
   it('`motto: …` scrie motto-ul numărului', () => {
     const p = potriveste('motto: Rugăciunea este respirația sufletului', la('text'))
