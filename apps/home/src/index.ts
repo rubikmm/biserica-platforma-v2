@@ -212,11 +212,13 @@ export default {
     const sesiune = await sesiuneCurenta(env.IDENTITATE, req).catch(() => SESIUNE_ANONIMA)
     const utilizator = sesiune.user?.displayName ?? sesiune.user?.email ?? null
     /*
-     * `eAdminPlatforma` — rolul GLOBAL; din el iese DOAR randul „Administrare" din meniul contului.
+     * `eAdminPlatforma` — din el iese DOAR randul „Administrare" din meniul contului, si e NUMAI al
+     * super-adminului (user, 19.09.2026: „un admin nu vede altceva decat Setari"). Masca doar
+     * coboara, deci sub orice masca randul dispare.
      * ⚠️ Usa nu mai intreaba autorizarea de nimic (18.09.2026): cheia Website-ului (`website.manage`)
      * se cerea numai pentru chenarele de stare, iar ele s-au scos cu totul.
      */
-    const eAdminPlatforma = sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin')
+    const eAdminPlatforma = sesiune.roles.some((r) => r.role === 'super-admin')
     const comune = {
       // Titlul din antet: WEBSITE, nu PLATFORMA (user, 17.09.2026) — `home` E website-ul parohiei.
       nume: 'WEBSITE',

@@ -125,8 +125,11 @@ export default {
      * randul se scria pentru `eAdmin`, adica pentru cheia Curateniei — deci un administrator al
      * curateniei vedea o legatura spre panoul PLATFORMEI, care il intampina cu 403. Regula de acum, la
      * fel in toate aplicatiile: panoul platformei e al rolului global, panoul aplicatiei e al cheii ei.
+     *
+     * ⚠️ Din 19.09.2026 randul e NUMAI al super-adminului (user: „un admin nu vede altceva decat
+     * Setari"). Masca doar coboara, deci sub orice masca randul dispare.
      */
-    const eAdminPlatforma = sesiune.roles.some((r) => r.role === "admin" || r.role === "super-admin")
+    const eAdminPlatforma = sesiune.roles.some((r) => r.role === "super-admin")
 
     const numeCont = sesiune.user?.displayName ?? null
     const userId = sesiune.user?.id ?? null

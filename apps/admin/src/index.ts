@@ -554,7 +554,13 @@ export default {
       return new Response(null, { status: 303, headers: { location: `${nav.cont}/auth/login` } })
     }
 
-    const eAdmin = sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin')
+    /*
+     * ⚠️ NUMAI pentru randul „Administrare" din meniul contului (`comune(...)` → `cont.admin`), si
+     * de aceea e NUMAI al super-adminului (user, 19.09.2026: „un admin nu vede altceva decat
+     * Setari"). Poarta panoului NU atarna de el: ea e pe chei, mai jos — un admin de aplicatie
+     * intra in continuare pe sectiunea lui, doar ca nu i se mai scrie drumul in meniu.
+     */
+    const eAdmin = sesiune.roles.some((r) => r.role === 'super-admin')
     const authz = new ClientAutorizare(env.AUTORIZARE, cid)
     const { prefix, cale } = prefixSiCale(url, '/admin')
 
@@ -970,6 +976,7 @@ function comune(
       // Numele din meniul contului se scrie la fel ca in restul aplicatiilor: numele omului, si
       // abia daca lipseste adresa lui (user, 15.09.2026). Pana acum aici era doar e-mailul.
       nume: sesiune.user?.displayName ?? sesiune.user?.email ?? 'Cont',
+      // Randul „Administrare" din meniu — numai la super-admin (vezi unde se calculeaza `eAdmin`).
       admin: eAdmin,
       urlCont: nav.cont,
       urlAdmin: nav.admin,

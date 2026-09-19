@@ -246,7 +246,9 @@ export default {
       // abonarea platformei sta pe adresa contului, nu pe una scrisa de mana
       emailulContului: sesiune.user?.email ?? null,
       eAdmin: eAdminCalendar,
-      eAdminPlatforma: sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin'),
+      // ⚠️ Randul „Administrare" din meniul contului e NUMAI al super-adminului (user, 19.09.2026:
+      // „un admin nu vede altceva decat Setari"). Masca doar coboara, deci sub ea randul dispare.
+      eAdminPlatforma: sesiune.roles.some((r) => r.role === 'super-admin'),
       versiune: pkg.version,
       modificata: dataVersiunii(env.VERSIUNE),
       anCurent: Number(azi.slice(0, 4)),

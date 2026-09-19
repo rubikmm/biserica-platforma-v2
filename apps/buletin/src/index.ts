@@ -752,9 +752,11 @@ export default {
       emailulContului: sesiune.user?.email ?? null,
       // ⚠️ Adminul BULETINULUI vine din cheia aplicatiei (`bulletin.write`), nu din rolul global
       // (18.09.2026): asa poate fi cineva admin numai aici. De el atarna `/nou`, compunerea si
-      // validarea — care la buletin E publicarea. Rolul global rămâne pentru randul „Administrare".
+      // validarea — care la buletin E publicarea.
       eAdmin: await eAdminulAplicatiei(env.AUTORIZARE, cid, principal, 'buletin'),
-      eAdminPlatforma: sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin'),
+      // ⚠️ Randul „Administrare" din meniul contului e NUMAI al super-adminului (user, 19.09.2026:
+      // „un admin nu vede altceva decat Setari"). Masca doar coboara, deci sub ea randul dispare.
+      eAdminPlatforma: sesiune.roles.some((r) => r.role === 'super-admin'),
       versiune: pkg.version,
       modificata: dataVersiunii(env.VERSIUNE),
       veziCa: sesiune.veziCa,

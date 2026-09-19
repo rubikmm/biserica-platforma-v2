@@ -173,15 +173,18 @@ export default {
     const eSuperAdminReal = sesiune.roles.some((r) => r.role === 'super-admin')
     /**
      * ⚠️ DOUA LUCRURI DEOSEBITE, din 18.09.2026:
-     *  - `eAdminPlatforma` — rolul global. Din el iese DOAR randul „Administrare" din meniul contului
-     *    (panoul platformei), unde un administrator de Program n-are ce face.
+     *  - `eAdminPlatforma` — din el iese DOAR randul „Administrare" din meniul contului (panoul
+     *    platformei), unde un administrator de Program n-are ce face.
      *  - `eAdminProgram` — administratorul ACESTEI aplicatii, venit de la autorizare pe cheia ei
      *    (`program.write`). Pe el atarna tot ce e al Programului: arhiva, hartiile, sfintii zilei.
      * Pana atunci amandoua erau acelasi rol, deci nimeni nu putea fi admin numai la Program (cerere
      * user, 18.09.2026: „sa aiba toate capacitatea de a avea setat administratori… nu doar super-admin").
-     * Adminul global si super-adminul nu pierd nimic: cheia vine cu rolul lor.
+     *
+     * ⚠️ Din 19.09.2026 randul „Administrare" e NUMAI al super-adminului (user: „un admin nu vede
+     * altceva decat Setari") — deci `eAdminPlatforma` e chiar `eSuperAdminReal`. Rolul global
+     * `admin` nu mai aprinde nimic aici; masca doar coboara, deci sub ea randul dispare oricum.
      */
-    const eAdminPlatforma = eSuperAdminReal || sesiune.roles.some((r) => r.role === 'admin')
+    const eAdminPlatforma = eSuperAdminReal
     const eAdminProgram = await eAdminulAplicatiei(env.AUTORIZARE, cid, principal, 'program')
     const utilizatorReal = sesiune.user?.displayName ?? sesiune.user?.email ?? null
     // Cine esti si ce poti vine DOAR din sesiune — la fel pe local si pe public. Rolurile sosesc

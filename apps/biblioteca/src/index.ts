@@ -137,8 +137,10 @@ export default {
        * ⚠️ La Biblioteca adminul APLICATIEI era deja pe cheie: `ePangar` (`library.manage`) e chiar el,
        * si pe el atarna pangarul. `eAdmin` era rolul global si a rămas atat: din 18.09.2026 se numeste
        * pe fata `eAdminPlatforma`, fiindca din el iese DOAR randul „Administrare" din meniul contului.
+       * ⚠️ Din 19.09.2026 randul e NUMAI al super-adminului (user: „un admin nu vede altceva decat
+       * Setari"). Masca doar coboara, deci sub orice masca randul dispare.
        */
-      eAdminPlatforma: sesiune.roles.some((r) => r.role === "admin" || r.role === "super-admin"),
+      eAdminPlatforma: sesiune.roles.some((r) => r.role === "super-admin"),
       versiune: pkg.version,
       modificata: dataVersiunii(env.VERSIUNE),
       veziCa: sesiune.veziCa,

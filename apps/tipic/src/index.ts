@@ -237,7 +237,9 @@ export default {
       // ⚠️ Adminul TIPICULUI vine din cheia lui (`typicon.manage`), nu din rolul global
       // (18.09.2026): asa poate fi cineva admin numai aici.
       eAdmin: await eAdminulAplicatiei(env.AUTORIZARE, cid, principal, 'tipic'),
-      eAdminPlatforma: sesiune.roles.some((r) => r.role === 'admin' || r.role === 'super-admin'),
+      // ⚠️ Randul „Administrare" din meniul contului e NUMAI al super-adminului (user, 19.09.2026:
+      // „un admin nu vede altceva decat Setari"). Masca doar coboara, deci sub ea randul dispare.
+      eAdminPlatforma: sesiune.roles.some((r) => r.role === 'super-admin'),
       versiune: pkg.version,
       modificata: dataVersiunii(env.VERSIUNE),
       veziCa: sesiune.veziCa,

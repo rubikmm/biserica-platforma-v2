@@ -130,6 +130,18 @@ const SESIUNE_MASCATA = {
   poateVedeaCa: true,
 }
 
+/**
+ * ⚠️ Sub masca „→ Administrator" identitatea PĂSTREAZĂ omul și îi ÎNLOCUIEȘTE rolurile cu rolul
+ * global `admin` (`services/identity-worker/src/index.ts`, `roles: veziCa ? [{ role: veziCa… }]`).
+ * Deci exact asta vede aplicația și de la un administrator global adevărat, nemascat: aceeași
+ * sesiune servește ambele cazuri, și tocmai de aceea proba de mai jos le acoperă pe amândouă.
+ */
+const SESIUNE_ADMIN = {
+  ...SESIUNE_SUPER,
+  roles: [{ role: 'admin', scope: 'global' }],
+  veziCa: 'admin',
+}
+
 function mediu(DB: unknown) {
   return {
     DB,
@@ -147,6 +159,7 @@ function mediu(DB: unknown) {
           const { token } = JSON.parse(String(init?.body ?? '{}')) as { token?: string }
           if (token === 'jeton-super') return raspunde(SESIUNE_SUPER)
           if (token === 'jeton-mascat') return raspunde(SESIUNE_MASCATA)
+          if (token === 'jeton-admin') return raspunde(SESIUNE_ADMIN)
           return new Response('nu', { status: 401 })
         }
         if (cale === '/asocieri/membri') return raspunde({ membri: MEMBRI })
@@ -167,6 +180,7 @@ const JETON = 'j'.repeat(43)
 const CSRF = `xc_csrf=${JETON}`
 const CA_SUPER = `xc_sesiune=jeton-super; ${CSRF}`
 const CA_MASCAT = `xc_sesiune=jeton-mascat; ${CSRF}`
+const CA_ADMIN = `xc_sesiune=jeton-admin; ${CSRF}`
 
 const cere = (env: unknown, cale: string, cookie: string) =>
   curatenie.fetch(new Request(`https://curatenie.test${cale}`, { headers: { cookie } }), env as never, {} as ExecutionContext)
@@ -316,5 +330,115 @@ describe('(c) masca nu te scoate din curățenie', () => {
     const r = await cere(mediu(echipa()), '/admin', CSRF)
     expect(r.status).toBe(303)
     expect(r.headers.get('location') ?? '').toContain('https://cont.test/intra')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// (d) „Administrare" în meniu e NUMAI al super-adminului
+// ---------------------------------------------------------------------------
+
+/**
+ * ⚠️ HOTĂRÂREA USERULUI, 19.09.2026: „văd că un admin are acces la Administrare globală — nu ar
+ * trebui să vadă altceva decât Setări". Adică rândul „Administrare" din meniul contului, care duce
+ * la panoul PLATFORMEI, e al super-adminului și atât. Un administrator — de aplicație sau chiar cu
+ * rolul global `admin` — vede Profil / Setări / Ieșire; adminii de aplicație se numesc din Setări.
+ *
+ * Până acum rândul se aprindea în ZECE aplicații cu `role === 'admin' || role === 'super-admin'`,
+ * deci și sub masca „→ Administrator" — tocmai cazul în care userul l-a văzut pe producție. Cum
+ * masca doar COBOARĂ treapta (identity-worker: rolurile reale se înlocuiesc cu rolul mascat), un
+ * rând legat numai de `super-admin` dispare de la sine sub orice mască. Asta se probează aici.
+ */
+describe('(d) rândul „Administrare" din meniu e numai al super-adminului', () => {
+  it('rolul global `admin` (și masca „→ Administrator") nu-l vede — dar are Setări', async () => {
+    const html = await (await cere(mediu(echipa()), '/', CA_ADMIN)).text()
+    const meniu = meniulContului(html) ?? ''
+    expect(meniu).not.toBe('')
+
+    // Rândul lipsește ca MARCAJ, nu ca simplu cuvânt: „Administrare" apare oricum în pagină.
+    expect(meniu).not.toContain('>Administrare</a>')
+    // Și nici drumul spre panoul platformei, oricum ar fi scris rândul care l-ar purta.
+    expect(meniu).not.toContain('/admin/')
+
+    // Ce îi RĂMÂNE: exact atât, nici mai puțin.
+    expect(meniu).toContain('>Setări</a>')
+    expect(meniu).toContain('>Profil</a>')
+    expect(meniu).toContain('>Ieșire</a>')
+
+    // Aceeași sesiune, desenată de Calendar: etalonul spune la fel.
+    expect(meniu).toBe(
+      meniulCalendarului({ utilizator: NUME_SUPER, eAdminPlatforma: false, veziCa: 'admin', poateVedeaCa: true }),
+    )
+  })
+
+  it('super-adminul adevărat îl vede mai departe', async () => {
+    const html = await (await cere(mediu(echipa()), '/', CA_SUPER)).text()
+    const meniu = meniulContului(html) ?? ''
+    expect(meniu).toContain('>Administrare</a>')
+    expect(meniu).toContain('>Setări</a>')
+  })
+
+  /**
+   * Structural, fiindcă regula e a PLATFORMEI, nu a curățeniei: aprinderea rândului stă în zece
+   * fișiere deodată, iar o aplicație nouă (sau una rescrisă) o poate lua pe cea veche de la vecin.
+   * Se caută tiparul care aprinde rândul din sesiunea de ACUM — nu orice pomenire a rolului
+   * `admin`: `apps/admin` îl compară legitim ca să AȘEZE oamenii pe cete în lista Oameni și să le
+   * scrie eticheta de rol, iar acolo e vorba de rolul ALTUIA, nu de meniul celui care se uită.
+   */
+  it('nicio aplicație nu mai aprinde rândul din rolul `admin`', async () => {
+    const { readdirSync, readFileSync, statSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const radacina = new URL('../', import.meta.url).pathname
+
+    /*
+     * ⚠️ `live` și `radio` sunt excepția hotărâtă pe 18.09.2026: acolo rândul nu duce la panoul
+     * platformei, ci la panoul EMISIEI, și e pe cheia `broadcast.manage` — deci nici nu intră în
+     * tiparul de mai jos. Sunt sărite ca să se vadă negru pe alb că excepția e știută, nu uitată.
+     */
+    const EXCEPTII = ['live', 'radio']
+    const vinovate: string[] = []
+    let cuSuperAdmin = 0
+    let fisiere = 0
+
+    const umbla = (dosar: string) => {
+      for (const nume of readdirSync(dosar)) {
+        const cale = join(dosar, nume)
+        if (statSync(cale).isDirectory()) {
+          if (nume !== 'node_modules' && !nume.startsWith('.')) umbla(cale)
+          continue
+        }
+        if (!nume.endsWith('.ts')) continue
+        fisiere++
+        const brut = readFileSync(cale, 'utf8')
+        // Fără comentarii (rândurile de explicații numesc tiparul vechi ca să spună că a plecat)
+        // și fără spații ori fel de ghilimele, ca proba să nu atârne de formatare.
+        const cod = brut
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/\/\/.*$/gm, '')
+          .replace(/"/g, "'")
+          .replace(/\s+/g, '')
+        const scurt = cale.slice(radacina.length)
+        if (/r\.role==='super-admin'/.test(cod)) cuSuperAdmin++
+        // (1) rolul curent citit ca „admin", oricum ar fi scris restul expresiei;
+        // (2) perechea „admin SAU super-admin", în ambele ordini — forma de dinainte de 19.09.2026.
+        if (
+          /sesiune\.roles\.some\(\(r\)=>r\.role==='admin'/.test(cod) ||
+          /r\.role==='admin'\|\|/.test(cod) ||
+          /\|\|r\.role==='admin'/.test(cod)
+        ) {
+          vinovate.push(scurt)
+        }
+      }
+    }
+
+    for (const app of readdirSync(join(radacina, 'apps'))) {
+      if (EXCEPTII.includes(app)) continue
+      const src = join(radacina, 'apps', app, 'src')
+      if (statSync(src).isDirectory()) umbla(src)
+    }
+
+    expect(vinovate).toEqual([])
+    // ⚠️ Și că proba chiar s-a uitat la cod: o căutare care nu prinde nimic „trece" degeaba.
+    expect(fisiere).toBeGreaterThan(20)
+    expect(cuSuperAdmin).toBeGreaterThanOrEqual(10)
   })
 })

@@ -321,7 +321,9 @@ export default {
       // Azi nu deschide nimic — Biblia n-are nicio fapta de admin — dar cheia si numirea exista, ca
       // aplicatia sa nu fie deosebita de celelalte cand va avea una.
       eAdmin: await eAdminulAplicatiei(env.AUTORIZARE, cid, principal, "biblia"),
-      eAdminPlatforma: sesiune.roles.some((r) => r.role === "admin" || r.role === "super-admin"),
+      // ⚠️ Randul „Administrare" din meniul contului e NUMAI al super-adminului (user, 19.09.2026:
+      // „un admin nu vede altceva decat Setari"). Masca doar coboara, deci sub ea randul dispare.
+      eAdminPlatforma: sesiune.roles.some((r) => r.role === "super-admin"),
       versiune: pkg.version,
       modificata: dataVersiunii(env.VERSIUNE),
       veziCa: sesiune.veziCa,
