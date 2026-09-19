@@ -42,6 +42,23 @@ describe('josul paginii a patra', () => {
   })
 })
 
+describe('zona neagră: autorul cu bară (user, 19.09.2026)', () => {
+  const cuAutor = (autor: string): string =>
+    foaieHtml({ cerut: { ...cerut, principal: { ...cerut.principal, autor } }, dataScrisa: '20 septembrie 2026', calendar: null })
+
+  it('pune înaintea barei un rând mic deasupra numelui', () => {
+    const html = cuAutor('SFÂNTUL CUVIOS MĂRTURISITOR / SOFIAN de la ANTIM')
+    expect(html).toContain('<div class="deasupra">SFÂNTUL CUVIOS MĂRTURISITOR</div><div class="nume">SOFIAN de la ANTIM</div>')
+    expect(html).toMatch(/\.zona-neagra \.deasupra \{ font-family: "Trajan", serif; font-size: 12pt;/)
+  })
+
+  it('lasă autorul fără bară exact ca până acum, pe un singur rând', () => {
+    const html = cuAutor('SFÂNTUL IERARH NICOLAE')
+    expect(html).toContain('<div class="nume">SFÂNTUL IERARH NICOLAE</div>')
+    expect(html).not.toContain('class="deasupra"')
+  })
+})
+
 describe('măsurile cerute de user pe 18.09.2026', () => {
   // 4.9 mm de margine, ca de la cerneală la cerneală să iasă cei 0.5 cm ceruți (aerul de deasupra
   // majusculelor Trajan intră și el în gol) — vezi comentariul din stilul foii.

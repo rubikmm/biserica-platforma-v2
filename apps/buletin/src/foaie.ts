@@ -147,11 +147,16 @@ body { font-family: "Caladea", Cambria, Georgia, serif; color: #000; font-size: 
 .pagina[data-pagina="1"] .col.a .zona-neagra { flex: 0 0 auto; margin-bottom: 0; }
 .poza.mica { margin-bottom: 1.5mm; }
 .zona-neagra { background: #000; color: #fff; text-align: center; padding: 2.4mm 2mm 2.8mm; margin: 0 0 3mm; }
+/* Rândul mic de deasupra numelui: cinstirea („SFÂNTUL CUVIOS MĂRTURISITOR"), despărțită de nume cu o
+   bară — user, 19.09.2026: „pe un rând mai mic SFÂNTUL CUVIOS MĂRTURISITOR / SOFIAN de la ANTIM".
+   Tot Trajan, cât anii și pomenirea, cu un fir de aer sub el. */
+.zona-neagra .deasupra { font-family: "Trajan", serif; font-size: 12pt; line-height: 1.2; margin-bottom: .8mm; }
 .zona-neagra .nume { font-family: "Trajan", serif; font-size: 17pt; line-height: 1.24; }
 .zona-neagra .ani { font-family: "Trajan", serif; font-size: 11.5pt; margin-top: 1mm; }
 .zona-neagra .pomenire { font-family: "Trajan", serif; font-size: 12pt; margin-top: .8mm; }
 .zona-neagra.mica { padding: 2mm 2mm 2.2mm; }
 .zona-neagra.mica .nume { font-size: 13pt; }
+.zona-neagra.mica .deasupra { font-size: 10pt; }
 /* Titlul articolului: Trajan Pro 3 Regular, FARA aldin, la toate — principal si secundari (user,
    17.09.2026, 22:38: „titlurile celorlalte articole secundare sa nu fie bold si sa Trajan"; mai
    devreme, 22:15, scosese aldinul de la primul text). Pana atunci secundarii aveau aldin sintetic,
@@ -217,9 +222,25 @@ const cursiv = (escapat: string): string => escapat.replace(/\*([^*\n]{1,400})\*
 const paragrafe = (text: string): string[] =>
   text.split(/\n\s*\n|\r\n\r\n/).map((p) => p.replace(/\s+/g, ' ').trim()).filter(Boolean)
 
+/**
+ * Autorul scris cu bară se rupe în două rânduri: ce stă ÎNAINTEA barei e cinstirea și merge pe un
+ * rând mai mic, deasupra numelui (user, 19.09.2026: „pe un rând mai mic SFÂNTUL CUVIOS MĂRTURISITOR
+ * / SOFIAN de la ANTIM"). Desparte NUMAI prima bară — cu spații în jur, ca să nu se rupă un nume
+ * care are „/" lipit — sau primul rând nou, dacă valoarea a venit cu „\n". Fără separator, autorul
+ * rămâne întreg în `.nume`, exact ca până acum.
+ */
+export function despartAutor(autor: string): { deasupra: string; nume: string } {
+  const m = /^([^]*?)(?: \/ |\r?\n)([^]*)$/.exec((autor ?? '').trim())
+  const deasupra = m ? m[1]!.trim() : ''
+  const nume = m ? m[2]!.trim() : ''
+  return deasupra && nume ? { deasupra, nume } : { deasupra: '', nume: autor }
+}
+
 /** Zona neagră cu numele autorului — la principal sub poză, la secundar în capul articolului. */
 function zonaNeagra(a: ArticolCerut, mica: boolean, incepeArticol = false): string {
-  const randuri = [`<div class="nume">${esc(a.autor)}</div>`]
+  const { deasupra, nume } = despartAutor(a.autor)
+  const randuri = deasupra ? [`<div class="deasupra">${esc(deasupra)}</div>`] : []
+  randuri.push(`<div class="nume">${esc(nume)}</div>`)
   if (a.ani) randuri.push(`<div class="ani">${esc(a.ani)}</div>`)
   if (a.pomenire) randuri.push(`<div class="pomenire">${esc(a.pomenire)}</div>`)
   return `<div class="zona-neagra${mica ? ' mica' : ''}${incepeArticol ? ' incepe-articol' : ''}">${randuri.join('')}</div>`
