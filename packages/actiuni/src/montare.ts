@@ -230,7 +230,7 @@ export function modulActiuni<E extends EnvActiuni>(cfg: {
             rezultat: 'success',
             prin: o.prin,
             correlationId: o.correlationId,
-            detalii: { argumente },
+            detalii: a.auditDetalii ? a.auditDetalii({ argumente, date }) : { argumente },
           }),
         )
       }
@@ -246,7 +246,7 @@ export function modulActiuni<E extends EnvActiuni>(cfg: {
             rezultat: 'failure',
             prin: o.prin,
             correlationId: o.correlationId,
-            detalii: { eroare: mesaj },
+            detalii: a.auditDetalii ? a.auditDetalii({ argumente, eroare: mesaj }) : { eroare: mesaj },
           }),
         )
       }

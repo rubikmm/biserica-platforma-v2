@@ -33,7 +33,15 @@ import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/co
 import { Logger, correlationId } from '@xc/observability'
 import { modulActiuni } from '@xc/actiuni'
 import { modulChat } from '@xc/chat'
-import { actiuniBuletin, chestionarul, compuneNumarul, schitaNumarului, schitaPastrata } from './actiuni.js'
+import {
+  actiuniBuletin,
+  chestionarul,
+  compuneNumarul,
+  rezumatAuditCompunere,
+  rezumatAuditEroare,
+  schitaNumarului,
+  schitaPastrata,
+} from './actiuni.js'
 import { HARTA_BULETIN } from './harta.js'
 import { dataVersiunii, eroareApi, html, json, jsonCuEtag } from '@xc/ui'
 import pkg from '../package.json'
@@ -376,7 +384,19 @@ function redirect(catre: string, status: 302 | 303 = 303): Response {
 
 async function scrieAudit(
   env: Env,
-  i: { action: string; target: string; outcome: 'success' | 'failure'; correlationId: string; actorId?: string },
+  i: {
+    action: string
+    target: string
+    outcome: 'success' | 'failure'
+    correlationId: string
+    actorId?: string
+    /**
+     * ⚠️ CE S-A ÎNTÂMPLAT, nu doar că s-a întâmplat. Cine nu-l scrie rămâne cu `{}`, ca până pe
+     * 19.09.2026: intrarea unei compuneri căzute nu spunea de ce a căzut (nr. 616, 10:55:55).
+     * Se ține MIC — coloana se citește cu ochiul, într-un tabel.
+     */
+    summary?: Record<string, unknown>
+  },
 ): Promise<void> {
   try {
     await env.AUDIT.fetch('https://audit.intern/scrie', {
@@ -389,7 +409,7 @@ async function scrieAudit(
         actor: i.actorId ? { type: 'user', id: i.actorId } : { type: 'system' },
         outcome: i.outcome,
         correlationId: i.correlationId,
-        summary: {},
+        summary: i.summary ?? {},
       }),
     })
   } catch {
@@ -904,11 +924,25 @@ export default {
               action: 'buletin.compune', target: `${r.nr}-${r.data}`,
               outcome: r.facut ? 'success' : 'failure',
               correlationId: cid, actorId: principal?.userId,
+              // ⚠️ Motivul refuzului merge în audit, nu doar spre buton: altfel „n-a compus" de azi
+              // nu se mai poate citi mâine.
+              summary: rezumatAuditCompunere(r),
             }),
           )
           return json(r, 200, fara)
         } catch (e) {
-          log.error('compunerea din pagina n-a iesit', { eroare: e instanceof Error ? e.message : String(e) })
+          const mesaj = e instanceof Error ? e.message : String(e)
+          log.error('compunerea din pagina n-a iesit', { eroare: mesaj })
+          // Eșecul tehnic n-are `nr`/`data` (compunerea a căzut înainte să le spună): ținta rămâne
+          // numărul care urma să se facă, iar mesajul erorii intră tăiat în rezumat.
+          ctxExec.waitUntil(
+            scrieAudit(env, {
+              action: 'buletin.compune', target: 'necunoscut',
+              outcome: 'failure',
+              correlationId: cid, actorId: principal?.userId,
+              summary: rezumatAuditEroare(mesaj),
+            }),
+          )
           return json({ facut: false, plangeri: ['compunerea n-a mers până la capăt; încearcă din nou'] }, 500, fara)
         }
       }

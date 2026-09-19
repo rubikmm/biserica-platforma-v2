@@ -126,6 +126,17 @@ export interface Actiune<I extends z.ZodType = z.ZodType, O extends z.ZodType = 
    * sens („nu gasesc slujba") — atunci nu se propune nimic, iar omul afla de ce.
    */
   rezuma?: (argumente: z.infer<I>, c: ContextActiune<E>) => Promise<string>
+  /**
+   * CE SE SCRIE DESPRE FAPTA ASTA IN AUDIT (`summary_json`), peste ce scrie montarea singura:
+   * `{ argumente }` la izbanda, `{ eroare }` la cadere. Se scrie DOAR unde argumentele nu spun
+   * nimic despre ce s-a intamplat — `buletin.compune` se cheama fara niciun argument, deci un rand
+   * de audit cu `{ argumente: {} }` nu spune de ce n-a iesit numarul.
+   *
+   * ⚠️ Ce intoarce ajunge intr-o coloana citita cu ochiul: tine-l mic si taie mesajele lungi.
+   */
+  auditDetalii?: (
+    r: { argumente: z.infer<I>; date?: z.infer<O>; eroare?: string },
+  ) => Record<string, unknown>
   executa: (argumente: z.infer<I>, c: ContextActiune<E>) => Promise<z.infer<O>>
 }
 

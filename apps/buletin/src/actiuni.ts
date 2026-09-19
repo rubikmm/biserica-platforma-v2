@@ -263,6 +263,46 @@ export async function compuneNumarul(
 }
 
 /**
+ * CÂT ÎNCAPE DINTR-UN MESAJ ÎN AUDIT. Motivul, nu stiva: intrarea de audit se citește cu ochiul,
+ * într-un tabel, iar un mesaj de o mie de semne ar îneca rândurile din jur.
+ */
+const SEMNE_IN_AUDIT = 300
+
+/** Un rând de audit nu poartă romane: ce trece de măsură se taie și se spune cu „…". */
+function taiatPentruAudit(s: string): string {
+  const v = s.trim()
+  return v.length > SEMNE_IN_AUDIT ? `${v.slice(0, SEMNE_IN_AUDIT)}…` : v
+}
+
+/**
+ * DE CE A CĂZUT O COMPUNERE — rezumatul care se scrie în audit (`summary_json`).
+ *
+ * ⚠️ Scris fiindcă până pe 19.09.2026 rândul de audit al unei compuneri rămase nefăcute era `{}`:
+ * se știa CĂ n-a mers (nr. 616, 10:55:55), nu și DE CE. Or tocmai plângerile sunt motivul —
+ * „textul e cu 412 semne peste măsură" e ce trebuie citit a doua zi, fără să se caute prin loguri.
+ *
+ * ⚠️ Îl folosesc AMÂNDOI chemătorii compunerii (butonul din `/nou` și acțiunea `buletin.compune`),
+ * ca rândul de audit să arate la fel, indiferent pe ce ușă a intrat cererea.
+ */
+export function rezumatAuditCompunere(
+  r: { facut: boolean; plangeri: string[]; atentie: string[]; semne_pe_dinafara: number | null },
+  eroare?: string,
+): Record<string, unknown> {
+  return {
+    facut: r.facut,
+    plangeri: r.plangeri.map(taiatPentruAudit),
+    atentie: r.atentie.map(taiatPentruAudit),
+    semne_pe_dinafara: r.semne_pe_dinafara,
+    ...(eroare ? { eroare: taiatPentruAudit(eroare) } : {}),
+  }
+}
+
+/** Compunerea care n-a apucat să răspundă (a aruncat): în audit rămâne măcar mesajul erorii. */
+export function rezumatAuditEroare(eroare: string): Record<string, unknown> {
+  return rezumatAuditCompunere({ facut: false, plangeri: [], atentie: [], semne_pe_dinafara: null }, eroare)
+}
+
+/**
  * CE SE COMPUNE: schița, ori ce a scris cel care cere.
  *
  * ⚠️ Hotărârea e după `principal`: fără el, numărul iese DIN SCHIȚĂ (drumul obișnuit, din chat) —
@@ -682,6 +722,13 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
         `${cati ? ` și încă ${cati} ${cati === 1 ? 'articol' : 'articole'}` : ''}. ` +
         `PDF-ul se va pune în depozit la ${cheiaNumarului(cerut)}.`
     },
+    /*
+     * ⚠️ AUDITUL SPUNE DE CE N-A IEȘIT, nu doar că s-a cerut. Acțiunea se cheamă FĂRĂ argumente
+     * (totul vine din schiță), deci rândul scris din oficiu — `{ argumente: {} }` — nu spune nimic
+     * despre un refuz. Aici intră plângerile cu cifrele lor, ca la butonul din `/nou`.
+     */
+    auditDetalii: ({ date, eroare }) =>
+      date ? rezumatAuditCompunere(date, eroare) : rezumatAuditEroare(eroare ?? 'compunerea n-a răspuns'),
     // ⚠️ Un singur loc care compune, pentru amândoi chemătorii (chatul și butonul din `/nou`).
     async executa(a, c) {
       return await compuneNumarul(c.env, a, c.ctxExec)

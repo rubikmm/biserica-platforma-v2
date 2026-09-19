@@ -438,6 +438,43 @@ describe('`POST /nou/compune` — compunerea cerută din pagină, fără model',
   })
 
   /**
+   * ⚠️ AUDITUL SPUNE ȘI DE CE (19.09.2026, nr. 616, 10:55:55: intrarea unei compuneri căzute era
+   * `{}`, deci a doua zi nu se mai știa din ce cauză). Ce se poate strica tăcut: rezumatul se scrie
+   * o dată, la o rută care răspunde oricum cu JSON — dacă redevine gol, nicio probă de răspuns nu
+   * cade, iar pierderea se vede abia peste o săptămână, în tabelul de audit.
+   */
+  it('refuzul scrie în audit plângerile cu cifrele lor, nu un rezumat gol', async () => {
+    const lung = 'Un rând de text al parohiei. '.repeat(900)
+    const { env } = mediu({
+      depozit: {
+        [cheiaSchitei(URMATOR)]: {
+          ...SCHITA_PASTRATA,
+          principal: { ...SCHITA_PASTRATA.principal, text: lung },
+        },
+      },
+    })
+    const scrise: Array<{ action: string; outcome: string; summary: Record<string, unknown> }> = []
+    const cuAudit = {
+      ...env,
+      AUDIT: {
+        fetch: async (_adresa: string, init?: RequestInit) => {
+          scrise.push(JSON.parse(String(init?.body ?? '{}')))
+          return new Response('{}')
+        },
+      },
+    }
+    await posteaza(cuAudit)
+    const intrarea = scrise.find((i) => i.action === 'buletin.compune')
+    expect(intrarea, 'compunerea refuzată trebuie să lase o intrare de audit').toBeDefined()
+    expect(intrarea!.outcome).toBe('failure')
+    expect(intrarea!.summary.facut).toBe(false)
+    expect((intrarea!.summary.plangeri as string[]).join(' ')).toMatch(/de semne peste măsură/)
+    // `atentie` și măsura rămasă pe dinafară merg tot acolo: ele spun cât lipsește
+    expect(Array.isArray(intrarea!.summary.atentie)).toBe(true)
+    expect(intrarea!.summary).toHaveProperty('semne_pe_dinafara')
+  })
+
+  /**
    * ⚠️ O RANDARE CĂZUTĂ RĂMÂNE JSON, nu o pagină de eroare: butonul citește `plangeri` din răspuns,
    * iar o carcasă HTML l-ar lăsa mut. (Browserul de probă nu dă niciun PDF, deci randarea cade.)
    */
