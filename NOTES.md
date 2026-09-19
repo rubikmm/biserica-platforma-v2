@@ -2482,7 +2482,7 @@ forța antetul `Host`**.
 - **Dispare la omul cu cont**: cine are sesiune adevărată nu vede pickerul deloc și cookie-ul i se șterge; la fel dacă rândul lui a dispărut din listă. Cookie-ul e **nesemnat dinadins** — nu deschide nimic ce nu se poate face oricum apăsând pe un slot.
 - **Abatere de la structura mare, asumată de user**: un cookie de om și scriere în date fără să treacă prin permisiunea centrală (authz). Aceeași alegere o făcuse pe 13.09, răsturnată pe 14.09 (voluntarii = conturi); acum se întoarce, dar strâmtată la o singură acțiune.
 - Texte noi față de V1: „Cine ești?" (titlul pickerului) și fraza din fereastra „mod vizualizare" — „…trebuie să-ți alegi numele din lista de sus — ori să intri cu contul parohiei, dacă vrei și restul aplicației".
-- Probe: `tests/curatenie-fantoma.test.ts` (nou, 16 probe), typecheck curat, 1013/1013 la vitest. Publicare în producție: `xc-curatenie-production`, Version ID `6e466358-a189-4bbf-9d2c-dbcc2cf0b21f`; verificat pe viu că `/` scoate `pickerFantoma`, `picker-list` și `0.3.0` în subsol. Commit `HASH_RUNDA`.
+- Probe: `tests/curatenie-fantoma.test.ts` (nou, 16 probe), typecheck curat, 1013/1013 la vitest. Publicare în producție: `xc-curatenie-production`, Version ID `6e466358-a189-4bbf-9d2c-dbcc2cf0b21f`; verificat pe viu că `/` scoate `pickerFantoma`, `picker-list` și `0.3.0` în subsol. Commit `085728b`.
 
 ### 2026-09-18
 
