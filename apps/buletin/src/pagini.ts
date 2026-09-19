@@ -672,8 +672,9 @@ function coperta(ctx: Ctx, b: Buletin, v?: string | null): string {
   const mare = b.cheie_poza
     ? `<img src="${fisier(ctx, b.cheie_poza, v)}" alt="Pagina întâi a numărului ${b.nr}" width="1400" height="1980">`
     : poza(ctx, b, 'cop')
-  // Coperta deschide RĂSFOITUL, ca și butonul de sub ea (`data-rasfoit`); `href` rămâne fișierul,
-  // ca ea să facă ceva și acolo unde răsfoitul nu poate rula.
+  // Coperta deschide RĂSFOITUL (`data-rasfoit`) — și e singura care-l mai deschide, de când butonul
+  // „Răsfoiește" a ieșit de peste tot (19.09.2026). `href` rămâne fișierul, ca ea să facă ceva și
+  // acolo unde răsfoitul nu poate rula.
   return b.cheie_pdf
     ? `<a class="coperta" data-rasfoit href="${fisier(ctx, b.cheie_pdf, v)}" target="_blank" rel="noopener"
          title="Răsfoiește numărul">${mare}</a>`
@@ -1114,10 +1115,14 @@ const JS_COMPUNE = `
  * doilea fel de a arăta un număr, ci se cheamă chiar `coperta`, `butoaneleNumarului` și
  * `fereastraRasfoit`, cu un rând de arhivă închipuit din cheile ciornei.
  *
- * Trei lucruri în plus față de arhivă, toate cerute:
- *  - **butonul de răsfoit (flip3D) se vede**. La numerele apărute a ieșit dinadins (coperta îl
- *    deschide, iar butonul ar fi fost al treilea într-un rând de fapte limpezi); aici omul se uită
- *    la o ciornă și trebuie să poată întoarce paginile fără să ghicească că poza e de apăsat;
+ * ⚠️ BUTONUL „Răsfoiește" A IEȘIT și de aici (user, 19.09.2026, 19:49: „să scoți butonul
+ * Răsfoiește"). Stătuse în rândul de butoane fiindcă se socotise că omul care se uită la o ciornă
+ * trebuie să poată întoarce paginile fără să ghicească că poza e de apăsat — nu mai e cazul: rândul
+ * arată acum ca la numerele din arhivă, iar răsfoitul se deschide DOAR de pe coperta apăsabilă
+ * (`coperta`, `data-rasfoit`). ⚠️ Răsfoitul în sine RĂMÂNE: `fereastraRasfoit` se scrie mai departe
+ * în pagină, altfel coperta ar apăsa în gol.
+ *
+ * Două lucruri în plus față de arhivă, amândouă cerute:
  *  - **butonul de VALIDARE**, care publică numărul (vezi ruta `/nou`, `fapta=valideaza`);
  *  - **amprenta randării în toate adresele** (`?v=…`): fără ea, a doua compunere a aceluiași număr
  *    ar arăta foaia dintâi, ținută în cache-ul browserului sub aceeași adresă.
@@ -1143,8 +1148,7 @@ function ciornaPeEcran(
   }
   return `<section class="ciorna">
   ${coperta(ctx, ciorna, v)}
-  <nav class="btns hartii">${butoaneleNumarului(ctx, ciorna, v)}<button type="button" class="btn intreg" data-rasfoit
-    title="Răsfoiește numărul, pagină cu pagină">${IC_CARTE} Răsfoiește</button></nav>
+  <nav class="btns hartii">${butoaneleNumarului(ctx, ciorna, v)}</nav>
   <form method="post" action="${ctx.prefix}/nou" class="valideaza">
     <input type="hidden" name="fapta" value="valideaza">
     <input type="hidden" name="nr" value="${nou.nr}">

@@ -76,18 +76,20 @@ describe('amprenta randării în adresele fișierelor', () => {
 })
 
 describe('numărul compus, arătat în pagină ca unul gata de validat', () => {
-  it('ține coperta, cele trei butoane ale foii și răsfoitul', () => {
+  it('ține coperta, butoanele foii și răsfoitul — dar NU butonul „Răsfoiește"', () => {
     const h = dupaCompunere()
     expect(h).toContain('<section class="ciorna">')
     // coperta, ca la un număr din arhivă — apăsată, deschide răsfoitul
     expect(h).toContain('<a class="coperta" data-rasfoit')
-    // descărcare · tipărește (+ reversul lui) · răsfoiește (flip3D), cerute toate trei
+    // descărcare · tipărește (+ reversul lui)
     expect(h).toContain('id="b-descarca"')
     expect(h).toContain('id="b-tipareste"')
     expect(h).toContain('id="b-revers"')
-    expect(h).toContain('<button type="button" class="btn intreg" data-rasfoit')
-    expect(h).toContain('Răsfoiește')
-    // fereastra răsfoitului chiar există în pagină (fără ea butoanele ar apăsa în gol)
+    // ⚠️ butonul „Răsfoiește" a IEȘIT din rândul de sub copertă (user, 19.09.2026, 19:49).
+    // Nu-l readuce: răsfoitul se deschide doar de pe coperta apăsabilă.
+    expect(h).not.toContain('<button type="button" class="btn intreg" data-rasfoit')
+    expect(h).not.toContain('Răsfoiește numărul, pagină cu pagină')
+    // fereastra răsfoitului chiar există în pagină (fără ea coperta ar apăsa în gol)
     expect(h).toContain('id="d-rasfoit"')
     // mărimea foii, scrisă pe butonul de descărcare, ca la numerele din arhivă
     expect(h).toContain('<small>0.7 MB</small>')
