@@ -60,6 +60,8 @@ const SAPTAMANA: Record<number, { slujbe: number; detalii: number }> = {
 }
 
 let cereriDeProgram: number[] = []
+/** Treptele pe care programul refuză să le dea — pentru proba de mai jos. */
+let trepteMute: number[] = []
 
 const ENV = {
   BROWSER: {},
@@ -68,6 +70,12 @@ const ENV = {
     fetch: async (adresa: string) => {
       const strans = Number(new URL(adresa).searchParams.get('strans') ?? 0)
       cereriDeProgram.push(strans)
+      if (trepteMute.includes(strans)) {
+        return new Response(JSON.stringify({ cod: 'program_indisponibil', mesaj: 'nu dau varianta asta' }), {
+          status: 503,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
       return new Response(
         JSON.stringify({
           // marcajul `data-strans` e al probei: din el își dă seama hârtia jucată ce program a primit
@@ -110,6 +118,7 @@ const compuneCu = async (peDinafara: number) => {
 beforeEach(() => {
   randari.length = 0
   cereriDeProgram = []
+  trepteMute = []
 })
 
 describe('foaia întreagă, când textul încape', () => {
@@ -186,6 +195,51 @@ describe('a treia cedare și refuzul', () => {
       await compuneCu(deficit)
       expect(randari.length).toBeLessThanOrEqual(2)
     }
+  })
+})
+
+/**
+ * ⚠️ PROBA CAPCANEI: o treaptă al cărei tabel nu vine NU e spațiu liber. Socotită cu `calendar:
+ * undefined`, ea pare că a eliberat o pagină întreagă — socoteala ar tăcea, iar foaia ar ieși cu
+ * pagina a patra fără NICIUN program, adică fără lucrul pentru care se tipărește numărul.
+ */
+describe('o treaptă pe care programul n-o dă', () => {
+  it('nu trece drept pagină liberă: se cedează doar cât se poate, și se refuză cu cifra rămasă', async () => {
+    trepteMute = [1, 2]
+    const r = await compuneCu(300)
+    expect(r.randari).toBe(2)
+    expect(r.cedat).toBe('fără floare')
+    expect(r.calendar?.strans).toBe(0)
+    // programul ÎNTREG rămâne pe pagina a patra, nu dispare
+    expect(randari[1]).toContain('class="program"')
+    expect(r.ok).toBe(false)
+    expect(r.raport?.peDinafara).toBe(300 - 212)
+  })
+
+  it('nici socoteala nu se lasă păcălită: numărul care încape se compune cu programul întreg', async () => {
+    trepteMute = [1, 2]
+    const r = await compuneCu(0)
+    expect(r.ok).toBe(true)
+    expect(r.calendar?.strans).toBe(0)
+    expect(randari[0]).toContain('class="program"')
+  })
+
+  /**
+   * Aceeași capcană, dar pe drumul socotelii: un text de 9 500 de semne nu încape nici întreg
+   * (8 498), nici fără floare (8 710) — iar treapta următoare nu vine. Socotită fără tabel, ea ar
+   * da 10 337 de semne, adică socoteala ar zice „încape" și s-ar randa o foaie fără program.
+   */
+  it('nu socotește o treaptă lipsă ca și cum pagina a patra ar fi goală', async () => {
+    trepteMute = [1, 2]
+    deficitulFoiiIntregi = 0
+    const r = await compune(ENV, {
+      cerut: { ...CERUT, principal: { ...CERUT.principal, text: 'cuvânt '.repeat(1358) } },
+    })
+    expect(r.ok).toBe(false)
+    expect(r.randari).toBe(0)
+    expect(randari).toHaveLength(0)
+    expect(r.plangeri.join(' ')).toContain('peste măsură')
+    expect(r.cedat).toBe('fără floare')
   })
 })
 

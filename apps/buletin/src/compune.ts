@@ -316,6 +316,13 @@ export async function compune(env: EnvCompunere, o: OptiuniCompunere): Promise<C
   const trepte = potStrange ? CEDARILE : [CEDARILE[0]!]
   for (let i = 0; i < trepte.length; i++) {
     const c = await calendarul(trepte[i]!.strans)
+    /*
+     * ⚠️ O TREAPTĂ AL CĂREI TABEL N-A VENIT SE SARE, nu se socotește. Socotită cu `calendar:
+     * undefined` ar părea că s-a eliberat o pagină întreagă — socoteala ar tăcea, iar foaia ar ieși
+     * cu pagina a patra FĂRĂ PROGRAM, adică fix lucrul pentru care se tipărește. Treapta 0 e mereu
+     * aici (altfel `potStrange` ar fi fals), deci rămâne ultima așezare bună.
+     */
+    if (potStrange && !c) break
     const s = socotealaCedarii(c, trepte[i]!)
     nivel = i
     calendar = c
@@ -375,7 +382,8 @@ export async function compune(env: EnvCompunere, o: OptiuniCompunere): Promise<C
     for (let i = 0; i < CEDARILE.length; i++) {
       if (i <= nivel) { elibereaza.push(0); continue }
       const c = await calendarul(CEDARILE[i]!.strans)
-      elibereaza.push(Math.max(0, socotealaCedarii(c, CEDARILE[i]!).semneCuTot - socoteala.semneCuTot))
+      // tabelul care n-a venit nu eliberează nimic — vezi mai sus de ce nu se socotește fără el
+      elibereaza.push(c ? Math.max(0, socotealaCedarii(c, CEDARILE[i]!).semneCuTot - socoteala.semneCuTot) : 0)
     }
     const ales = cedareaDeIncercat({ dela: nivel, peDinafara: raport.peDinafara, elibereaza })
     if (ales !== null) {
