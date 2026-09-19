@@ -616,12 +616,19 @@ describe('cârligul buletinului: fișierul intră în SCHIȚĂ, nu în discuție
   it('un .docx urcat în timpul chestionarului devine TEXTUL articolului de acum', async () => {
     const { env, tinut } = mediuBuletin()
     const docx = new File([await docxCu(8)], 'articol.docx', { type: TIP_DOCX })
-    const j = (await (await urcaLaBuletin(env, docx)).json()) as { ok: boolean; text: string }
+    const j = (await (await urcaLaBuletin(env, docx)).json()) as { ok: boolean; text: string; nota: string }
 
     expect(j.ok).toBe(true)
-    // mesajul către model e o FRAZĂ, nu articolul: textul a rămas pe server
-    expect(j.text).toContain('Am pus textul din articol.docx')
-    expect(j.text).toContain('ca textul articolului principal')
+    /*
+     * ⚠️ DOUĂ VORBE, de pe 19.09.2026: `nota` e ce i se arată OMULUI, `text` e ce pleacă spre creier.
+     * S-au despărțit fiindcă fluxul pe hartă citea în propria noastră notă cuvintele „textul" și
+     * „articolul principal" și o lua drept o instrucțiune nouă — cerând textul a doua oară.
+     */
+    expect(j.nota).toContain('Am pus textul din articol.docx')
+    expect(j.nota).toContain('ca textul articolului principal')
+    expect(j.text).toBe('unde am rămas')
+    // articolul nu pleacă nicăieri, pe niciuna dintre cele două: el a rămas pe server
+    expect(j.nota).not.toContain('DESPRE RUGĂCIUNE')
     expect(j.text).not.toContain('DESPRE RUGĂCIUNE')
 
     const schita = schitaDin(tinut)
@@ -657,7 +664,7 @@ describe('cârligul buletinului: fișierul intră în SCHIȚĂ, nu în discuție
   it('o poză ajunge în depozitul buletinului, sub `poze/…`, iar în schiță se scrie ADRESA ei', async () => {
     const { env, tinut } = mediuBuletin()
     const poza = new File([new Uint8Array([137, 80, 78, 71])], 'sfantul.png', { type: 'image/png' })
-    const j = (await (await urcaLaBuletin(env, poza)).json()) as { text: string; poza: string }
+    const j = (await (await urcaLaBuletin(env, poza)).json()) as { text: string; nota: string; poza: string }
 
     const cheiePoze = [...tinut.keys()].filter((k) => k.startsWith('poze/'))
     expect(cheiePoze).toHaveLength(1)
@@ -666,7 +673,9 @@ describe('cârligul buletinului: fișierul intră în SCHIȚĂ, nu în discuție
     // ⚠️ ADRESA ÎNTREAGĂ, nu cheia: Browser Rendering ia poza de pe internet
     expect(j.poza).toBe(`${ORIGINE}/fisier/${cheiePoze[0]}`)
     expect(schitaDin(tinut).principal.poza).toBe(j.poza)
-    expect(j.text).toContain('Am pus poza sfantul.png la articolul principal')
+    // nota e a omului (bula o desenează), iar spre creier pleacă doar comanda hărții
+    expect(j.nota).toContain('Am pus poza sfantul.png la articolul principal')
+    expect(j.text).toBe('unde am rămas')
   })
 
   it('poza urcată se poate chiar CERE de pe adresa publică (altfel foaia ar ieși cu locul gol)', async () => {

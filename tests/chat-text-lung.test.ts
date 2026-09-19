@@ -441,11 +441,18 @@ describe('buletinul: textul lipit intră în schiță, nu în discuție', () => 
     // ⚠️ și NU a ajuns la creier, pe niciuna dintre cele două cereri
     expect(catreCreier).toHaveLength(2)
     for (const c of catreCreier) expect(c.text).not.toContain('Mănăstirea Antim')
-    expect(catreCreier[0]!.text).toMatch(/^Am pus textul \([\d ]+ de semne\) ca textul articolului principal\./)
+    /*
+     * ⚠️ SPRE CREIER PLEACĂ O COMANDĂ, NU NOTA (19.09.2026, odată cu harta). Nota („Am pus textul…")
+     * o vede OMUL, iar creierului îi rămâne doar să pună întrebarea următoare — „unde am rămas" e
+     * chiar comanda hărții pentru asta, potrivită determinist, fără niciun apel de model. Trimisă
+     * nota, potrivitorul ar fi citit în ea „textul" și „articolul principal" și ar fi luat-o drept
+     * instrucțiune nouă, cerând textul a doua oară.
+     */
+    expect(catreCreier[0]!.text).toBe('unde am rămas')
 
-    // ecranul de dedesubt află pe loc că schița s-a schimbat
+    // ecranul de dedesubt află pe loc că schița s-a schimbat, iar omul vede ce s-a pus
     expect(j.unelte).toEqual(['buletin.raspunde'])
-    expect(j.nota).toContain('Am pus textul')
+    expect(j.nota).toMatch(/^Am pus textul \([\d ]+ de semne\) ca textul articolului principal\./)
   })
 
   it('un răspuns scurt („rămâne așa") rămâne un răspuns: nu se scrie nimic în schiță', async () => {

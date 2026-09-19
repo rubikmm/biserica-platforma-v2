@@ -32,6 +32,15 @@ import { Logger, correlationId } from '@xc/observability'
 import { TAIERE_MESAJ_OM, configAplicatie, configChat, type ConfigAplicatie, type ConfigChat } from '@xc/chat'
 import { intreabaModelul, instructiuni, type EnvCreier, type MesajModel } from './creier.js'
 import {
+  citesteStatistica,
+  cheiaStatisticii,
+  noteazaDrumul,
+  peHarta,
+  statisticaGoala,
+  type Asteptare,
+  type OptiuneBula,
+} from './harta.js'
+import {
   conversatia,
   conversatiaDe,
   inchidePropunerea,
@@ -221,7 +230,9 @@ async function adunaUneltele(
   for (const { a, m } of manifeste) {
     if (!m) continue
     for (const descriere of (m as Manifest).actiuni) {
-      if (descriere.fundal || !permis(descriere.nume)) continue
+      // ⚠️ `ascunsa` iese și de aici, nu doar din lista trimisă modelului: altfel potrivitorul hărții
+      // ar apărea ca o bifă în Setări → „Chat AI", ca și cum ar fi o unealtă de ales.
+      if (descriere.fundal || descriere.ascunsa || !permis(descriere.nume)) continue
       harta.set(numeUnealta(descriere.nume), {
         nume: descriere.nume,
         aplicatie: a.nume,
@@ -286,6 +297,11 @@ interface RaspunsChat {
   text: string
   obiecte: Obiect[]
   propunere: { id: string; rezumat: string } | null
+  /**
+   * BUTOANELE DE ALES (19.09.2026, fluxul pe hartă): „e vorba de X sau de Y?", „nu știu ce să fac cu
+   * X: [acțiunile]". Apăsarea trimite `text` ca mesaj obișnuit — de aceea meniul E drumul fără AI.
+   */
+  optiuni?: OptiuneBula[]
   /** Uneltele chemate pentru raspunsul asta, in ordine. Pentru probe si pentru curiosi. */
   unelte: string[]
   /**
@@ -308,7 +324,9 @@ function raspunsulDin(
   let d: {
     obiecte?: Obiect[]
     propunere?: { id: string; rezumat: string } | null
+    optiuni?: OptiuneBula[]
     apeluri?: Array<{ nume?: unknown }>
+    harta?: { drum?: string; asteapta?: Asteptare | null }
   } = {}
   try {
     d = JSON.parse(m.date_json || '{}') as typeof d
@@ -322,6 +340,7 @@ function raspunsulDin(
     text: m.text,
     obiecte: Array.isArray(d.obiecte) ? d.obiecte : [],
     propunere: p && stare === 'asteapta' ? p : null,
+    ...(Array.isArray(d.optiuni) && d.optiuni.length ? { optiuni: d.optiuni } : {}),
     /*
      * ⚠️ UNELTELE SE SCOT DIN `apeluri`, nu se lasă goale (18.09.2026). Răspunsul venit prin sondare
      * trece pe aici, iar bula dă mai departe `unelte` paginii de dedesubt: ecranul „buletin nou" își
@@ -332,6 +351,24 @@ function raspunsulDin(
       ? d.apeluri.map((a) => String(a?.nume ?? '')).filter(Boolean)
       : [],
     ...(p && stare !== 'asteapta' ? { propunereTrecuta: { rezumat: p.rezumat, stare } } : {}),
+  }
+}
+
+/**
+ * CE VALOARE AȘTEPTAM — scrisă lângă răspunsul dinainte (fluxul pe hartă).
+ *
+ * ⚠️ Fără ea, drumul fără AI s-ar rupe la ultimul pas: omul apasă „titlul" pe un buton de nivel 2,
+ * chatul îl întreabă „Ce titlu pui la secundarul 1?", iar răspunsul lui („DESPRE POST") n-ar mai avea
+ * niciun subiect — ar cădea în „nu înțeleg". Se ține în `date_json` al mesajului agentului, rând care
+ * există oricum: nici coloană nouă, nici tabel nou.
+ */
+function asteptareaDin(dateJson: string | null | undefined): Asteptare | null {
+  try {
+    const d = JSON.parse(dateJson || '{}') as { harta?: { asteapta?: Asteptare | null } }
+    const a = d.harta?.asteapta
+    return a && typeof a.subiect === 'string' && typeof a.actiune === 'string' ? a : null
+  } catch {
+    return null
   }
 }
 
@@ -410,6 +447,89 @@ async function lucreaza(
   if (comutator.creier === 'fara') {
     await scrieMesaj(env.DB, { conversatie_id: o.conversatieId, rol: 'agent', text: FARA_CREIER })
     return { conversatieId: o.conversatieId, text: FARA_CREIER, obiecte: [], propunere: null, unelte: [] }
+  }
+
+  /*
+   * ================= FLUXUL PE HARTĂ (19.09.2026) =================
+   *
+   * O aplicație care își declară CUPRINSUL în manifest (`harta`) nu mai trece pe drumul cu unelte:
+   * mesajul se potrivește întâi determinist, la ea acasă, iar modelul face cel mult două clasificări
+   * mici (subiectul, apoi acțiunea). Promptul vechi — regulile și uneltele — nu se mai trimite deloc,
+   * și nici cunoștințele de fundal nu se mai cer: aici nu se alege nimic din ele.
+   *
+   * ⚠️ Aplicațiile fără hartă (program, tipic) nu simt nimic: codul de mai jos rămâne al lor.
+   */
+  const aleiNoastre = aplicatiileLegate(env, o.aplicatie).find((a) => a.nume === o.aplicatie)
+  const manifestulNostru = aleiNoastre
+    ? await manifestulLui(aleiNoastre.fetcher, aleiNoastre.nume, { secret: o.secret, correlationId: o.cid, prin: 'chat' })
+    : null
+  if (aleiNoastre && manifestulNostru?.harta) {
+    const efecte = new Map((manifestulNostru as Manifest).actiuni.map((a) => [a.nume, a.efect as string]))
+    // ce valoare i-am cerut omului la mesajul dinainte (după un buton de nivel 2)
+    const alAgentului = [...istoric].reverse().find((m) => m.rol === 'agent')
+    const r = await peHarta({
+      env,
+      harta: manifestulNostru.harta,
+      aplicatie: o.aplicatie,
+      fetcher: aleiNoastre.fetcher,
+      actor: o.actor,
+      secret: o.secret,
+      cid: o.cid,
+      creier: comutator.creier,
+      model: comutator.model,
+      indrumari: aleAplicatiei.indrumari,
+      pana,
+      mesaj: istoric[istoric.length - 1]?.text ?? '',
+      asteapta: alAgentului ? asteptareaDin(alAgentului.date_json) : null,
+      conversatieId: o.conversatieId,
+      log: o.log,
+      spune,
+      propune: async (p) => {
+        const scrisa = await scriePropunere(env.DB, {
+          conversatie_id: o.conversatieId,
+          aplicatie: o.aplicatie,
+          actiune: p.actiune,
+          argumente: p.argumente,
+          rezumat: p.rezumat,
+        })
+        return { id: scrisa.id, rezumat: scrisa.rezumat }
+      },
+      previzualizeaza: async (actiune, argumente) => {
+        const prev = await previzualizeaza(aleiNoastre.fetcher, actiune, argumente, o.actor, {
+          secret: o.secret,
+          correlationId: o.cid,
+          prin: 'chat',
+        })
+        return prev.ok ? { ok: true as const, rezumat: prev.date.rezumat } : { ok: false as const, mesaj: prev.mesaj }
+      },
+      efectul: (actiune) => efecte.get(actiune),
+    })
+
+    // MĂSURA „FĂRĂ AI": pe ce drum s-a rezolvat mesajul — în log ȘI în contorul din KV.
+    o.log.info('mesaj pe harta', { aplicatie: o.aplicatie, drum: r.drum, conversatie: o.conversatieId })
+    await noteazaDrumul(env.CONFIG, o.aplicatie, r.drum)
+
+    await scrieMesaj(env.DB, {
+      conversatie_id: o.conversatieId,
+      rol: 'agent',
+      text: r.text,
+      date: {
+        obiecte: [],
+        propunere: r.propunere,
+        ...(r.optiuni.length ? { optiuni: r.optiuni } : {}),
+        model: comutator.model,
+        apeluri: r.apeluri,
+        harta: { drum: r.drum, asteapta: r.asteapta },
+      },
+    })
+    return {
+      conversatieId: o.conversatieId,
+      text: r.text,
+      obiecte: [],
+      propunere: r.propunere,
+      ...(r.optiuni.length ? { optiuni: r.optiuni } : {}),
+      unelte: r.unelte,
+    }
   }
 
   const { unelte, harta, fundal } = await adunaUneltele(env, {
@@ -637,6 +757,9 @@ export default {
               date: {
                 obiecte: r.obiecte,
                 propunere: r.propunere,
+                // butoanele fluxului pe hartă: firul refăcut trebuie să le poarte, ca omul să poată
+                // apăsa mai departe după ce a strâns panoul (aceeași socoteală ca la propunere)
+                ...(r.optiuni?.length ? { optiuni: r.optiuni } : {}),
                 ...(r.propunereTrecuta ? { propunereTrecuta: r.propunereTrecuta } : {}),
               },
             }
@@ -661,6 +784,19 @@ export default {
        * după ultimul mesaj al omului. Așa nu se poate pierde nicio stare dacă lucrul cade la mijloc.
        */
       if (req.method === 'GET' && cale === '/stare') {
+        /*
+         * MĂSURA „FĂRĂ AI" (19.09.2026) — `?statistica=<aplicatie>`, pe aceeași ușă ieftină.
+         *
+         * Utilizatorul vrea să analizeze dacă poate lucra fără AI: cifra e câte mesaje s-au rezolvat
+         * determinist și câte au cerut modelul. Contorul îl scrie codul (`noteazaDrumul`), la fiecare
+         * mesaj pe hartă; aici doar se citește. Nu ține nimic personal — numai numărători.
+         */
+        const pentruStatistica = url.searchParams.get('statistica') ?? ''
+        if (pentruStatistica) {
+          if (!env.CONFIG) return json(statisticaGoala(pentruStatistica))
+          const brut = await env.CONFIG.get(cheiaStatisticii(pentruStatistica), 'json').catch(() => null)
+          return json(citesteStatistica(pentruStatistica, brut))
+        }
         const id = url.searchParams.get('id') ?? ''
         const c = await conversatiaDe(env.DB, id, userId)
         if (!c) return json({ gata: false, lipseste: true, etapa: '' }, 404)

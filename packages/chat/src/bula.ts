@@ -91,6 +91,19 @@ export const STIL_CHAT = `
                             background:var(--paper); color:var(--ink) }
 .xc-chat-propunere button.da { background:var(--rosu); border-color:var(--rosu); color:#fff }
 
+/* ALEGEREA DINTRE MAI MULTE (19.09.2026, fluxul pe harta): aceeasi cutie ca propunerea, dar cu N
+   butoane. Apasarea NU face nimic pe ascuns — trimite alegerea ca mesaj obisnuit, deci drumul fara AI
+   e chiar meniul: „meniu" → subiect → actiune → valoarea scrisa de om. Linie subtire, nu rosu plin:
+   aici nu se confirma nimic, doar se alege. */
+.xc-chat-optiuni { align-self:stretch; border:1px solid var(--rule); border-radius:10px;
+                   padding:9px 10px; background:var(--paper) }
+.xc-chat-optiuni div { display:flex; flex-wrap:wrap; gap:6px }
+.xc-chat-optiuni button { flex:1 1 calc(50% - 6px); padding:7px 10px; border-radius:8px; cursor:pointer;
+                          font:600 13px/1.25 ui-sans-serif,system-ui; border:1px solid var(--rule);
+                          background:var(--paper); color:var(--ink); text-align:left }
+.xc-chat-optiuni button:hover { border-color:var(--rosu); color:var(--rosu) }
+.xc-chat-optiuni button:disabled { opacity:.45; cursor:default }
+
 /* randul de scris. ⚠️ Carcasa are stiluri GLOBALE pe form (display:flex, wrap) si pe label —
    de aceea formularul isi scrie AICI toata asezarea, altfel campul si butonul se insira aiurea. */
 .xc-chat-jos { display:flex; align-items:flex-end; gap:8px; padding:10px; margin:0;
@@ -365,6 +378,10 @@ export const JS_CHAT = `(function(){
       atinge();
       if (scris) mesaj('om', scris);
       cardFisier(j.obiect, j.semne, j.taiat);
+      // Ce a facut aplicatia cu fisierul, spus OMULUI acum (19.09.2026) — la fel ca la textul lipit.
+      // Pana aici vorba asta pleca numai spre creier, iar omul afla ce s-a intamplat abia din
+      // raspunsul lui; pe drumul hartii creierul primeste alt mesaj, deci n-ar mai fi aflat nimeni.
+      if (j.nota) mesaj('agent', j.nota);
       // Ce a atins aplicatia cu fisierul asta, spus paginii ACUM — nu dupa ce raspunde modelul.
       if (j.unelte && j.unelte.length) vesteste(j);
       // Mesajul iese singur pe drumul obisnuit, ca omul sa nu mai apese inca o data (cerere anume).
@@ -372,6 +389,35 @@ export const JS_CHAT = `(function(){
     }).catch(function(){
       rand.remove(); mesaj('rea', 'Nu am putut urca fișierul.'); gata();
     });
+  }
+
+  /**
+   * BUTOANELE DE ALES (19.09.2026). Serverul trimite „optiuni": [{eticheta, text}]. Apasarea nu
+   * cheama nicio ruta noua — SCRIE textul optiunii ca mesaj obisnuit, pe drumul tastaturii. Asa
+   * meniul chiar E drumul fara AI: „meniu" → butoanele subiectelor → butoanele actiunilor → omul
+   * scrie valoarea. Si asa nu se poate strica nimic: orice buton e o fraza pe care omul ar fi putut-o
+   * scrie singur.
+   */
+  function optiuni(lista){
+    if (!lista || !lista.length) return;
+    var d = document.createElement('div');
+    d.className = 'xc-chat-optiuni';
+    var rand = document.createElement('div');
+    lista.forEach(function(op){
+      if (!op || !op.text) return;
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = op.eticheta || op.text;
+      b.addEventListener('click', function(){
+        if (ocupat) return;
+        d.remove();
+        ocupat = true; buton.disabled = true;
+        mesaj('om', op.text);
+        duMesajul(op.text);
+      });
+      rand.appendChild(b);
+    });
+    d.appendChild(rand); fir.appendChild(d); jos();
   }
 
   function propunere(p){
@@ -495,6 +541,7 @@ export const JS_CHAT = `(function(){
     if (j.conversatieId){ idConv = j.conversatieId; try { localStorage.setItem(CHEIE_ID, idConv); } catch(e){} }
     if (j.text) mesaj('agent', j.text);
     (j.obiecte || []).forEach(card);
+    if (j.optiuni && j.optiuni.length) { optiuni(j.optiuni); return; }
     if (j.propunere) { propunere(j.propunere); return; }
     // O propunere care a fost si nu se mai poate apasa: se spune, nu se deseneaza butoane moarte.
     if (j.propunereTrecuta && j.propunereTrecuta.stare === 'expirata') {
@@ -604,6 +651,9 @@ export const JS_CHAT = `(function(){
           // ⚠️ SI PROPUNEREA (18.09.2026): pana atunci firul refacut din istoric avea numai text si
           // hartii, deci cine strangea panoul pierdea butoanele Da/Nu si nu mai avea cum sa confirme
           // ce-i pregatise chatul. Serverul trimite doar propunerea care se mai poate apasa.
+          // ⚠️ Si butoanele de ales, din aceeasi pricina ca propunerea: cine strange panoul la
+          // „e vorba de X sau de Y?" trebuie sa poata apasa mai departe la redeschidere.
+          if (d.optiuni && d.optiuni.length) optiuni(d.optiuni);
           if (d.propunere) propunere(d.propunere);
           else if (d.propunereTrecuta && d.propunereTrecuta.stare === 'expirata') {
             mesaj('rea', 'Propunerea „' + d.propunereTrecuta.rezumat + '" a expirat — cere-mi din nou.');

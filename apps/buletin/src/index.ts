@@ -34,6 +34,7 @@ import { Logger, correlationId } from '@xc/observability'
 import { modulActiuni } from '@xc/actiuni'
 import { modulChat } from '@xc/chat'
 import { actiuniBuletin, chestionarul, compuneNumarul, schitaNumarului, schitaPastrata } from './actiuni.js'
+import { HARTA_BULETIN } from './harta.js'
 import { dataVersiunii, eroareApi, html, json, jsonCuEtag } from '@xc/ui'
 import pkg from '../package.json'
 import {
@@ -144,7 +145,17 @@ export interface Env {
  * Verbele buletinului, publicate la `/_actiuni`: socoteala lungimii și compunerea unui număr.
  * Răspund DOAR prin Service Binding, cu secretul platformei — de pe internet calea nu există.
  */
-const MODUL = modulActiuni<Env>({ aplicatie: 'buletin', versiune: pkg.version, actiuni: actiuniBuletin })
+const MODUL = modulActiuni<Env>({
+  aplicatie: 'buletin',
+  versiune: pkg.version,
+  actiuni: actiuniBuletin,
+  /*
+   * ⚠️ CUPRINSUL, în manifest (19.09.2026). Cu el, bula buletinului capătă în chat fluxul cu două
+   * nivele — subiect, apoi acțiune, apoi confirmare — iar promptul vechi (patru unelte, optsprezece
+   * reguli) nu se mai trimite. Aplicațiile care nu scriu rândul ăsta (program, tipic) rămân neatinse.
+   */
+  harta: HARTA_BULETIN,
+})
 
 /**
  * BULA DE CHAT A BULETINULUI (user, 18.09.2026: „am făcut-o să fie transmisibilă… să facem Buletinul
@@ -222,7 +233,7 @@ async function textulInSchita(
   env: Env,
   text: string,
   o: { dinFisier?: string; strict?: boolean } = {},
-): Promise<{ mesaj: string; unelte: string[] } | null> {
+): Promise<{ mesaj: string; catreChat: string; unelte: string[] } | null> {
   const { schita, deAcum, pastreaza } = await schitaDeAcum(env)
   const care = deAcum.articol
   /*
@@ -241,7 +252,15 @@ async function textulInSchita(
     unelte: ['buletin.raspunde'],
     mesaj:
       `Am pus textul${o.dinFisier ? ` din ${o.dinFisier}` : ''} (${cuMii(semne(text))} de semne) ` +
-      `ca textul articolului ${NUMELE_ZONEI[care]}. Continuă cu întrebarea următoare.`,
+      `ca textul articolului ${NUMELE_ZONEI[care]}.`,
+    /*
+     * ⚠️ CE CERE CHATUL E ALTCEVA DECÂT CE SE SPUNE OMULUI (19.09.2026). Treaba e deja făcută, din
+     * cod; chatului îi rămâne doar să pună întrebarea următoare — și „unde am rămas" e chiar comanda
+     * hărții pentru asta, potrivită determinist, fără niciun apel de model. Trimisă nota de mai sus,
+     * potrivitorul ar fi citit în ea „textul" și „articolul principal" și ar fi luat-o drept o
+     * instrucțiune nouă, cerând textul a doua oară.
+     */
+    catreChat: 'unde am rămas',
   }
 }
 
@@ -258,7 +277,10 @@ const PRAG_TEXT_ARTICOL = 400
  * CE FACE BULETINUL CU UN TEXT LUNG LIPIT ÎN BULĂ (19.09.2026): îl scrie în schiță, din cod, și
  * întoarce modelului o frază. Textul nu mai ajunge niciodată în context — nici la dus, nici la întors.
  */
-async function laTextulBuletinului(text: string, env: Env): Promise<{ mesaj: string; unelte: string[] } | null> {
+async function laTextulBuletinului(
+  text: string,
+  env: Env,
+): Promise<{ mesaj: string; catreChat: string; unelte: string[] } | null> {
   if (text.trim().length <= PRAG_TEXT_ARTICOL) return null
   return await textulInSchita(env, text, { strict: true })
 }
@@ -276,10 +298,10 @@ async function laTextulBuletinului(text: string, env: Env): Promise<{ mesaj: str
 async function laFisierulBuletinului(
   f: { nume: string; fel: string; tip: string; text: string; continut: ArrayBuffer },
   env: Env,
-): Promise<{ text?: string; mesaj?: string; poza?: string; unelte?: string[] } | null> {
+): Promise<{ text?: string; mesaj?: string; catreChat?: string; poza?: string; unelte?: string[] } | null> {
   if (f.fel === 'docx' || f.fel === 'txt') {
     const pus = await textulInSchita(env, f.text, { dinFisier: f.nume })
-    return pus ? { text: f.text, unelte: pus.unelte, mesaj: pus.mesaj } : null
+    return pus ? { text: f.text, unelte: pus.unelte, mesaj: pus.mesaj, catreChat: pus.catreChat } : null
   }
 
   const { schita, deAcum, pastreaza } = await schitaDeAcum(env)
@@ -293,6 +315,8 @@ async function laFisierulBuletinului(
     poza: adresa,
     unelte: ['buletin.raspunde'],
     mesaj: `Am pus poza ${f.nume} la articolul ${NUMELE_ZONEI[care]}. Dacă o vrei la alt articol, spune-mi.`,
+    // vezi lămurirea de la `textulInSchita`: poza e deja urcată, chatului îi rămâne întrebarea următoare
+    catreChat: 'unde am rămas',
   }
 }
 

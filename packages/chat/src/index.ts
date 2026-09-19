@@ -133,6 +133,16 @@ export interface RaspunsLaFisier {
   text?: string
   /** Mesajul care pleacă spre model în locul celui obișnuit. */
   mesaj?: string
+  /**
+   * CE PLEACĂ SPRE CREIER, când e altceva decât nota arătată omului (19.09.2026, odată cu harta).
+   *
+   * ⚠️ DE CE EXISTĂ. `mesaj` face două lucruri deodată: e vorba spusă omului („Am pus poza la
+   * articolul principal") ȘI mesajul dus mai departe. Cu fluxul pe hartă, a doua întrebuințare s-a
+   * întors împotriva ei: potrivitorul citea în propria noastră notă cuvintele „poza" și „principal"
+   * și o lua drept o INSTRUCȚIUNE nouă — răspunzând „poza se dă din clemă" despre o poză tocmai
+   * urcată. Deci cine are ceva de spus omului scrie `mesaj`, iar ce cere chatului scrie aici.
+   */
+  catreChat?: string
   /** Adresa sub care a ajuns poza la aplicație, dacă a mutat-o la ea. */
   poza?: string
   /**
@@ -154,8 +164,10 @@ export interface RaspunsLaFisier {
  * frază de citit, nu nouă mii de semne de recitit și de retrimis.
  */
 export interface RaspunsLaText {
-  /** Fraza scurtă care pleacă spre model în locul textului lung. */
+  /** Fraza scurtă care i se arată omului în locul textului lung. */
   mesaj: string
+  /** Ce pleacă spre creier, când e altceva decât nota de mai sus (vezi `RaspunsLaFisier.catreChat`). */
+  catreChat?: string
   /** Ce a atins aplicația, cu numele acțiunilor ei — pentru împrospătarea ecranului de dedesubt. */
   unelte?: string[]
 }
@@ -343,7 +355,14 @@ export function modulChat(cfg: {
       }
     }
 
-    let mesaj = alAplicatiei?.mesaj ?? ''
+    /*
+     * ⚠️ DOUĂ VORBE, NU UNA (19.09.2026). Ce se arată omului („Am pus poza la articolul principal")
+     * și ce pleacă spre creier („unde am rămas") sunt lucruri deosebite de când există fluxul pe
+     * hartă: potrivitorul citea în propria noastră notă cuvintele „poza" și „principal" și o lua
+     * drept instrucțiune nouă. Nota o desenează bula, ca la textul lipit.
+     */
+    const nota = alAplicatiei?.mesaj ?? ''
+    let mesaj = alAplicatiei?.catreChat ?? alAplicatiei?.mesaj ?? ''
     if (!mesaj) {
       mesaj = felul.ePoza
         ? `${scrisDeOm ? `${scrisDeOm}\n\n` : ''}Am urcat poza ${nume} (${cheie}).`
@@ -361,6 +380,7 @@ export function modulChat(cfg: {
       ok: true,
       obiect: { cheie, titlu: nume, fel: felul.fel, octeti: fisier.size },
       text: mesaj,
+      ...(nota ? { nota } : {}),
       semne: text.length,
       taiat,
       poza: alAplicatiei?.poza ?? null,
@@ -469,9 +489,17 @@ export function modulChat(cfg: {
          * răspunsul venea pe o conexiune care se rupsese pe drum.
          */
         const propunere = unde === 'stare' ? (cautate.get('propunere') ?? '') : ''
+        /*
+         * ⚠️ `statistica` tot numai la `/stare` (19.09.2026): cu el se cere contorul drumurilor
+         * fluxului pe hartă — câte mesaje s-au rezolvat determinist și câte au cerut modelul. E cifra
+         * cu care utilizatorul cântărește dacă poate lucra fără AI, deci trebuie să se poată citi din
+         * aplicație, nu doar din wrangler.
+         */
+        const statistica = unde === 'stare' ? (cautate.get('statistica') ?? '') : ''
         const r = await chat.fetch(
           `https://chat.intern/${unde}?id=${encodeURIComponent(id)}` +
-            (propunere ? `&propunere=${encodeURIComponent(propunere)}` : ''),
+            (propunere ? `&propunere=${encodeURIComponent(propunere)}` : '') +
+            (statistica ? `&statistica=${encodeURIComponent(statistica)}` : ''),
           { headers: cap },
         )
         return new Response(r.body, { status: r.status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } })
@@ -539,7 +567,8 @@ export function modulChat(cfg: {
           try {
             const alAplicatiei = await cfg.laText(scrisDeOm, { env, ctxExec, ctx })
             if (alAplicatiei?.mesaj) {
-              dus.text = alAplicatiei.mesaj
+              // ⚠️ nota e a OMULUI, `catreChat` e a creierului — vezi `RaspunsLaFisier.catreChat`
+              dus.text = alAplicatiei.catreChat ?? alAplicatiei.mesaj
               nota = alAplicatiei.mesaj
               uneltele = alAplicatiei.unelte ?? []
             }

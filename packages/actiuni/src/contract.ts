@@ -100,6 +100,14 @@ export interface Actiune<I extends z.ZodType = z.ZodType, O extends z.ZodType = 
    */
   fundal?: boolean
   /**
+   * NU E O UNEALTA PENTRU MODEL, e o usa pentru cod (19.09.2026, odata cu harta aplicatiilor).
+   *
+   * Actiunea ramane in manifest si se poate cere ca oricare alta — dar nu intra in lista de unelte
+   * trimisa modelului. Asa potrivitorul hartii (`buletin.harta`) e chemat de chat CA SERVICIU, fara
+   * sa devina inca un verb pe care un model mic l-ar incerca la intamplare.
+   */
+  ascunsa?: boolean
+  /**
    * Are voie sa o ceara un SERVICIU (nu un om)? Implicit nu, pentru actiunile cu permisiune:
    * altfel un serviciu ar ocoli tacut drepturile. Actiunile fara permisiune sunt oricum deschise.
    */

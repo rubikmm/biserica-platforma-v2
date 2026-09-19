@@ -21,14 +21,67 @@ export interface DescriereActiune {
   exemple: Array<string | ExempluActiune>
   /** Se cheama inainte de orice raspuns si intra in context (vezi `Actiune.fundal`). */
   fundal: boolean
+  /** Nu e o unealta pentru model, e o usa pentru cod (vezi `Actiune.ascunsa`). */
+  ascunsa: boolean
   /** Ce se propune dupa ce actiunea s-a facut (vezi `Actiune.urmare`). */
   urmare: { actiune: string; argumente: Record<string, string> } | null
+}
+
+/**
+ * HARTA UNEI APLICAȚII — cuprinsul ei, ca DATE (user, 19.09.2026: „aș vrea să aibă un cuprins pe
+ * care să facă match — cu subiecte… apoi nivelul 2 să înțeleagă acțiunea… Cu o hartă așa simplă ar
+ * trebui să pot lucra și fără AI").
+ *
+ * ⚠️ CE SCHIMBĂ EA. O aplicație care declară o hartă capătă în chat FLUXUL CU DOUĂ NIVELE: mesajul
+ * trece întâi prin potrivitorul ei determinist, iar dacă acela nu e sigur, modelul face doar două
+ * clasificări mici (subiect, apoi acțiune), cu JSON strict și fără unelte. O aplicație FĂRĂ hartă
+ * rămâne pe drumul de până acum — uneltele din manifest, alese de model. De aceea harta stă aici,
+ * lângă manifest, și e opțională: nimic nu se schimbă pentru cine n-o scrie.
+ *
+ * Harta NU conține logică: e tabelul, în date. Potrivirea și traducerea într-un apel adevărat le
+ * face aplicația, în acțiunea numită de `potrivitor` — numai ea știe starea (ce întrebare e pendinte,
+ * ce articole există).
+ */
+export interface ActiuneHarta {
+  id: string
+  /** Cum se scrie pe buton, omenește: „titlul", „compune numărul". */
+  nume: string
+  /** Ce valoare cere de la om: `nimic`, `text` (scrisă de el), `fisier` (prin clemă). */
+  cere: 'nimic' | 'text' | 'fisier'
+  /** Se cere Da/Nu, cu interpretarea scrisă, înainte de a se face? */
+  confirma: boolean
+  /** Nu se oferă ca buton și nu intră în socoteala „acțiune unică" — dar se recunoaște la citire. */
+  ascunsa?: boolean
+  /** Ce se răspunde când lucrul NU se face de aici („se face în Program, nu de aici"). */
+  raspuns?: string
+}
+
+export interface SubiectHarta {
+  id: string
+  /** Cum îi spune omul: „Articolul principal". */
+  nume: string
+  /** După ce se recunoaște — și pentru potrivitorul determinist, și pentru model. */
+  cuvinte: string[]
+  actiuni: ActiuneHarta[]
+}
+
+export interface HartaAplicatie {
+  /**
+   * Numele acțiunii (ascunse) care potrivește un mesaj și traduce o alegere într-un apel adevărat.
+   * Chatul o cheamă ca serviciu, exact cum cheamă cârligul `laText`.
+   */
+  potrivitor: string
+  /** Despre ce e vorba aici, într-o frază — intră în prompturile de nivel 1 și 2. */
+  despre?: string
+  subiecte: SubiectHarta[]
 }
 
 export interface Manifest {
   aplicatie: string
   versiune: string
   actiuni: DescriereActiune[]
+  /** Vezi `HartaAplicatie`. Lipsa ei = aplicația rămâne pe drumul cu unelte. */
+  harta?: HartaAplicatie | null
 }
 
 /**
@@ -55,12 +108,18 @@ export function descrie(a: Actiune): DescriereActiune {
     iesire: schema(a.iesire, 'output'),
     exemple: a.exemple ?? [],
     fundal: Boolean(a.fundal),
+    ascunsa: Boolean(a.ascunsa),
     urmare: a.urmare ?? null,
   }
 }
 
-export function manifest(aplicatie: string, versiune: string, r: Registru): Manifest {
-  return { aplicatie, versiune, actiuni: r.map(descrie) }
+export function manifest(
+  aplicatie: string,
+  versiune: string,
+  r: Registru,
+  harta?: HartaAplicatie | null,
+): Manifest {
+  return { aplicatie, versiune, actiuni: r.map(descrie), ...(harta ? { harta } : {}) }
 }
 
 /**
@@ -98,7 +157,9 @@ export function actiuneaDupaUnealta(numeUnealta: string): string {
 }
 
 export function unelteDinManifest(m: Manifest): UnealtaDescrisa[] {
-  return m.actiuni.filter((a) => !a.fundal).map((a) => ({
+  // ⚠️ `ascunsa` iese de aici, ca și `fundal`: e o ușă pentru cod (potrivitorul hărții), nu o unealtă
+  // de ales. Lăsată în listă, ar fi un verb în plus pe care un model mic l-ar încerca la întâmplare.
+  return m.actiuni.filter((a) => !a.fundal && !a.ascunsa).map((a) => ({
     name: numeUnealta(a.nume),
     description:
       a.descriere +

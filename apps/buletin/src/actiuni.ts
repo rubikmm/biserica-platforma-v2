@@ -31,6 +31,7 @@ import {
   pastreazaNumarul,
   plangeriDeForma,
 } from './compune.js'
+import { CUPRINS, type StareHarta, potriveste, traduFapta } from './harta.js'
 import { SECUNDARI_MAXIM, type NumarCerut, semne, socoteste, variante } from './masuri.js'
 import {
   CHEIE_CHESTIONAR,
@@ -361,7 +362,149 @@ export const REGULI = [
   'Lasă `articol` GOL când omul răspunde la întrebarea pe care tocmai i-ai pus-o. Scrie-l numai când omul spune el despre care articol e vorba. Dacă `intrebare` vine `null`, nu mai întreba nimic — spune doar ce s-a schimbat.',
 ]
 
+// ---------------------------------------------------------------------------
+// HARTA — cuprinsul foii și potrivitorul ei, pentru fluxul cu două nivele
+// ---------------------------------------------------------------------------
+
+const OptiuneHarta = z.object({ id: z.string(), nume: z.string() })
+
+/** Ce a înțeles potrivitorul determinist (vezi `Potrivire` din `harta.ts`). */
+const PotrivireIesire = z.object({
+  nivel: z.enum(['sigur', 'valoare', 'nesigur', 'meniu', 'necunoscut']),
+  subiect: z.string().optional(),
+  actiune: z.string().optional(),
+  valoare: z.string().optional(),
+  articol: z.string().optional(),
+  confirma: z.boolean().optional(),
+  /** Omul a RĂSPUNS la întrebarea pusă (nu a dat o instrucțiune liberă). */
+  raspuns: z.boolean().optional(),
+  ce: z.enum(['subiect', 'actiune']).optional(),
+  intre: z.array(OptiuneHarta).optional(),
+})
+
+/** Ce are de făcut chatul: un apel al unei acțiuni EXISTENTE, cu interpretarea scrisă. */
+const FaptaIesire = z.object({
+  subiect: z.string(),
+  actiune: z.string(),
+  apel: z.object({ actiune: z.string(), argumente: z.record(z.string(), z.unknown()) }).nullable(),
+  rezumat: z.string(),
+  confirma: z.boolean(),
+  raspuns: z.string().optional(),
+})
+
 export const actiuniBuletin = registru<EnvActiuniBuletin>([
+  /**
+   * POTRIVITORUL HĂRȚII — ușa prin care chatul lucrează pe cuprinsul buletinului.
+   *
+   * ⚠️ `ascunsa`: NU e o unealtă pe care s-o aleagă modelul. E chemată de chat-worker ca serviciu,
+   * la fiecare mesaj, exact ca pe cârligul `laText`. Lăsată în lista de unelte, ar fi fost un verb în
+   * plus pe care un model mic l-ar fi încercat la întâmplare — adică exact boala pe care harta o
+   * drege.
+   *
+   * Trei întrebuințări, într-o singură acțiune fiindcă toate trei au nevoie de ACEEAȘI stare
+   * (schița și întrebarea pendinte), iar două chemări ar fi putut prinde două stări deosebite:
+   *   - fără argumente → cuprinsul viu + întrebarea de acum (pentru prompturi și pentru meniu);
+   *   - cu `mesaj`    → ce a înțeles potrivitorul DETERMINIST din el;
+   *   - cu `alegere`  → traducerea unei hotărâri (a codului sau a modelului) în apelul adevărat.
+   */
+  actiune({
+    nume: 'buletin.harta',
+    descriere:
+      'Cuprinsul buletinului (subiectele și acțiunile lor), întrebarea la care a rămas chestionarul ' +
+      'și potrivirea deterministă a unui mesaj pe hartă. Nu schimbă nimic.',
+    efect: 'citeste',
+    ascunsa: true,
+    permisiune: 'bulletin.write',
+    intrare: z.object({
+      mesaj: z.string().optional().describe('ce a scris omul, literă cu literă'),
+      alegere: z.object({
+        subiect: z.string(),
+        actiune: z.string(),
+        valoare: z.string().optional(),
+        articol: z.enum(ARTICOLE).optional(),
+        raspuns: z.boolean().optional(),
+      }).optional().describe('subiectul și acțiunea hotărâte — se traduc în apelul de făcut'),
+      asteapta: z.object({
+        subiect: z.string(),
+        actiune: z.string(),
+        articol: z.enum(ARTICOLE).optional(),
+      }).optional().describe('ce valoare s-a cerut omului la mesajul dinainte'),
+    }),
+    iesire: z.object({
+      cuprins: z.array(z.object({
+        id: z.string(),
+        nume: z.string(),
+        cuvinte: z.array(z.string()),
+        actiuni: z.array(z.object({
+          id: z.string(),
+          nume: z.string(),
+          cere: z.enum(['nimic', 'text', 'fisier']),
+          confirma: z.boolean(),
+          ascunsa: z.boolean(),
+        })),
+      })),
+      intrebare: z.object({
+        subiect: z.string(),
+        articol: z.string(),
+        text: z.string(),
+        candidati: z.array(z.string()),
+      }).nullable(),
+      secundari: z.number(),
+      potrivire: PotrivireIesire.nullable(),
+      fapta: FaptaIesire.nullable(),
+    }),
+    exemple: [],
+    async executa(a, c) {
+      const [{ schita }, intrebari] = await Promise.all([schitaNumarului(c.env), chestionarul(c.env)])
+      const i = urmatoareaIntrebare(schita, intrebari)
+      const pendinte = i.subiect === 'gata' ? null : i
+      const stare: StareHarta = {
+        intrebare: pendinte ? { subiect: pendinte.subiect, articol: pendinte.articol, candidati: pendinte.candidati } : null,
+        secundari: schita.secundari.length,
+        asteapta: a.asteapta ?? null,
+      }
+
+      const potrivire = a.mesaj !== undefined ? potriveste(a.mesaj, stare) : null
+      /*
+       * ⚠️ Traducerea se face pentru ALEGEREA dată anume (venită de la model) SAU pentru potrivirea
+       * sigură de aici. Într-o singură chemare: altfel chat-worker ar întreba de două ori, iar între
+       * cele două chemări schița se poate schimba (două ferestre deschise).
+       */
+      const alegere =
+        a.alegere ??
+        (potrivire?.nivel === 'sigur'
+          ? {
+              subiect: potrivire.subiect,
+              actiune: potrivire.actiune,
+              valoare: potrivire.valoare,
+              articol: potrivire.articol,
+              raspuns: potrivire.raspuns,
+            }
+          : null)
+
+      return {
+        cuprins: CUPRINS.map((s) => ({
+          id: s.id,
+          nume: s.nume,
+          cuvinte: s.cuvinte,
+          actiuni: s.actiuni.map((x) => ({
+            id: x.id,
+            nume: x.nume,
+            cere: x.cere,
+            confirma: x.confirma,
+            ascunsa: Boolean(x.ascunsa),
+          })),
+        })),
+        intrebare: pendinte
+          ? { subiect: pendinte.subiect, articol: pendinte.articol, text: pendinte.text, candidati: pendinte.candidati ?? [] }
+          : null,
+        secundari: schita.secundari.length,
+        potrivire,
+        fapta: alegere ? traduFapta(alegere) : null,
+      }
+    },
+  }),
+
   actiune({
     nume: 'buletin.reguli',
     descriere: 'Regulile după care se compune foaia tipărită a buletinului: componentele ei, ce are voie și ce nu, cum se răspunde când textul nu încape.',
@@ -425,6 +568,13 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
       secundari: z.array(Articol).max(SECUNDARI_MAXIM).optional(),
     }),
     iesire: z.object({
+      /**
+       * SOCOTEALA ÎN VORBE, într-o frază. ⚠️ Pusă aici (19.09.2026) fiindcă fluxul pe hartă citește
+       * omului câmpul `text` al unui rezultat, dacă el există — aceeași convenție ca la acțiunile de
+       * fundal: cine își scrie singur textul știe mai bine decât chatul cum se citește. Fără el,
+       * „socoteală" ar fi cerut încă un apel de model doar ca să spună o cifră în românește.
+       */
+      text: z.string(),
       /** pentru care număr s-a socotit — el nu vine de la model, ci din arhivă */
       nr: z.number(),
       data: z.string(),
@@ -459,7 +609,16 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
         data,
         calendar: cuCalendar ? { slujbe: cuCalendar.slujbe, detalii: cuCalendar.detalii } : undefined,
       })
+      const ramase = s.semneCuTot - s.scriseCuTot
+      const despreProgram = cuCalendar
+        ? ` Programul săptămânii e ${cuCalendar.stare === 'validat' ? 'validat' : 'PROPUS (nevalidat)'}.`
+        : ' Programul n-a răspuns, deci pagina 4 e socotită fără el.'
       return {
+        text:
+          (s.incape
+            ? `Încape. S-au scris ${s.scriseCuTot} din ${s.semneCuTot} de semne — mai ai loc pentru ${ramase}.`
+            : `NU încape: s-au scris ${s.scriseCuTot} din ${s.semneCuTot} de semne, adică ${-ramase} peste.`) +
+          despreProgram,
         nr,
         data,
         incape: s.incape,

@@ -1,0 +1,222 @@
+/**
+ * HARTA BULETINULUI — potrivitorul determinist, cel care trebuie să meargă FĂRĂ AI.
+ *
+ * Cererea utilizatorului (19.09.2026, 11:27): „Cu o hartă așa simplă ar trebui să pot lucra și fără
+ * AI." Probele de aici sunt chiar măsura vorbei aceleia: fiecare mesaj de mai jos se rezolvă fără
+ * niciun apel de model, fără rețea și fără depozit — `potriveste` e o funcție pură.
+ *
+ * Ce se poate strica TĂCUT, și de asta stă fiecare probă aici:
+ *   1. **ordinea treptelor** — dacă „schimbă titlul secundarului 1 în X", spus la mijlocul
+ *      chestionarului, ar fi luat drept RĂSPUNS la întrebarea de atunci, textul omului s-ar scrie în
+ *      cu totul alt câmp decât a cerut el. Nicio eroare nicăieri, doar o foaie greșită;
+ *   2. **confirmarea** — regula e că se confirmă orice instrucțiune LIBERĂ și nu se confirmă
+ *      răspunsul la întrebarea pusă. Stricată, fie plictisește cu Da/Nu la fiecare cuvânt, fie
+ *      schimbă foaia pe furiș;
+ *   3. **`de_la_capat`** — singura acțiune care ȘTERGE. Dacă și-ar pierde confirmarea, un „de la
+ *      capăt" scris din greșeală ar goli tot ce s-a strâns;
+ *   4. **butoanele** — ele trimit mesaje obișnuite („s1", „s1 titlu"). Dacă potrivitorul nu le-ar mai
+ *      recunoaște, drumul fără AI s-ar rupe exact la mijloc, iar „s1" s-ar scrie ca răspuns.
+ */
+import { describe, expect, it } from 'vitest'
+import {
+  CUPRINS,
+  HARTA_BULETIN,
+  type StareHarta,
+  actiunileCaOptiuni,
+  potriveste,
+  traduFapta,
+} from '../apps/buletin/src/harta.js'
+
+/** Starea obișnuită: chestionarul a rămas la o întrebare anume. */
+const la = (subiect: string, articol: 'principal' | 's1' | 's2' = 'principal', candidati?: string[]): StareHarta => ({
+  intrebare: { subiect, articol, ...(candidati ? { candidati } : {}) },
+  secundari: articol === 's2' ? 2 : articol === 's1' ? 1 : 0,
+})
+
+/** Nicio întrebare pendinte: schița e completă. */
+const gata: StareHarta = { intrebare: null, secundari: 0 }
+
+// ---------------------------------------------------------------------------
+
+describe('răspunsurile la întrebarea pendinte — fără confirmare, fiindcă întrebarea a pus-o chatul', () => {
+  it('„da" la autor păstrează ce a propus codul; „nu" sare peste', () => {
+    const da = potriveste('da', la('autor'))
+    expect(da).toMatchObject({ nivel: 'sigur', subiect: 'principal', actiune: 'autor', raspuns: true, confirma: false })
+
+    // ⚠️ traducerea: „da" devine `pastreaza`, FĂRĂ `articol` — așa `buletin.raspunde` vede un răspuns
+    // la întrebarea de acum, nu o instrucțiune punctuală (vezi `eRaspunsLaIntrebare`).
+    expect(traduFapta({ subiect: 'principal', actiune: 'autor', valoare: 'da', articol: 'principal', raspuns: true }))
+      .toMatchObject({ apel: { actiune: 'buletin.raspunde', argumente: { subiect: 'pastreaza' } }, confirma: false })
+
+    const nu = potriveste('nu', la('ani'))
+    expect(nu).toMatchObject({ nivel: 'sigur', actiune: 'ani', valoare: 'nu', raspuns: true })
+    expect(traduFapta({ subiect: 'principal', actiune: 'ani', valoare: 'nu', raspuns: true }))
+      .toMatchObject({ apel: { argumente: { subiect: 'sari' } } })
+  })
+
+  it('o cifră la întrebarea titlurilor e titlul ales, iar „da" e chiar primul', () => {
+    const cifra = potriveste('2', la('titlu', 's1', ['DESPRE POST', 'POSTUL MARE', 'CUM POSTIM']))
+    expect(cifra).toMatchObject({ nivel: 'sigur', subiect: 's1', actiune: 'titlu', valoare: '2', confirma: false })
+
+    // „da" la titluri = titlul 1: `pastreaza` scrie candidatul dintâi (vezi `scrieRaspuns`)
+    const da = potriveste('da', la('titlu', 's1', ['DESPRE POST', 'POSTUL MARE']))
+    expect(da).toMatchObject({ nivel: 'sigur', valoare: 'da', raspuns: true })
+    expect(traduFapta({ subiect: 's1', actiune: 'titlu', valoare: 'da', articol: 's1', raspuns: true }))
+      .toMatchObject({ apel: { argumente: { subiect: 'pastreaza' } }, confirma: false })
+  })
+
+  it('orice altceva, la o întrebare pendinte, e chiar valoarea ei', () => {
+    const p = potriveste('Sfântul Vasile cel Mare', la('autor', 's1'))
+    expect(p).toMatchObject({
+      nivel: 'sigur', subiect: 's1', actiune: 'autor', valoare: 'Sfântul Vasile cel Mare', confirma: false, raspuns: true,
+    })
+    expect(traduFapta({ subiect: 's1', actiune: 'autor', valoare: 'Sfântul Vasile cel Mare', articol: 's1', raspuns: true }))
+      .toMatchObject({ apel: { argumente: { subiect: 'autor', valoare: 'Sfântul Vasile cel Mare' } } })
+  })
+})
+
+describe('sintaxa strictă — instrucțiune liberă, deci CU confirmare și cu interpretarea scrisă', () => {
+  it('`motto: …` scrie motto-ul numărului', () => {
+    const p = potriveste('motto: Rugăciunea este respirația sufletului', la('text'))
+    expect(p).toMatchObject({ nivel: 'sigur', subiect: 'motto', actiune: 'schimba', confirma: true })
+    const f = traduFapta({ subiect: 'motto', actiune: 'schimba', valoare: 'Rugăciunea este respirația sufletului' })
+    expect(f?.apel).toEqual({ actiune: 'buletin.raspunde', argumente: { subiect: 'motto', valoare: 'Rugăciunea este respirația sufletului' } })
+    expect(f?.rezumat).toContain('Motto-ul numărului →')
+  })
+
+  it('`s1 titlu: …` nimerește articolul spus anume, nu cel al chestionarului', () => {
+    const p = potriveste('s1 titlu: DESPRE POST', la('text', 'principal'))
+    expect(p).toMatchObject({ nivel: 'sigur', subiect: 's1', actiune: 'titlu', valoare: 'DESPRE POST', articol: 's1', confirma: true })
+    const f = traduFapta({ subiect: 's1', actiune: 'titlu', valoare: 'DESPRE POST', articol: 's1' })
+    // ⚠️ interpretarea scrisă negru pe alb: asta citește omul pe butonul Da/Nu
+    expect(f?.rezumat).toBe('Titlul secundarului 1 → „DESPRE POST"')
+    expect(f?.apel?.argumente).toEqual({ subiect: 'titlu', valoare: 'DESPRE POST', articol: 's1' })
+  })
+
+  it('o acțiune fără subiect scris merge la articolul întrebării de acum', () => {
+    const p = potriveste('sursa: ziarullumina.ro', la('titlu', 's2'))
+    expect(p).toMatchObject({ nivel: 'sigur', subiect: 's2', actiune: 'sursa', valoare: 'ziarullumina.ro' })
+  })
+})
+
+describe('comenzile scurte', () => {
+  it('compune / socoteală / unde am rămas / de la capăt', () => {
+    expect(potriveste('compune', la('text'))).toMatchObject({ nivel: 'sigur', subiect: 'numar', actiune: 'compune', confirma: true })
+    expect(potriveste('socoteala', gata)).toMatchObject({ subiect: 'numar', actiune: 'socoteste', confirma: false })
+    expect(potriveste('unde am rămas?', la('text'))).toMatchObject({ subiect: 'numar', actiune: 'continua', confirma: false })
+    expect(potriveste('compune buletinul', gata)).toMatchObject({ subiect: 'numar', actiune: 'compune' })
+  })
+
+  it('⚠️ „de la capăt" cere confirmare MEREU — e singura acțiune care șterge', () => {
+    const p = potriveste('ia-o de la capăt', la('text'))
+    expect(p).toMatchObject({ nivel: 'sigur', subiect: 'numar', actiune: 'de_la_capat', confirma: true })
+    const f = traduFapta({ subiect: 'numar', actiune: 'de_la_capat' })
+    expect(f?.confirma).toBe(true)
+    expect(f?.rezumat).toContain('DE LA CAPĂT')
+    expect(f?.apel?.argumente).toEqual({ subiect: 'de_la_capat' })
+  })
+
+  it('ștergerea unui secundar spune care', () => {
+    expect(potriveste('scoate secundarul 2', gata)).toMatchObject({ nivel: 'sigur', subiect: 's2', actiune: 'sterge', confirma: true })
+    expect(potriveste('șterge secundarul', { intrebare: null, secundari: 1 })).toMatchObject({ subiect: 's1', actiune: 'sterge' })
+  })
+})
+
+describe('cuvinte-cheie: unic, ambiguu, necunoscut', () => {
+  it('UN subiect și O acțiune, cu valoarea scoasă din frază — chiar la mijlocul chestionarului', () => {
+    const p = potriveste('schimbă titlul secundarului 1 în DESPRE POST', la('text', 'principal'))
+    expect(p).toMatchObject({ nivel: 'sigur', subiect: 's1', actiune: 'titlu', valoare: 'DESPRE POST', confirma: true })
+  })
+
+  it('două subiecte → „e vorba de X sau de Y?"', () => {
+    const p = potriveste('schimbă ceva la motto și la program', gata)
+    expect(p).toMatchObject({ nivel: 'nesigur', ce: 'subiect' })
+    expect((p as { intre: Array<{ id: string }> }).intre.map((x) => x.id).sort()).toEqual(['motto', 'program'])
+  })
+
+  it('un subiect fără acțiune → „nu știu ce să fac cu el", cu acțiunile lui', () => {
+    const p = potriveste('vreau să schimb ceva la motto', gata)
+    expect(p).toMatchObject({ nivel: 'nesigur', ce: 'actiune', subiect: 'motto' })
+    expect((p as { intre: Array<{ id: string }> }).intre.map((x) => x.id)).toEqual(['schimba', 'autor', 'pastreaza'])
+  })
+
+  it('⚠️ un text lung nu se caută pe cuvinte: e o valoare, nu o instrucțiune', () => {
+    // un motto dictat lung poartă în el și „text", și „titlu", și „program" — potrivirea pe cuvinte
+    // l-ar fi trimis în alt câmp, fără nicio eroare nicăieri
+    const lung =
+      'Rugăciunea este respirația sufletului, iar textul ei nu are titlu și nu ține de niciun program al lumii. ' +
+      'Sfinții au spus-o mereu, în toate veacurile, cu aceleași cuvinte simple pe care le auzim și azi în biserică. '.repeat(4)
+    expect(lung.length).toBeGreaterThan(400)
+    const p = potriveste(lung, la('motto'))
+    expect(p).toMatchObject({ nivel: 'sigur', subiect: 'motto', actiune: 'schimba', confirma: false, raspuns: true })
+    expect((p as { valoare: string }).valoare).toBe(lung.trim())
+  })
+
+  it('nimic din cuprins → necunoscut (dar numai când nu se aștepta un răspuns)', () => {
+    expect(potriveste('cât e ceasul?', gata)).toEqual({ nivel: 'necunoscut' })
+    expect(potriveste('', gata)).toEqual({ nivel: 'necunoscut' })
+  })
+
+  it('„meniu" și „?" cer chiar cuprinsul', () => {
+    expect(potriveste('meniu', la('text'))).toEqual({ nivel: 'meniu' })
+    expect(potriveste('?', gata)).toEqual({ nivel: 'meniu' })
+  })
+})
+
+describe('drumul fără AI: meniu → subiect → acțiune → valoare', () => {
+  it('⚠️ numele gol al unui subiect e o apăsare de buton, nu un răspuns la întrebare', () => {
+    const p = potriveste('s1', la('text', 'principal'))
+    expect(p).toMatchObject({ nivel: 'nesigur', ce: 'actiune', subiect: 's1' })
+    expect((p as { intre: Array<{ id: string }> }).intre.map((x) => x.id)).toContain('titlu')
+  })
+
+  it('un subiect cu o singură acțiune se rezolvă din prima („program")', () => {
+    expect(potriveste('program', gata)).toMatchObject({ nivel: 'sigur', subiect: 'program', actiune: 'stare', confirma: false })
+  })
+
+  it('butonul de nivel 2 cere valoarea, iar valoarea scrisă apoi se confirmă', () => {
+    const cerere = potriveste('s1 titlu', la('text'))
+    expect(cerere).toEqual({ nivel: 'valoare', subiect: 's1', actiune: 'titlu', articol: 's1' })
+
+    const valoarea = potriveste('DESPRE POST', {
+      ...la('text'),
+      asteapta: { subiect: 's1', actiune: 'titlu', articol: 's1' },
+    })
+    expect(valoarea).toMatchObject({ nivel: 'sigur', subiect: 's1', actiune: 'titlu', valoare: 'DESPRE POST', confirma: true })
+  })
+
+  it('„nu" la cererea valorii lasă baltă, nu scrie „nu" în foaie', () => {
+    const p = potriveste('nu', { ...gata, asteapta: { subiect: 's1', actiune: 'titlu' } })
+    expect(p).toEqual({ nivel: 'necunoscut' })
+  })
+})
+
+describe('ce nu se face de aici', () => {
+  it('programul se schimbă în Program, poza se dă din clemă, validarea o apasă omul', () => {
+    const program = traduFapta({ subiect: 'program', actiune: 'schimba', valoare: 'mută Vecernia' })
+    expect(program?.apel).toBeNull()
+    expect(program?.raspuns).toContain('Program')
+
+    const poza = traduFapta({ subiect: 'principal', actiune: 'poza' })
+    expect(poza?.apel).toBeNull()
+
+    const valideaza = traduFapta({ subiect: 'numar', actiune: 'valideaza' })
+    expect(valideaza?.apel).toBeNull()
+    expect(valideaza?.raspuns).toContain('Validează')
+  })
+})
+
+describe('harta, ca date', () => {
+  it('cuprinsul are cele șase subiecte, fiecare cu acțiuni unice, iar potrivitorul e acțiunea ascunsă', () => {
+    expect(CUPRINS.map((s) => s.id)).toEqual(['motto', 'principal', 's1', 's2', 'numar', 'program'])
+    expect(HARTA_BULETIN.potrivitor).toBe('buletin.harta')
+    for (const s of CUPRINS) {
+      const ids = s.actiuni.map((a) => a.id)
+      expect(new Set(ids).size, `acțiuni dublate la ${s.id}`).toBe(ids.length)
+      expect(s.cuvinte.length).toBeGreaterThan(0)
+    }
+    // butoanele nivelului 2 nu oferă niciodată ce nu se face de aici
+    expect(actiunileCaOptiuni('numar').map((a) => a.id)).not.toContain('valideaza')
+    expect(actiunileCaOptiuni('program').map((a) => a.id)).toEqual(['stare'])
+  })
+})

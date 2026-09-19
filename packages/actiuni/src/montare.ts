@@ -15,7 +15,7 @@ import {
   type Previzualizare,
   type Registru,
 } from './contract.js'
-import { manifest, type Manifest } from './manifest.js'
+import { manifest, type HartaAplicatie, type Manifest } from './manifest.js'
 
 /**
  * MONTAREA — cele doua rute pe care le capata o aplicatie care isi publica actiunile:
@@ -130,6 +130,11 @@ export function modulActiuni<E extends EnvActiuni>(cfg: {
   aplicatie: string
   versiune: string
   actiuni: Registru<E>
+  /**
+   * CUPRINSUL APLICAȚIEI (vezi `HartaAplicatie`). Scris aici, ajunge în manifest, iar chatul îi dă
+   * bulei acestei aplicații fluxul cu două nivele. Aplicațiile care nu-l scriu rămân neatinse.
+   */
+  harta?: HartaAplicatie | null
 }): ModulActiuni<E> {
   const dupaNume = new Map<string, Actiune<any, any, E>>(cfg.actiuni.map((a) => [a.nume, a]))
 
@@ -252,7 +257,7 @@ export function modulActiuni<E extends EnvActiuni>(cfg: {
   }
 
   return {
-    manifest: () => manifest(cfg.aplicatie, cfg.versiune, cfg.actiuni),
+    manifest: () => manifest(cfg.aplicatie, cfg.versiune, cfg.actiuni, cfg.harta),
 
     executa: (nume, argumente, env, ctxExec, o) => {
       const a = dupaNume.get(nume)
@@ -274,7 +279,7 @@ export function modulActiuni<E extends EnvActiuni>(cfg: {
 
       if (cale === CALE_ACTIUNI) {
         if (req.method !== 'GET') return gresit('necunoscuta', 'aici se face doar GET', 405)
-        return json(manifest(cfg.aplicatie, cfg.versiune, cfg.actiuni))
+        return json(manifest(cfg.aplicatie, cfg.versiune, cfg.actiuni, cfg.harta))
       }
 
       if (req.method !== 'POST') return gresit('necunoscuta', 'o acțiune se cere cu POST', 405)
