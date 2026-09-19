@@ -82,6 +82,7 @@ const Articol = z.object({
   ani: z.string().optional().describe('anii vieții, dacă se știu: „1661-1729"'),
   pomenire: z.string().optional().describe('ziua de pomenire, ultimul rând al zonei negre: „† 16 august"'),
   titlu: z.string().optional().describe('titlul articolului, cu majuscule, scurt — intră pe cel mult trei rânduri; lipsă = „TITLU ARTICOL", de probă'),
+  semnatura: z.string().optional().describe('rândul de sub titlu, aldin, cu corpul textului: „Text de: Părintele Mihail Stanciu, fost stareț al Mănăstirii Antim". Se scrie întreg, cum l-a spus omul — „Text de:" nu se adaugă din cod'),
   text: z.string().optional().describe('textul articolului; paragrafele se despart cu rând gol; *între steluțe* = cursive (citatele din Scriptură); lipsă = Lorem ipsum, exact cât încape'),
   sursa: z.string().optional().describe('de unde e luat: „ziarullumina.ro"; lipsă = „-"'),
   nota: z.string().optional().describe('mențiunea de deasupra sursei, în cuvinte: „Mesajul Patriarhului Daniel la proclamarea locală a canonizării…"'),
@@ -404,7 +405,7 @@ async function calendarulPentru(
 export const REGULI = [
   'Buletinul are PATRU pagini A4, două coloane pe fiecare. Componentele lui sunt: motto (+ cine l-a spus), nr, data, articolul principal, cel mult DOI secundari, calendarul (vine singur de la program), subsolul (fix).',
   'Pagina 1, coloana din stânga: NUMAI poza mare și zona neagră a principalului (autor, ani, pomenire). Nu se pune text acolo.',
-  'Articolul principal: autor (majuscule; un rând mai mic deasupra numelui se desparte cu ` / ` — „SFÂNTUL CUVIOS MĂRTURISITOR / SOFIAN de la ANTIM"), titlu (majuscule, scurt), text pe paragrafe (rând gol între ele; *între steluțe* = cursive), sursa și, opțional, o mențiune deasupra sursei (`nota`). Un secundar are aceleași părți, cu poză mică opțională.',
+  'Articolul principal: autor (majuscule; un rând mai mic deasupra numelui se desparte cu ` / ` — „SFÂNTUL CUVIOS MĂRTURISITOR / SOFIAN de la ANTIM"), titlu (majuscule, scurt), opțional o semnătură pe rândul de sub titlu (`semnatura`), text pe paragrafe (rând gol între ele; *între steluțe* = cursive), sursa și, opțional, o mențiune deasupra sursei (`nota`). Un secundar are aceleași părți, cu poză mică opțională.',
   'Câte semne încap e scris în `buletin.masura` — cere-o înainte să scrii. Textul care nu încape NU se taie de API: `buletin.compune` refuză și spune cu cât e peste. Scurtează cu atât și încearcă iar.',
   'Calendarul de pe pagina 4 e programul săptămânii care începe a doua zi după data numărului; dacă textul nu încape, API-ul îl strânge singur (întâi fără sfinții duminicii, apoi fără pericopă) și spune ce treaptă a folosit.',
   'Dacă programul săptămânii nu e validat, se folosește ce e disponibil (propunerea) și răspunsul spune la început „PROPUS", în `atentie`. Nu e o greșeală, dar trebuie spus omului.',
@@ -440,7 +441,8 @@ export const REGULI = [
    * rămâne de potrivit fraza cu un subiect și un articol — și atât. De aceea rândurile astea sunt
    * scrise ca o poruncă scurtă, nu ca o explicație.
    */
-  'OBIECTELE FOII, pe care le poți schimba oricând, și numele lor: motto, moto_autor, iar la fiecare articol text, autor, ani, pomenire, titlu, sursa, nota, poza. Articolele sunt trei: `principal`, `s1` (secundar 1), `s2` (secundar 2).',
+  'OBIECTELE FOII, pe care le poți schimba oricând, și numele lor: motto, moto_autor, iar la fiecare articol text, autor, ani, pomenire, titlu, semnatura, sursa, nota, poza. Articolele sunt trei: `principal`, `s1` (secundar 1), `s2` (secundar 2).',
+  'semnatura (rândul de sub titlu, aldin, de ex. «Text de: Părintele Mihail Stanciu, fost stareț al Mănăstirii Antim») se dă oricând, ca `nota`. Trimite-o literă cu literă, cum a spus-o omul: nu adăuga tu „Text de:" și nu o confunda cu `autor`, care e scrisul alb din zona neagră.',
   'O instrucțiune care numește un obiect al foii și (dacă spune) un articol se traduce DIRECT în `buletin.raspunde`, fără să întrebi nimic: „schimbă motto-ul în X" → {subiect:"motto", valoare:"X"}; „titlul articolului secundar 1: Y" → {subiect:"titlu", valoare:"Y", articol:"s1"}; „scoate secundarul 2" → {subiect:"sterge_secundar"}. Valoarea e literă cu literă ce a scris omul.',
   'Lasă `articol` GOL când omul răspunde la întrebarea pe care tocmai i-ai pus-o. Scrie-l numai când omul spune el despre care articol e vorba. Dacă `intrebare` vine `null`, nu mai întreba nimic — spune doar ce s-a schimbat.',
 ]
@@ -870,7 +872,8 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
       subiect: z.enum(SUBIECTE).describe(
         'ce se scrie: `pastreaza` = „da, rămâne așa"; `sari` = „nu, treci mai departe"; ' +
         '`text`/`autor`/`ani`/`pomenire`/`titlu`/`sursa`/`motto`/`moto_autor` = chiar câmpul; ' +
-        '`nota` și `poza` se dau oricând; `sterge_secundar` și `de_la_capat` sunt îndreptări',
+        '`semnatura` (rândul aldin de sub titlu), `nota` și `poza` se dau oricând; ' +
+        '`sterge_secundar` și `de_la_capat` sunt îndreptări',
       ),
       valoare: z.string().optional().describe(
         'ce a spus omul, cuvânt cu cuvânt. Lipsește la `pastreaza` și `sari`. La `titlu` merge și ' +

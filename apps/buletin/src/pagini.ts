@@ -894,6 +894,7 @@ function articolulSchitei(
   ${randSchita('Anii vieții', a.ani, 'fără')}
   ${randSchita('Pomenire', a.pomenire, 'fără')}
   ${randSchita('Titlu', a.titlu, 'încă nespus')}
+  ${a.semnatura ? randSchita('Semnătura', a.semnatura, '') : ''}
   ${randSchita('Sursa', a.sursa, 'fără')}
   ${a.nota ? randSchita('Mențiune', a.nota, '') : ''}
   ${a.poza ? randSchita('Poza', a.poza, '') : ''}

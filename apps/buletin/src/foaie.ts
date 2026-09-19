@@ -168,7 +168,14 @@ body { font-family: "Caladea", Cambria, Georgia, serif; color: #000; font-size: 
    dar nu si cand ea deschide o coloana — acolo golul il da hotarul paginii. */
 .incepe-articol { margin-top: 10mm; }
 .col > .incepe-articol:first-child { margin-top: 0; }
-.titlu-articol + .rigla { border-top: .5pt solid #000; margin: 0 0 1.6mm; height: 0; }
+/* Semnatura de sub titlu (user, 19.09.2026: „adaugam ca semnatura sub titluri"): corpul textului,
+   aldin si centrat, intre titlu si rigla — „Text de: Parintele Mihail Stanciu, fost staret al
+   Manastirii Antim". Scrisa de om cu totul, cuvant cu cuvant: „Text de:" nu se adauga din cod. */
+.semnatura { font-family: "Caladea", serif; font-size: 15pt; font-weight: 700; line-height: 1.3;
+             text-align: center; margin: 0 0 1.4mm; }
+/* ⚠️ Rigla isi tine firul si cand semnatura s-a asezat intre ea si titlu: selectorul e pe FRATELE
+   DE DINAINTE, deci fara al doilea caz linia ar fi disparut tocmai la articolele semnate. */
+.titlu-articol + .rigla, .semnatura + .rigla { border-top: .5pt solid #000; margin: 0 0 1.6mm; height: 0; }
 p.t { margin: 0; text-align: justify; text-indent: 10mm; hyphens: none; }
 /* Sursa si mentiunea de deasupra ei: 13 pt, ca in nr. 615 din Word (Calibri 13.3 pt, pas 16.4 pt) — erau
    10.5 pt, „text scris prea mic" (user, 23:07). */
@@ -246,8 +253,15 @@ function zonaNeagra(a: ArticolCerut, mica: boolean, incepeArticol = false): stri
   return `<div class="zona-neagra${mica ? ' mica' : ''}${incepeArticol ? ' incepe-articol' : ''}">${randuri.join('')}</div>`
 }
 
+/**
+ * Titlul, rigla de sub el și — dacă e — semnătura, strecurată ÎNTRE ele (user, 19.09.2026:
+ * „adăugăm ca semnătură sub titluri"). Ordinea din HTML e și ordinea în care curg prin coloane,
+ * deci rigla rămâne fratele DE DUPĂ semnătură — de asta stilul o prinde și așa.
+ */
 const titluArticol = (a: ArticolCerut): string =>
-  `<h2 class="titlu-articol">${esc(a.titlu)}</h2><div class="rigla"></div>`
+  `<h2 class="titlu-articol">${esc(a.titlu)}</h2>` +
+  (a.semnatura ? `<div class="semnatura">${esc(a.semnatura)}</div>` : '') +
+  '<div class="rigla"></div>'
 
 /** Rândul sursei; deasupra lui, dacă e, mențiunea (de unde e luat textul, în cuvinte). */
 const sursa = (a: ArticolCerut): string =>

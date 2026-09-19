@@ -210,6 +210,31 @@ export function inaltimeaTitlului(titlu: string, principal: boolean): number {
 }
 
 /**
+ * Semnătura de sub titlu, cum stă în foaia de stil: corpul textului curent, pasul 1.3 și 1.4 mm
+ * de aer până la riglă (vezi `.semnatura` din `foaie.ts`).
+ */
+export const SEMNATURA = { corp: CORP_TEXT, pas: 1.3, jos: 1.4 } as const
+
+/**
+ * ÎNĂLȚIMEA SEMNĂTURII DE SUB TITLU, în rânduri de text — 0 când articolul n-are niciuna.
+ *
+ * Cerută de user pe 19.09.2026 („adăugăm ca semnătură sub titluri"), ea se strecoară ÎNTRE titlu și
+ * riglă, deci împinge textul în jos și trebuie plătită din coloană ca orice piesă fixă. Un rând de
+ * semnătură costă ~1.42 rânduri de text, nu unul: pasul ei e 1.3, nu 1.104 al textului curent, și
+ * mai poartă și aerul de sub ea.
+ *
+ * ⚠️ Lungimea se măsoară cu `SEMNE_PE_RAND` — cifra e tot a lui Caladea 15 pt pe lățimea asta de
+ * coloană. Semnătura e aldină (cu un fir mai lată), dar nu e justificată (spațiile nu se întind),
+ * iar rândurile se rotunjesc în sus: socoteala cere loc cu un fir mai mult, niciodată mai puțin.
+ */
+export function inaltimeaSemnaturii(semnatura: string | undefined): number {
+  const s = (semnatura ?? '').replace(/\s+/g, ' ').trim()
+  if (!s) return 0
+  const linii = Math.max(1, Math.ceil(s.length / SEMNE_PE_RAND))
+  return (linii * SEMNATURA.corp * SEMNATURA.pas + SEMNATURA.jos * MM) / RAND
+}
+
+/**
  * Înălțimea calendarului, în rânduri de text, după cât are de spus săptămâna.
  *
  * Tabelul e cel al programului, randat „ca la tipar". Un rând de tabel (o slujbă) ține cât două
@@ -238,6 +263,8 @@ export interface ArticolCerut {
   /** ziua de pomenire, ultimul rând al zonei negre: „† 16 august" */
   pomenire?: string
   titlu: string
+  /** rândul de sub titlu, aldin, cu corpul textului: „Text de: Părintele Mihail Stanciu" */
+  semnatura?: string
   text: string
   sursa?: string
   /** mențiunea de deasupra sursei: „Mesajul Patriarhului Daniel la proclamarea locală…" */
@@ -331,7 +358,9 @@ export function socoteste(cerut: NumarCerut): Socoteala {
    * desenat. Deci de acolo nu vine niciun rând de text — nici cu poză, nici fără.
    */
   const p1c1 = 0
-  const p1c2 = inaltePagina1 - inaltimeaTitlului(cerut.principal.titlu, true)
+  // titlul principalului și, dacă e, semnătura de sub el mănâncă din capul coloanei a doua
+  const p1c2 = inaltePagina1 - inaltimeaTitlului(cerut.principal.titlu, true) -
+    inaltimeaSemnaturii(cerut.principal.semnatura)
 
   // --- paginile din mijloc ------------------------------------------------
   const mijloc = RANDURI_PE_COLOANA * COLOANE_PE_PAGINA * 2
@@ -351,7 +380,7 @@ export function socoteste(cerut: NumarCerut): Socoteala {
   // Principalul și-a plătit deja titlul și zona neagră mai sus; secundarii și le plătesc aici.
   const costSecundar = (a: ArticolCerut): number =>
     INALTIMI.aerIntreArticole + INALTIMI.zonaNeagraMica + inaltimeaTitlului(a.titlu, false) +
-    (a.poza ? INALTIMI.pozaMica : 0) + (a.sursa ? INALTIMI.sursa : 0)
+    inaltimeaSemnaturii(a.semnatura) + (a.poza ? INALTIMI.pozaMica : 0) + (a.sursa ? INALTIMI.sursa : 0)
   const costPrincipal = cerut.principal.sursa ? INALTIMI.sursa : 0
   const capete = costPrincipal + secundari.reduce((n, a) => n + costSecundar(a), 0)
 

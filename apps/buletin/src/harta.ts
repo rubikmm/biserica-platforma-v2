@@ -40,7 +40,7 @@ export const LA_GENITIV: Record<Articol, string> = {
 }
 
 /**
- * Cele opt acțiuni ale unui ARTICOL, aceleași la principal și la cei doi secundari. Scrise o dată:
+ * Cele nouă acțiuni ale unui ARTICOL, aceleași la principal și la cei doi secundari. Scrise o dată:
  * trei copii s-ar fi depărtat una de alta la prima schimbare.
  *
  * ⚠️ `poza` cere `fisier`, nu text, și NU confirmă: poza se urcă prin clemă, iar cârligul `laFisier`
@@ -52,6 +52,7 @@ const ALE_ARTICOLULUI: ActiuneHarta[] = [
   { id: 'ani', nume: 'anii vieții', cere: 'text', confirma: true },
   { id: 'pomenire', nume: 'ziua de pomenire', cere: 'text', confirma: true },
   { id: 'titlu', nume: 'titlul', cere: 'text', confirma: true },
+  { id: 'semnatura', nume: 'semnătura de sub titlu', cere: 'text', confirma: true },
   { id: 'sursa', nume: 'sursa', cere: 'text', confirma: true },
   { id: 'mentiune', nume: 'mențiunea de deasupra sursei', cere: 'text', confirma: true },
   {
@@ -238,11 +239,18 @@ const STERGERE = /^(sterge|scoate|elimina|arunca|da jos)( |-)?(mi )?(ultimul |al
 /** Cuvintele care numesc o acțiune, oriunde în frază. Ordinea contează: cele lungi, întâi. */
 const CUVINTELE_ACTIUNILOR: Array<{ actiune: string; cuvinte: string[]; doarLa?: string[] }> = [
   { actiune: 'mentiune', cuvinte: ['mentiunea de deasupra sursei', 'mentiunea', 'mentiune', 'nota de deasupra', 'nota'] },
+  /*
+   * ⚠️ „SEMNATURA" E RANDUL DE SUB TITLU, NU AUTORUL (19.09.2026). Până în ziua asta cuvântul era
+   * un sinonim al lui `autor` — scrisul alb din zona neagră. De când foaia are chiar un rând de
+   * semnătură sub titlu, ăla e lucrul pe care omul îl numește așa („adăugăm ca semnătură sub
+   * titluri"), deci vorba s-a mutat aici. Autorul rămâne cu numele lui.
+   */
+  { actiune: 'semnatura', cuvinte: ['semnatura de sub titlu', 'randul de sub titlu', 'semnatura', 'sub titlu', 'text de'] },
   { actiune: 'pomenire', cuvinte: ['ziua de pomenire', 'pomenirea', 'pomenire', 'praznuit', 'praznuire'] },
   { actiune: 'ani', cuvinte: ['anii vietii', 'anii', 'ani', 'a trait'] },
   { actiune: 'titlu', cuvinte: ['titlul', 'titlu'] },
   { actiune: 'sursa', cuvinte: ['sursa', 'de unde e luat', 'preluat din'] },
-  { actiune: 'autor', cuvinte: ['autorul', 'autor', 'cine a spus', 'cine l-a spus', 'semnatura'] },
+  { actiune: 'autor', cuvinte: ['autorul', 'autor', 'cine a spus', 'cine l-a spus'] },
   { actiune: 'text', cuvinte: ['textul', 'text', 'continutul', 'articolul in sine'] },
   { actiune: 'poza', cuvinte: ['poza', 'fotografia', 'imaginea', 'fotografie'] },
   { actiune: 'sterge', cuvinte: ['sterge', 'scoate', 'elimina'], doarLa: ['s1', 's2'] },
@@ -279,6 +287,16 @@ function subiecteleDin(text: string): string[] {
   return [...new Set(gasite)]
 }
 
+/**
+ * ACȚIUNEA MAI ANUME O ÎNGHITE PE CEA LARGĂ. Vorbele lungi ale uneia pot conține cuvântul scurt al
+ * alteia: „rândul de sub TITLU" și „TEXT de: …" aprind și `titlu`, și `text`, deși omul a numit
+ * limpede semnătura (19.09.2026). Fără regula asta potrivirea ar vedea două acțiuni și ar întreba
+ * „care din ele?" la fiecare semnătură — adică exact drumul fără AI s-ar rupe.
+ */
+const INGHITE: Readonly<Record<string, readonly string[]>> = {
+  semnatura: ['titlu', 'text'],
+}
+
 /** Acțiunile numite în mesaj, îngustate la cele care au rost pentru subiectul ales (dacă e unul). */
 function actiunileDin(text: string, subiect?: string): string[] {
   const gasite: string[] = []
@@ -287,7 +305,8 @@ function actiunileDin(text: string, subiect?: string): string[] {
     if (a.doarLa && subiect && !a.doarLa.includes(subiect)) continue
     if (a.cuvinte.some((c) => areCuvantul(text, c))) gasite.push(a.actiune)
   }
-  const unice = [...new Set(gasite)]
+  const inghitite = new Set(gasite.flatMap((id) => INGHITE[id] ?? []))
+  const unice = [...new Set(gasite)].filter((id) => !inghitite.has(id))
   if (!subiect) return unice
   return unice.filter((id) => Boolean(actiunea(subiect, id)))
 }
@@ -749,7 +768,7 @@ function campulLui(subiect: string, actiune: string): string | null {
   if (subiect === 'motto') return actiune === 'autor' ? 'moto_autor' : 'motto'
   if (subiect === 'numar') return actiune === 'mai_adaugam' ? 'mai_adaugam' : null
   if (actiune === 'mentiune') return 'nota'
-  return ['text', 'autor', 'ani', 'pomenire', 'titlu', 'sursa', 'poza'].includes(actiune) ? actiune : null
+  return ['text', 'autor', 'ani', 'pomenire', 'titlu', 'semnatura', 'sursa', 'poza'].includes(actiune) ? actiune : null
 }
 
 /** Cum se citește câmpul în interpretare: „Titlul secundarului 1". */
@@ -762,6 +781,7 @@ function numeleCampului(camp: string, articol?: Articol): string {
     ani: 'Anii vieții',
     pomenire: 'Ziua de pomenire',
     titlu: 'Titlul',
+    semnatura: 'Semnătura de sub titlul',
     sursa: 'Sursa',
     nota: 'Mențiunea de deasupra sursei',
     poza: 'Poza',

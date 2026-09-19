@@ -797,6 +797,23 @@ describe('schița implicită — varianta zero', () => {
     expect(catreCerere(s).principal.autor).toBe('SFÂNTUL VASILE CEL MARE')
   })
 
+  /**
+   * SEMNĂTURA DE SUB TITLU (user, 19.09.2026) nu e o întrebare a chestionarului, ca și `nota`: se dă
+   * când e de dat, nu se marchează în `gata` și nu mută chestionarul din loc.
+   */
+  it('semnătura se scrie oricând, literă cu literă, fără să mute chestionarul', () => {
+    const SEMNATURA = 'Text de: Părintele Mihail Stanciu, fost stareț al Mănăstirii Antim'
+    let s = IMPLICITA()
+    const r = scrieRaspuns(s, { subiect: 'semnatura', valoare: SEMNATURA }, intrebarile())
+    s = r.schita
+    expect(s.principal.semnatura).toBe(SEMNATURA)
+    expect(r.scris).toContain('semnătura de sub titlu')
+    // nu e un răspuns la o întrebare: chestionarul e tot la început, la motto
+    expect(urmatoareaIntrebare(s, intrebarile()).subiect).toBe('motto')
+    // și trece mai departe, la compunere, exact cum a spus-o omul
+    expect(catreCerere(s).principal.semnatura).toBe(SEMNATURA)
+  })
+
   /** „Indicând exact ce vine": o valoare dată direct, la ce articol vrea omul, în orice ordine. */
   it('o valoare dată anume, la un articol anume, intră fără să treacă prin întrebări', () => {
     let s = IMPLICITA()

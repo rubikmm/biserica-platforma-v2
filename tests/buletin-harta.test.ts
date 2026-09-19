@@ -241,6 +241,49 @@ describe('cuvinte-cheie: unic, ambiguu, necunoscut', () => {
   })
 })
 
+/**
+ * SEMNĂTURA DE SUB TITLU (user, 19.09.2026: „adăugăm ca semnătură sub titluri"). Câmpul e nou, dar
+ * cuvântul nu: până atunci „semnătura" era un sinonim al AUTORULUI (scrisul alb din zona neagră).
+ * Probele de aici păzesc chiar mutarea aceea — și împiedicarea de care se lovește orice vorbă lungă
+ * a hărții: „sub TITLU" și „TEXT de" poartă în ele numele altor două acțiuni.
+ */
+describe('semnătura de sub titlu', () => {
+  const VALOARE = 'Text de: Părintele Mihail Stanciu, fost stareț al Mănăstirii Antim'
+
+  it('`semnatura la principal: …` scrie chiar câmpul nou, nu autorul', () => {
+    const p = potriveste(`semnatura la principal: ${VALOARE}`, la('text'))
+    expect(p).toMatchObject({ nivel: 'sigur', subiect: 'principal', actiune: 'semnatura', valoare: VALOARE, confirma: true })
+
+    const f = traduFapta({ subiect: 'principal', actiune: 'semnatura', valoare: VALOARE, articol: 'principal' })
+    expect(f?.apel).toEqual({
+      actiune: 'buletin.raspunde',
+      argumente: { subiect: 'semnatura', valoare: VALOARE, articol: 'principal' },
+    })
+    expect(f?.rezumat).toContain('Semnătura de sub titlul articolului principal →')
+  })
+
+  /**
+   * ⚠️ Fără regula „cea mai anume o înghite pe cea largă", mesajul ar fi aprins și `titlu` (din „sub
+   * titlu"), și `text` (din „text de") — iar potrivirea ar fi întrebat „care din ele?" la fiecare
+   * semnătură, adică drumul fără AI s-ar fi rupt exact la câmpul cel nou.
+   */
+  it('„sub titlu" nu aprinde și titlul, „text de" nu aprinde și textul', () => {
+    expect(potriveste('s1 sub titlu: Text de: Ion Popescu', gata))
+      .toMatchObject({ nivel: 'sigur', subiect: 's1', actiune: 'semnatura', valoare: 'Text de: Ion Popescu' })
+  })
+
+  it('autorul rămâne al lui: „s1 autor: …" nu e semnătura', () => {
+    expect(potriveste('s1 autor: SFÂNTUL IERARH NICOLAE', gata))
+      .toMatchObject({ nivel: 'sigur', subiect: 's1', actiune: 'autor', valoare: 'SFÂNTUL IERARH NICOLAE' })
+  })
+
+  it('e o acțiune a fiecărui articol, oferită și pe butoanele nivelului 2', () => {
+    for (const care of ['principal', 's1', 's2']) {
+      expect(actiunileCaOptiuni(care).map((a) => a.id)).toContain('semnatura')
+    }
+  })
+})
+
 describe('drumul fără AI: meniu → subiect → acțiune → valoare', () => {
   it('⚠️ numele gol al unui subiect e o apăsare de buton, nu un răspuns la întrebare', () => {
     const p = potriveste('s1', la('text', 'principal'))

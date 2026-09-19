@@ -15,6 +15,7 @@ import {
   SECUNDARI_MAXIM,
   SEMNE_PE_RAND,
   inaltimeaCalendarului,
+  inaltimeaSemnaturii,
   randuriPentru,
   semne,
   socoteste,
@@ -116,6 +117,29 @@ describe('socoteala unui număr', () => {
     expect(doi.semneCuTot).toBeLessThan(unul.semneCuTot)
     expect(unul.zone.map((z) => z.cine)).toEqual(['principal', 'secundar 1'])
     expect(doi.zone).toHaveLength(3)
+  })
+
+  /**
+   * SEMNĂTURA DE SUB TITLU SE PLĂTEȘTE DIN COLOANĂ (user, 19.09.2026). Ea se strecoară între titlu
+   * și riglă, deci împinge textul în jos. Nesocotită, foaia ar promite aceleași semne ca înainte și
+   * ar da pe dinafară exact cu rândul pe care l-a adăugat omul.
+   */
+  it('semnătura de sub titlu mănâncă din rândurile de text, la principal și la secundari', () => {
+    const semnatura = 'Text de: Părintele Mihail Stanciu, fost stareț al Mănăstirii Antim'
+    expect(inaltimeaSemnaturii(undefined)).toBe(0)
+    expect(inaltimeaSemnaturii('')).toBe(0)
+    // un rând de semnătură costă mai mult de un rând de text: pasul ei e 1.3, plus aerul de sub ea
+    expect(inaltimeaSemnaturii('Text de: Ion Popescu')).toBeGreaterThan(1)
+    // peste o lățime de coloană trece pe al doilea rând și costă pe măsură
+    expect(inaltimeaSemnaturii(semnatura)).toBeGreaterThan(inaltimeaSemnaturii('Text de: Ion Popescu'))
+
+    const fara = socoteste(numar({ principal: articol(500) }))
+    const cu = socoteste(numar({ principal: articol(500, { semnatura }) }))
+    expect(cu.semneCuTot).toBeLessThan(fara.semneCuTot)
+
+    const faraS = socoteste(numar({ secundari: [articol(800, { poza: false })] }))
+    const cuS = socoteste(numar({ secundari: [articol(800, { poza: false, semnatura })] }))
+    expect(cuS.semneCuTot).toBeLessThan(faraS.semneCuTot)
   })
 
   it('refuză mai mult de doi secundari', () => {

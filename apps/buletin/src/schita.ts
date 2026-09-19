@@ -126,6 +126,8 @@ export interface ArticolSchitei {
   /** ultimul rând al zonei negre, cu cruce: „† 16 august" */
   pomenire?: string
   titlu?: string
+  /** rândul de sub titlu, aldin, cu corpul textului: „Text de: Părintele Mihail Stanciu, fost stareț…" */
+  semnatura?: string
   text?: string
   sursa?: string
   /** mențiunea de deasupra sursei */
@@ -245,7 +247,7 @@ export function schitaImplicita(n: {
 export function eSchitaNeatinsa(s: Schita): boolean {
   if ((s.gata ?? []).length > 0 || s.secundari.length > 0) return false
   const a = s.principal
-  return (a.gata ?? []).length === 0 && !a.nota && !a.poza && !a.pomenire
+  return (a.gata ?? []).length === 0 && !a.nota && !a.semnatura && !a.poza && !a.pomenire
 }
 
 /** Ce scrie în depozit, adus la forma de acum. `null` când n-a fost începută nicio schiță. */
@@ -620,7 +622,7 @@ export function urmatoareaIntrebare(s: Schita, intrebari: Record<CheieIntrebare,
  */
 export const SUBIECTE = [
   // câmpurile foii
-  'motto', 'moto_autor', 'text', 'autor', 'ani', 'pomenire', 'titlu', 'sursa', 'nota', 'poza',
+  'motto', 'moto_autor', 'text', 'autor', 'ani', 'pomenire', 'titlu', 'semnatura', 'sursa', 'nota', 'poza',
   // răspunsuri la întrebarea de acum
   'mai_adaugam', 'pastreaza', 'sari',
   // îndreptări
@@ -842,6 +844,15 @@ export function scrieRaspuns(
       a.gata = marcheaza(a.gata, 'titlu')
       return { schita: s, scris: `titlu la ${NUMELE_ZONEI[care]}: ${a.titlu}`, articol: care }
     }
+    case 'semnatura':
+      /*
+       * Rândul de sub titlu (user, 19.09.2026: „adăugăm ca semnătură sub titluri"). Ca și `nota`,
+       * NU e o întrebare a chestionarului: se dă când e de dat, deci nu se marchează în `gata`.
+       * ⚠️ Valoarea merge literă cu literă: „Text de:" îl scrie omul, nu-l adăugăm noi — la fel de
+       * bine poate scrie „Traducere de …" sau numai numele.
+       */
+      a.semnatura = taie(v, 200)
+      return { schita: s, scris: `semnătura de sub titlu la ${NUMELE_ZONEI[care]}: ${scurt(a.semnatura, 60)}`, articol: care }
     case 'sursa':
       a.sursa = taie(v, 200)
       a.gata = marcheaza(a.gata, 'sursa')
@@ -878,6 +889,7 @@ const caArticol = (a: ArticolSchitei): NumarCerut['principal'] => {
     ...(ani ? { ani } : {}),
     ...(a.pomenire ? { pomenire: a.pomenire } : {}),
     titlu: fara(a.titlu),
+    ...(a.semnatura ? { semnatura: a.semnatura } : {}),
     text: fara(a.text),
     ...(sursa ? { sursa } : {}),
     ...(a.nota ? { nota: a.nota } : {}),
@@ -946,6 +958,7 @@ export function rezumatulSchitei(s: Schita): string[] {
     if (!eDeProba(a.ani)) parti.push(`anii ${a.ani}`)
     if (a.pomenire) parti.push(`pomenire ${a.pomenire}`)
     if (!eDeProba(a.titlu)) parti.push(`titlu „${a.titlu}"`)
+    if (a.semnatura) parti.push('semnătură sub titlu')
     if (!eDeProba(a.text)) parti.push(`text ${semne(a.text ?? '')} de semne`)
     if (!eDeProba(a.sursa)) parti.push(`sursa ${a.sursa}`)
     if (a.nota) parti.push('mențiune deasupra sursei')
