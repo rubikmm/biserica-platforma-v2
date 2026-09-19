@@ -16,7 +16,7 @@
 import { dataLunga, pdfCuRaportSiCoperta } from '@xc/ui'
 import { capulTextului, mottoDinText } from './depozit.js'
 import { foaieHtml, textCurat } from './foaie.js'
-import { type NumarCerut, type Socoteala, SECUNDARI_MAXIM, semne, socoteste } from './masuri.js'
+import { type NumarCerut, type Socoteala, SECUNDARI_MAXIM, SEMNE_PE_RAND, semne, socoteste } from './masuri.js'
 import { cheiaBrosurii } from './tipar.js'
 import { umpleCuProba } from './umplere.js'
 
@@ -113,6 +113,66 @@ export const NUMELE_TREPTEI: Record<Strans, string> = {
   2: 'programul fără sfinții duminicii și fără pericopă (apostol, evanghelie, glas)',
 }
 
+/**
+ * CE SE CEDEAZĂ DE PE FOAIE CÂND TEXTUL NU ÎNCAPE — și în ce ordine (user, 19.09.2026, 16:31:
+ * „Ar trebui să dispară floricica și dacă nici așa nu intră să dispară sfinții din calendar").
+ *
+ * Ordinea nu e a noastră, e a lui, și e cumulativă: floarea e podoabă, sfinții duminicii se
+ * citesc și în calendar, pericopa e „în extremis". Abia după toate trei se refuză numărul.
+ */
+export interface Cedare {
+  /** se mai pune floarea de deasupra calendarului? */
+  floare: boolean
+  /** cât de strâns e cerut tabelul de la program */
+  strans: Strans
+}
+
+export const CEDARILE: readonly Cedare[] = [
+  { floare: true, strans: 0 },
+  { floare: false, strans: 0 },
+  { floare: false, strans: 1 },
+  { floare: false, strans: 2 },
+] as const
+
+/** Ce s-a cedat, în vorbele omului; `null` când foaia a ieșit întreagă. */
+export function vorbaCedarii(c: Cedare): string | null {
+  const ce: string[] = []
+  if (!c.floare) ce.push('fără floare')
+  if (c.strans === 1) ce.push('calendar fără sfinții duminicii')
+  if (c.strans === 2) ce.push('calendar fără sfinții duminicii și fără pericopă (apostol, evanghelie, glas)')
+  return ce.length ? ce.join(', ') : null
+}
+
+/**
+ * CE SE MAI CEDEAZĂ DUPĂ O RANDARE CARE A LĂSAT TEXT PE DINAFARĂ — ales din ARITMETICĂ, nu din
+ * încă trei randări.
+ *
+ * ⚠️ De ce nu se coboară treaptă cu treaptă (19.09.2026): o randare ține vreo minut prin Browser
+ * Rendering, iar `POST /nou/compune` și „Da"-ul din bulă nu stau patru minute. Din prima randare
+ * știm deficitul în semne (`peDinafara`), iar socoteala știe cât ELIBEREAZĂ fiecare treaptă (tot
+ * în semne, din `semneCuTot`). Deci se alege dintr-o dată treapta cea mai mică ce acoperă
+ * deficitul, cu o rezervă de un rând, și se randează O SINGURĂ dată în plus.
+ *
+ * Dacă nicio treaptă nu acoperă deficitul, se ia cea mai largă care eliberează totuși ceva: omul
+ * a cerut ca foaia să se strângă ÎNAINTE de refuz, iar cifra cu care refuzăm trebuie să fie cea
+ * rămasă cu adevărat, nu una dinaintea strângerii. `null` = nu mai e nimic de cedat, se refuză.
+ */
+export function cedareaDeIncercat(o: {
+  /** treapta la care s-a randat acum (indice în `CEDARILE`) */
+  dela: number
+  /** semnele rămase pe dinafară la randarea făcută */
+  peDinafara: number
+  /** câte semne eliberează fiecare treaptă față de cea randată (aceeași lungime ca `CEDARILE`) */
+  elibereaza: readonly number[]
+  /** cât se cere peste deficit, ca să nu se piardă totul pentru un cuvânt — un rând */
+  rezerva?: number
+}): number | null {
+  const nevoie = o.peDinafara + (o.rezerva ?? SEMNE_PE_RAND)
+  const mai = CEDARILE.map((_, i) => i).filter((i) => i > o.dela && (o.elibereaza[i] ?? 0) > 0)
+  if (!mai.length) return null
+  return mai.find((i) => (o.elibereaza[i] ?? 0) >= nevoie) ?? mai[mai.length - 1]!
+}
+
 export async function calendarulNumarului(env: EnvCompunere, dataNumarului: string, strans: Strans = 0): Promise<Calendar | { eroare: string; cod: string }> {
   const aDouaZi = new Date(`${dataNumarului}T12:00:00Z`)
   aDouaZi.setUTCDate(aDouaZi.getUTCDate() + 1)
@@ -154,6 +214,13 @@ export interface Compus {
   calendar?: Calendar | null
   /** ce oprește compunerea — cu cifre */
   plangeri: string[]
+  /**
+   * CE S-A CEDAT ca să încapă textul — „fără floare", „calendar fără sfinții duminicii", „și fără
+   * pericopă". `null` când foaia a ieșit întreagă. Se spune și în `atentie`, la vedere.
+   */
+  cedat: string | null
+  /** câte randări au fost (cel mult două: prima, și una după ce s-a strâns foaia) */
+  randari: number
   /**
    * ce NU oprește compunerea, dar trebuie spus la vedere: programul e PROPUS (nevalidat), sau o
    * parte a numărului e text de probă. Se scriu la începutul răspunsului, nu la coadă.
@@ -213,33 +280,47 @@ export async function compune(env: EnvCompunere, o: OptiuniCompunere): Promise<C
   const { cerut, deProba } = umpleCuProba(o.cerut, c0 ? { slujbe: c0.slujbe, detalii: c0.detalii } : undefined)
 
   /*
-   * CALENDARUL SE STRÂNGE TREAPTĂ CU TREAPTĂ, numai cât e nevoie (user, 17.09.2026): întâi întreg;
-   * dacă textul nu încape, fără sfinții duminicii; „în extremis", și fără pericopă. Se oprește la
-   * prima treaptă la care socoteala tace. Dacă nici la a treia nu încape, vina e a textului, nu a
-   * calendarului — și se răspunde cu cifrele de la treapta a treia, ca omul să știe cât să taie.
+   * Calendarele, unul pe treaptă, cerute cel mult o dată. Sunt IEFTINE (legătură de serviciu, D1,
+   * milisecunde) — spre deosebire de randare, care ține un minut. De aceea aritmetica de mai jos
+   * are voie să le ceară pe toate ca să afle cât eliberează fiecare treaptă.
    */
+  const stiute = new Map<Strans, Calendar | null>([[0, c0]])
+  const potStrange = !o.faraCalendar && !eroareCalendar
+  const calendarul = async (strans: Strans): Promise<Calendar | null> => {
+    if (!potStrange) return null
+    if (stiute.has(strans)) return stiute.get(strans) ?? null
+    const r = await calendarulNumarului(env, cerut.data, strans)
+    // ⚠️ O treaptă care nu vine NU strică numărul: rămâne cea de dinainte, doar că nu se poate ceda
+    // atât. Un `eroareCalendar` pus aici ar refuza o foaie care se compunea foarte bine cu treapta 0.
+    stiute.set(strans, 'eroare' in r ? null : r)
+    return stiute.get(strans) ?? null
+  }
+  const socotealaCedarii = (c: Calendar | null, cedare: Cedare): Socoteala =>
+    socoteste({
+      ...cerut,
+      floare: !!cerut.floare && cedare.floare,
+      calendar: c ? { slujbe: c.slujbe, detalii: c.detalii } : undefined,
+    })
+
+  /*
+   * FOAIA SE STRÂNGE TREAPTĂ CU TREAPTĂ, numai cât e nevoie (user, 17.09.2026, apoi 19.09.2026):
+   * întâi întreagă; dacă textul nu încape, cade FLOAREA; pe urmă sfinții duminicii din calendar;
+   * „în extremis", și pericopa. Se oprește la prima treaptă la care socoteala tace. Dacă nici la
+   * ultima nu încape, vina e a textului — și se răspunde cu cifrele de acolo, ca omul să știe cât
+   * să taie.
+   */
+  let nivel = 0
   let calendar: Calendar | null = null
   let socoteala: Socoteala | null = null
   let plangeri: string[] = []
-  const trepte: Strans[] = o.faraCalendar || eroareCalendar ? [0] : [0, 1, 2]
-  for (const treapta of trepte) {
-    let c: Calendar | null = null
-    if (!o.faraCalendar && !eroareCalendar) {
-      if (treapta === 0) c = c0
-      else {
-        const r = await calendarulNumarului(env, cerut.data, treapta)
-        if ('eroare' in r) eroareCalendar = `calendarul: ${r.eroare}`
-        else c = r
-      }
-    }
-    const s = socoteste({
-      ...cerut,
-      calendar: c ? { slujbe: c.slujbe, detalii: c.detalii } : undefined,
-    })
+  const trepte = potStrange ? CEDARILE : [CEDARILE[0]!]
+  for (let i = 0; i < trepte.length; i++) {
+    const c = await calendarul(trepte[i]!.strans)
+    const s = socotealaCedarii(c, trepte[i]!)
+    nivel = i
     calendar = c
     socoteala = s
     plangeri = [...deForma, ...(eroareCalendar ? [eroareCalendar] : []), ...s.plangeri]
-    // fără calendar nu e ce strânge; iar dacă încape, nu se strânge degeaba
     if (eroareCalendar || s.incape) break
   }
   if (!socoteala) throw new Error('socoteala n-a rulat')
@@ -247,32 +328,73 @@ export async function compune(env: EnvCompunere, o: OptiuniCompunere): Promise<C
     plangeri = plangeri.filter((p) => !p.startsWith('calendarul singur'))
   }
 
-  // ce se spune LA ÎNCEPUT, chiar dacă numărul iese: programul propus și textul de probă
-  const atentie: string[] = []
-  if (calendar?.stare === 'propus') atentie.push(atentiePropus(calendar))
-  if (deProba.length) atentie.push(`text de probă la: ${deProba.join('; ')}`)
+  // ce se spune LA ÎNCEPUT, chiar dacă numărul iese: programul propus, textul de probă, ce s-a cedat
+  const atentiaFoii = (): string[] => {
+    const a: string[] = []
+    if (calendar?.stare === 'propus') a.push(atentiePropus(calendar))
+    if (deProba.length) a.push(`text de probă la: ${deProba.join('; ')}`)
+    const cedat = vorbaCedarii(CEDARILE[nivel]!)
+    if (cedat) a.push(`ca să încapă textul, foaia s-a strâns: ${cedat}.`)
+    return a
+  }
 
   if (plangeri.length && !o.chiarDacaNuIncape) {
-    return { ok: false, socoteala, calendar, plangeri, atentie, cerut }
+    return { ok: false, socoteala, calendar, plangeri, atentie: atentiaFoii(), cerut, cedat: vorbaCedarii(CEDARILE[nivel]!), randari: 0 }
   }
 
-  const html = foaieHtml({
-    cerut,
-    poze: o.poze,
-    calendar: calendar ? { tabel: calendar.tabel, stil: calendar.stil } : null,
-    floare: socoteala.floare,
-    dataScrisa: dataLunga(cerut.data),
-  })
+  const foaia = (c: Calendar | null, s: Socoteala): string =>
+    foaieHtml({
+      cerut,
+      poze: o.poze,
+      calendar: c ? { tabel: c.tabel, stil: c.stil } : null,
+      floare: s.floare,
+      dataScrisa: dataLunga(cerut.data),
+    })
 
   if (o.doarHtml) {
-    return { ok: plangeri.length === 0, socoteala, calendar, plangeri, atentie, cerut, cheie: undefined, pdf: undefined, raport: undefined }
+    return {
+      ok: plangeri.length === 0, socoteala, calendar, plangeri, atentie: atentiaFoii(), cerut,
+      cedat: vorbaCedarii(CEDARILE[nivel]!), randari: 0, cheie: undefined, pdf: undefined, raport: undefined,
+    }
   }
 
-  const { pdf, raport, coperta } = await randeaza(env, html)
+  let randari = 0
+  let { pdf, raport, coperta } = await randeaza(env, foaia(calendar, socoteala))
+  randari++
+
+  /*
+   * ⚠️ CURGEREA SPUNE ADEVĂRUL, ȘI EA ARE DREPTUL SĂ CEARĂ O CEDARE (19.09.2026). Până aici,
+   * treptele se încercau DOAR din socoteală: când socoteala zicea „încape" iar randarea găsea text
+   * pe dinafară, numărul era refuzat pe loc, cu floarea și cu sfinții încă pe foaie — deși userul
+   * ceruse ca ei să cadă ÎNAINTE de refuz. De aceea deficitul randării intră acum în aceeași
+   * scară, o singură dată: se alege prin aritmetică treapta care-l acoperă, se randează încă o
+   * dată, și abia dacă nici atunci nu încape se refuză, cu cifra NOUĂ.
+   */
+  if (raport && raport.peDinafara > 0 && potStrange && !o.chiarDacaNuIncape) {
+    const elibereaza: number[] = []
+    for (let i = 0; i < CEDARILE.length; i++) {
+      if (i <= nivel) { elibereaza.push(0); continue }
+      const c = await calendarul(CEDARILE[i]!.strans)
+      elibereaza.push(Math.max(0, socotealaCedarii(c, CEDARILE[i]!).semneCuTot - socoteala.semneCuTot))
+    }
+    const ales = cedareaDeIncercat({ dela: nivel, peDinafara: raport.peDinafara, elibereaza })
+    if (ales !== null) {
+      const c = await calendarul(CEDARILE[ales]!.strans)
+      const s = socotealaCedarii(c, CEDARILE[ales]!)
+      nivel = ales
+      calendar = c
+      socoteala = s
+      ;({ pdf, raport, coperta } = await randeaza(env, foaia(c, s)))
+      randari++
+    }
+  }
+
+  const cedat = vorbaCedarii(CEDARILE[nivel]!)
   if (raport && raport.peDinafara > 0) {
     plangeri.push(
       `la randare au rămas ${raport.peDinafara} de semne pe dinafară — socoteala zicea că încap, ` +
-      `dar hârtia zice altfel; scurtează cu cel puțin atât`,
+      `dar hârtia zice altfel; scurtează cu cel puțin atât` +
+      (cedat ? ` (foaia s-a strâns deja: ${cedat})` : ''),
     )
   }
 
@@ -284,8 +406,10 @@ export async function compune(env: EnvCompunere, o: OptiuniCompunere): Promise<C
     coperta,
     calendar,
     plangeri,
-    atentie,
+    atentie: atentiaFoii(),
     cerut,
+    cedat,
+    randari,
     cheie: cheiaNumarului(cerut),
   }
 }

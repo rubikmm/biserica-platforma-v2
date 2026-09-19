@@ -224,6 +224,8 @@ export async function compuneNumarul(
   semne_pe_dinafara: number | null
   calendar: string | null
   program: 'validat' | 'propus' | null
+  /** ce s-a cedat ca să încapă textul: „fără floare", calendarul strâns; `null` = foaia întreagă */
+  cedat: string | null
   atentie: string[]
   plangeri: string[]
 }> {
@@ -233,6 +235,7 @@ export async function compuneNumarul(
   const r = await compune(env, { cerut, poze })
   const calendar = r.calendar ? NUMELE_TREPTEI[r.calendar.strans] : null
   const program = r.calendar?.stare ?? null
+  const cedat = r.cedat ?? null
   if (!r.ok || !r.pdf) {
     /*
      * ⚠️ CIFRELE RANDĂRII SE ȚIN ȘI PE DRUMUL REFUZULUI (19.09.2026). Până aici se întorcea `null`,
@@ -242,7 +245,7 @@ export async function compuneNumarul(
      * Rămâne `null` doar când randarea n-a apucat să se facă (socoteala a refuzat înainte) — atunci
      * cifra stă în plângerea socotelii, cu vorbele ei.
      */
-    return { facut: false, nr: cerut.nr, data: cerut.data, cheie: null, semne_intrate: r.raport?.intrate ?? null, semne_pe_dinafara: r.raport?.peDinafara ?? null, calendar, program, atentie: r.atentie, plangeri: r.plangeri }
+    return { facut: false, nr: cerut.nr, data: cerut.data, cheie: null, semne_intrate: r.raport?.intrate ?? null, semne_pe_dinafara: r.raport?.peDinafara ?? null, calendar, program, cedat, atentie: r.atentie, plangeri: r.plangeri }
   }
   /*
    * ⚠️ TOT ce urmează unei randări reușite stă în `pastreazaNumarul`: PDF-ul, COPERTA, cererea
@@ -265,6 +268,7 @@ export async function compuneNumarul(
     semne_pe_dinafara: r.raport?.peDinafara ?? null,
     calendar,
     program,
+    cedat,
     atentie: r.atentie,
     plangeri: [],
   }
@@ -317,6 +321,18 @@ export function rezumatAuditCompunere(
 export function vorbaRefuzului(r: { nr: number; plangeri: string[] }): string {
   const de = r.plangeri.length ? r.plangeri.join('; ') : 'nu încape pe hârtie'
   return `Numărul ${r.nr} NU s-a compus, foaia rămâne cea de dinainte: ${de}.`
+}
+
+/**
+ * CE S-A CEDAT CA SĂ ÎNCAPĂ NUMĂRUL — spus omului tot pe amândouă ușile (user, 19.09.2026, 16:31:
+ * „Ar trebui să dispară floricica și dacă nici așa nu intră să dispară sfinții din calendar").
+ *
+ * ⚠️ Un număr ieșit prin cedare E o izbândă, dar nu una tăcută: floarea lipsă de pe pagina a patra
+ * și sfinții lipsă din calendar se văd pe hârtie, iar cine nu știe de ce lipsesc crede că s-a
+ * stricat ceva. Foaia întreagă nu spune nimic — acolo n-a fost nimic de cedat.
+ */
+export function vorbaIzbanzii(r: { nr: number; cedat: string | null }): string {
+  return r.cedat ? `Numărul ${r.nr} s-a compus, dar foaia s-a strâns ca să încapă textul: ${r.cedat}.` : ''
 }
 
 /** Compunerea care n-a apucat să răspundă (a aruncat): în audit rămâne măcar mesajul erorii. */
@@ -726,6 +742,8 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
       calendar: z.string().nullable(),
       /** validat sau propus (nevalidat — s-a folosit ce era disponibil) */
       program: z.enum(['validat', 'propus']).nullable(),
+      /** ce s-a cedat ca să încapă textul: „fără floare", calendarul strâns; `null` = foaia întreagă */
+      cedat: z.string().nullable(),
       /** de spus la ÎNCEPUT, chiar dacă s-a făcut: programul PROPUS, textul de probă */
       atentie: z.array(z.string()),
       plangeri: z.array(z.string()),
@@ -761,7 +779,15 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
      * buletinul nr. 616 …" peste o foaie rămasă neatinsă — chiar pățania de la 12:35. De aici
      * înainte, `facut:false` scrie în bulă ce scrie și sub butonul din `/nou`, cu aceleași cuvinte.
      */
-    raportul: ({ date }) => ({ facut: date.facut, text: date.facut ? '' : vorbaRefuzului(date) }),
+    /*
+     * ⚠️ IZBÂNDA CU CEDARE NU TACE (19.09.2026). Când foaia a ieșit numai fiindcă i-am scos floarea
+     * ori sfinții duminicii din calendar, omul trebuie să afle — altfel se uită la pagina a patra
+     * și crede că s-a stricat ceva. Fără cedare, raportul rămâne gol, ca până acum.
+     */
+    raportul: ({ date }) => ({
+      facut: date.facut,
+      text: date.facut ? vorbaIzbanzii(date) : vorbaRefuzului(date),
+    }),
     // ⚠️ Un singur loc care compune, pentru amândoi chemătorii (chatul și butonul din `/nou`).
     async executa(a, c) {
       return await compuneNumarul(c.env, a, c.ctxExec)

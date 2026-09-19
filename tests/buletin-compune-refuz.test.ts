@@ -23,6 +23,7 @@ import {
   actiuniBuletin,
   compuneNumarul,
   rezumatAuditCompunere,
+  vorbaIzbanzii,
   vorbaRefuzului,
 } from '../apps/buletin/src/actiuni.js'
 import { LOCAL } from '../apps/buletin/src/stil.js'
@@ -120,6 +121,38 @@ describe('vorba refuzului: una singură, pentru amândouă ușile', () => {
 
   it('fără nicio plângere spune măcar că n-a încăput — nu tace', () => {
     expect(vorbaRefuzului({ nr: 616, plangeri: [] })).toContain('nu încape pe hârtie')
+  })
+})
+
+/**
+ * ⚠️ IZBÂNDA CU CEDARE NU TACE (19.09.2026, 16:31): când foaia a ieșit numai fiindcă i-am scos
+ * floarea ori sfinții duminicii din calendar, lipsa lor se VEDE pe pagina a patra. Cine n-a fost
+ * înștiințat crede că s-a stricat ceva — deci cedarea călătorește până în bulă, ca și refuzul.
+ */
+describe('ce s-a cedat ajunge la om, nu rămâne în compunere', () => {
+  const CU_CEDARE = { ...IZBUTITA, cedat: 'fără floare, calendar fără sfinții duminicii' }
+
+  it('`compuneNumarul` duce `cedat` mai departe', async () => {
+    compuneJucat.mockResolvedValueOnce(CU_CEDARE)
+    const r = await compuneNumarul(ENV, NUMARUL)
+    expect(r.facut).toBe(true)
+    expect(r.cedat).toBe('fără floare, calendar fără sfinții duminicii')
+  })
+
+  it('foaia ieșită întreagă nu spune nimic — n-a fost nimic de cedat', async () => {
+    compuneJucat.mockResolvedValueOnce(IZBUTITA)
+    const r = await compuneNumarul(ENV, NUMARUL)
+    expect(r.cedat).toBeNull()
+    expect(vorbaIzbanzii(r)).toBe('')
+  })
+
+  it('bula citește fapta făcută ȘI ce s-a cedat pentru ea', async () => {
+    compuneJucat.mockResolvedValueOnce(CU_CEDARE)
+    const date = await compuneNumarul(ENV, NUMARUL)
+    const raport = actiuniBuletin.find((a) => a.nume === 'buletin.compune')!.raportul!({ argumente: {}, date })
+    expect(raport).toMatchObject({ facut: true })
+    expect(raport!.text).toContain('s-a compus')
+    expect(raport!.text).toContain('fără floare')
   })
 })
 

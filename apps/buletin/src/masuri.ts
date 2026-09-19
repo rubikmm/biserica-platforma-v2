@@ -71,6 +71,9 @@ export const SEMNE_PE_RAND = 36.67
 /** Câte rânduri de text încap într-o coloană întreagă, fără nimic deasupra sau dedesubt. */
 export const RANDURI_PE_COLOANA = Math.floor((BANDA.jos - BANDA.sus) / RAND)
 
+/** Un milimetru în puncte — măsurile din CSS sunt scrise în milimetri, socoteala lucrează în puncte. */
+const MM = 72 / 25.4
+
 // ---------------------------------------------------------------------------
 // Blocurile care nu sunt text curent — ce mănâncă din coloană
 // ---------------------------------------------------------------------------
@@ -94,7 +97,12 @@ export const INALTIMI = {
   zonaNeagra: 6,
   /** zona neagră a unui secundar, în coloană (nume pe cel mult două rânduri) */
   zonaNeagraMica: 4.6,
-  /** titlul articolului, majuscule mari, de obicei pe două rânduri, cu linia de sub el */
+  /**
+   * titlul articolului, majuscule mari, de obicei pe două rânduri, cu linia de sub el.
+   * ⚠️ De pe 19.09.2026 e doar PRAGUL DE JOS: înălțimea adevărată o dă `inaltimeaTitlului()`, din
+   * câte rânduri ia titlul cu adevărat. Cifra asta rămâne fiindcă e măsurată pe arhivă și e mai
+   * darnică decât geometria la titlurile scurte — iar socoteala nu are voie să promită mai mult.
+   */
   titlu: 4.4,
   /** rândul „Sursa: …", cu linia de deasupra — la 13 pt din 17.09.2026 seara (era 2.4 la 10.5 pt) */
   sursa: 3,
@@ -109,6 +117,97 @@ export const INALTIMI = {
   /** subsolul fix al paginii a patra: abonarea și adresa parohiei — la 13 pt (era 2.6 la 10.5 pt) */
   subsol: 3.2,
 } as const
+
+// ---------------------------------------------------------------------------
+// Titlul articolului — singura piesă care NU se măsoară ca textul curent
+// ---------------------------------------------------------------------------
+
+/**
+ * LĂȚIMILE LITERELOR DIN TRAJAN PRO 3 REGULAR, în fracțiuni de em (`unitsPerEm` 1000).
+ *
+ * ⚠️ De ce un tabel întreg, și nu `SEMNE_PE_RAND`: titlurile NU sunt scrise ca textul. Textul e
+ * Caladea 15 pt, justificat, și de aceea are o medie măsurată pe 915 de rânduri (36.67 semne).
+ * Titlul e Trajan, majuscule, 21 pt la principal și 17 la secundari, centrat — iar majusculele
+ * inscripționale sunt foarte neegale: „I" ține 0.44 em, „W" 1.10, adică de două ori și jumătate
+ * mai mult. O medie ar minți cu un rând întreg la titlurile cu multe litere late.
+ *
+ * Cifrele sunt CITITE DIN FONTUL DIN REPO, nu ghicite, și se pot reface oricând:
+ *   node apps/buletin/unelte/masura-trajan.mjs apps/buletin/resurse/TrajanPro3-Regular.otf
+ * Kerningul (fontul îl are) nu se scade: fără el titlul iese cu un fir mai lat, adică socoteala
+ * greșește în partea sigură.
+ */
+export const LATIMI_TRAJAN: Readonly<Record<string, number>> = {
+  A: 0.7, B: 0.685, C: 0.805, D: 0.917, E: 0.61, F: 0.592, G: 0.862, H: 0.958, I: 0.44,
+  J: 0.414, K: 0.773, L: 0.592, M: 1.05, N: 0.947, O: 0.915, P: 0.642, Q: 0.92, R: 0.754,
+  S: 0.57, T: 0.691, U: 0.83, V: 0.741, W: 1.1, X: 0.674, Y: 0.654, Z: 0.692,
+  Ă: 0.7, Â: 0.7, Î: 0.44, Ș: 0.57, Ț: 0.691, Ä: 0.7, Ö: 0.915, Ü: 0.83, É: 0.61, È: 0.61,
+  ' ': 0.325, '0': 0.623, '1': 0.401, '2': 0.571, '3': 0.567, '4': 0.605, '5': 0.55,
+  '6': 0.604, '7': 0.54, '8': 0.589, '9': 0.594,
+  '.': 0.25, ',': 0.264, ':': 0.284, ';': 0.284, '!': 0.36, '?': 0.538, "'": 0.201, '"': 0.367,
+  '(': 0.375, ')': 0.389, '[': 0.388, ']': 0.388, '-': 0.345, '–': 0.507, '—': 0.93,
+  '„': 0.367, '”': 0.367, '«': 0.588, '»': 0.588, '/': 0.479, '&': 0.821, '+': 0.661,
+}
+
+/** Media A–Z, pentru semnele care nu sunt în tabel (media alfabetului, nu a textului). */
+const LATIME_TRAJAN_MEDIE = 0.7511
+
+/**
+ * Cum stă titlul pe pagină, din foaia de stil (`foaie.ts`), în puncte și milimetri:
+ * corpul de literă, pasul rândului (`line-height`) și aerul de deasupra/dedesubt.
+ *
+ * ⚠️ Principalul are 9 mm deasupra (stă sub pastila numărului, cum e pe hârtie) și e mai mare —
+ * 21 pt față de 17. Un titlu care trece pe al doilea rând costă acolo 1.65 rânduri de text, adică
+ * vreo 60 de semne: exact cât a lipsit numărului 616 pe 19.09.2026.
+ */
+export const TITLUL = {
+  principal: { corp: 21, pas: 1.3, sus: 9, jos: 2.4 },
+  secundar: { corp: 17, pas: 1.22, sus: 0, jos: 1.4 },
+} as const
+
+/** Rigla de sub titlu: firul de 0.5 pt și 1.6 mm de aer sub el. */
+const RIGLA_PT = 0.5 + 1.6 * MM
+
+/**
+ * Câte RÂNDURI DE TITLU ia un titlu, la lățimea coloanei — cu ruperea pe cuvinte, ca în pagină.
+ * Un cuvânt mai lat decât coloana se rupe oricum (Chromium îl lasă să dea pe dinafară, dar noi
+ * socotim rândurile pe care le-ar cere: tot în partea sigură).
+ */
+export function liniileTitlului(titlu: string, corp: number): number {
+  const vorbe = (titlu ?? '').toUpperCase().replace(/\s+/g, ' ').trim().split(' ').filter(Boolean)
+  if (!vorbe.length) return 1
+  const lat = (s: string): number =>
+    [...s].reduce((n, c) => n + (LATIMI_TRAJAN[c] ?? LATIME_TRAJAN_MEDIE), 0) * corp
+  const spatiu = LATIMI_TRAJAN[' ']! * corp
+  const pesteColoana = (w: number): number => Math.max(0, Math.ceil(w / BANDA.coloana) - 1)
+  let linii = 1
+  let pe = lat(vorbe[0]!)
+  linii += pesteColoana(pe)
+  for (const v of vorbe.slice(1)) {
+    const w = lat(v)
+    if (pe + spatiu + w <= BANDA.coloana) {
+      pe += spatiu + w
+    } else {
+      linii += 1 + pesteColoana(w)
+      pe = w
+    }
+  }
+  return linii
+}
+
+/**
+ * ÎNĂLȚIMEA TITLULUI, în rânduri de text — cât mănâncă din coloană.
+ *
+ * ⚠️ NICIODATĂ SUB `INALTIMI.titlu` (19.09.2026). Geometria zice că un titlu de un rând costă 3.9
+ * rânduri la principal și 1.8 la secundar, adică mai puțin decât cei 4.4 măsurați pe arhivă. Dacă
+ * am scădea la cifra „exactă", socoteala ar promite ~500 de semne în plus pe număr — fix greșeala
+ * pe care o reparăm, doar că în celălalt sens. Cifra nouă are voie să CREASCĂ măsura titlului, nu
+ * să o micșoreze: „socoteala refuză, nu taie" ține numai cât timp ea nu minte în plus.
+ */
+export function inaltimeaTitlului(titlu: string, principal: boolean): number {
+  const t = principal ? TITLUL.principal : TITLUL.secundar
+  const puncte = t.sus * MM + liniileTitlului(titlu, t.corp) * t.corp * t.pas + t.jos * MM + RIGLA_PT
+  return Math.max(INALTIMI.titlu, puncte / RAND)
+}
 
 /**
  * Înălțimea calendarului, în rânduri de text, după cât are de spus săptămâna.
@@ -232,7 +331,7 @@ export function socoteste(cerut: NumarCerut): Socoteala {
    * desenat. Deci de acolo nu vine niciun rând de text — nici cu poză, nici fără.
    */
   const p1c1 = 0
-  const p1c2 = inaltePagina1 - INALTIMI.titlu
+  const p1c2 = inaltePagina1 - inaltimeaTitlului(cerut.principal.titlu, true)
 
   // --- paginile din mijloc ------------------------------------------------
   const mijloc = RANDURI_PE_COLOANA * COLOANE_PE_PAGINA * 2
@@ -251,7 +350,8 @@ export function socoteste(cerut: NumarCerut): Socoteala {
   // --- cât mănâncă capetele articolelor -----------------------------------
   // Principalul și-a plătit deja titlul și zona neagră mai sus; secundarii și le plătesc aici.
   const costSecundar = (a: ArticolCerut): number =>
-    INALTIMI.aerIntreArticole + INALTIMI.zonaNeagraMica + INALTIMI.titlu + (a.poza ? INALTIMI.pozaMica : 0) + (a.sursa ? INALTIMI.sursa : 0)
+    INALTIMI.aerIntreArticole + INALTIMI.zonaNeagraMica + inaltimeaTitlului(a.titlu, false) +
+    (a.poza ? INALTIMI.pozaMica : 0) + (a.sursa ? INALTIMI.sursa : 0)
   const costPrincipal = cerut.principal.sursa ? INALTIMI.sursa : 0
   const capete = costPrincipal + secundari.reduce((n, a) => n + costSecundar(a), 0)
 

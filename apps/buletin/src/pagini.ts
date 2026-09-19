@@ -1085,7 +1085,9 @@ const JS_COMPUNE = `
     }).then(function(x){
       return x.json().catch(function(){ return { facut:false, plangeri:['serverul a raspuns ' + x.status] }; });
     }).then(function(j){
-      if (j && j.facut) { spune('Gata. Actualizez pagina…'); location.reload(); return; }
+      // Ce s-a cedat ca sa incapa textul (floarea, sfintii duminicii) se spune si aici, nu doar in
+      // bula: pe pagina a patra lipsa lor se VEDE, iar cine nu stie de ce crede ca s-a stricat ceva.
+      if (j && j.facut) { spune('Gata' + (j.cedat ? ' — foaia s-a strans: ' + j.cedat : '') + '. Actualizez pagina…'); location.reload(); return; }
       slobod();
       // Fraza refuzului o scrie serverul, in campul "spune", aceeasi ca in bula; plangerile raman
       // plasa de siguranta, pentru un raspuns venit de pe un drum care n-o poarta (403, 405, 500).
