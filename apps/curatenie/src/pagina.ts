@@ -5,10 +5,12 @@
  *
  * Cele trei „potriviri locale" pe care V1 le tinea ca sa poata fi sterse la legarea de platforma
  * (scria „Autentificare" in loc de „Cont", ascundea „Profil", trimitea „Administrare" la panoul
- * aplicatiei) AU FOST STERSE: contul e acum cel al platformei, cu meniul lui intreg si cu „vezi
- * ca". A ramas din ele un singur lucru, fiindca utilizatorul a cerut sa ramana pickerul: cand
- * nimeni n-a intrat cu contul, dar omul si-a ales numele din lista, antetul scrie NUMELE LUI —
- * altfel pagina ar spune „Cont", iar el tocmai apasase pe numele lui.
+ * aplicatiei) AU FOST STERSE: contul e acum cel al platformei, cu meniul lui intreg si cu „vezi ca".
+ *
+ * ⚠️ Nici FANTOMA nu le aduce inapoi (19.09.2026). Cine si-a ales doar numele din lista vede in
+ * antet acelasi „Cont" ca un necunoscut — acolo e usa spre platforma, iar numele ales n-a deschis-o.
+ * Ca sa stie totusi cine e socotit, numele lui scrie pe randul personal al antetului (`.cine`,
+ * slotul `personal`), impreuna cu „Nu ești tu?" — vezi `pagini/index.ts`.
  */
 import { type Navigatie, adresaPaginii } from '@xc/config'
 import { type Cont, esc, pagina as carcasa } from '@xc/ui'
@@ -22,8 +24,12 @@ export interface Ctx {
   /** Numele din contul platformei, daca omul a intrat cu el. */
   utilizator: string | null
   userId: string | null
-  /** Numele scurt al voluntarului ales din lista („Mihai P."), cand exista. */
-  voluntar: string | null
+  /**
+   * Numele scurt al FANTOMEI („Mihai P.") — omul care si-a ales numele din lista, fara cont.
+   * Gol cand nimeni n-a ales, si INTOTDEAUNA gol cand `userId` exista: cine a intrat cu contul
+   * n-are fantoma. Nu intra in meniul contului; se scrie pe randul personal al paginii.
+   */
+  fantoma: string | null
   /** `cleaning.manage` — hotarat de autorizarea centrala, nu de `is_admin` din tabel. */
   eAdmin: boolean
   /** Rolul global — DOAR randul „Administrare" din meniul contului atarna de el (18.09.2026). */
@@ -42,17 +48,11 @@ export const campCsrf = (ctx: Ctx): string => `<input type="hidden" name="csrf" 
 
 function contDin(ctx: Ctx): Cont {
   /*
-   * Antetul are DOUA feluri de „cine sunt", fiindca aplicatia are doua usi:
-   *  - cine a intrat cu CONTUL platformei vede meniul obisnuit (Profil, Administrare, „vezi ca",
-   *    Iesire) — la fel ca in orice alta aplicatie V2;
-   *  - cine si-a ales numai NUMELE din lista („modul simplu", pastrat anume de utilizator) nu are
-   *    cont, deci n-are ce sa caute in meniul contului: numele lui scrie in antet, iar apasarea
-   *    deschide iar lista de nume (`?alege=1`), de unde poate lua alt nume. Iesirea din numele ales
-   *    sta pe randul personal al paginii de programare, nu aici.
+   * ⚠️ Antetul are UN SINGUR fel de „cine sunt": contul platformei. Fantoma nu apare aici deloc
+   * (user, 19.09.2026: „dacă vrea acces în platformă trebuie să intre pe Cont normal") — capul
+   * meniului ii scrie tot „Cont" si il duce tot la intrare, ca oricarui necunoscut. Numele ales
+   * si „Nu ești tu?" stau pe randul personal al paginii, nu in meniul unui cont pe care nu-l are.
    */
-  if (!ctx.userId && ctx.voluntar) {
-    return { nume: ctx.voluntar, intrat: false, href: `${ctx.prefix}/?alege=1` }
-  }
   return {
     nume: ctx.utilizator ?? 'Cont',
     intrat: !!ctx.userId,
@@ -62,7 +62,7 @@ function contDin(ctx: Ctx): Cont {
     urlCont: ctx.nav.cont,
     urlAdmin: ctx.nav.admin,
     // Setarile APLICATIEI, nu ale platformei (user, 15.09.2026) — de aceea adresa e a noastra.
-    // Randul apare numai la cine e intrat cu CONTUL: cine si-a ales doar numele n-are meniu deloc.
+    // Carcasa scrie randul numai cand `intrat` e adevarat, deci fantoma nu-l vede.
     urlSetari: `${ctx.prefix}/setari`,
     poateVedeaCa: ctx.poateVedeaCa,
     veziCa: ctx.veziCa,

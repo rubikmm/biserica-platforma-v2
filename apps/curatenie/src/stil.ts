@@ -878,4 +878,14 @@ body:not(.cu-platforma) .cont-lista a[href^="https://cont."] { display: none }
 .info-jos { margin: 26px 0 0; text-align: center; color: var(--faint);
             font: 13px/1.6 ui-sans-serif, system-ui }
 .info-jos a { color: var(--soft) }
+
+/* Randul FANTOMEI — numele ales si intrebarea care il uita, pe randul personal al antetului
+   (.cine, din carcasa). Uitarea e o FAPTA, deci un formular cu jeton, nu o legatura GET; butonul
+   imprumuta insa infatisarea legaturilor de acolo, ca randul sa ramana un singur rand.
+   ⚠️ Fara texte de-ale paginii in comentariile de aici: stilul intra INTREG in fiecare pagina,
+   iar un cuvant scris aici s-ar gasi si la un om care n-are ce sa-l vada. */
+.cine form { display: inline; margin: 0 }
+.cine .ca-legatura { background: none; border: 0; padding: 0; font: inherit;
+                     color: var(--soft); cursor: pointer }
+.cine .ca-legatura:hover { color: var(--rosu); text-decoration: underline }
 ` + STIL_SETARI;

@@ -75,7 +75,9 @@ de semne de HTML), 7 setări — **677 de rânduri, verificate sumă cu sumă fa
 Ce s-a schimbat față de V1, și de ce:
 - **voluntarii au rămas ai aplicației** (nume, e-mail, telefon în baza ei), iar omul se recunoaște
   alegându-și numele din listă, fără cont. Utilizatorul a ales asta anume, dintre trei variante, după
-  ce i s-a spus că se abate de la „datele stau într-un loc, autentificarea la fel";
+  ce i s-a spus că se abate de la „datele stau într-un loc, autentificarea la fel". Pickerul a ieșit
+  pe 14.09 (voluntarii = conturi) și **s-a întors pe 19.09 într-o formă îngustă**: doar numele, doar
+  rezervări în calendar, și dispare cu totul la omul intrat cu contul;
 - **parola locală de admin a ieșit cu totul** — cele trei hash-uri bcrypt, sesiunea semnată, resetarea
   prin email, fila „Schimbă parola" și „modul de inițializare". Panoul cere `cleaning.manage`, cheie
   care exista deja în contracte (deci **fără republicarea lui authz**). `is_admin` din tabel a rămas
@@ -2471,6 +2473,16 @@ forța antetul `Host`**.
 - **Convenție NOUĂ de marcaje, peste TOATĂ foaia** (fișier nou `marcaje.ts`): `_cursiv_`, `*aldin*`, împreună = aldin cursiv — în titlu, semnătură, text, sursă, motto, notă. **Convenția veche „steluțe = cursiv" e abrogată.** Trajan Bold se încorporează în PDF **doar când vreun titlu are aldin** (+211 KB, altfel degeaba); cursivul în titlu e oblic sintetic (Trajan n-are italic). Bug vechi reparat pe drum: `CURGE` tăia paragraful cu `textContent` și pierdea tagurile la hotarul de coloană. (buletin 0.15.0)
 - **`/` = rând nou** în titlu și în semnătură (`randNou` se aplică ÎNAINTEA lui `marcaj`, altfel `</b>` se rupea în două); `textCurat()` scoate marcajele din textul dus în arhivă. (buletin 0.15.1)
 - ⚠️ Capcane noi de build: `*/` într-un comentariu de bloc închide comentariul (esbuild cade), iar accentele grave dintr-un CSS scris în template literal fac același lucru. Deschis: `despre` din hartă e prea lung în textul meniului (propus un câmp separat `numit`).
+
+**CURĂȚENIA — s-a întors „intrarea fantomă", dar îngustă: doar numele, doar calendarul** (curatenie **0.3.0**, publicat în producție). Cererea userului, cuvânt cu cuvânt: „păstrăm intrarea fantomă doar cu numele (ex.: Mihai P.) și astfel pre-logat un om poate face rezervări în calendar. Dacă vrea acces în platformă trebuie să intre pe Cont normal. Dacă ești deja în platformă ca utilizator să nu mai fie selecția fantomă deloc".
+
+- **Cum se recunoaște**: cookie `curatenie_voluntar` (id-ul voluntarului), pus de `POST /alege`, șters de `POST /iesi` (ambele cu jeton CSRF; GET-ul pe `/alege` întoarce 303 spre `/`). `identitate.ts` ține `puneFantoma` / `uitaFantoma` / `voluntarulFantoma`.
+- **Poarta e în `api.ts`, nu în interfață** (cine trimite formularul de mână ajunge tot acolo): `ACTIUNI_FANTOMA = new Set(["toggle_slot"])`, iar `if (cine.fantoma && !ACTIUNI_FANTOMA.has(action)) return fail(INTRA_IN_CONT, 403)`. Tot acolo: `isAdmin = cine.eAdmin && !cine.fantoma` și `with_stats` **refuzat** fantomei (vederea de arhivă cu statistica de participare rămâne a conturilor).
+- **Antetul rămâne de NEINTRAT** — un singur fel de „cine sunt" în platformă, contul. Fantoma se arată doar în pagină: rândul „Ești Mihai P. · Nu ești tu?" pe slotul personal (POST cu jeton, nu legătură GET), iar pickerul V1 (`#pickerFantoma`, clasa `picker-list`, markup neschimbat din V1 — s-a schimbat doar înțelesul) stă deasupra calendarului.
+- **Dispare la omul cu cont**: cine are sesiune adevărată nu vede pickerul deloc și cookie-ul i se șterge; la fel dacă rândul lui a dispărut din listă. Cookie-ul e **nesemnat dinadins** — nu deschide nimic ce nu se poate face oricum apăsând pe un slot.
+- **Abatere de la structura mare, asumată de user**: un cookie de om și scriere în date fără să treacă prin permisiunea centrală (authz). Aceeași alegere o făcuse pe 13.09, răsturnată pe 14.09 (voluntarii = conturi); acum se întoarce, dar strâmtată la o singură acțiune.
+- Texte noi față de V1: „Cine ești?" (titlul pickerului) și fraza din fereastra „mod vizualizare" — „…trebuie să-ți alegi numele din lista de sus — ori să intri cu contul parohiei, dacă vrei și restul aplicației".
+- Probe: `tests/curatenie-fantoma.test.ts` (nou, 16 probe), typecheck curat, 1013/1013 la vitest. Publicare în producție: `xc-curatenie-production`, Version ID `6e466358-a189-4bbf-9d2c-dbcc2cf0b21f`; verificat pe viu că `/` scoate `pickerFantoma`, `picker-list` și `0.3.0` în subsol. Commit `HASH_RUNDA`.
 
 ### 2026-09-18
 

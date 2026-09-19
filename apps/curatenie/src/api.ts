@@ -38,6 +38,11 @@ export interface CineApasa {
   /** Numele din contul platformei — pentru adminul fără voluntar al lui. */
   numeCont: string | null;
   userId: string | null;
+  /**
+   * ⚠️ Omul și-a ales numai NUMELE din listă, fără cont (19.09.2026). `voluntar` e atunci rândul
+   * ales din cookie, nu unul dovedit de o sesiune — deci trece DOAR pe la calendar.
+   */
+  fantoma: boolean;
 }
 
 interface MediuApi {
@@ -48,8 +53,19 @@ type Ok = Record<string, unknown>;
 
 const fail = (msg: string, http = 400): Response => json({ ok: false, error: msg }, http);
 
+/**
+ * ⚠️ TOT CE POATE O FANTOMĂ. Numele ales din listă nu e o dovadă a nimănui: oricine de la aceeași
+ * tastatură poate lua orice nume. De aceea îi lăsăm exact cât a cerut utilizatorul — rezervarea
+ * unui loc în calendar (`toggle_slot`: ocupă, mută, eliberează propria înscriere) — și nimic din
+ * ce ține de cont. Poarta stă AICI, nu în pagină: cine trimite formularul de mână ajunge tot pe
+ * drumul ăsta.
+ */
+const ACTIUNI_FANTOMA = new Set(["toggle_slot"]);
+const INTRA_IN_CONT = "Pentru asta intră în cont.";
+
 export async function api(_env: MediuApi, db: Baza, cine: CineApasa, post: Record<string, string>): Promise<Response> {
   const action = post.action ?? "";
+  if (cine.fantoma && !ACTIUNI_FANTOMA.has(action)) return fail(INTRA_IN_CONT, 403);
   try {
     switch (action) {
       case "toggle_slot":
@@ -112,7 +128,9 @@ async function toggleVacationMonth(db: Baza, cine: CineApasa, post: Record<strin
 
 // ============================================================================
 async function toggleSlot(db: Baza, cine: CineApasa, post: Record<string, string>): Promise<Response> {
-  const isAdmin = cine.eAdmin;
+  // Administrarea e a CONTULUI. O fantomă n-are cum să ajungă aici cu `eAdmin` — dreptul se cere
+  // pe sesiune — dar regula se scrie o dată, aici, ca să nu atârne de felul cum s-a aflat.
+  const isAdmin = cine.eAdmin && !cine.fantoma;
   // Adminul care a intrat cu contul platformei, fără voluntar al lui, lucrează în numele celorlalți.
   const volunteer = cine.voluntar ?? (isAdmin ? adminFaraVoluntar(cine.numeCont, cine.userId) : null);
   if (volunteer === null) return fail("Trebuie să intri cu contul tău mai întâi.", 401);
@@ -124,7 +142,9 @@ async function toggleSlot(db: Baza, cine: CineApasa, post: Record<string, string
   if (ziuaSaptamanii(sunday) !== 0) return fail("Data nu este o duminică.");
 
   // Vederea de arhivă (with_stats)? Atașăm statistica de participare recalculată la răspuns.
-  const withStats = !!post.with_stats;
+  // ⚠️ Nu și fantomei: statistica scrie numele întregii echipe și cine cât a venit, iar numele ales
+  // din listă nu dovedește pe nimeni. Pagina nici nu i-o cere — dar cererea se poate scrie de mână.
+  const withStats = !!post.with_stats && !cine.fantoma;
   const admin = isAdmin ? volunteer : null;
   const op = post.op ?? "";
 

@@ -8,20 +8,25 @@
  *   /health                     starea bazei
  *   /                           programarea: calendarul duminicilor
  *   /faq                        întrebări frecvente (public)
+ *   POST /alege                 numele ales din listă, fără cont („fantoma")
+ *   POST /iesi                  uită numele ales (contul platformei nu se atinge)
  *   POST /api                   ocuparea / eliberarea unui slot, vacanța pe o lună
  *   /admin                      panoul: echipa, cererile, rapoarte, jurnal    (cleaning.manage)
  *   /admin/faq                  întrebările administratorilor                (cleaning.manage)
  *   /admin/curatare-arhiva      subțierea arhivei de rapoarte                (cleaning.manage)
  *   /cron                       pornirea ceasului cu mâna, pentru probe      (cleaning.manage)
  *
- * ⚠️ Trei lucruri care se încalcă ușor:
+ * ⚠️ Patru lucruri care se încalcă ușor:
  *
- *  1. **Voluntarii sunt CONTURI ale platformei** (user, 14.09.2026). Pickerul — lista de nume din
- *     care omul se alegea singur, fără cont — a ieșit cu totul, împreună cu „Schimbă numele" și
- *     „Ieși": funcția lor o face acum butonul **Cont** din antet. Aplicația nu mai ține nume,
+ *  1. **Voluntarii sunt CONTURI ale platformei** (user, 14.09.2026). Aplicația nu mai ține nume,
  *     e-mail sau telefon: le cere de la identitate (`oameni.ts`).
- *  2. **Emailul nu pleacă de aici** — rapoartele se dau poștei platformei (`xc-communication`).
- *  3. **Apartenența la echipă se CERE, nu se ia**: omul apasă comutatorul „Curățenia" pe contul
+ *  2. **FANTOMA e o excepție îngustă, nu o a doua autentificare** (user, 19.09.2026: „păstrăm
+ *     intrarea fantomă doar cu numele… dacă vrea acces în platformă trebuie să intre pe Cont
+ *     normal"). Omul neintrat își alege numele din listă, cookie-ul îl ține minte un an, și atât
+ *     poate: **rezervări în calendar**. Poarta stă în `api.ts` (`CineApasa.fantoma`), nu în
+ *     pagină. Cine a intrat cu CONTUL nu vede pickerul, iar cookie-ul rămas i se șterge.
+ *  3. **Emailul nu pleacă de aici** — rapoartele se dau poștei platformei (`xc-communication`).
+ *  4. **Apartenența la echipă se CERE, nu se ia**: omul apasă comutatorul „Curățenia" pe contul
  *     lui, iar un administrator al curățeniei îl primește din panou. Eticheta „Admin" NU mai e un
  *     desen — aprinderea ei acordă chiar `cleaning.manage`, deci un admin e numit numai de alt
  *     admin al curățeniei sau de un super-admin.
@@ -43,9 +48,9 @@ import { paginaFaqAdmin } from "./admin/faq.js"
 import { paginaCuratareArhiva } from "./admin/cleanup.js"
 import { numeleDuminicilor } from "./calendar.js"
 import { ruleazaCeasul } from "./cron.js"
-import { numar, numeScurt } from "./depozit.js"
+import { numar, numeScurt, voluntarDupaId } from "./depozit.js"
 import { citestePost, duTe, text } from "./html.js"
-import { voluntarulCurent } from "./identitate.js"
+import { idFantomaDinCookie, puneFantoma, uitaFantoma, voluntarulCurent, voluntarulFantoma } from "./identitate.js"
 import { cuOameni, incarcaOamenii } from "./oameni.js"
 import type { MediuRaport } from "./newsletter.js"
 import { type Ctx, pagina, paginaMesaj } from "./pagina.js"
@@ -131,6 +136,16 @@ export default {
     const db = cuOameni(env.DB, await incarcaOamenii(env))
     const voluntar = await voluntarulCurent(db, userId).catch(() => null)
 
+    /*
+     * FANTOMA — numele ales din listă, fără cont (user, 19.09.2026). Două reguli, amândouă aici:
+     *  - cine a intrat cu CONTUL nu are fantomă, oricâte cookie-uri ar căra cu el;
+     *  - cookie-ul care nu mai duce nicăieri (rândul șters, omul scos din echipă) se șterge, ca
+     *    să nu rămână un nume mort în browser pentru încă un an.
+     */
+    const cookieFantoma = idFantomaDinCookie(req)
+    const fantoma = userId ? null : await voluntarulFantoma(db, req).catch(() => null)
+    const stergeFantoma = cookieFantoma !== null && fantoma === null
+
     // Jetonul CSRF trăiește patru ore într-un cookie propriu; fiecare formular al paginii îl scrie,
     // iar POST-ul îl cere înapoi.
     const csrf = asiguraCsrf(req, cfg.DOMENIU_COOKIE)
@@ -143,7 +158,7 @@ export default {
       csrf: csrf.jeton,
       utilizator: numeCont ?? sesiune.user?.email ?? null,
       userId,
-      voluntar: voluntar ? numeScurt(voluntar) : null,
+      fantoma: fantoma ? numeScurt(fantoma) : null,
       eAdmin,
       eAdminPlatforma,
       versiune: pkg.version,
@@ -155,17 +170,47 @@ export default {
 
     const antete = cuCookie(FARA_STOC)
 
+    /*
+     * Răspunsul se face înăuntru, dar iese pe AICI, printr-o singură ușă: cookie-ul fantomei care
+     * nu mai duce nicăieri trebuie șters de pe ORICE pagină, iar `html()` primește un singur antet
+     * (`Record<string, string>`), deci al doilea `set-cookie` se adaugă pe răspunsul gata făcut.
+     */
+    const raspuns = await ruteaza()
+    if (stergeFantoma) raspuns.headers.append("set-cookie", uitaFantoma(cfg.DOMENIU_COOKIE))
+    return raspuns
+
+    async function ruteaza(): Promise<Response> {
     try {
       if (req.method === "POST") {
         const problema = verificaCsrf(req, [cfg.ORIGINE_PUBLICA], cfg.MEDIU === "dev")
         if (problema) return html(paginaMesaj(ctx, "Verificare de securitate", problema), 403, antete)
       }
 
+      // ------------------------------------------------------- numele ales („fantoma")
       /*
-       * Adresele pickerului, scoase pe 14.09.2026. Rămân ca redirect, nu ca 404: o duminică
-       * trecută poate fi salvată la favorite cu `?alege=1`, iar „Ieși" era un link obișnuit.
-       * Ieșirea adevărată se face acum din meniul contului, ca în orice aplicație V2.
+       * ⚠️ Alegerea e o SCRIERE, deci merge pe POST cu jeton CSRF, ca orice faptă a aplicației —
+       * altfel o poză `<img src="/alege?...">` de pe alt site ar putea pune un nume în browserul
+       * cuiva. Adresele vechi cerute cu GET rămân redirect, nu 404: `?alege=1` a stat la favorite.
        */
+      if (cale === "/alege" && req.method === "POST") {
+        const post = await citestePost(req)
+        const problema = verificaTokenCsrf(req, post.csrf ?? "")
+        if (problema) return html(paginaMesaj(ctx, "Verificare de securitate", problema), 403, antete)
+        // Cine a intrat cu contul nu-și alege un nume: ar fi al doilea „eu" pe aceeași pagină.
+        if (userId) return duTe(`${prefix}/`)
+        const v = await voluntarDupaId(db, parseInt(post.volunteer_id ?? "0", 10) || 0)
+        if (!v || v.is_active !== 1 || v.is_volunteer !== 1) return duTe(`${prefix}/`)
+        return duTe(`${prefix}/`, [puneFantoma(Number(v.id), cfg.DOMENIU_COOKIE)])
+      }
+
+      /*
+       * „Nu ești tu?" — uită numai NUMELE ales. Sesiunea platformei nu se atinge: ea e a contului,
+       * iar ieșirea din el se face din meniul contului, ca în toate aplicațiile V2.
+       */
+      if (cale === "/iesi" && req.method === "POST") {
+        return duTe(`${prefix}/`, [uitaFantoma(cfg.DOMENIU_COOKIE)])
+      }
+
       if (cale === "/alege" || cale === "/iesi") return duTe(`${prefix}/`)
 
       /*
@@ -194,7 +239,18 @@ export default {
         const post = await citestePost(req)
         const problema = verificaTokenCsrf(req, post.csrf ?? "")
         if (problema) return json({ ok: false, error: problema }, 403)
-        const cine: CineApasa = { voluntar, eAdmin, numeCont, userId }
+        /*
+         * ⚠️ Fantoma intră în `api` pe același loc ca un voluntar adevărat (`voluntar`), fiindcă
+         * rezervarea e aceeași faptă — dar poartă steagul cu ea, iar `api.ts` îi taie tot restul.
+         * Fără steag, numele ales din listă ar valora cât o sesiune.
+         */
+        const cine: CineApasa = {
+          voluntar: voluntar ?? fantoma,
+          eAdmin,
+          numeCont,
+          userId,
+          fantoma: fantoma !== null,
+        }
         return api(env, db, cine, post)
       }
 
@@ -251,13 +307,14 @@ export default {
         // Numele duminicilor pentru cele trei luni care se pot vedea deodată (arhiva cerută, luna
         // curentă, luna viitoare) — o singură întrebare la calendar.
         const nume = await numeleDuminicilor(env.CALENDAR ?? null, ...intervalulPaginii(url))
-        return html(await paginaIndex(ctx, db, req, url, voluntar, nume), 200, antete)
+        return html(await paginaIndex(ctx, db, req, url, voluntar, fantoma, nume), 200, antete)
       }
 
       return html(paginaMesaj(ctx, "Pagina nu există", "Adresa aceasta nu duce nicăieri la curățenie."), 404, antete)
     } catch (e) {
       log.error("eroare pagina", { eroare: e instanceof Error ? e.message : String(e) })
       return html(paginaMesaj(ctx, "A apărut o eroare", "Încearcă din nou peste puțin."), 500, antete)
+    }
     }
   },
 
