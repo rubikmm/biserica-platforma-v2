@@ -1087,8 +1087,11 @@ const JS_COMPUNE = `
     }).then(function(j){
       if (j && j.facut) { spune('Gata. Actualizez pagina…'); location.reload(); return; }
       slobod();
-      var p = j && j.plangeri && j.plangeri.length ? j.plangeri.join(' ') : 'nu s-a compus';
-      spune('Nu s-a compus: ' + p, true);
+      // Fraza refuzului o scrie serverul, in campul "spune", aceeasi ca in bula; plangerile raman
+      // plasa de siguranta, pentru un raspuns venit de pe un drum care n-o poarta (403, 405, 500).
+      var p = j && j.spune ? j.spune
+        : (j && j.plangeri && j.plangeri.length ? 'Nu s-a compus: ' + j.plangeri.join(' ') : 'Nu s-a compus.');
+      spune(p, true);
     }).catch(function(){
       slobod();
       spune('Nu am putut cere compunerea. Încearcă din nou.', true);

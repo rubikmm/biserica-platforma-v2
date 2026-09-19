@@ -13,6 +13,7 @@ import {
   type Actor,
   type CodEroare,
   type Previzualizare,
+  type RaportFapta,
   type Registru,
 } from './contract.js'
 import { manifest, type HartaAplicatie, type Manifest } from './manifest.js'
@@ -123,7 +124,7 @@ export interface ModulActiuni<E> {
     env: E,
     ctxExec: ExecutionContext,
     o: { actor: Actor; correlationId: string; prin: string },
-  ): Promise<{ ok: true; date: unknown } | { ok: false; cod: CodEroare; mesaj: string }>
+  ): Promise<{ ok: true; date: unknown; raport?: RaportFapta } | { ok: false; cod: CodEroare; mesaj: string }>
 }
 
 export function modulActiuni<E extends EnvActiuni>(cfg: {
@@ -144,7 +145,7 @@ export function modulActiuni<E extends EnvActiuni>(cfg: {
     env: E,
     ctxExec: ExecutionContext,
     o: { actor: Actor; correlationId: string; prin: string; previzualizare?: boolean },
-  ): Promise<{ ok: true; date: unknown } | { ok: false; cod: CodEroare; mesaj: string }> {
+  ): Promise<{ ok: true; date: unknown; raport?: RaportFapta } | { ok: false; cod: CodEroare; mesaj: string }> {
     const log = new Logger({ service: `actiuni-${cfg.aplicatie}`, correlationId: o.correlationId })
 
     const parsat = a.intrare.safeParse(argumenteBrute ?? {})
@@ -222,19 +223,28 @@ export function modulActiuni<E extends EnvActiuni>(cfg: {
         }
       }
 
+      /*
+       * CE S-A FACUT CU ADEVARAT (19.09.2026). O actiune poate raspunde cuminte ca n-a facut nimic
+       * (`buletin.compune` refuza foaia care nu incape, fara sa arunce). Raportul ei calatoreste in
+       * plic, langa `date`, ca cel care a cerut fapta sa nu mai citeasca „Gata." peste un refuz.
+       */
+      const raport = a.raportul ? a.raportul({ argumente, date: iesit.success ? iesit.data : date }) : null
+
       if (a.efect === 'scrie') {
         ctxExec.waitUntil(
           scrieAudit(env, {
             actiune: a.nume,
             actor: o.actor,
-            rezultat: 'success',
+            // ⚠️ Un refuz cuminte NU e `success` in audit: pana aici, randul zilei de maine spunea ca
+            // numarul s-a compus, cand el nu s-a compus.
+            rezultat: raport && !raport.facut ? 'failure' : 'success',
             prin: o.prin,
             correlationId: o.correlationId,
             detalii: a.auditDetalii ? a.auditDetalii({ argumente, date }) : { argumente },
           }),
         )
       }
-      return { ok: true, date: iesit.success ? iesit.data : date }
+      return { ok: true, date: iesit.success ? iesit.data : date, ...(raport ? { raport } : {}) }
     } catch (e) {
       const mesaj = e instanceof Error ? e.message : String(e)
       log.error('actiune cazuta', { actiune: a.nume, eroare: mesaj })

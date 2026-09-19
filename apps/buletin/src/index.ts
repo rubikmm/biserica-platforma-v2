@@ -41,6 +41,7 @@ import {
   rezumatAuditEroare,
   schitaNumarului,
   schitaPastrata,
+  vorbaRefuzului,
 } from './actiuni.js'
 import { HARTA_BULETIN } from './harta.js'
 import { dataVersiunii, eroareApi, html, json, jsonCuEtag } from '@xc/ui'
@@ -929,7 +930,9 @@ export default {
               summary: rezumatAuditCompunere(r),
             }),
           )
-          return json(r, 200, fara)
+          // ⚠️ Vorba refuzului o scrie ACELAȘI loc ca pentru bulă (`vorbaRefuzului`): butonul și chatul
+          // n-au voie să spună altfel despre același număr nefăcut.
+          return json(r.facut ? r : { ...r, spune: vorbaRefuzului(r) }, 200, fara)
         } catch (e) {
           const mesaj = e instanceof Error ? e.message : String(e)
           log.error('compunerea din pagina n-a iesit', { eroare: mesaj })

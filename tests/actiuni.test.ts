@@ -245,3 +245,95 @@ describe('drepturile: aceleasi porti ca pentru un om', () => {
     expect(r?.status).toBe(403)
   })
 })
+
+// ---------------------------------------------------------------------------
+// RAPORTUL FAPTEI: cand actiunea raspunde cuminte ca N-A FACUT nimic (19.09.2026)
+// ---------------------------------------------------------------------------
+
+/**
+ * ⚠️ `ok` NU inseamna „s-a facut". O actiune poate merge fara cusur si totusi sa nu schimbe nimic:
+ * `buletin.compune` REFUZA foaia care nu incape („au ramas 64 de semne pe dinafara") si intoarce
+ * `facut:false` cu cod 200 — pe drept, fiindca nu e o cadere, e un refuz socotit.
+ *
+ * Pana pe 19.09.2026 plicul nu purta deosebirea asta nicaieri, si de aceea cel care cerea fapta
+ * (chatul) citea omului „Gata." peste o foaie ramasa neatinsa, iar auditul scria `success` peste un
+ * numar necompus. Probele de aici pazesc amandoua urmarile raportului.
+ */
+const CU_RAPORT = registru<any>([
+  actiune({
+    nume: 'proba.face',
+    descriere: 'Face ceva — sau refuza cuminte.',
+    efect: 'scrie',
+    intrare: z.object({ incape: z.boolean() }),
+    iesire: z.object({ facut: z.boolean(), peDinafara: z.number().nullable() }),
+    raportul: ({ date }) => ({
+      facut: date.facut,
+      text: date.facut ? '' : `NU s-a facut: au ramas ${date.peDinafara} de semne pe dinafara.`,
+    }),
+    async executa({ incape }) {
+      return { facut: incape, peDinafara: incape ? null : 64 }
+    },
+  }),
+])
+
+const MODUL_RAPORT = modulActiuni<any>({ aplicatie: 'proba', versiune: '1.0.0', actiuni: CU_RAPORT })
+
+/** Auditul, jucat: tine minte randurile scrise, ca sa se vada ce `outcome` a primit fapta. */
+function auditFals() {
+  const randuri: Array<Record<string, unknown>> = []
+  return {
+    randuri,
+    fetch: async (_u: string, init?: RequestInit) => {
+      randuri.push(JSON.parse(String(init?.body ?? '{}')))
+      return new Response('{}', { headers: { 'content-type': 'application/json' } })
+    },
+  } as unknown as Fetcher & { randuri: Array<Record<string, unknown>> }
+}
+
+async function faCeva(incape: boolean, audit?: Fetcher) {
+  const r = await MODUL_RAPORT.ruteaza(
+    cerere('/_actiuni/proba.face', { secret: SECRET, actor: OMUL, corp: { incape } }),
+    { SECRET_INTERN: SECRET, AUDIT: audit },
+    ctxExec,
+    '/_actiuni/proba.face',
+  )
+  return (await r!.json()) as { ok: boolean; date: unknown; raport?: { facut: boolean; text: string } }
+}
+
+describe('raportul faptei calatoreste in plic, langa date', () => {
+  it('refuzul cuminte se vede in plic, cu vorba lui — nu doar in `date`', async () => {
+    const j = await faCeva(false)
+    expect(j.ok).toBe(true)
+    expect(j.raport).toEqual({ facut: false, text: 'NU s-a facut: au ramas 64 de semne pe dinafara.' })
+  })
+
+  it('fapta dusa la capat raporteaza `facut:true`', async () => {
+    const j = await faCeva(true)
+    expect(j.raport?.facut).toBe(true)
+  })
+
+  it('o actiune fara `raportul` ramane cum era: plic fara raport', async () => {
+    const authz = autorizare(true)
+    const r = await MODUL.ruteaza(
+      cerere('/_actiuni/proba.scrie', { secret: SECRET, actor: OMUL, corp: { text: 'ceva' } }),
+      { SECRET_INTERN: SECRET, AUTORIZARE: authz },
+      ctxExec,
+      '/_actiuni/proba.scrie',
+    )
+    expect(await r!.json()).toEqual({ ok: true, date: { scris: 'ceva' } })
+  })
+
+  // ⚠️ Randul de audit al zilei de ieri spunea `success` peste un numar care NU s-a compus: asa nu se
+  // mai poate citi a doua zi ce s-a intamplat de fapt.
+  it('un refuz cuminte intra in audit ca `failure`, nu ca `success`', async () => {
+    const audit = auditFals()
+    await faCeva(false, audit)
+    expect(audit.randuri[0]).toMatchObject({ action: 'actiune.proba.face', outcome: 'failure' })
+  })
+
+  it('fapta facuta intra in audit ca `success`', async () => {
+    const audit = auditFals()
+    await faCeva(true, audit)
+    expect(audit.randuri[0]).toMatchObject({ action: 'actiune.proba.face', outcome: 'success' })
+  })
+})

@@ -895,18 +895,32 @@ export default {
           correlationId: cid,
           prin: 'chat',
         })
-        await inchidePropunerea(env.DB, p.id, r.ok ? 'facuta' : 'refuzata')
+        /*
+         * ⚠️ „GATA." SE SPUNE DOAR PESTE O FAPTĂ FĂCUTĂ (user, 19.09.2026, 12:35: „am dat compune …
+         * nicio modificare"). `r.ok` spune că ACȚIUNEA a mers, nu că lumea s-a schimbat: o acțiune
+         * poate refuza cuminte, fără să arunce (`buletin.compune` cu „au rămas 64 de semne pe
+         * dinafară" întoarce `facut:false` și cod 200). Până aici, omul citea peste refuzul ăsta
+         * „Gata. Compun buletinul nr. 616 …", iar foaia rămânea cea de ieri, fără un cuvânt.
+         * Raportul faptei vine acum în plic, de la aplicație (`raportul`, în `@xc/actiuni`).
+         */
+        const raport = r.ok ? r.raport : undefined
+        const facut = r.ok && (raport?.facut ?? true)
+        await inchidePropunerea(env.DB, p.id, facut ? 'facuta' : 'refuzata')
         // Rezumatul era la viitor („Schimb…", „o scriu întâi"); după execuție se spune la trecut.
         const laTrecut = p.rezumat
           .replace(/^(Schimb|Adaug|Scot|Scriu|Validez)\b/, (v) => ({ Schimb: 'Am schimbat', Adaug: 'Am adăugat', Scot: 'Am scos', Scriu: 'Am scris', Validez: 'Am validat' })[v] ?? v)
           .replace(/\s*Săptămâna nu e scrisă încă — o scriu întâi din propunere\.|\s*Nu e scrisă încă — o scriu întâi din propunere\./, ' Săptămâna a fost scrisă din propunere.')
-        let text = r.ok ? `Gata. ${laTrecut}` : `N-am putut: ${r.mesaj}`
+        let text = !r.ok
+          ? `N-am putut: ${r.mesaj}`
+          : facut
+            ? `Gata. ${laTrecut}`
+            : `N-am făcut-o. ${raport?.text || 'Aplicația n-a spus de ce.'}`
 
         // URMAREA (user, 11.09.2026, 21:48): dupa fiecare schimbare confirmata, chatul intreaba —
         // deterministic, nu la voia modelului — daca valideaza saptamana. Se previzualizeaza intai
         // (daca e deja validata, previzualizarea cade si nu se intreaba nimic) si se propune cu Da/Nu.
         let urmare: RaspunsChat['propunere'] = null
-        if (r.ok) {
+        if (facut) {
           // ⚠️ Aceeasi vedere ca la mesaj (`CE_VEDE_BULA` + bifele APLICATIEI), altfel urmarea s-ar
           // căuta printre uneltele altei aplicatii — si `buletin.compune` n-are urmare, dar
           // programul are. Si: o unealta debifata din Setari nu trebuie sa vina pe usa din dos.
@@ -938,7 +952,10 @@ export default {
         }
 
         await scrieMesaj(env.DB, { conversatie_id: p.conversatie_id, rol: 'agent', text, date: { propunere: urmare } })
-        return json({ ok: r.ok, text, propunere: urmare, reincarca: r.ok })
+        // ⚠️ `ok:false` la un refuz cuminte: bula scrie rândul cu roșu (`mesaj('rea', …)`), iar roșul e,
+        // peste tot la noi, al lucrului nefăcut. Și `reincarca` se ține tot de faptă: n-are ce
+        // împrospăta un ecran peste care nu s-a schimbat nimic.
+        return json({ ok: facut, text, propunere: urmare, reincarca: facut })
       }
 
       /*

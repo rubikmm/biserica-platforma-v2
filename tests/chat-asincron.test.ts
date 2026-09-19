@@ -707,3 +707,88 @@ describe('sondarea unei confirmări: `/stare` spune și starea propunerii', () =
     expect(JS_CHAT).not.toContain('Nu am putut trimite confirmarea.')
   })
 })
+
+// ---------------------------------------------------------------------------
+// „GATA." PESTE UN LUCRU NEFĂCUT (user, 19.09.2026, 12:35)
+// ---------------------------------------------------------------------------
+
+/**
+ * CE S-A ÎNTÂMPLAT, aflat din chat și din audit, nu ghicit: omul a schimbat titlul articolului
+ * principal al nr. 616 (12:32:51Z), a cerut compunerea din bulă, a apăsat „Da" — și a citit
+ * „Gata. Compun buletinul nr. 616 din 20 septembrie 2026: …". Foaia de pe ecran rămăsese însă cea
+ * de dinainte: compunerea REFUZASE, fiindcă la randare rămâneau 64 de semne pe dinafară.
+ *
+ * Vina n-a fost a compunerii, care a răspuns cinstit `facut:false` cu plângerea ei, ci a
+ * confirmării: `r.ok` spune că ACȚIUNEA a mers, nu că lumea s-a schimbat, iar `/confirma` le lua
+ * drept unul și același lucru. Un refuz cuminte (cod 200, `facut:false`) trecea drept izbândă —
+ * în bulă, în starea propunerii și în reîncărcarea ecranului.
+ */
+describe('confirmarea nu mai spune „Gata." peste o faptă nefăcută', () => {
+  const REFUZ = 'Numărul 616 NU s-a compus, foaia rămâne cea de dinainte: la randare au rămas 64 de semne pe dinafară.'
+
+  /**
+   * Duce discuția până la „Da/Nu". Cu `refuza`, aplicația răspunde cum a răspuns buletinul pe
+   * 19.09.2026: `ok:true` (acțiunea a mers) și `raport.facut:false` (foaia n-a fost scrisă).
+   */
+  async function panaLaRefuz(refuza = true) {
+    const m = mediuCreier({
+      modelul: (apel) => (apel === 1 ? cheamaUnealta('program__adauga_slujba') : vorba('Am pregătit-o.')),
+      program: (_cale, prev) =>
+        prev
+          ? { ok: true, date: { rezumat: 'Compun buletinul nr. 616 din 20 septembrie 2026.' } }
+          : refuza
+            ? { ok: true, date: { facut: false }, raport: { facut: false, text: REFUZ } }
+            : { ok: true, date: { facut: true } },
+    })
+    const pornit = (await (await cere(m.env, '/mesaj', { text: 'compune', aplicatie: 'program', asincron: true })).json()) as {
+      conversatieId: string
+      mesajId: string
+    }
+    await cere(m.env, '/lucreaza', { conversatieId: pornit.conversatieId, mesajId: pornit.mesajId, aplicatie: 'program' })
+    const gata = (await (await cere(m.env, `/stare?id=${pornit.conversatieId}`)).json()) as {
+      raspuns: { propunere: { id: string } | null }
+    }
+    return { ...m, conversatieId: pornit.conversatieId, propunereId: gata.raspuns.propunere!.id }
+  }
+
+  it('citește omului REFUZUL, cu cifra lui — nu „Gata." peste foaia neatinsă', async () => {
+    const { env, propunereId } = await panaLaRefuz()
+    const c = (await (await cere(env, '/confirma', { propunereId, raspuns: 'da' })).json()) as {
+      ok: boolean
+      text: string
+      reincarca: boolean
+    }
+    expect(c.text).not.toContain('Gata.')
+    expect(c.text).toContain('64 de semne')
+    expect(c.text).toContain('NU s-a compus')
+    // roșul lucrului nefăcut: bula scrie rândul cu `mesaj('rea', …)` doar când `ok` e fals
+    expect(c.ok).toBe(false)
+    // și ecranul nu se mai împrospătează degeaba: n-are peste ce
+    expect(c.reincarca).toBe(false)
+  })
+
+  it('propunerea rămâne „refuzata", deci nici sondarea nu spune că s-a făcut', async () => {
+    const { env, propuneri, propunereId } = await panaLaRefuz()
+    await cere(env, '/confirma', { propunereId, raspuns: 'da' })
+    expect(propuneri[0]!.stare).toBe('refuzata')
+  })
+
+  it('refuzul se scrie în discuție, ca omul să-l regăsească la reîncărcare', async () => {
+    const { env, mesaje, propunereId } = await panaLaRefuz()
+    await cere(env, '/confirma', { propunereId, raspuns: 'da' })
+    expect(mesaje[mesaje.length - 1]!.text).toContain('64 de semne')
+  })
+
+  /** ⚠️ Plasa: o aplicație care nu trimite niciun raport rămâne cum era — „Gata." peste o izbândă. */
+  it('fără raport în plic, izbânda se spune ca până acum', async () => {
+    const { env, propunereId } = await panaLaRefuz(false)
+    const c = (await (await cere(env, '/confirma', { propunereId, raspuns: 'da' })).json()) as {
+      ok: boolean
+      text: string
+      reincarca: boolean
+    }
+    expect(c.ok).toBe(true)
+    expect(c.reincarca).toBe(true)
+    expect(c.text).toContain('Gata.')
+  })
+})

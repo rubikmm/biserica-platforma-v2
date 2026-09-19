@@ -234,7 +234,15 @@ export async function compuneNumarul(
   const calendar = r.calendar ? NUMELE_TREPTEI[r.calendar.strans] : null
   const program = r.calendar?.stare ?? null
   if (!r.ok || !r.pdf) {
-    return { facut: false, nr: cerut.nr, data: cerut.data, cheie: null, semne_intrate: null, semne_pe_dinafara: null, calendar, program, atentie: r.atentie, plangeri: r.plangeri }
+    /*
+     * ⚠️ CIFRELE RANDĂRII SE ȚIN ȘI PE DRUMUL REFUZULUI (19.09.2026). Până aici se întorcea `null`,
+     * tocmai acolo unde numărul e singurul lucru de care are nevoie omul: „cu cât e peste". Când
+     * hârtia a lăsat text pe dinafară, randarea CHIAR a avut loc și a numărat — `r.raport` știe 64,
+     * iar rândul de audit al zilei de ieri scria `semne_pe_dinafara: null`.
+     * Rămâne `null` doar când randarea n-a apucat să se facă (socoteala a refuzat înainte) — atunci
+     * cifra stă în plângerea socotelii, cu vorbele ei.
+     */
+    return { facut: false, nr: cerut.nr, data: cerut.data, cheie: null, semne_intrate: r.raport?.intrate ?? null, semne_pe_dinafara: r.raport?.peDinafara ?? null, calendar, program, atentie: r.atentie, plangeri: r.plangeri }
   }
   /*
    * ⚠️ TOT ce urmează unei randări reușite stă în `pastreazaNumarul`: PDF-ul, COPERTA, cererea
@@ -295,6 +303,20 @@ export function rezumatAuditCompunere(
     semne_pe_dinafara: r.semne_pe_dinafara,
     ...(eroare ? { eroare: taiatPentruAudit(eroare) } : {}),
   }
+}
+
+/**
+ * DE CE N-A IEȘIT NUMĂRUL, ÎN VORBELE OMULUI — aceeași frază pe amândouă ușile (user, 19.09.2026,
+ * 12:35: „am dat compune … am scris în chat să compună … nicio modificare").
+ *
+ * ⚠️ Rândul începe cu FAPTA, nu cu motivul: „NU s-a compus, foaia rămâne cea de dinainte". Omul se
+ * uită la un ecran pe care foaia veche stă neschimbată — întâi trebuie să afle că așa și rămâne,
+ * abia pe urmă de ce. Plângerile își poartă singure cifrele („au rămas 64 de semne pe dinafară",
+ * „412 de semne peste măsură"), deci nu se mai spune „cu cât" încă o dată.
+ */
+export function vorbaRefuzului(r: { nr: number; plangeri: string[] }): string {
+  const de = r.plangeri.length ? r.plangeri.join('; ') : 'nu încape pe hârtie'
+  return `Numărul ${r.nr} NU s-a compus, foaia rămâne cea de dinainte: ${de}.`
 }
 
 /** Compunerea care n-a apucat să răspundă (a aruncat): în audit rămâne măcar mesajul erorii. */
@@ -729,6 +751,13 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
      */
     auditDetalii: ({ date, eroare }) =>
       date ? rezumatAuditCompunere(date, eroare) : rezumatAuditEroare(eroare ?? 'compunerea n-a răspuns'),
+    /*
+     * ⚠️ REFUZUL AJUNGE LA OM, nu doar în audit (19.09.2026). Compunerea care nu încape răspunde
+     * CUMINTE (`facut:false`, cod 200), deci chatul o citea drept izbândă și spunea „Gata. Compun
+     * buletinul nr. 616 …" peste o foaie rămasă neatinsă — chiar pățania de la 12:35. De aici
+     * înainte, `facut:false` scrie în bulă ce scrie și sub butonul din `/nou`, cu aceleași cuvinte.
+     */
+    raportul: ({ date }) => ({ facut: date.facut, text: date.facut ? '' : vorbaRefuzului(date) }),
     // ⚠️ Un singur loc care compune, pentru amândoi chemătorii (chatul și butonul din `/nou`).
     async executa(a, c) {
       return await compuneNumarul(c.env, a, c.ctxExec)

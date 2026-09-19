@@ -137,7 +137,36 @@ export interface Actiune<I extends z.ZodType = z.ZodType, O extends z.ZodType = 
   auditDetalii?: (
     r: { argumente: z.infer<I>; date?: z.infer<O>; eroare?: string },
   ) => Record<string, unknown>
+  /**
+   * CUM S-A SFARSIT FAPTA — spus omului DUPA „Da", in locul lui „Gata.".
+   *
+   * ⚠️ De ce trebuie sa existe (user, 19.09.2026, 12:35: „am dat compune … nicio modificare"): o
+   * actiune poate raspunde CUMINTE ca n-a facut nimic. `buletin.compune` intoarce `facut:false` cu
+   * plangerile lui („au ramas 64 de semne pe dinafara") si NU arunca — pe drept, fiindca nu e o
+   * cadere, e un refuz socotit. Dar pentru chat orice raspuns nearuncat era izbanda, si omul citea
+   * „Gata. Compun buletinul nr. 616…" peste o foaie care ramasese neatinsa.
+   *
+   * Cine o scrie spune, din raspunsul propriu, DACA s-a facut si CE i se citeste omului cand nu.
+   * `null` (ori lipsa cu totul) = actiunea nu cunoaste refuzuri cuminti: s-a facut, ca pana acum.
+   *
+   * ⚠️ Textul e pentru OM, nu pentru model: scurt, cu cifra lui si cu ce are de facut mai departe.
+   */
+  raportul?: (r: { argumente: z.infer<I>; date: z.infer<O> }) => RaportFapta | null
   executa: (argumente: z.infer<I>, c: ContextActiune<E>) => Promise<z.infer<O>>
+}
+
+/**
+ * Raportul unei fapte cerute: s-a facut ori nu, si vorba omeneasca a refuzului.
+ *
+ * ⚠️ Deosebit de `Rezultat.ok`: acela spune daca ACTIUNEA a mers (argumente bune, drept, fara
+ * exceptie); asta spune daca LUMEA s-a schimbat. O actiune poate merge fara cusur si totusi sa nu
+ * faca nimic — iar omul despre a doua vrea sa afle.
+ */
+export interface RaportFapta {
+  /** `false` = actiunea a raspuns cuminte, dar n-a schimbat nimic */
+  facut: boolean
+  /** ce i se citeste omului cand nu s-a facut — cu cifra refuzului, nu doar „n-a mers" */
+  text: string
 }
 
 /**
@@ -180,7 +209,8 @@ export const CODURI_EROARE = [
 export type CodEroare = (typeof CODURI_EROARE)[number]
 
 export type Rezultat<T = unknown> =
-  | { ok: true; date: T }
+  /** `raport` lipseste la actiunile care nu cunosc refuzuri cuminti — atunci `ok: true` e „s-a facut". */
+  | { ok: true; date: T; raport?: RaportFapta }
   | { ok: false; cod: CodEroare; mesaj: string }
 
 /** Antetele intre workeri. `_XC_` ca sa nu se incurce cu ale platformei sau ale Cloudflare. */

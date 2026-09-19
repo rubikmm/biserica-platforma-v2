@@ -320,6 +320,17 @@ export const LOCAL = `
 .compunerea .btns { justify-content:center }
 .compunerea .btn[disabled] { opacity:.5; cursor:default }
 .compunerea .marunt { margin:8px 0 0 }
+/* REFUZUL COMPUNERII, VAZUT (19.09.2026). Randul de sub buton spunea si pana acum de ce n-a iesit
+   numarul, dar il scria cu clasele "marunt rau" — iar "rau" era stilat DOAR pe .veste (vestea
+   abonarii), nu si aici. Asa, „nu s-a compus: au ramas 64 de semne pe dinafara" iesea gri-estompat,
+   leit cu randul nevinovat de dinainte („se compune varianta de proba…"): omul a apasat de doua ori
+   si a spus „nicio modificare". Acum e chenarul rosu al lucrului nefacut, ca la .atentie-program, si
+   textul se citeste la marimea randului, nu a unei note de subsol.
+   (Fara accente grave aici: blocul e un template literal, iar ele l-ar rupe.) */
+.compunerea .marunt.rau { max-width:560px; margin:12px auto 0; padding:10px 14px;
+                          border:1px solid var(--rosu); border-radius:10px;
+                          background:color-mix(in srgb, var(--rosu) 7%, transparent);
+                          color:var(--rosu); font-size:15px; line-height:1.45; text-align:left }
 /* PROGRAMUL S-A SCHIMBAT DE LA ULTIMA COMPUNERE (19.09.2026): singurul chenar de atentie ramas pe
    /nou. Rosul platformei, care e peste tot aici al lucrului nefacut, si un fundal palid cat sa se
    desprinda de rand — nu o banda tipatoare: nimic nu s-a stricat, doar foaia a ramas in urma. */
