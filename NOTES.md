@@ -2515,7 +2515,7 @@ forța antetul `Host`**.
 - **Publicat în producție** (în ordinea: curatenie, calendar, program, tipic, biblia, biblioteca, buletin, newsletter, home, admin): curatenie **0.4.2** `515269d3-555c-43aa-aa1d-0633a0b735f2`, calendar **0.8.3** `9cc58a26-e750-402e-9661-5bbf9d1481d1`, program **0.9.5** `d208964a-a0e9-4a63-a569-1b5f272ef9ad`, tipic **0.4.2** `a354a95f-7bf6-4fc9-81b3-876baec9cba2`, biblia **0.1.7** `9ec57ddb-f361-4a1b-b84f-bc59d55295b8`, biblioteca **0.1.7** `da6fab0f-2bdf-420f-b282-5c46919245ad`, buletin **0.15.4** `572ad365-5261-413a-8676-517dad8c9780`, newsletter **0.6.4** `2eb7df0d-3290-4c2a-96bc-c56c59a039b6`, home **0.7.7** `344021c5-7b35-4c5a-b489-f0886feb0587`, admin **0.5.1** `eab6462c-8314-4423-b203-cc7bb7901c89`.
 - Verificat pe viu, doar GET: 9 din 10 → **200** cu versiunea nouă în subsol (curatenie, calendar, program, tipic, biblia, biblioteca, buletin, newsletter, home pe `website.sfantul-ilie.ro`); `admin.sfantul-ilie.ro/` → **303** `location: https://cont.sfantul-ilie.ro/auth/login` (neintrat — purtarea așteptată, corpul e gol, deci fără versiune de citit).
 - Deschise (încă valabile): **`STIL_ADMIN`** din panoul curățeniei redefinește `.btn` al carcasei (butoane verzi pe `/setari` la admin); **FAQ-ul adminilor** (`apps/curatenie/src/admin/faq.ts:21`) încă greșit despre bifa Admin; **titlul rubricii** „Echipa și rapoartele" și **textul măștii** de confirmat cu userul; **`eAdmin`** din `apps/admin` ar merita numele `eSuperAdmin`; **drumul fantomei cap-coadă** n-a fost mers de nimeni pe producție.
-- Commit `XXXXXXX`.
+- Commit `519a5f8`.
 
 ### 2026-09-18
 
