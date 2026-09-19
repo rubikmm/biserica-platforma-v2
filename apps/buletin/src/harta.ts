@@ -196,7 +196,19 @@ export type Potrivire =
   /** Știu ce vrea, dar nu cu ce: „Ce titlu pui la secundarul 1?". */
   | { nivel: 'valoare'; subiect: string; actiune: string; articol?: Articol }
   /** Între două-trei lucruri, la nivelul 1 (subiect) sau la nivelul 2 (acțiune). */
-  | { nivel: 'nesigur'; ce: 'subiect' | 'actiune'; subiect?: string; intre: Array<{ id: string; nume: string }> }
+  | {
+      nivel: 'nesigur'
+      ce: 'subiect' | 'actiune'
+      subiect?: string
+      intre: Array<{ id: string; nume: string }>
+      /**
+       * OMUL A VENIT DIN MENIU, apăsând (ori scriind) NUMAI numele subiectului. Atunci treapta a doua
+       * nu e o nedumerire a chatului, ci pagina următoare a meniului — se citește ca meniu („Articolul
+       * principal. Ce vrei să faci?") și poartă și drumul înapoi. Fără semnul ăsta, o apăsare de buton
+       * primea „Nu știu ce să fac cu articolul principal", adică o eroare în loc de un cuprins.
+       */
+      dinMeniu?: boolean
+    }
   /** „meniu", „?" — omul cere chiar cuprinsul. */
   | { nivel: 'meniu' }
   | { nivel: 'necunoscut' }
@@ -218,7 +230,14 @@ const DA = /^(da|d[ae]a|dda|ok|okay|bine|corect|exact|sigur|asa|asa e|ramane|ram
 /** „nu", cu tot ce-l urmează de obicei. */
 const NU = /^(nu|nup|n-?am|nu stiu|nu are|nu e|nu este|nu se stie|nu vreau|nu multumesc|sari|treci mai departe|lasa|las-o|nimic|no|n)[\s.!,]*$/
 
-const MENIU = /^(meniu|\?+|ajutor|help|ce poti face|ce poti|ce pot face|ce pot|optiuni|lista|cuprins)[\s.!?]*$/
+/**
+ * CUPRINSUL, CERUT ANUME — și DRUMUL ÎNAPOI. „înapoi" e aici, nu la acțiuni: de la butoanele
+ * nivelului 2 omul trebuie să se poată întoarce la subiecte cu o vorbă, altfel treapta a doua e o
+ * fundătură (user, 19.09.2026: a cerut meniul crezând că nu există). Formele se scriu FĂRĂ
+ * diacritice și fără majuscule — `curatat` le scoate pe amândouă înainte de potrivire.
+ */
+const MENIU =
+  /^(meniu|meniul|inapoi|inapoi la meniu|arata meniul|arata-?mi meniul|ce subiecte ai|\?+|ajutor|help|ce poti face|ce poti|ce pot face|ce pot|optiuni|lista|cuprins)[\s.!?]*$/
 
 /**
  * FORMELE SCURTE EVIDENTE — comenzi întregi, fără subiect scris. Se cântăresc ÎNAINTEA întrebării
@@ -456,14 +475,18 @@ export function potriveste(mesaj: string, stare: StareHarta): Potrivire {
      * degrabă chiar răspunsul la ea. Nesigurul rămâne pentru când nu se aștepta nimic.
      */
     if (!pendinte || doarNumele) {
+      // ⚠️ `dinMeniu` numai la apăsarea de buton (mesajul E numele subiectului): atunci treapta a
+      // doua e meniul mai departe, nu o nedumerire — vezi `Potrivire`.
+      const semn = doarNumele ? { dinMeniu: true } : {}
       if (actiuni.length === 0) {
-        return { nivel: 'nesigur', ce: 'actiune', subiect: s, intre: actiunileCaOptiuni(s) }
+        return { nivel: 'nesigur', ce: 'actiune', subiect: s, intre: actiunileCaOptiuni(s), ...semn }
       }
       return {
         nivel: 'nesigur',
         ce: 'actiune',
         subiect: s,
         intre: actiuni.map((id) => ({ id, nume: actiunea(s, id)?.nume ?? id })),
+        ...semn,
       }
     }
   } else if (subiecte.length > 1 && !pendinte) {

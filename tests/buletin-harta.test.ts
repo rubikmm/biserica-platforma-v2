@@ -291,6 +291,29 @@ describe('drumul fără AI: meniu → subiect → acțiune → valoare', () => {
     expect((p as { intre: Array<{ id: string }> }).intre.map((x) => x.id)).toContain('titlu')
   })
 
+  it('⚠️ apăsarea de buton poartă semnul `dinMeniu`: treapta a 2-a e meniu, nu eroare', () => {
+    // butonul meniului trimite chiar id-ul subiectului
+    expect(potriveste('principal', gata)).toMatchObject({ nivel: 'nesigur', ce: 'actiune', subiect: 'principal', dinMeniu: true })
+    // și scris de mână, gol, e tot o apăsare — chiar la mijlocul chestionarului
+    expect(potriveste('motto', la('text', 'principal'))).toMatchObject({ ce: 'actiune', subiect: 'motto', dinMeniu: true })
+  })
+
+  it('⚠️ nedumerirea chatului NU e meniu: „vreau să schimb ceva la motto" n-are `dinMeniu`', () => {
+    // aici chatul chiar nu știe ce vrea omul — textul rămâne „Nu știu ce să fac…", fără „Înapoi"
+    expect(potriveste('vreau să schimb ceva la motto', gata)).not.toHaveProperty('dinMeniu')
+    // nici ezitarea dintre două SUBIECTE (nivelul 1) nu vine din meniu
+    expect(potriveste('schimbă ceva la motto și la program', gata)).not.toHaveProperty('dinMeniu')
+  })
+
+  it('drumul înapoi: „înapoi", „meniul", „ce subiecte ai" cer tot cuprinsul', () => {
+    expect(potriveste('inapoi', la('text'))).toEqual({ nivel: 'meniu' })
+    expect(potriveste('Înapoi la meniu.', gata)).toEqual({ nivel: 'meniu' })
+    expect(potriveste('meniul', gata)).toEqual({ nivel: 'meniu' })
+    expect(potriveste('Arată-mi meniul', gata)).toEqual({ nivel: 'meniu' })
+    expect(potriveste('arată meniul', gata)).toEqual({ nivel: 'meniu' })
+    expect(potriveste('ce subiecte ai?', gata)).toEqual({ nivel: 'meniu' })
+  })
+
   it('un subiect cu o singură acțiune se rezolvă din prima („program")', () => {
     expect(potriveste('program', gata)).toMatchObject({ nivel: 'sigur', subiect: 'program', actiune: 'stare', confirma: false })
   })

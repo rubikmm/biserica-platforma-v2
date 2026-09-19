@@ -48,6 +48,8 @@ const Potrivire = z.object({
   raspuns: z.boolean().optional(),
   ce: z.enum(['subiect', 'actiune']).optional(),
   intre: z.array(Optiune).optional(),
+  /** Omul a apăsat un buton al meniului (doar numele subiectului) — vezi `butoane`. */
+  dinMeniu: z.boolean().optional(),
 })
 
 const Fapta = z.object({
@@ -562,29 +564,45 @@ function meniul(h: RaspunsPotrivitor, o: PorniHarta): RezultatHarta {
   }
 }
 
+/** Drumul înapoi de la treapta a doua: trimite „meniu", pe care potrivitorul îl știe deja. */
+const INAPOI: OptiuneBula = { eticheta: '← Înapoi la meniu', text: 'meniu' }
+
 /** Butoanele, la nivelul 1 (subiecte) sau la nivelul 2 (acțiunile unui subiect). */
 function butoane(
   h: RaspunsPotrivitor,
-  p: { ce?: 'subiect' | 'actiune'; subiect?: string; intre?: Array<{ id: string; nume: string }> },
+  p: {
+    ce?: 'subiect' | 'actiune'
+    subiect?: string
+    intre?: Array<{ id: string; nume: string }>
+    dinMeniu?: boolean
+  },
   drum: Drum,
 ): RezultatHarta {
   if (p.ce === 'actiune' && p.subiect) {
     const s = h.cuprins.find((x) => x.id === p.subiect)
     if (!s) return nuInteleg(h)
     /*
-     * ⚠️ Două vorbe deosebite, fiindcă sunt două lucruri deosebite: „nu știu CE SĂ FAC cu motto-ul"
-     * (n-am nimerit nicio acțiune — se arată toate) și „nu știu CE VREI la motto" (am nimerit două,
-     * și nu pot alege între ele — se arată doar acelea).
+     * ⚠️ TREI VORBE DEOSEBITE, fiindcă sunt trei lucruri deosebite:
+     *   - „Articolul principal. Ce vrei să faci?" — omul a apăsat un buton al MENIULUI (`dinMeniu`):
+     *     asta nu e o nedumerire a chatului, e pagina a doua a cuprinsului, deci sună a meniu și
+     *     poartă și drumul înapoi (user, 19.09.2026: a cerut meniul crezând că nu există, fiindcă
+     *     treapta asta îi suna a eroare și n-avea cale de întoarcere);
+     *   - „nu știu CE SĂ FAC cu motto-ul" — n-am nimerit nicio acțiune, se arată toate;
+     *   - „nu știu CE VREI la motto" — am nimerit două și nu pot alege, se arată doar acelea.
      */
     const cate = s.actiuni.filter((a) => !a.ascunsa).length
     const ids = (p.intre ?? []).map((x) => x.id)
     const doar = ids.length > 1 && ids.length < cate ? ids : undefined
+    const text = p.dinMeniu
+      ? `${s.nume}. Ce vrei să faci?`
+      : doar
+        ? `Nu știu ce vrei la ${s.nume.toLowerCase()}. Alege:`
+        : `Nu știu ce să fac cu ${s.nume.toLowerCase()}. Alege:`
     return {
       ...gol(),
-      text: doar
-        ? `Nu știu ce vrei la ${s.nume.toLowerCase()}. Alege:`
-        : `Nu știu ce să fac cu ${s.nume.toLowerCase()}. Alege:`,
-      optiuni: butoaneleActiunilor(s, doar),
+      text,
+      // ⚠️ „Înapoi" se adaugă DUPĂ filtrul `ascunsa`: el nu e o acțiune a hărții, e ieșirea din meniu.
+      optiuni: p.dinMeniu ? [...butoaneleActiunilor(s, doar), INAPOI] : butoaneleActiunilor(s, doar),
       drum,
     }
   }

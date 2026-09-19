@@ -343,7 +343,24 @@ describe('drumul determinist — modelul nu se cheamă deloc', () => {
     const j = await trimite(env, 'vreau să schimb ceva la motto')
     expect(apeluriModel).toHaveLength(0)
     expect(j.text).toContain('Nu știu ce să fac')
+    // ⚠️ aici chatul chiar nu știe: nu e meniu, deci nici „Înapoi"
     expect(j.optiuni?.map((o) => o.text)).toEqual(['motto schimba', 'motto autor', 'motto pastreaza'])
+  })
+
+  it('⚠️ treapta a 2-a a MENIULUI sună a meniu și are drumul înapoi', async () => {
+    const { env, apeluriModel } = mediu({ stare: LA_TEXT })
+    const j = await trimite(env, 'principal')
+    expect(apeluriModel).toHaveLength(0)
+    // nu „Nu știu ce să fac cu articolul principal" — omul tocmai a apăsat butonul, nu s-a bâlbâit
+    expect(j.text).toBe('Articolul principal. Ce vrei să faci?')
+    expect(j.text).not.toContain('Nu știu')
+    const optiuni = j.optiuni!
+    expect(optiuni[0]!.text).toBe('principal text')
+    expect(optiuni.at(-1)).toEqual({ eticheta: '← Înapoi la meniu', text: 'meniu' })
+
+    // și butonul acela chiar duce înapoi la subiecte
+    const inapoi = await trimite(env, optiuni.at(-1)!.text)
+    expect(inapoi.optiuni?.map((o) => o.text)).toEqual(['motto', 'principal', 's1', 's2', 'numar', 'program'])
   })
 })
 

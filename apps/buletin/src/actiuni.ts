@@ -473,6 +473,8 @@ const PotrivireIesire = z.object({
   numit: z.boolean().optional(),
   ce: z.enum(['subiect', 'actiune']).optional(),
   intre: z.array(OptiuneHarta).optional(),
+  /** Omul a apăsat un buton al meniului (doar numele subiectului) — treapta a 2-a e tot meniu. */
+  dinMeniu: z.boolean().optional(),
 })
 
 /** Ce are de făcut chatul: un apel al unei acțiuni EXISTENTE, cu interpretarea scrisă. */
