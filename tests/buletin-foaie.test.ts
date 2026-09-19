@@ -5,8 +5,8 @@
  * `apps/buletin/unelte/proba-foaie.mjs`), ci păzesc stilul de o „îndreptare" nevinovată.
  */
 import { describe, expect, it } from 'vitest'
-import { SUBSOL, foaieHtml, sursaMarcata } from '../apps/buletin/src/foaie.js'
-import type { NumarCerut } from '../apps/buletin/src/masuri.js'
+import { SUBSOL, curatDeMarcaje, foaieHtml, marcaj, sursaMarcata } from '../apps/buletin/src/foaie.js'
+import { inaltimeaSemnaturii, inaltimeaTitlului, semne, type NumarCerut } from '../apps/buletin/src/masuri.js'
 
 const cerut: NumarCerut = {
   motto: 'Un citat scurt, cât să încapă pe două rânduri de cursive în capul paginii întâi.',
@@ -121,11 +121,98 @@ describe('măsurile cerute de user pe 18.09.2026', () => {
 })
 
 /**
+ * MARCAJELE OMULUI (user, 19.09.2026, 18:01: „aș vrea atât în texte cât și în titluri să am italic
+ * și bold: plain text: `_italic_` și `*bold*`… și la sursa și la textul mare conținut articol").
+ *
+ * O singură convenție peste toate câmpurile de text ale foii. Probele de aici păzesc două lucruri
+ * deodată: că marcajul se pune unde trebuie ȘI că nu se pune unde nu trebuie — un `_` dintr-un URL
+ * sau steluța înmulțirii sunt litere, nu porunci.
+ */
+describe('marcajele textului: _cursiv_ și *aldin*', () => {
+  const cuText = (text: string): string =>
+    foaieHtml({ cerut: { ...cerut, principal: { ...cerut.principal, text } }, dataScrisa: '20 septembrie 2026', calendar: null })
+  const cuTitlu = (titlu: string): string =>
+    foaieHtml({ cerut: { ...cerut, principal: { ...cerut.principal, titlu } }, dataScrisa: '20 septembrie 2026', calendar: null })
+
+  it('face cursiv ce stă între liniuțe de jos', () => {
+    expect(marcaj('a spus _cu blândețe_ atunci')).toBe('a spus <i>cu blândețe</i> atunci')
+    expect(cuText('a spus _cu blândețe_ atunci')).toContain('a spus <i>cu blândețe</i> atunci')
+  })
+
+  it('face aldin ce stă între steluțe', () => {
+    expect(marcaj('a spus *răspicat* atunci')).toBe('a spus <b>răspicat</b> atunci')
+    expect(cuText('a spus *răspicat* atunci')).toContain('a spus <b>răspicat</b> atunci')
+  })
+
+  it('le ține pe amândouă, în orice ordine le-a scris omul', () => {
+    expect(marcaj('_*amândouă*_')).toBe('<i><b>amândouă</b></i>')
+    expect(marcaj('*_amândouă_*')).toBe('<b><i>amândouă</i></b>')
+  })
+
+  /** ⚠️ Rostul regulii prudente: semnele astea se scriu și fără să însemne ceva. */
+  it('lasă în pace steluța înmulțirii, liniuțele dintr-un nume și cele dintr-un URL', () => {
+    expect(marcaj('5 * 3 = 15')).toBe('5 * 3 = 15')
+    expect(marcaj('nume_fisier_2')).toBe('nume_fisier_2')
+    expect(marcaj('http://x.ro/a_b_c')).toBe('http://x.ro/a_b_c')
+    // dublate, sunt ale omului: markdown-ul cu `**` și `__` nu e convenția foii
+    expect(marcaj('**x**')).toBe('**x**')
+    expect(marcaj('__x__')).toBe('__x__')
+  })
+
+  it('pune marcajele DUPĂ escapare, deci din text nu iese alt HTML', () => {
+    expect(cuText('un <script>rău</script> și *bun*')).toContain('un &lt;script&gt;rău&lt;/script&gt; și <b>bun</b>')
+  })
+
+  it('marchează titlul și, doar atunci, încorporează Trajan Bold', () => {
+    const html = cuTitlu('DESPRE *POST*')
+    expect(html).toContain('<h2 class="titlu-articol">DESPRE <b>POST</b></h2>')
+    // (sub vitest fișierele binare vin goale, deci se probează fața, nu octeții ei)
+    expect(html).toMatch(/font-family: "Trajan"; src: url\(data:font\/otf;base64,[^)]*\) format\("opentype"\); font-weight: 700;/)
+    expect(html).toMatch(/\.titlu-articol b \{ font-weight: 700; \}/)
+    // fără titlu aldin, fontul Bold NU se încarcă degeaba: 216 KB de base64 în fiecare foaie
+    expect(foaia()).not.toMatch(/format\("opentype"\); font-weight: 700;/)
+  })
+
+  it('marchează semnătura, mențiunea și motto-ul', () => {
+    const html = foaieHtml({
+      cerut: {
+        ...cerut,
+        motto: 'Un citat _plecat_ din inimă.',
+        principal: { ...cerut.principal, semnatura: 'Text de: _Părintele Mihail_', nota: 'Mesajul *Patriarhului*' },
+      },
+      dataScrisa: '20 septembrie 2026',
+      calendar: null,
+    })
+    expect(html).toContain('<div class="semnatura">Text de: <i>Părintele Mihail</i></div>')
+    expect(html).toContain('<div class="nota">Mesajul <b>Patriarhului</b></div>')
+    expect(html).toContain('<p class="motto">Un citat <i>plecat</i> din inimă.</p>')
+    expect(html).toMatch(/\.semnatura i \{ font-style: italic; \}/)
+  })
+
+  /**
+   * ⚠️ SOCOTEALA NU NUMĂRĂ MARCAJELE. Steluțele nu ajung pe hârtie, deci un titlu marcat trebuie să
+   * coste exact cât același titlu nemarcat — altfel `*DESPRE* _POST_` ar părea cu patru litere mai
+   * lung decât e și socoteala ar refuza text care încape.
+   */
+  it('nu le numără ca litere: măsurile ies aceleași cu și fără marcaje', () => {
+    expect(curatDeMarcaje('*DESPRE* _POST_')).toBe('DESPRE POST')
+    expect(curatDeMarcaje('nume_fisier_2')).toBe('nume_fisier_2')
+    expect(inaltimeaTitlului('*DESPRE* _POST_', true)).toBe(inaltimeaTitlului('DESPRE POST', true))
+    expect(inaltimeaTitlului('*DESPRE* _POST_', false)).toBe(inaltimeaTitlului('DESPRE POST', false))
+    expect(inaltimeaSemnaturii('Text de: _Părintele Mihail_')).toBe(inaltimeaSemnaturii('Text de: Părintele Mihail'))
+    expect(semne('a spus *răspicat* atunci')).toBe(semne('a spus răspicat atunci'))
+  })
+})
+
+/**
  * RÂNDUL „Sursa:" (user, 19.09.2026, 17:30: „să meargă și un link care e pus doar ca domeniu… sau o
  * carte în care folosim bold italic și scris normal… dar și combinație").
  *
  * Reperul e nr. 615, singurul număr vechi rămas pe disc: acolo „Sursa: " e scris normal (Calibri
  * regular), iar „ziarullumina.ro" aldin (Calibri-Bold) — deci domeniul rămâne aldin ca atunci.
+ *
+ * ⚠️ Din 19.09.2026, 18:01 marcajele sursei sunt cele ale întregii foi: titlul cărții se cere aldin
+ * cursiv, deci se scrie `_*Așa*_`. Steluțele singure nu-l mai fac și cursiv.
  */
 describe('marcajul rândului „Sursa:"', () => {
   const cuSursa = (s: string): string =>
@@ -137,27 +224,35 @@ describe('marcajul rândului „Sursa:"', () => {
   })
 
   it('scrie titlul cărții aldin cursiv, iar editura, anul și pagina normal', () => {
-    const scris = sursaMarcata('*Cuvinte de folos*, Editura Doxologia, 2020, p. 12')
-    expect(scris).toBe('<b><i>Cuvinte de folos</i></b>, Editura Doxologia, 2020, p. 12')
+    const scris = sursaMarcata('_*Cuvinte de folos*_, Editura Doxologia, 2020, p. 12')
+    expect(scris).toBe('<i><b>Cuvinte de folos</b></i>, Editura Doxologia, 2020, p. 12')
     // ⚠️ „p. 12" și anul NU sunt domenii: un TLD deschis le-ar fi făcut aldine
     expect(scris).not.toContain('<b>p')
     expect(scris).not.toContain('<b>2020')
   })
 
   it('le ține pe amândouă în același rând: cartea aldin cursiv, domeniul aldin, restul normal', () => {
-    expect(sursaMarcata('*Cuvinte de folos*, Iași, 2020; doxologia.ro'))
-      .toBe('<b><i>Cuvinte de folos</i></b>, Iași, 2020; <b>doxologia.ro</b>')
+    expect(sursaMarcata('_*Cuvinte de folos*_, Iași, 2020; doxologia.ro'))
+      .toBe('<i><b>Cuvinte de folos</b></i>, Iași, 2020; <b>doxologia.ro</b>')
+    expect(cuSursa('_*Cuvinte de folos*_, Iași, 2020; doxologia.ro'))
+      .toContain('Sursa: <i><b>Cuvinte de folos</b></i>, Iași, 2020; <b>doxologia.ro</b>')
+  })
+
+  /** Marcajele sursei sunt cele ale foii: steluțele singure o îngroașă, fără să o încline. */
+  it('ascultă de aceeași convenție ca restul foii: *aldin*, _cursiv_', () => {
+    expect(sursaMarcata('*Cuvinte de folos*, Iași')).toBe('<b>Cuvinte de folos</b>, Iași')
+    expect(sursaMarcata('_Cuvinte de folos_, Iași')).toBe('<i>Cuvinte de folos</i>, Iași')
   })
 
   /** Fără regula asta, toate numerele deja compuse și-ar schimba fața la o recompunere. */
-  it('lasă aldină ÎNTREAGĂ o sursă fără steluțe și fără domeniu, ca până acum', () => {
+  it('lasă aldină ÎNTREAGĂ o sursă fără marcaje și fără domeniu, ca până acum', () => {
     expect(sursaMarcata('Părintele X, predică')).toBe('<b>Părintele X, predică</b>')
     expect(cuSursa('Părintele X, predică')).toContain('Sursa: <b>Părintele X, predică</b>')
   })
 
   it('nu se încrede în prescurtările unei trimiteri de carte („vol.II", „Ed.IBMBOR")', () => {
-    expect(sursaMarcata('*Omilii la Matei*, vol.II, Ed.IBMBOR, p.45'))
-      .toBe('<b><i>Omilii la Matei</i></b>, vol.II, Ed.IBMBOR, p.45')
+    expect(sursaMarcata('_*Omilii la Matei*_, vol.II, Ed.IBMBOR, p.45'))
+      .toBe('<i><b>Omilii la Matei</b></i>, vol.II, Ed.IBMBOR, p.45')
   })
 
   it('prinde și un URL întreg, dar lasă punctul de la capăt în afara aldinei', () => {
@@ -165,7 +260,17 @@ describe('marcajul rândului „Sursa:"', () => {
       .toBe('vezi <b>https://doxologia.ro/cuvinte-de-folos</b>.')
   })
 
+  /** ⚠️ Liniuțele de jos dintr-un URL sunt ale adresei, nu marcaje: altfel linkul iese rupt. */
+  it('nu taie un URL cu liniuțe de jos în el', () => {
+    expect(sursaMarcata('http://x.ro/a_b_c')).toBe('<b>http://x.ro/a_b_c</b>')
+  })
+
+  /** Un domeniu marcat de om rămâne cum l-a vrut el: aldinul nu se pune de două ori. */
+  it('nu mai aldinește domeniul care stă deja într-un marcaj', () => {
+    expect(sursaMarcata('_doxologia.ro_')).toBe('<i>doxologia.ro</i>')
+  })
+
   it('escapează înainte să pună marcajele, deci din sursă nu iese alt HTML', () => {
-    expect(sursaMarcata('*<b>x</b>*')).toBe('<b><i>&lt;b&gt;x&lt;/b&gt;</i></b>')
+    expect(sursaMarcata('*<b>x</b>*')).toBe('<b>&lt;b&gt;x&lt;/b&gt;</b>')
   })
 })

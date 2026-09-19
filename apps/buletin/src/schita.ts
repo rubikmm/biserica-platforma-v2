@@ -70,8 +70,9 @@ export const INTREBARI_SIMPLE: Partial<Record<CheieIntrebare, string>> = {
   motto: 'Care este motto-ul numărului?',
   autor: 'Cine e autorul {articol}?',
   ani: 'Știi anii vieții? (sau „nu")',
-  // titlul de carte se dă între steluțe: pe foaie iese aldin cursiv (vezi `sursaMarcata`, foaie.ts)
-  sursa: 'Care e sursa textului? Un domeniu („doxologia.ro") sau o carte, cu titlul *între steluțe*. (sau „nu")',
+  // marcajele sunt cele ale foii, aceleași la toate câmpurile: `_cursiv_`, `*aldin*`, amândouă =
+  // aldin cursiv (vezi `marcaje.ts`). Titlul de carte se cere aldin cursiv, deci `_*Titlul*_`.
+  sursa: 'Care e sursa textului? Un domeniu („doxologia.ro") sau o carte, cu titlul scris _*Așa*_ (aldin cursiv). (sau „nu")',
 }
 
 /** Cheia din KV `CONFIG` sub care stau întrebările schimbate de adminul buletinului. */

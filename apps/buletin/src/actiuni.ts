@@ -83,8 +83,8 @@ const Articol = z.object({
   pomenire: z.string().optional().describe('ziua de pomenire, ultimul rând al zonei negre: „† 16 august"'),
   titlu: z.string().optional().describe('titlul articolului, cu majuscule, scurt — intră pe cel mult trei rânduri; lipsă = „TITLU ARTICOL", de probă'),
   semnatura: z.string().optional().describe('rândul de sub titlu, aldin, cu corpul textului: „Text de: Părintele Mihail Stanciu, fost stareț al Mănăstirii Antim". Se scrie întreg, cum l-a spus omul — „Text de:" nu se adaugă din cod'),
-  text: z.string().optional().describe('textul articolului; paragrafele se despart cu rând gol; *între steluțe* = cursive (citatele din Scriptură); lipsă = Lorem ipsum, exact cât încape'),
-  sursa: z.string().optional().describe('de unde e luat, literă cu literă cum a scris omul: un domeniu simplu („doxologia.ro") sau o trimitere de carte, cu titlul *între steluțe* („*Cuvinte de folos*, Editura Doxologia, Iași, 2020, p. 12"); lipsă = „-"'),
+  text: z.string().optional().describe('textul articolului; paragrafele se despart cu rând gol; marcajele foii merg și aici (_cursiv_, *aldin*); lipsă = Lorem ipsum, exact cât încape'),
+  sursa: z.string().optional().describe('de unde e luat, literă cu literă cum a scris omul: un domeniu simplu („doxologia.ro") sau o trimitere de carte, cu titlul între marcaje („_*Cuvinte de folos*_, Editura Doxologia, Iași, 2020, p. 12"); lipsă = „-"'),
   nota: z.string().optional().describe('mențiunea de deasupra sursei, în cuvinte: „Mesajul Patriarhului Daniel la proclamarea locală a canonizării…"'),
   poza: z.boolean().optional().describe('are poză? la principal e poza mare de pe pagina întâi, la secundar una mică'),
 })
@@ -405,7 +405,15 @@ async function calendarulPentru(
 export const REGULI = [
   'Buletinul are PATRU pagini A4, două coloane pe fiecare. Componentele lui sunt: motto (+ cine l-a spus), nr, data, articolul principal, cel mult DOI secundari, calendarul (vine singur de la program), subsolul (fix).',
   'Pagina 1, coloana din stânga: NUMAI poza mare și zona neagră a principalului (autor, ani, pomenire). Nu se pune text acolo.',
-  'Articolul principal: autor (majuscule; un rând mai mic deasupra numelui se desparte cu ` / ` — „SFÂNTUL CUVIOS MĂRTURISITOR / SOFIAN de la ANTIM"), titlu (majuscule, scurt), opțional o semnătură pe rândul de sub titlu (`semnatura`), text pe paragrafe (rând gol între ele; *între steluțe* = cursive), sursa și, opțional, o mențiune deasupra sursei (`nota`). Un secundar are aceleași părți, cu poză mică opțională.',
+  'Articolul principal: autor (majuscule; un rând mai mic deasupra numelui se desparte cu ` / ` — „SFÂNTUL CUVIOS MĂRTURISITOR / SOFIAN de la ANTIM"), titlu (majuscule, scurt), opțional o semnătură pe rândul de sub titlu (`semnatura`), text pe paragrafe (rând gol între ele), sursa și, opțional, o mențiune deasupra sursei (`nota`). Un secundar are aceleași părți, cu poză mică opțională.',
+  /*
+   * ⚠️ MARCAJELE, O SINGURĂ REGULĂ PESTE TOT (user, 19.09.2026, 18:01: „aș vrea atât în texte cât și
+   * în titluri să am italic și bold… și la sursa și la textul mare conținut articol"). Până atunci
+   * steluța însemna una în `text` (cursiv) și alta în `sursa` (titlu de carte, aldin cursiv) — două
+   * reguli pe care un model mic le încurca. Acum e una singură, scrisă global, și de asta a ieșit de
+   * pe câmpuri.
+   */
+  'MARCAJELE TEXTULUI, la toate câmpurile de text ale foii (text, titlu, semnatura, sursa, nota, motto): `_între liniuțe de jos_` = cursiv, `*între steluțe*` = aldin, amândouă (`_*așa*_`) = aldin cursiv. Se trimit literă cu literă, cu semnele omului: nu adăuga marcaje de la tine și nu scoate marcajele lui.',
   'Câte semne încap e scris în `buletin.masura` — cere-o înainte să scrii. Textul care nu încape NU se taie de API: `buletin.compune` refuză și spune cu cât e peste. Scurtează cu atât și încearcă iar.',
   'Calendarul de pe pagina 4 e programul săptămânii care începe a doua zi după data numărului; dacă textul nu încape, API-ul îl strânge singur (întâi fără sfinții duminicii, apoi fără pericopă) și spune ce treaptă a folosit.',
   'Dacă programul săptămânii nu e validat, se folosește ce e disponibil (propunerea) și răspunsul spune la început „PROPUS", în `atentie`. Nu e o greșeală, dar trebuie spus omului.',
@@ -444,11 +452,11 @@ export const REGULI = [
   'OBIECTELE FOII, pe care le poți schimba oricând, și numele lor: motto, moto_autor, iar la fiecare articol text, autor, ani, pomenire, titlu, semnatura, sursa, nota, poza. Articolele sunt trei: `principal`, `s1` (secundar 1), `s2` (secundar 2).',
   'semnatura (rândul de sub titlu, aldin, de ex. «Text de: Părintele Mihail Stanciu, fost stareț al Mănăstirii Antim») se dă oricând, ca `nota`. Trimite-o literă cu literă, cum a spus-o omul: nu adăuga tu „Text de:" și nu o confunda cu `autor`, care e scrisul alb din zona neagră.',
   /*
-   * ⚠️ MARCAJUL SURSEI (user, 19.09.2026, 17:30). Steluțele din `sursa` nu înseamnă același lucru ca
-   * în `text` — acolo sunt cursive, aici titlu de carte, aldin cursiv. De asta regula e scrisă pe
-   * câmp, nu global: un model care duce regula lui `text` peste tot ar crede că strică ceva.
+   * ⚠️ CE A RĂMAS PROPRIU SURSEI (user, 19.09.2026, 17:30): domeniul. Marcajele au ieșit de aici pe
+   * 19.09.2026, 18:01 — sunt aceleași peste tot, scrise o dată, mai sus. Rândul ăsta ține doar ce nu
+   * se poate ghici din regula generală: adresa se dă goală, foaia o îngroașă singură.
    */
-  'sursa se scrie CUM A SPUS-O OMUL, literă cu literă, cu steluțele lui: un domeniu se dă simplu, «doxologia.ro» (iese aldin pe foaie, ca dintotdeauna); la o carte, titlul stă *între steluțe* și iese aldin cursiv, iar autorul, editura, orașul, anul și pagina rămân scrise normal — «*Cuvinte de folos*, Editura Doxologia, Iași, 2020, p. 12»; merg și amândouă în același rând. Nu adăuga și nu scoate steluțe, nu rescrie sursa și nu pune „Sursa:" în valoare — cuvântul îl scrie foaia.',
+  'sursa se scrie CUM A SPUS-O OMUL, literă cu literă: un domeniu se dă SIMPLU, fără marcaje — «doxologia.ro» (foaia îl scrie aldin singură, ca dintotdeauna); la o carte, titlul poartă marcajele obișnuite — «_*Cuvinte de folos*_, Editura Doxologia, Iași, 2020, p. 12»; merg și amândouă în același rând. Nu rescrie sursa și nu pune „Sursa:" în valoare — cuvântul îl scrie foaia.',
   'O instrucțiune care numește un obiect al foii și (dacă spune) un articol se traduce DIRECT în `buletin.raspunde`, fără să întrebi nimic: „schimbă motto-ul în X" → {subiect:"motto", valoare:"X"}; „titlul articolului secundar 1: Y" → {subiect:"titlu", valoare:"Y", articol:"s1"}; „scoate secundarul 2" → {subiect:"sterge_secundar"}. Valoarea e literă cu literă ce a scris omul.',
   'Lasă `articol` GOL când omul răspunde la întrebarea pe care tocmai i-ai pus-o. Scrie-l numai când omul spune el despre care articol e vorba. Dacă `intrebare` vine `null`, nu mai întreba nimic — spune doar ce s-a schimbat.',
 ]

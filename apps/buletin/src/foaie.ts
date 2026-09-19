@@ -22,11 +22,16 @@
  */
 import { esc } from '@xc/ui'
 import { type ArticolCerut, type NumarCerut, PAGINI } from './masuri.js'
+import { curatDeMarcaje, marcaj } from './marcaje.js'
 // Trajan Pro 3 Regular: fontul Adobe original (v1.012, cu kerning), din familia trimisă de user pe
 // 17.09.2026 (abonament Adobe, liber din Adobe Fonts). Până atunci aveam un Regular extras dintr-un PDF,
-// fără kerning. `resurse/TrajanPro3-Bold.otf` există, dar NU se încorporează: din 22:38 niciun titlu nu
-// mai e aldin (ar fi 216 KB de base64 degeaba în fiecare foaie).
+// fără kerning.
+// ⚠️ BOLD-ul s-a întors pe 19.09.2026, dar NUMAI LA CERERE: titlul rămâne Regular implicit (userul a
+// scos aldinul din titluri pe 17.09.2026, 22:38), iar Trajan Bold se încorporează doar când un titlu
+// are `*între steluțe*`. Altfel ar fi 216 KB de base64 degeaba în fiecare foaie — de aceea `fonturi()`
+// primește un martor, nu scrie fața aldină din oficiu.
 import trajanOtf from '../resurse/TrajanPro3-Regular.otf'
+import trajanBoldOtf from '../resurse/TrajanPro3-Bold.otf'
 import caladeaRegular from '../resurse/Caladea-Regular.ttf'
 import caladeaBold from '../resurse/Caladea-Bold.ttf'
 import caladeaItalic from '../resurse/Caladea-Italic.ttf'
@@ -66,8 +71,13 @@ function dataUri(cheie: string, octeti: ArrayBuffer, tip: string): string {
   return uri
 }
 
-const fonturi = (): string => `
-@font-face { font-family: "Trajan"; src: url(${dataUri('trajan', trajanOtf, 'font/otf')}) format("opentype"); font-weight: 400; }
+/**
+ * Fețele încorporate în foaie. `trajanAldin` se cere doar când un titlu are marcaj de aldin: fontul
+ * Bold e 162 KB pe disc, adică ~216 KB de base64 în HTML-ul fiecărei foi.
+ */
+const fonturi = (trajanAldin: boolean): string => `
+@font-face { font-family: "Trajan"; src: url(${dataUri('trajan', trajanOtf, 'font/otf')}) format("opentype"); font-weight: 400; }${trajanAldin ? `
+@font-face { font-family: "Trajan"; src: url(${dataUri('trajan-b', trajanBoldOtf, 'font/otf')}) format("opentype"); font-weight: 700; }` : ''}
 @font-face { font-family: "Caladea"; src: url(${dataUri('cal-r', caladeaRegular, 'font/ttf')}) format("truetype"); font-weight: 400; }
 @font-face { font-family: "Caladea"; src: url(${dataUri('cal-b', caladeaBold, 'font/ttf')}) format("truetype"); font-weight: 700; }
 @font-face { font-family: "Caladea"; src: url(${dataUri('cal-i', caladeaItalic, 'font/ttf')}) format("truetype"); font-style: italic; }
@@ -123,6 +133,9 @@ body { font-family: "Caladea", Cambria, Georgia, serif; color: #000; font-size: 
    la 1.1 e ~1.1 mm. Departarea fata de parohie ramane cea dinainte (2.6 mm) — cererea de la 22:37
    („la jumatate distanta") era despre randuri, nu despre golul de sub titlu. */
 .motto { font-style: italic; font-size: 14pt; line-height: 1.1; margin: 2.6mm 0 0; }
+/* Motto-ul e cursiv cu totul, deci _liniutele_ din el nu se vad; *stelutele* il ingroasa. */
+.motto b, .motto-autor b { font-weight: 700; }
+.motto i, .motto-autor i { font-style: italic; }
 .motto-autor { font-family: "Carlito", Calibri, sans-serif; font-size: 13.5pt; color: #7e7e7e; margin: .6mm 0 0; }
 /* Pastila numărului atârnă de o linie pe toată lățimea — ca la foaia programului, aceeași mână. */
 .linie { border-top: .75pt solid #333; margin: 3mm 0 0; height: 0; font-size: 0; line-height: 0; }
@@ -157,13 +170,18 @@ body { font-family: "Caladea", Cambria, Georgia, serif; color: #000; font-size: 
 .zona-neagra.mica { padding: 2mm 2mm 2.2mm; }
 .zona-neagra.mica .nume { font-size: 13pt; }
 .zona-neagra.mica .deasupra { font-size: 10pt; }
-/* Titlul articolului: Trajan Pro 3 Regular, FARA aldin, la toate — principal si secundari (user,
-   17.09.2026, 22:38: „titlurile celorlalte articole secundare sa nu fie bold si sa Trajan"; mai
-   devreme, 22:15, scosese aldinul de la primul text). Pana atunci secundarii aveau aldin sintetic,
-   apoi, cateva minute, Trajan Bold adevarat — fisierul resurse/TrajanPro3-Bold.otf ramane, nu se
-   mai incorporeaza. */
+/* Titlul articolului: Trajan Pro 3 Regular, FARA aldin DIN OFICIU, la toate — principal si secundari
+   (user, 17.09.2026, 22:38: „titlurile celorlalte articole secundare sa nu fie bold si sa Trajan";
+   mai devreme, 22:15, scosese aldinul de la primul text).
+   Din 19.09.2026 titlul primeste si el marcajele omului: *intre stelute* = aldin, iar atunci foaia
+   incorporeaza Trajan Bold cel adevarat (resurse/TrajanPro3-Bold.otf, vezi fonturi()). Implicit
+   titlul ramane Regular — aldinul e o cerere, nu o regula.
+   ⚠️ _intre liniute de jos_ in titlu iese OBLIC SINTETIC: Trajan Pro 3 n-are cursiv, deci Chromium
+   inclina el literele. E asumat; daca nu place, se scoate cursivul din titluri. */
 .titlu-articol { font-family: "Trajan", serif; font-size: 17pt; line-height: 1.22; text-align: center;
                  margin: 0 0 1.4mm; font-weight: 400; }
+.titlu-articol b { font-weight: 700; }
+.titlu-articol i { font-style: italic; }
 /* Intre articole, cel putin 1 cm (user, 17.09.2026, 22:39): il poarta prima bucata a fiecarui secundar,
    dar nu si cand ea deschide o coloana — acolo golul il da hotarul paginii. */
 .incepe-articol { margin-top: 10mm; }
@@ -173,15 +191,23 @@ body { font-family: "Caladea", Cambria, Georgia, serif; color: #000; font-size: 
    Manastirii Antim". Scrisa de om cu totul, cuvant cu cuvant: „Text de:" nu se adauga din cod. */
 .semnatura { font-family: "Caladea", serif; font-size: 15pt; font-weight: 700; line-height: 1.3;
              text-align: center; margin: 0 0 1.4mm; }
+/* Semnatura e aldina cu totul, deci *stelutele* din ea nu se vad; _liniutele de jos_ o inclina. */
+.semnatura b { font-weight: 700; }
+.semnatura i { font-style: italic; }
 /* ⚠️ Rigla isi tine firul si cand semnatura s-a asezat intre ea si titlu: selectorul e pe FRATELE
    DE DINAINTE, deci fara al doilea caz linia ar fi disparut tocmai la articolele semnate. */
 .titlu-articol + .rigla, .semnatura + .rigla { border-top: .5pt solid #000; margin: 0 0 1.6mm; height: 0; }
 p.t { margin: 0; text-align: justify; text-indent: 10mm; hyphens: none; }
+/* Marcajele din corpul textului — Caladea are si fata aldina, si cea cursiva, incorporate mai sus. */
+p.t b { font-weight: 700; }
+p.t i { font-style: italic; }
 /* Sursa si mentiunea de deasupra ei: 13 pt, ca in nr. 615 din Word (Calibri 13.3 pt, pas 16.4 pt) — erau
    10.5 pt, „text scris prea mic" (user, 23:07). */
 .sursa { font-family: "Carlito", Calibri, sans-serif; font-size: 13pt; line-height: 1.26; border-top: .5pt solid #000;
          margin-top: 1.4mm; padding-top: .8mm; text-align: left; }
-/* Aldinul sursei si titlul de carte din ea: *intre stelute* iese aldin CURSIV (user, 19.09.2026).
+/* Marcajele omului in sursa si in mentiune (regulile prind si .nota, e coborata din .sursa):
+   *intre stelute* = aldin, _intre liniute de jos_ = cursiv, amandoua = aldin cursiv (user, 19.09.2026).
+   ⚠️ Carlito n-are fata aldin-cursiva: pe combinatie Chromium ingroasa el cursivul.
    ⚠️ Stilul e un template literal: fara accente grave in comentariile astea, inchid sirul. */
 .sursa b { font-weight: 700; }
 .sursa i { font-style: italic; }
@@ -224,10 +250,15 @@ p.t { margin: 0; text-align: justify; text-indent: 10mm; hyphens: none; }
 // ---------------------------------------------------------------------------
 
 /**
- * Singurul marcaj din text: `*cursiv*` → cursive (citatele din Scriptură stau în cursive pe foaie).
+ * MARCAJELE OMULUI — o singură convenție peste toate câmpurile de text ale foii (user, 19.09.2026,
+ * 18:01): `_cursiv_`, `*aldin*`, amândouă = aldin cursiv. Regulile și motivele lor stau în
+ * `marcaje.ts`; de aici se văd, fiindcă asta e ușa pe care le caută restul codului și probele.
  * Se aplică DUPĂ escapare, deci în pagină nu ajunge niciodată alt HTML decât al nostru.
  */
-const cursiv = (escapat: string): string => escapat.replace(/\*([^*\n]{1,400})\*/g, '<i>$1</i>')
+export { curatDeMarcaje, marcaj }
+
+/** Titlul, gata marcat — se cere de două ori: o dată pentru foaie, o dată ca să știm de Trajan Bold. */
+const titluMarcat = (titlu: string): string => marcaj(esc(titlu))
 
 const paragrafe = (text: string): string[] =>
   text.split(/\n\s*\n|\r\n\r\n/).map((p) => p.replace(/\s+/g, ' ').trim()).filter(Boolean)
@@ -262,8 +293,8 @@ function zonaNeagra(a: ArticolCerut, mica: boolean, incepeArticol = false): stri
  * deci rigla rămâne fratele DE DUPĂ semnătură — de asta stilul o prinde și așa.
  */
 const titluArticol = (a: ArticolCerut): string =>
-  `<h2 class="titlu-articol">${esc(a.titlu)}</h2>` +
-  (a.semnatura ? `<div class="semnatura">${esc(a.semnatura)}</div>` : '') +
+  `<h2 class="titlu-articol">${titluMarcat(a.titlu)}</h2>` +
+  (a.semnatura ? `<div class="semnatura">${marcaj(esc(a.semnatura))}</div>` : '') +
   '<div class="rigla"></div>'
 
 /*
@@ -281,45 +312,48 @@ const DOMENIU_SURSA = new RegExp(
   `\\bhttps?:\\/\\/\\S+|\\b(?:www\\.)?[a-z0-9-]+(?:\\.[a-z0-9-]+)*\\.(?:${TLD_SURSA})\\b(?:\\/\\S*)?`,
   'gi',
 )
-/** Titlul cărții sau al articolului, scris de om între steluțe — ca marcajul `cursiv` al corpului. */
-const TITLU_SURSA = /\*([^*\n]{1,400})\*/g
-
 /**
  * CUM SE SCRIE SURSA pe foaie. Trei feluri de scris pe același rând:
  *
- *   - `*între steluțe*` → **aldin cursiv** (`<b><i>`): titlul cărții sau al articolului;
+ *   - marcajele obișnuite ale foii (`marcaj`): `_cursiv_`, `*aldin*`, `_*ambele*_` — cu ele se
+ *     scrie titlul cărții, care se cere aldin cursiv: „_*Cuvinte de folos*_";
  *   - un domeniu ori un URL de sine stătător → **aldin**, cum a fost dintotdeauna (nr. 615:
  *     „Sursa: " scris normal, „ziarullumina.ro" aldin);
  *   - restul (autor, editură, oraș, an, pagină) → **scris normal**.
  *
- * ⚠️ O sursă FĂRĂ steluțe și FĂRĂ domeniu rămâne ALDINĂ ÎNTREAGĂ, ca până acum — altfel toate
+ * ⚠️ O sursă FĂRĂ marcaje și FĂRĂ domeniu rămâne ALDINĂ ÎNTREAGĂ, ca până acum — altfel toate
  * numerele deja compuse („Părintele X, predică") și-ar schimba fața la o recompunere.
  *
- * Marcajele se pun DUPĂ escapare, ca la `cursiv`: în pagină nu ajunge alt HTML decât al nostru.
+ * ⚠️ ORDINEA: întâi marcajele, apoi domeniul — și domeniul NUMAI pe bucățile din afara marcajelor.
+ * Invers, `\S+` din URL ar înghiți tagurile puse de noi, iar un domeniu scris chiar de om între
+ * steluțe („*doxologia.ro*") ar ieși cu aldinul pus de două ori.
  */
 export function sursaMarcata(text: string): string {
   const escapat = esc(text)
-  // split cu grup prins: bucățile pare sunt scrisul normal, cele impare au stat între steluțe
-  const bucati = escapat.split(TITLU_SURSA)
-  let marcat = bucati.length > 1
-  const scris = bucati
-    .map((b, i) => {
-      if (i % 2 === 1) return `<b><i>${b}</i></b>`
-      return b.replace(DOMENIU_SURSA, (gasit) => {
-        marcat = true
-        // punctul sau virgula de după adresă nu fac parte din ea, deci rămân în afara aldinei
-        const coada = /[.,;:]+$/.exec(gasit)?.[0] ?? ''
-        return `<b>${coada ? gasit.slice(0, -coada.length) : gasit}</b>${coada}`
-      })
+  const cuMarcaje = marcaj(escapat)
+  let marcat = cuMarcaje !== escapat
+  // bucățile sunt ori un tag pus de `marcaj`, ori scris curat: alt `<` nu există, textul e escapat
+  let adancime = 0
+  const scris = cuMarcaje.replace(/<\/?[bi]>|[^<]+/g, (bucata) => {
+    if (bucata[0] === '<') {
+      adancime += bucata[1] === '/' ? -1 : 1
+      return bucata
+    }
+    if (adancime > 0) return bucata // aici a hotărât omul cum se scrie; nu mai punem noi aldin
+    return bucata.replace(DOMENIU_SURSA, (gasit) => {
+      marcat = true
+      // punctul sau virgula de după adresă nu fac parte din ea, deci rămân în afara aldinei
+      const coada = /[.,;:]+$/.exec(gasit)?.[0] ?? ''
+      return `<b>${coada ? gasit.slice(0, -coada.length) : gasit}</b>${coada}`
     })
-    .join('')
+  })
   return marcat ? scris : `<b>${escapat}</b>`
 }
 
 /** Rândul sursei; deasupra lui, dacă e, mențiunea (de unde e luat textul, în cuvinte). */
 const sursa = (a: ArticolCerut): string =>
   a.sursa
-    ? `<div class="sursa">${a.nota ? `<div class="nota">${esc(a.nota)}</div>` : ''}Sursa: ${sursaMarcata(a.sursa)}</div>`
+    ? `<div class="sursa">${a.nota ? `<div class="nota">${marcaj(esc(a.nota))}</div>` : ''}Sursa: ${sursaMarcata(a.sursa)}</div>`
     : ''
 
 /**
@@ -335,7 +369,7 @@ function bucati(cerut: NumarCerut, poze: Record<string, string>): string[] {
       b.push(zonaNeagra(a, true, !(a.poza && poze[`s${i}`])))
     }
     b.push(titluArticol(a))
-    paragrafe(a.text).forEach((p, k) => b.push(`<p class="t${k === 0 ? ' prim' : ''}">${cursiv(esc(p))}</p>`))
+    paragrafe(a.text).forEach((p, k) => b.push(`<p class="t${k === 0 ? ' prim' : ''}">${marcaj(esc(p))}</p>`))
     if (a.sursa) b.push(sursa(a))
   }
   articol(cerut.principal, true, 0)
@@ -374,7 +408,9 @@ const CURGE = `
   function dupaIncarcare(fn){
     function fonturi(){
       if (!document.fonts || !document.fonts.load) return fn();
-      var fete = ['400 16px Caladea', '700 16px Caladea', 'italic 400 16px Caladea', '400 16px Carlito', '700 16px Carlito', '400 16px Trajan'];
+      // '700 16px Trajan' e cerut si cand fata aldina nu e incorporata: promisiunea se implineste
+      // goala (nu e nicio fata de incarcat), iar .catch de mai jos prinde orice alta nazbatie.
+      var fete = ['400 16px Caladea', '700 16px Caladea', 'italic 400 16px Caladea', '400 16px Carlito', '700 16px Carlito', '400 16px Trajan', '700 16px Trajan'];
       Promise.all(fete.map(function(f){ return document.fonts.load(f).catch(function(){}); }))
         .then(function(){ return document.fonts.ready; })
         .then(fn, fn);
@@ -435,17 +471,42 @@ const CURGE = `
   }
   function incape(col){ return ocupat(col) <= col.clientHeight - 0.5; }
   function randuriLibere(col){ return (col.clientHeight - ocupat(col)) / RAND_PX; }
+  /*
+   * ⚠️ TAIEREA PASTREAZA MARCAJELE OMULUI (19.09.2026). Pana aici se taia pe textContent, si asta
+   * STERGEA tagurile <b>/<i> din paragraful taiat SI din coada lui — adica scrisul aldin sau cursiv
+   * disparea tocmai la hotarul de coloana, o data la fiecare coloana, fara ca cineva sa stie de ce.
+   * Acum se taie pe innerHTML: tagurile noastre n-au spatii in ele, deci despartirea pe spatii nu
+   * rupe niciodata un tag in doua. Ce a ramas deschis la capatul bucatii se inchide acolo si se
+   * redeschide in coada, ca amandoua sa fie HTML intreg — altfel parserul le-ar drege cum vrea el,
+   * iar masuratoarea din mijlocul cautarii binare ar minti.
+   */
+  function ramase(html){
+    var st = [], re = /<(\\/?)([bi])>/g, m;
+    while ((m = re.exec(html))) { if (m[1]) st.pop(); else st.push(m[2]); }
+    return st;
+  }
+  function inchide(html){
+    var st = ramase(html), s = html;
+    for (var i = st.length - 1; i >= 0; i--) s += '</' + st[i] + '>';
+    return s;
+  }
+  function redeschide(html, cap){
+    var st = ramase(cap), s = html;
+    for (var i = st.length - 1; i >= 0; i--) s = '<' + st[i] + '>' + s;
+    return s;
+  }
   function taie(col, p){
     // p e deja în coloană și dă pe dinafară: caut cel mai lung început care încape
-    var vorbe = p.textContent.split(' ');
+    var vorbe = p.innerHTML.split(' ');
     var jos = 0, sus = vorbe.length, bun = 0;
     while (jos <= sus) {
       var mij = (jos + sus) >> 1;
-      p.textContent = vorbe.slice(0, mij).join(' ');
+      p.innerHTML = inchide(vorbe.slice(0, mij).join(' '));
       if (incape(col)) { bun = mij; jos = mij + 1; } else { sus = mij - 1; }
     }
-    p.textContent = vorbe.slice(0, bun).join(' ');
-    return vorbe.slice(bun).join(' ');
+    var cap = vorbe.slice(0, bun).join(' ');
+    p.innerHTML = inchide(cap);
+    return redeschide(vorbe.slice(bun).join(' '), cap);
   }
   function curge(){
     var i = 0, intrate = 0, peDinafara = 0;
@@ -462,7 +523,8 @@ const CURGE = `
         var p = document.createElement('p');
         p.className = 't';
         p.style.textIndent = '0';
-        p.textContent = coada;
+        // HTML, nu text: coada poarta mai departe marcajele (totul e deja escapat de foaie)
+        p.innerHTML = coada;
         rest.insertBefore(p, rest.firstChild);
       }
       i++;
@@ -512,14 +574,18 @@ export function foaieHtml(o: OptiuniFoaie): string {
   const poze = o.poze ?? {}
   const pagini: string[] = []
   const chenar = `<img class="chenar" src="${dataUri('chenar', chenarPng, 'image/png')}" alt="">`
+  // Trajan Bold se încorporează DOAR dacă un titlu îl cere: e singurul loc în care se scrie Trajan
+  // aldin (zona neagră rămâne brută, restul foii e Caladea sau Carlito).
+  const trajanAldin = [cerut.principal, ...(cerut.secundari ?? [])]
+    .some((a) => titluMarcat(a.titlu).includes('<b>'))
 
   for (let p = 1; p <= PAGINI; p++) {
     const capul = p === 1
       ? `<div class="cap">
       <h1 class="titlu-foaie">BULETINU<span class="l">L<img class="cruce" src="${dataUri('cruce', crucePng, 'image/png')}" alt=""></span> BISERICII</h1>
       <p class="parohia">${PAROHIA}</p>
-      <p class="motto">${esc(cerut.motto)}</p>
-      ${cerut.motoAutor ? `<p class="motto-autor">– ${esc(cerut.motoAutor)}</p>` : ''}
+      <p class="motto">${marcaj(esc(cerut.motto))}</p>
+      ${cerut.motoAutor ? `<p class="motto-autor">– ${marcaj(esc(cerut.motoAutor))}</p>` : ''}
       <div class="linie"></div>
       <div class="numar"><b>Nr. ${cerut.nr}</b> / ${esc(o.dataScrisa)}</div>
     </div>`
@@ -548,7 +614,7 @@ export function foaieHtml(o: OptiuniFoaie): string {
 
   return `<!doctype html><html lang="ro"><head><meta charset="utf-8">
 <title>Buletinul parohiei · nr. ${cerut.nr} / ${esc(o.dataScrisa)}</title>
-<style>${fonturi()}${STIL}${o.calendar?.stil ?? ''}
+<style>${fonturi(trajanAldin)}${STIL}${o.calendar?.stil ?? ''}
 ${masuriDeSus(o)}</style></head>
 <body>${pagini.join('\n')}
 <div id="rest">${bucati(cerut, poze).join('')}</div>
@@ -563,7 +629,8 @@ ${masuriDeSus(o)}</style></head>
  */
 function masuriDeSus(o: OptiuniFoaie): string {
   // capul paginii întâi: antet + motto (două rânduri) + pastila numărului
-  const randuriMotto = Math.max(1, Math.ceil(o.cerut.motto.length / 78))
+  // ⚠️ Marcajele nu se tipăresc, deci nu se numără nici aici: `_x_` ocupă cât `x`.
+  const randuriMotto = Math.max(1, Math.ceil(curatDeMarcaje(o.cerut.motto).length / 78))
   const capMm = 58 + (randuriMotto - 2) * 6
   // josul paginii a patra: floarea + „PROGRAMUL LITURGIC" + tabelul + subsolul. Îl măsoară
   // scriptul; aici dăm o pornire ca să nu curgă textul peste el.

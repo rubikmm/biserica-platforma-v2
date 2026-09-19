@@ -18,6 +18,16 @@
  * socoteala stă pe măsurători reale, deci greșește puțin și în siguranță.
  */
 
+/*
+ * ⚠️ MARCAJELE NU SE MĂSOARĂ (19.09.2026). Textul vine de la om cu `_cursiv_` și `*aldin*` în el, dar
+ * steluțele și liniuțele nu ajung pe hârtie: se prefac în `<i>` și `<b>`. Peste tot unde numărăm
+ * semne sau măsurăm geometria (titlu, semnătură, text), textul trece întâi prin `curatDeMarcaje`.
+ * Aldinul e cu un fir mai lat decât regularul — NU îl compensăm: socoteala ar ieși mai strâmbă din
+ * ghicit decât din tăcut, iar toleranța ei (pragul `INALTIMI.titlu`, rotunjirile în sus) acoperă
+ * cele câteva procente de la un cuvânt-două îngroșate.
+ */
+import { curatDeMarcaje } from './marcaje.js'
+
 // ---------------------------------------------------------------------------
 // Măsurile hârtiei, în puncte tipografice (1 pt = 1/72")
 // ---------------------------------------------------------------------------
@@ -173,7 +183,7 @@ const RIGLA_PT = 0.5 + 1.6 * MM
  * socotim rândurile pe care le-ar cere: tot în partea sigură).
  */
 export function liniileTitlului(titlu: string, corp: number): number {
-  const vorbe = (titlu ?? '').toUpperCase().replace(/\s+/g, ' ').trim().split(' ').filter(Boolean)
+  const vorbe = curatDeMarcaje(titlu ?? '').toUpperCase().replace(/\s+/g, ' ').trim().split(' ').filter(Boolean)
   if (!vorbe.length) return 1
   const lat = (s: string): number =>
     [...s].reduce((n, c) => n + (LATIMI_TRAJAN[c] ?? LATIME_TRAJAN_MEDIE), 0) * corp
@@ -228,7 +238,7 @@ export const SEMNATURA = { corp: CORP_TEXT, pas: 1.3, jos: 1.4 } as const
  * iar rândurile se rotunjesc în sus: socoteala cere loc cu un fir mai mult, niciodată mai puțin.
  */
 export function inaltimeaSemnaturii(semnatura: string | undefined): number {
-  const s = (semnatura ?? '').replace(/\s+/g, ' ').trim()
+  const s = curatDeMarcaje(semnatura ?? '').replace(/\s+/g, ' ').trim()
   if (!s) return 0
   const linii = Math.max(1, Math.ceil(s.length / SEMNE_PE_RAND))
   return (linii * SEMNATURA.corp * SEMNATURA.pas + SEMNATURA.jos * MM) / RAND
@@ -322,8 +332,11 @@ export interface Socoteala {
   incape: boolean
 }
 
-/** Semnele unui text, numărate cum le numără hârtia: fără spațiile de prisos. */
-export const semne = (text: string): number => text.replace(/\s+/g, ' ').trim().length
+/**
+ * Semnele unui text, numărate cum le numără hârtia: fără spațiile de prisos și FĂRĂ MARCAJE —
+ * `_cursiv_` ocupă pe foaie cât `cursiv`, deci cele două liniuțe nu se pun la socoteală.
+ */
+export const semne = (text: string): number => curatDeMarcaje(text).replace(/\s+/g, ' ').trim().length
 
 /** Rândurile pe care le ține un text, la lățimea coloanei. */
 export const randuriPentru = (semneText: number): number => Math.ceil(semneText / SEMNE_PE_RAND)
