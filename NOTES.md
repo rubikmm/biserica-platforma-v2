@@ -312,6 +312,34 @@ propunerea automată, ca în V1.
 
 ## NEXT
 
+00f. **BULETINUL 616 — harta, cedările, semnătura, marcajele; scris și PUBLICAT pe 19.09.2026.**
+    Vezi jurnalul zilei (19.09.2026) și „BULETINUL — foaia tipărită". Pe producție: buletin **0.15.1**,
+    chat-worker **0.6.2**, program **0.9.3**.
+    ⚠️ **Prima probă e a userului, pe viu**: (1) **compunerea lui 616** cu scara nouă `CEDARILE` — se
+    dă floarea întâi, apoi sfinții, apoi pericopa; de văzut că iese fără floare și că nu refuză cu
+    cifre; (2) **meniul și marcajele** în bulă: „meniu" → subiecte → acțiuni → „← Înapoi la meniu",
+    și `_cursiv_` / `*aldin*` pe titlu, semnătură, text, sursă.
+    **Deschise, în ordinea în care dor**:
+    1. **`despre` din hartă e prea lung în textul meniului** — propus un câmp separat `numit`, scurt,
+       numai pentru butoane și liste; de hotărât cu userul;
+    2. **pragul de 5 cuvinte în stânga lui `:`** (`harta.ts:545`): o frază mai lungă cade pe ramura
+       „ce scriu?" în loc să fie citită ca `subiect: valoare`. Cifra e arbitrară, nemăsurată;
+    3. **`sursa` se taie la 200 de semne** — de întrebat dacă ajunge (o carte cu editură și an trece);
+    4. **`creier: fara` scurtcircuitează ÎNAINTE de hartă**, deci drumul determinist nu se mai încearcă
+       deloc — exact invers decât se vrea;
+    5. **contorul determinist/model** (`GET /chat/stare?statistica=buletin`) e **cumulativ, fără
+       resetare** — nu se poate citi „cât a lucrat AI-ul în runda asta", iar din cifra asta hotărăște
+       userul dacă rămâne AI-ul deloc;
+    6. **„altul: X" cu text după nu e prins** de `refuz.ts` (doar refuzul curat, „Niciunul", e prins);
+    7. **mesajul cedării e trecător pe ecran** — îl păstrează doar bula; omul care compune din pagină
+       nu află că i-a căzut floarea sau sfinții;
+    8. **`/chat/confirma` e sincron** — leacul adevărat (`waitUntil`, ca la `/mesaj`) e **nefăcut**;
+       azi merge pe cârpeala din 01:30 (ceas + sondare `/stare?propunere=`). Vezi 00c;
+    9. **arhiva 610–614 e doar în R2** — local avem numai 615, deci forma nouă a sursei (carte între
+       steluțe) nu e validată pe un număr adevărat;
+    10. **floarea nu se mai întoarce la `strans=1`** (scara e cumulativă dinadins) — de confirmat cu
+       userul că așa vrea.
+
 00e. **ROTIREA ALBUMELOR — scrisă și publicată pe 18.09.2026.** Vezi „Rotirea albumelor" la „LIVE și
     RADIO". Ce rămâne: (1) **pragul `PRAG_SUNET_DBFS` e REGLAT la −60 dBFS** (18.09.2026, seara), după
     ce biserica goală s-a măsurat la −67.5 dBFS RMS pe `live.sfantul-ilie.ro/mic`; rămâne **validat la
@@ -337,8 +365,13 @@ propunerea automată, ca în V1.
     drumul lung rămâne: fiecare mesaj face 2 apeluri la model, iar propunerea mai adaugă unul.
     De privit la următoarea rundă, cu `wrangler tail`, pe bucăți.
     ✅ **Viteza și blocarea — rezolvate pe 18.09.2026, seara** (chat-worker 0.4.0, program 0.8.4, buletin 0.9.0): răspunsul e ASINCRON (`/chat/mesaj` întoarce sub o secundă, aplicația ține lucrul cu `waitUntil` al ei, bula sondează `/chat/stare` la 2,5 s, cu etapa curentă și timpul scurs), buget de 90 s pe mesaj în chat-worker, fundalul nu se mai blochează pe desktop (excepție anume de la regula ferestrelor; pe ≤480px rămâne), propunerea Da/Nu se reface din istoric, Enter = rând nou pe telefon, mesajul omului până la 12 000 de semne. Vezi „Modulul de Chat (AI)" → „Asincron și sondare" în `docs/architecture/chat-si-actiuni.md`. **Neprobat viu cu modelul** — prima probă e a userului.
+    ⚠️ **`/chat/confirma` a rămas pe drumul vechi, SINCRON** (găsit 19.09.2026, 01:30): execută acțiunea
+    pe conexiunea bulei, iar o compunere de buletin trece de un minut → conexiunea cade, butoane moarte.
+    Cârpit aditiv (ceas + „renunț" + sondare `/stare?propunere=<id>` în `raspunde()`); **leacul adevărat
+    — `waitUntil`, ca la `/mesaj` — e NEFĂCUT**, fiindcă e schimbare în codul comun al tuturor bulelor.
+    Celelalte aplicații cu bulă poartă `raspunde()` vechi până la republicare.
 
-00d. **CHESTIONARUL BULETINULUI NOU — scris și publicat pe 18.09.2026, ~23:00 (buletin 0.9.0).** Vezi „CHESTIONARUL BULETINULUI" mai jos în jurnal (18.09.2026). Ce a rămas din lista de mai jos: (1) ✅ formularul a ieșit, `/nou` arată schița; ciorna e JSON în R2 (`schita/<nr>-<data>.json`), nu rând D1 — se poate muta; **nu se generează PDF gol la prima intrare** (nefăcut); (2) ✅ subiectele = lista închisă din `buletin.raspunde` (chestionarul îi conduce ordinea) — ✅ instrucțiunile punctuale în afara chestionarului („schimbă motto-ul în…") — făcute 18.09, 23:30 (buletin 0.10.1); (3) ✅ fișiere Word/txt/poze în chat — făcute 18.09, 23:30 (chat-worker 0.5.0, program 0.9.1, buletin 0.10.1); vezi jurnalul. Rămân: PDF gol la prima intrare (nefăcut), curățenia pozelor din `poze/` (nu se șterg la validare), urcarea mai multor fișiere cu un singur răspuns. Lista veche, pentru referință:
+00d. **CHESTIONARUL BULETINULUI NOU — scris și publicat pe 18.09.2026, ~23:00 (buletin 0.9.0).** Vezi „CHESTIONARUL BULETINULUI" mai jos în jurnal (18.09.2026). Ce a rămas din lista de mai jos: (1) ✅ formularul a ieșit, `/nou` arată schița; ciorna e JSON în R2 (`schita/<nr>-<data>.json`), nu rând D1 — se poate muta; ✅ **PDF gol la prima intrare — închis pe 19.09.2026**: varianta zero (schiță implicită) se compune singură la prima intrare pe `/nou`; (2) ✅ subiectele = lista închisă din `buletin.raspunde` (chestionarul îi conduce ordinea) — ✅ instrucțiunile punctuale în afara chestionarului („schimbă motto-ul în…") — făcute 18.09, 23:30 (buletin 0.10.1); (3) ✅ fișiere Word/txt/poze în chat — făcute 18.09, 23:30 (chat-worker 0.5.0, program 0.9.1, buletin 0.10.1); vezi jurnalul. Rămân: curățenia pozelor din `poze/` (nu se șterg la validare), urcarea mai multor fișiere cu un singur răspuns. Lista veche, pentru referință:
     (1) **Ciorna ca RÂND CU CÂMPURI** în baza buletinului, nu PDF + cererea păstrată: la prima intrare
     pe `/nou` se generează singură, cu text **gol** (fără Lorem ipsum), rotiță în locul copertei, iar
     când e gata apar poza și butoanele active; la intrările următoare se preia ciorna și așteaptă
@@ -2038,12 +2071,39 @@ randare. Dacă cineva „îndreaptă" cifra asta, probele din `tests/buletin-soc
 - **pagina 1**: crucea + „BULETINUL PAROHIEI" + parohia (antet fix, Trajan), **motto** pe două
   rânduri cursive cu cel citat dedesubt, linia cu pastila **„Nr. 615 / 6 septembrie 2026"**. Apoi
   coloana întâi: **poza mare** (o coloană pe 448 pt) și **zona neagră** cu numele autorului, anii și
-  pomenirea, scris alb, centrat; coloana a doua: **titlul** articolului și începutul textului;
+  pomenirea, scris alb, centrat (din 19.09.2026, `autor` cu ` / ` scoate ce e înaintea barei pe un
+  **rând mic deasupra numelui**, Trajan 12 pt: „SFÂNTUL CUVIOS MĂRTURISITOR / SOFIAN de la ANTIM");
+  coloana a doua: **titlul** articolului, **semnătura** (dacă e) și începutul textului;
 - **paginile 2–3**: patru coloane de text justificat;
 - **pagina 4**: textul se termină, „Sursa: …" cu linie deasupra, apoi **PROGRAMUL LITURGIC** cu
   tabelul programului și **subsolul fix** (abonarea + adresa parohiei, al doilea rând **aldin** din
   18.09.2026). Deasupra capului, floarea, cu **0.5 cm** până la el (18.09.2026; capul e **24 pt** —
   18 → 20 → 24, două cereri în aceeași zi).
+
+**MARCAJELE DE TEXT — convenția din 19.09.2026** (`apps/buletin/src/marcaje.ts`), valabilă peste
+**toată foaia**: titlu, semnătură, text, sursă, motto, notă.
+- `_între linii joase_` = **cursiv**, `*între steluțe*` = **aldin**, amândouă = aldin cursiv.
+- ⚠️ **Convenția veche „steluțe = cursiv" e ABROGATĂ** (până pe 19.09 `*…*` scotea cursiv, iar `**…**`
+  tot cursiv). Regula e prudentă: se aplică numai la perechi limpezi, ca să nu strice un asterisc
+  scris de om; marcajul se pune **după escapare**.
+- **Trajan Bold se încorporează în PDF doar când vreun titlu are aldin** (+211 KB, altfel degeaba);
+  cursivul în titlu e **oblic sintetic**, fiindcă Trajan n-are italic.
+- **`/` = rând nou** în titlu și în semnătură. ⚠️ `randNou` se aplică **înaintea** lui `marcaj` —
+  invers, `</b>` se rupea în două.
+- `textCurat()` scoate marcajele din textul dus în arhivă (arhiva nu poartă sintaxa).
+- ⚠️ La curgere, `CURGE` tăia paragraful cu `textContent` și **pierdea tagurile** la hotarul de
+  coloană — reparat în 0.15.0; cine atinge curgerea să nu se întoarcă la `textContent`.
+
+**`semnatura` — rândul de sub titlu** (câmp nou, 19.09.2026, cerere user: „Text de: Părintele Mihail
+Stanciu…"): Caladea **15 pt aldin, centrat**, sub titlu, la principal și la secundari, cu acțiune în
+hartă (cuvântul „semnatura" i-a fost mutat de la `autor`; regula INGHITE: semnătura înghite
+titlu/text). **Intră în `INALTIMI`**, deci în socoteală. Nu-l confunda cu `nota`, care iese la baza
+articolului (Carlito 13, ne-aldin).
+
+**`sursa` cu înțeles** (19.09.2026): `*între steluțe*` = aldin cursiv (numele cărții), domeniul/URL-ul
+= **aldin**, restul normal; **fără niciun marcaj rămâne toată aldină**, ca înainte. ⚠️ Se taie la
+**200 de semne**. Arhiva locală are doar 615 pentru verificat forma — 610–614 sunt numai în R2, deci
+convenția nu e încă validată pe un număr cu carte.
 
 **Trei lucruri care se încalcă ușor:**
 
@@ -2107,16 +2167,30 @@ deștept, dar cu rezultate foarte bune, cum am făcut la Programul liturgic") �
   principalului, pe pagina 1, e Regular, mai mare (21 pt) și stă cu 9 mm sub pastilă, cum e pe hârtie.
   Fonturile: `resurse/TrajanPro3-Regular.otf` = Adobe original v1.012 (cu kerning), `TrajanPro3-Bold.otf`
   din familia trimisă de user (abonament Adobe). Restul familiei (Black…SemiBold) nu e în repo.
+  ⚠️ **Înălțimea titlului se MĂSOARĂ, nu se presupune** (19.09.2026): `INALTIMI.titlu` era constanta
+  4.4 („două rânduri") și de acolo venea „socoteala zice că încap, hârtia nu" la titluri lungi. Acum
+  e **`max(4.4, geometria din font)`**, cu lățimile Trajanului citite din fișierul fontului
+  (`unelte/masura-trajan.mjs`): un titlu de 28 de semne = 2 rânduri ≈ 60 de semne.
 - **Calendarul strâns, treaptă cu treaptă**: `/v1/tabel-tipar?strans=1` fără sfinții duminicii,
   `strans=2` și fără pericopă („în extremis"). `compune` încearcă 0 → 1 → 2 și se oprește la prima
   care încape; răspunsul spune ce treaptă a folosit. Sărbătoarea zilei rămâne la orice treaptă.
+  ⚠️ **Din 19.09.2026 scara e altfel — `CEDARILE` din `compune.ts`, CUMULATIV** (user: „să dispară
+  floricica și dacă nici așa nu intră să dispară sfinții din calendar"): `(floare, 0) → (fără floare,
+  0) → (fără floare, 1) → (fără floare, 2)`. **Floarea e acum ÎN scară**, prima care cade (înainte
+  trăia pe dinafara ei). Scara e una singură, comună **socotelii și randării**: când randarea dă
+  deficit, treapta se alege prin aritmetică (floarea ≈ 212 semne, `strans=1` +230, `strans=2` +171)
+  și se randează **o singură dată în plus** (cel mult două randări), apoi se refuză cu cifra nouă.
+  Pază de ținut minte: o treaptă fără tabel era socotită drept pagină goală → ieșea foaie fără
+  program. Deschis: fiind cumulativă, floarea **nu se mai întoarce** la `strans=1`.
   ⚠️ Pericopa vine din program **pe UN rând** („Ap. …; Ev. …; glas 6, voscr. 4") — rândurile
   separate erau doar în datele mele de probă. `PERICOPA` prinde acum și rândul care începe cu „glas".
 - **Golul de deasupra calendarului: 6 mm normal, 3 mm la nevoie** („minim cum e acum și dublu în
   mod normal") — scriptul curge o dată cu 6, și numai dacă a rămas text pe dinafară reia cu 3.
 - **Floarea** a venit de la user (poză pe Slack) → `resurse/floare.png`, 44 mm lată, cade prima când
-  nu e loc.
-- `nota` (mențiunea de deasupra sursei) și `*cursiv*` (singurul marcaj din text, aplicat după escapare).
+  nu e loc — din 19.09.2026 **ca treaptă în `CEDARILE`**, nu doar când pagina a patra n-are loc fizic.
+- `nota` (mențiunea de deasupra sursei) și `*cursiv*` (singurul marcaj din text, aplicat după
+  escapare). ⚠️ **Marcajul s-a schimbat pe 19.09.2026** — vezi „MARCAJELE DE TEXT" mai sus: acum
+  `_cursiv_` / `*aldin*`, peste toată foaia.
 - **`buletin.reguli`** — acțiune de fundal cu regulile foii în cuvinte, pentru „un AI simplu care să
   înlocuiască un text, să ceară ceva, să citească niște reguli" (componentele numărului, ce nu are
   voie, ce face când nu încape).
@@ -2359,6 +2433,44 @@ forța antetul `Host`**.
   copiere în fiecare aplicație** — de aici costul oricărei schimbări transversale (antetul în 12 locuri).
 
 ## Jurnal
+
+### 2026-09-19
+
+**Varianta zero a buletinului + butonul „Compune numărul" + confirmarea din bulă care nu mai atârnă** (00:50–01:30, mod auto, subagent). Cererea userului: „la prima accesare a /nou să se genereze varianta cu «text» la conținut… toate câmpurile să aibă ceva implicit ca să poți genera varianta 0… un buton manual în pagină… acum nu merg să-i zici să-l compună, tot aștept și nu răspunde".
+
+- **Schița implicită** (`schita.ts` → `schitaImplicita()`): la prima privire pe `/nou` schița se naște cu autor/ani/titlu/sursă de probă și **`text: "text"`** (literal, cum a cerut) și se scrie în R2 (`schitaPastrata`). Pomenirea, mențiunea și poza rămân nescrise dinadins (lipsesc și din numere adevărate; o adresă de poză inventată ar lăsa un pătrat gol). `umplere.ts` are `TEXT_IMPLICIT` + `eDeProba(v)`: un câmp cu valoarea de probă e „doar locul lui" → se umple cu Lorem după regulile din 17.09. `catreCerere` scoate placeholderele la graniță (nu ajung pe hârtie, nici în `compus/*.json`); `rezumatulSchitei` nu le dă drept răspunsuri; `autorPropus('text')` → `null`. Cârligul de fișiere din `index.ts` folosea `!articol.text` — cu placeholderul devenea fals, deci primul .docx n-ar mai fi intrat în schiță; acum `eDeProba`. `de_la_capat` golește de tot (ștergere cerută de om), numărul rămâne compozabil.
+- **`POST /nou/compune`** (`index.ts`): aceeași `compuneNumarul()` (extrasă din `actiuni.ts`, singurul loc care compune) ca acțiunea din chat; poarta = adminul buletinului, CSRF global, audit. Butonul „Compune numărul" (`pagini.ts` → `JS_COMPUNE`, `stil.ts` → `.compunerea`) stă SUB blocul `#schita` (în afara lui, ca să nu fie înlocuit din chat); cât compune e stins cu „se compune…", la izbândă reîncarcă, la refuzul socotelii scrie plângerile cu cifra. **Compunere asincronă la prima intrare**: pagina vine îndată cu `data-auto` pe buton și el trage singur POST-ul — în GET, `/nou` ar fi stat alb un minut (Browser Rendering), iar o randare căzută ar fi însemnat un ecran care nu se mai deschide. Auto doar dacă nu există foaie ȘI schița e neatinsă (`eSchitaNeatinsa`). Închide **NEXT 00d**.
+- **De ce „compune" din chat nu răspundea**: `buletin.compune` are `efect: 'scrie'` → propunere Da/Nu; la „Da", `raspunde()` din `packages/chat/src/bula.ts` era UN fetch la `/chat/confirma`, fără ceas, fără sondare; `/confirma` din chat-worker execută acțiunea sincron pe conexiunea bulei, iar randarea (20+8+20 s/pagină) trece de un minut → conexiunea cade, butoane moarte, zero cuvinte. Aceeași boală reparată pe `/mesaj` pe 18.09 (comentariul din `chat-worker/src/index.ts`), dar `/confirma` rămăsese pe drumul vechi. NU era modelul: KV `modul:chat:buletin` oferă unealta. Reparat aditiv: `/stare?propunere=<id>` întoarce `propunereStare`; `raspunde()` are ceas + „renunț" și sondează în paralel cu cererea; cine răspunde primul închide. **Nefăcut**: `/confirma` asincron cu `waitUntil` (leacul adevărat, ca la `/mesaj`) — schimbare în codul comun al tuturor bulelor, lăsată pentru zi. Celelalte aplicații cu bulă poartă `raspunde()` vechi până la republicare.
+- Probe: `tests/buletin-chestionar.test.ts` (nou), `buletin-umplere`, `buletin-chat`, `chat-asincron` — 851/851. Publicat: buletin **0.11.0**, chat-worker **0.5.2**, `@xc/chat` 0.3.2. Commit `80890bb`, nepushuit. Neprobat cap-coadă ca admin: prima intrare a userului pe `/nou` e prima randare adevărată a variantei zero.
+
+**Harta cu două nivele — „altă abordare cu AI-ul free"** (user, 11:30: un cuprins cu subiecte → acțiuni → confirmare; „cu o hartă așa simplă ar trebui să pot lucra și fără AI"; la ambele nivele „nu înțeleg" e răspuns legitim, iar „nu sunt sigur" se întoarce ca întrebare). Publicată la 12:25: buletin **0.12.0**, chat-worker **0.6.0**, `@xc/chat` 0.4.0, commit `d639818`.
+
+- Harta stă în **manifest** (`Manifest.harta`, `modulActiuni({harta})`) — aplicațiile fără hartă nu simt nimic. Drumul: potrivitor **determinist** (`apps/buletin/src/harta.ts`) → model N1/N2 (JSON strict, `services/chat-worker/src/harta.ts`) → confirmare. Subiectele: motto, principal, s1, s2, numar, program, fiecare cu acțiunile lui; confirmarea se cere la **instrucțiunile libere**, nu la răspunsul dat unei întrebări pendinte. În bulă, butoane cu opțiuni; **`meniu` = drumul întreg fără AI**. `Actiune.ascunsa` (nou) = cerabilă din cod, nevăzută de model și de Setări.
+- **Contorul determinist/model**: `GET /chat/stare?statistica=buletin` — cifra din care userul hotărăște dacă mai rămâne AI-ul deloc. Ciorna lui 616 a fost ștearsă din R2 la cererea lui (4 chei), ca proba să fie pe curat. Deschis: **`creier: fara` scurtcircuitează ÎNAINTE de hartă**; contorul e cumulativ, fără resetare; probele vechi `chat-fisiere`/`chat-text-lung` mutate pe `nota` (purtare schimbată anume).
+
+**„Am modificat programul și nu mi-l citește" — NU era cache** (14:20). Service Binding + SELECT-uri proaspete la fiecare compunere; auditul a dat altă poveste: compunere izbutită la 10:47 UTC, programul schimbat la 10:54 (Sf. Maslu marți 22, 18:00), iar compunerea de la 10:55 a **eșuat** (`summary_json` gol, cauza neștiută; textul e la muchie — 9108 semne la ~9178 capacitate), deci pe ecran a rămas foaia veche, fără niciun semn că e veche. Hotărârea userului: „un flag pentru dată, nu regenerare automată". Făcut: `/v1/tabel-tipar` dă `amprenta` (peste tabelul întreg + stare, aceeași la strans 0/1/2) și `modificat_la` (MAX peste `saptamani.modificat`/`slujbe.modificat`); buletinul ține programul folosit în `compus/*.json`, iar `/nou` arată chenarul **„programul s-a schimbat de la ultima compunere"** lângă butonul Compune; `?v=` = etag PDF + amprenta programului; spre program se cere cu `cache-control: no-cache` (ruta publică stă la muchie 300 s). program **0.9.3**, buletin **0.12.1**, commit `a26a465`. ⚠️ Semnul se aprinde abia de la prima compunere izbutită de acum încolo — 616 n-are `program` în `compus`.
+
+**„Am schimbat titlul, am dat compune, nicio modificare" — foaia refuza PE DREPT, dar refuzul nu ajungea la om** (16:10). Titlul urcat de la 8 la 28 de semne peste un text deja la limită = 64 de semne pe dinafară la randare. Refuzul se pierdea pe toate drumurile: chat-worker `/confirma` zicea „Gata." pe `r.ok` (acțiunea a mers — nu lumea s-a schimbat), butonul scria refuzul cu `.rau` nestilat (gri, ca un rând nevinovat), iar `semne_pe_dinafara` ieșea `null`. Reparat: cârligul `raportul`/`RaportFapta` în `@xc/actiuni` (un refuz cuminte se scrie `failure` în audit), `/confirma` întoarce vorba refuzului + propunere „refuzata" + `ok:false`, chenar roșu la buton, `vorbaRefuzului()` comună. buletin **0.12.3** (`0697f96`), chat-worker **0.6.1**.
+
+- Găsit pe drum: la „3 posibile titluri" omul a scris **„Niciunul"** și modelul mic l-a pus drept TITLU — a ajuns în PDF la 11:06 UTC. Reparat determinist: `refuz.ts` (`CUVINTE_DE_REFUZ`, `eRefuz`), prins în hartă + plasă în `scrieRaspuns`, cu steagul `numit` (sintaxa strictă `titlu: Niciunul` rămâne valoare, pentru cine chiar o vrea). buletin **0.12.4** (`4173533`), 930/930. ⚠️ Neprins încă: „altul: X" cu text după.
+
+**„Să dispară floricica și dacă nici așa nu intră să dispară sfinții din calendar"** (user, 16:55). Până atunci treptele (`strans` 0→1→2) trăiau DOAR în socoteală, floarea nu era în scară deloc (cădea numai când pagina a patra n-avea loc fizic), iar refuzul venit din randare nu mai încerca nimic. Acum `CEDARILE` din `compune.ts` e o **scară cumulativă** — `(floare, 0) → (fără floare, 0) → (fără floare, 1) → (fără floare, 2)` — comună socotelii și randării; când randarea dă deficit, treapta se alege prin aritmetică (floarea ≈ 212 semne, `strans=1` +230, `strans=2` +171) și se randează **o singură dată în plus** (cel mult două randări), apoi se refuză cu cifra nouă. Pază găsită pe drum: o treaptă fără tabel era socotită drept pagină goală → ar fi ieșit foaie fără program.
+
+- În aceeași rundă, `INALTIMI.titlu` a încetat să fie constanta 4.4 („două rânduri") și a devenit **`max(4.4, geometria din font)`**, cu lățimile Trajanului citite din fișierul fontului (`unelte/masura-trajan.mjs`): titlul de 28 de semne = 2 rânduri ≈ 60 de semne, exact cele 64 găsite mai devreme. De aici venea „socoteala zice că încap, hârtia nu" la titluri lungi. buletin **0.13.0**, commit-uri `b28dc06` + `c2ae49c`, 954/954. Neprobat viu cu Browser Rendering pe 616. Deschis: floarea nu se mai întoarce la `strans=1` (scara e cumulativă) — de confirmat cu userul; mesajul cedării e trecător pe ecran (îl păstrează doar bula).
+
+**Rândul de sub titlu — câmpul `semnatura`** (17:25–17:50). Întrebarea userului: cum cere prin chat un rând „Text de: Părintele Mihail Stanciu…" sub titlul articolului principal, aldin, la mărimea corpului. Verificat: articolul avea doar `autor/ani/pomenire/titlu/text/sursa/nota/poza`; `nota` iese la baza articolului (Carlito 13, ne-aldin), iar textul avea un singur marcaj, `*cursiv*` (`**` ieșea tot cursiv, nu aldin) — deci NU se putea. Propus și acceptat un câmp nou. Trei schimbări, toate publicate în producție (buletin **0.13.1** → **0.14.0** → **0.14.1**, commit-uri `2a1a49c`, `dcd2e4d`, `fd938aa`; 973/973):
+
+- **`autor` cu ` / `**: ce stă înaintea barei iese pe un rând mic (Trajan 12 pt) deasupra numelui, în zona neagră — cererea era „SFÂNTUL CUVIOS MĂRTURISITOR / SOFIAN de la ANTIM";
+- **`semnatura`** — câmp nou sub titlu, Caladea 15 pt aldin centrat, la principal și la secundari, cu acțiune în hartă (cuvântul „semnatura" mutat de la `autor`; regula INGHITE: semnătura înghite titlu/text). Intră în `INALTIMI`, deci în socoteală;
+- **`sursa`** cu înțeles: `*între steluțe*` = aldin cursiv (numele cărții), domeniul/URL-ul = aldin, restul normal; fără niciun marcaj rămâne toată aldină, ca înainte.
+- ⚠️ Arhiva locală are doar 615 pentru verificat forma sursei — **610–614 sunt doar în R2**, deci convenția nu e validată pe un număr cu carte. Capcane strânse aici: **`--env staging` nu mai există** (comanda veche pică); o frază cu **mai mult de 5 cuvinte în stânga lui `:`** cade pe ramura „ce scriu?" (`harta.ts:545`); `sursa` se taie la **200 de semne**.
+
+**Meniul cu ton de meniu + marcajele peste toată foaia** (18:35; patru runde, toate publicate în producție: buletin **0.14.2** → **0.15.1**, chat-worker **0.6.2**; commit-uri `5345c74`, `b6181a0`, `ad34dac`; 997/997).
+
+- **„Vreau un meniu"** — exista deja (meniu → subiecte → acțiuni → valoare, tot determinist), dar treapta a doua suna a eroare: „Nu știu ce să fac cu…". Acum răspunde ca un meniu — „Articolul principal. Ce vrei să faci?" —, are buton **„← Înapoi la meniu"** și înțelege `inapoi`, `meniul`, `ce subiecte ai`. (buletin 0.14.2 + chat-worker 0.6.2)
+- **Convenție NOUĂ de marcaje, peste TOATĂ foaia** (fișier nou `marcaje.ts`): `_cursiv_`, `*aldin*`, împreună = aldin cursiv — în titlu, semnătură, text, sursă, motto, notă. **Convenția veche „steluțe = cursiv" e abrogată.** Trajan Bold se încorporează în PDF **doar când vreun titlu are aldin** (+211 KB, altfel degeaba); cursivul în titlu e oblic sintetic (Trajan n-are italic). Bug vechi reparat pe drum: `CURGE` tăia paragraful cu `textContent` și pierdea tagurile la hotarul de coloană. (buletin 0.15.0)
+- **`/` = rând nou** în titlu și în semnătură (`randNou` se aplică ÎNAINTEA lui `marcaj`, altfel `</b>` se rupea în două); `textCurat()` scoate marcajele din textul dus în arhivă. (buletin 0.15.1)
+- ⚠️ Capcane noi de build: `*/` într-un comentariu de bloc închide comentariul (esbuild cade), iar accentele grave dintr-un CSS scris în template literal fac același lucru. Deschis: `despre` din hartă e prea lung în textul meniului (propus un câmp separat `numit`).
 
 ### 2026-09-18
 
