@@ -348,6 +348,7 @@ export default {
       cfg,
       cid,
       principal,
+      veziCa: ctx.veziCa,
       urlCont: nav.cont,
       urlTermeni: `${nav.home || ""}/termeni`,
       carcasa: (p) => paginaCarcasa(ctx, p),

@@ -257,6 +257,7 @@ export default {
         cfg,
         cid,
         principal: principalDin(sesiune),
+        veziCa: sesiune.veziCa,
         urlCont: nav.cont,
         urlTermeni: `${nav.home || ''}/termeni`,
         carcasa: (p) => pagina({ ...comune, titluPagina: p.titluPagina, corp: p.corp, ...(p.scripturi ? { scripturi: p.scripturi } : {}) }),

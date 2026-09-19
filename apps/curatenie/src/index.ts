@@ -247,6 +247,7 @@ export default {
         cfg,
         cid,
         principal,
+        veziCa: ctx.veziCa,
         urlCont: nav.cont,
         urlTermeni: `${nav.home || ""}/termeni`,
         // Carcasa poarta si stilul PANOULUI, pentru cine are cheia: filele lui au CSS-ul lor
@@ -302,8 +303,16 @@ export default {
        */
       if (cale === "/admin" || cale.startsWith("/admin/")) {
         if (!eAdmin) {
-          // Neintrat: la intrarea platformei, cu întoarcere în Setări — acolo e panoul acum.
-          if (!userId) return duTe(spreCont(ctx, cfg.ORIGINE_PUBLICA, "/setari"))
+          /*
+           * Neintrat: la intrarea platformei, cu întoarcere în Setări — acolo e panoul acum.
+           *
+           * ⚠️ DAR NU ȘI SUB MASCĂ (tiparul din `apps/radio`, user 14.09.2026: „când selectez un
+           * mod… să rămână în pagina în care sunt"). Masca „neautentificat" lasă sesiunea fără om,
+           * deci `userId` e gol pentru un super-admin care doar se uită cu alți ochi — trimis la
+           * cont, ar fi aruncat tocmai din aplicația pe care o încerca. Drumul spre intrare rămâne
+           * întreg pentru omul care chiar nu e intrat (fără mască).
+           */
+          if (!userId && !ctx.veziCa) return duTe(spreCont(ctx, cfg.ORIGINE_PUBLICA, "/setari"))
           // Intrat, dar fără cheie: Setările îi arată ce e al lui, fără o pagină de refuz. Refuzul
           // rămâne întreg pe SCRIERE: cine trimite formularul de mână se lovește de el.
           if (req.method !== "POST") return duTe(`${prefix}/setari`)

@@ -17,6 +17,27 @@ import { STIL_SETARI } from "@xc/setari"
  *
  * Nu edita src/comun/*: alea vin din biserica-platforma/carcasa/. Daca o regula de aici se
  * dovedeste buna peste tot, se MUTA in stilul global — se anunta pe canalul platformei.
+ *
+ * ⚠️ MENIUL DE CONT, 19.09.2026 (user: „încă se vede ciudat meniul de la Cont. Vreau să fie exact
+ * ca la Calendar… Să pot să modific și «vezi ca»"). Pana azi, la coada stilului, mai stateau doua
+ * reguli mostenite din V1, amandoua scrise pe selectoarele CARCASEI:
+ *
+ *   body:not(.cu-platforma) .cont-lista a[href^="https://cont."] { display: none }
+ *   .cont-lista a.intra-platforma { … }
+ *
+ * Prima e din vremea cand curatenia avea contul EI si abia urma sa fie legata de platforma: clasa
+ * `cu-platforma` trebuia pusa pe <body> dupa legare, ca regula sa se stinga singura. Legarea s-a
+ * facut pe alt drum (carcasa `@xc/ui`, 14.09.2026) si clasa n-a mai fost pusa de nimeni, niciodata
+ * — grep in tot depozitul: singura ei aparitie era chiar regula asta. Deci `:not(…)` era mereu
+ * adevarat, iar meniul contului pierdea TOT ce duce la aplicatia de cont: „Profil", „Ieșire" si
+ * cele trei comutatoare „vezi ca". Ramaneau „Setări", „Administrare" si doua linii despartitoare
+ * intre care nu mai era nimic — de aici „se vede ciudat". Mai rau: sub masca „neautentificat"
+ * meniul e FACUT numai din cele trei comutatoare, deci se golea cu totul, iar super-adminul mascat
+ * ramanea fara drum inapoi (trebuia scris de mana /vezi-ca?ca=real).
+ * A doua imbraca o clasa pusa candva de un JS al paginii care nu mai exista din 19.09.2026.
+ *
+ * Nici la stil nu se scrie diferit de restul platformei: ce trebuie schimbat in antet, in meniul
+ * contului sau in subsol se schimba in `@xc/ui`, pentru toate aplicatiile deodata.
  */
 export const LOCAL = `
 /* ============================ paleta aplicatiei ============================ */
@@ -813,19 +834,18 @@ main form { display: block; gap: 0; margin: 0 }
 .slot-menu-empty { padding: 10px 12px; color: var(--text-muted); font-size: 13px; }
 
 
-/* ======================= potriviri cu carcasa (locale) ======================= */
-/* „Profil" din meniul contului duce la A13: are rost doar pentru cine a intrat cu contul
-   platformei; celorlalti li se ascunde. „Administrare" e dusa la /admin/ din JS-ul paginii. */
-body:not(.cu-platforma) .cont-lista a[href^="https://cont."] { display: none }
-
-/* Usa spre contul platformei, prima in meniul contului (pusa de JS-ul din pagina.ts).
-   Prin ea intra adminii si super-adminii, cu email si cod, fara parola locala. */
-.cont-lista a.intra-platforma { color: var(--rosu); font-weight: 600;
-                                border-bottom: 1px solid var(--rule); margin-bottom: 4px }
-
-/* Aici a stat .btn-platforma, butonul mare „Intră cu contul platformei" din panoul de intrare al
-   paginii de programare. Panoul a iesit pe 19.09.2026 odata cu randul de unelte: usa spre platforma
-   e meniul de cont din antet, ca la toate aplicatiile. */
+/* ===================== culorile aplicatiei peste carcasa ===================== */
+/*
+ * ⚠️ AICI AU MURIT DOUA REGULI MOSTENITE DIN V1 (19.09.2026) — vezi jurnalul si proba
+ * tests/curatenie-meniu.test.ts. Erau scrise pe selectoarele ANTETULUI, nu ale aplicatiei, si
+ * amandoua stricau lucruri pe care nu le putea vedea nimeni citind codul aplicatiei.
+ * Explicatia intreaga sta in comentariul fisierului, sus — nu si aici: stilul intra INTREG in
+ * fiecare pagina, deci orice cuvant scris in el ajunge la ochii oricui ii citeste sursa.
+ *
+ * Regula de acum, fara exceptii: stilul aplicatiei atinge CONTINUTUL ei. Antetul, meniul de cont
+ * si subsolul sunt ale carcasei; ce trebuie schimbat acolo se schimba acolo, pentru toate
+ * aplicatiile deodata.
+ */
 
 /* Mesajul de jos (toast): fundalul ia culoarea scrisului temei, deci scrisul ia hartia. */
 .toast { background: var(--ink); color: var(--paper) }

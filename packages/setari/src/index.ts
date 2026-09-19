@@ -30,10 +30,12 @@ import {
   aplicatiaAdministrabila,
   aplicatieCuMembri,
   cheileAdminului,
+  numeMasca,
   SCOPE_GLOBAL,
   type AplicatieAdministrabila,
   type AplicatieCuMembri,
   type Asociere,
+  type Masca,
   type Permisiune,
   type Principal,
 } from '@xc/contracts'
@@ -65,6 +67,12 @@ export interface UneltleSetarilor {
   cid: string
   /** cine e pe sesiune acum; `null` = neautentificat */
   principal: Principal | null
+  /**
+   * MASCA „vezi ca" purtată de sesiune, dacă e (`user` · `admin` · `anonim`); `null`/lipsă = fără
+   * mască. Sub masca „neautentificat" identitatea întoarce o sesiune anonimă, deci `principal` e
+   * `null` deși la tastatură e un super-admin — de aici pagina știe să nu-l trimită la intrare.
+   */
+  veziCa?: string | null
   /** adresa aplicației de cont — acolo e trimis cine nu e intrat */
   urlCont: string
   /** pagina de termeni a platformei (una singură, în `home`) */
@@ -704,6 +712,37 @@ ${o.rubriciApp}
 <nav class="vecini"><a href="${esc(o.prefix)}/">← Înapoi în ${esc(o.nume)}</a></nav>`
 }
 
+/**
+ * PAGINA DE SUB MASCĂ — ce vede super-adminul care s-a uitat „ca neautentificat".
+ *
+ * ⚠️ O mască „vezi ca" NU te scoate din pagină (user, 14.09.2026: „când selectez un mod — «vezi ca
+ * neautentificat» sau «vezi ca administrator» — să nu se mai ducă în Cont, pagină profil, să rămână
+ * în pagina în care sunt"). Masca „anonim" lasă sesiunea FĂRĂ om — identitatea întoarce sesiune
+ * anonimă, deci `principal` e `null` — iar trimiterea la intrare l-ar arunca din aplicație tocmai
+ * când voia să vadă ce vede un om neintrat. Aici rămânem în aplicație și spunem ce ar fi găsit el:
+ * nimic, fiindcă Setările sunt ale unui om anume.
+ *
+ * Tiparul e cel din `apps/radio` (`faraAcces`): se spune a cui e „vina" și pe unde se iese — meniul
+ * „Cont" din antet ține comutatoarele măștii, deci întoarcerea e la o apăsare.
+ */
+function corpulMastii(o: { nume: string; prefix: string; veziCa: string }): string {
+  const cine = esc(numeMasca(o.veziCa as Masca))
+  return `<div class="cap">
+  <h1 class="titlu-lista">Setări — ${esc(o.nume)}</h1>
+  <p class="sursa">Te uiți ca ${cine} — așa arată pagina asta cu ochii unui om neintrat.</p>
+</div>
+${grup({
+  titlu: 'Un om neintrat n-are setări aici',
+  treapta: 'Vezi ca',
+  spune: `Tot ce se schimbă din Setări ține de un om anume: abonarea lui, e-mailul lui, locul lui în
+    ${esc(o.nume)} și cheile pe care le are. Fără cont nu e nimic de arătat și nimic de apăsat — pe
+    cel neintrat pagina îl trimite la intrarea platformei.`,
+  corp: `<p class="set-spune">Ca să revii la contul tău, apasă „Cont" în antet și apoi rândul roșu
+  <b>→ ${cine.charAt(0).toUpperCase()}${cine.slice(1)}</b>: masca se scoate de pe rândul pe care ești.</p>`,
+})}
+<nav class="vecini"><a href="${esc(o.prefix)}/">← Înapoi în ${esc(o.nume)}</a></nav>`
+}
+
 // ---------------------------------------------------------------------------
 // Drumul
 // ---------------------------------------------------------------------------
@@ -747,9 +786,27 @@ export async function ruteazaSetari(
 
   // Setările sunt ale unui om anume: fără cont n-au ce arăta. Îl trimitem la intrare, cu
   // întoarcere exact aici.
+  //
+  // ⚠️ DAR NU ȘI SUB MASCĂ (user, 14.09.2026: „să rămână în pagina în care sunt"). Masca
+  // „neautentificat" lasă sesiunea fără om, deci `principal` e `null` pentru un super-admin care
+  // doar se uită cu alți ochi: trimis la cont, ar fi aruncat din aplicație tocmai când voia să
+  // vadă ce vede un om neintrat. Rămânem aici și îi arătăm ce ar fi găsit acela — nimic.
   if (!o.principal) {
-    const inapoi = encodeURIComponent(`${p}/setari`)
-    return new Response(null, { status: 303, headers: { location: `${o.urlCont}/auth/login?spre=${inapoi}` } })
+    if (!o.veziCa) {
+      const inapoi = encodeURIComponent(`${p}/setari`)
+      return new Response(null, { status: 303, headers: { location: `${o.urlCont}/auth/login?spre=${inapoi}` } })
+    }
+    // ⚠️ Sub mască nu se scrie NIMIC: adresele de faptă duc înapoi la pagină, fără să atingă vreun
+    // serviciu. Oricum n-ar avea pe cine: toate faptele de mai jos cer `principal`.
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      return new Response(null, { status: 303, headers: { location: `${p}/setari` } })
+    }
+    return html(
+      o.carcasa({ titluPagina: 'Setări', corp: corpulMastii({ nume: o.nume, prefix: p, veziCa: o.veziCa }) }),
+      200,
+      // ca pagina întreagă: ce ține de sesiune nu se dă cache-ului, nici sub mască
+      { 'cache-control': 'private, no-store' },
+    )
   }
   const principal = o.principal
 
