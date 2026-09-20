@@ -17,9 +17,29 @@ export interface RandSaptamana {
   versiune_calendar: string | null
   validat_de: string | null
   validat_la: string | null
+  /**
+   * CLIPA anuntata (ISO UTC) la care saptamana se valideaza singura: duminica dinaintea ei, ora
+   * 12:00 a Bucurestiului. `null` = nu e programata. Vezi `eProgramata` si migratia 0003.
+   * ⚠️ Nu iese NICIODATA pe `/v1/*` si nici in `Saptamana` din contracte: pentru lume, o saptamana
+   * programata e `propus`, cum si este.
+   */
+  programat_la: string | null
+  /** Cine a apasat „Validează și programează". La trecere ajunge in `validat_de`. */
+  programat_de: string | null
   creat: string
   modificat: string
 }
+
+/**
+ * E PROGRAMATA saptamana asta? — citit din COLOANA, nu din ceas.
+ *
+ * ⚠️ Lectia buletinului (20.09.2026): daca starea s-ar deduce la fiecare citire, dintr-o data pusa
+ * langa ceasul de acum, ar fi doua adevaruri despre acelasi rand — unul scris pe el, altul socotit —
+ * si s-ar putea desparti fara ca nimic sa parrie. Ceasul (`ceas.ts`) spune doar ce SE SCRIE la
+ * apasare; ce E scris se citeste de aici.
+ */
+export const eProgramata = (s: { stare?: StareSaptamana | null; programat_la?: string | null } | null | undefined): boolean =>
+  !!s && s.stare === 'propus' && !!s.programat_la
 
 export interface RandSlujba {
   id: string
@@ -274,10 +294,22 @@ export async function tiparele(db: D1Database, azi: string, ani = 2): Promise<Ti
     .sort((a, b) => b.aparitii - a.aparitii)
 }
 
-/** Tot ce e in baza, pentru arhiva: saptamanile si slujbele lor. Mare — nu se da unui model. */
+/**
+ * Tot ce e in baza, pentru arhiva: saptamanile si slujbele lor. Mare — nu se da unui model.
+ *
+ * ⚠️ COLOANELE SE SCRIU PE NUME, nu `SELECT *`: fisierul asta iese pe `/v1/arhiva.json`, usa
+ * deschisa a masinilor. Cu `*`, `programat_la` si `programat_de` (adaugate in 20.09.2026) ar fi
+ * plecat in lume de la sine — ceasul launtric al unei saptamani inca nevalidate si user-id-ul celui
+ * care a apasat. Orice coloana noua trebuie ADAUGATA AICI ca sa iasa, si asta e tot rostul.
+ */
 export async function arhivaIntreaga(db: D1Database): Promise<{ saptamani: RandSaptamana[]; slujbe: RandSlujba[] }> {
   const [saptamani, slujbe] = await Promise.all([
-    toate<RandSaptamana>(db, `SELECT * FROM saptamani ORDER BY luni`),
+    toate<RandSaptamana>(
+      db,
+      `SELECT luni, duminica, stare, titlu, sursa, sursa_id, sursa_link, versiune_calendar,
+              validat_de, validat_la, creat, modificat
+       FROM saptamani ORDER BY luni`,
+    ),
     toate<RandSlujba>(db, `SELECT * FROM slujbe ORDER BY data, ora, ordine`),
   ])
   return { saptamani, slujbe }
@@ -329,7 +361,7 @@ function actorEveniment(cine: CineScrie): ActorEveniment {
 function declaratieIstoric(
   db: D1Database,
   cine: CineScrie,
-  ce: 'scris' | 'validat' | 'retras' | 'schimbat' | 'sters',
+  ce: 'scris' | 'validat' | 'programat' | 'retras' | 'schimbat' | 'sters',
   luni: string,
   slujbaId: string | null,
   detalii: unknown,
@@ -432,7 +464,7 @@ export async function scrieSaptamana(db: D1Database, luni: string, slujbe: Slujb
 
   const rand: RandSaptamana = existenta
     ? { ...existenta, stare: stareaDupaSchimbare(existenta), modificat: t }
-    : { luni, duminica, stare: 'propus', titlu: intervalLizibil(luni, duminica), sursa: 'manual', sursa_id: null, sursa_link: null, versiune_calendar: null, validat_de: null, validat_la: null, creat: t, modificat: t }
+    : { luni, duminica, stare: 'propus', titlu: intervalLizibil(luni, duminica), sursa: 'manual', sursa_id: null, sursa_link: null, versiune_calendar: null, validat_de: null, validat_la: null, programat_la: null, programat_de: null, creat: t, modificat: t }
   declaratii.push(declaratieIstoric(db, cine, 'scris', luni, null, { slujbe: slujbe.length, din: existenta ? 'inlocuire' : 'propunere' }))
   declaratii.push(declaratieEveniment(db, 'program.week.changed.v1', rand, rand.stare, slujbe.length, cine))
   await batch(db, declaratii)
@@ -530,12 +562,123 @@ export async function valideazaSaptamana(db: D1Database, luni: string, cine: Cin
   const n = await numarSlujbe(db, luni)
   await batch(db, [
     db
-      .prepare(`UPDATE saptamani SET stare = 'validat', validat_de = ?, validat_la = ?, versiune_calendar = COALESCE(?, versiune_calendar), modificat = ? WHERE luni = ?`)
+      // ⚠️ `programat_la/de` se sterg: validarea de mana ARE LOC ACUM, deci ceasul n-are ce mai trece.
+      // Lasate scrise, ar fi ramas o clipa moarta pe un rand deja validat — cronul n-ar fi atins-o
+      // (WHERE cere `propus`), dar oricine ar fi citit randul ar fi avut doua povesti despre el.
+      .prepare(`UPDATE saptamani SET stare = 'validat', validat_de = ?, validat_la = ?, versiune_calendar = COALESCE(?, versiune_calendar), programat_la = NULL, programat_de = NULL, modificat = ? WHERE luni = ?`)
       .bind(cine.userId ?? 'sistem', t, versiuneCalendar, t, luni),
     declaratieIstoric(db, cine, 'validat', luni, null, { slujbe: n }),
     declaratieEveniment(db, 'program.week.validated.v1', s, 'validat', n, cine),
   ])
-  return { ...s, stare: 'validat', validat_de: cine.userId ?? 'sistem', validat_la: t, modificat: t }
+  return { ...s, stare: 'validat', validat_de: cine.userId ?? 'sistem', validat_la: t, programat_la: null, programat_de: null, modificat: t }
+}
+
+// ---------------------------------------------------------------------------
+// PROGRAMAREA saptamanii (20.09.2026) — validarea inainte de vreme
+// ---------------------------------------------------------------------------
+
+/**
+ * PROGRAMEAZA saptamana pentru duminica dinaintea ei, ora 12:00 — clipa in care apare si buletinul
+ * care o tipareste pe pagina a patra.
+ *
+ * Randul RAMANE `propus`: pentru site, pentru `/v1/*` si pentru enorias nu s-a intamplat nimic —
+ * programul n-a fost validat inca, si chiar asa e. S-au scris doua coloane si atat.
+ *
+ * ⚠️ EVENIMENTUL E `changed`, NU `validated`. Anuntul pleaca la VALIDARE, iar validarea se intampla
+ * duminica, de la ceas — nu acum. Trimis de doua ori, enoriasii ar fi primit programul saptamanii
+ * viitoare miercuri, adica exact ce inlatura programarea.
+ * ⚠️ `versiune_calendar` se scrie ACUM, ca la validare: e calendarul pe care l-a vazut omul cand a
+ * apasat, si el trebuie pomenit, nu cel de duminica.
+ */
+export async function programeazaSaptamana(db: D1Database, luni: string, prag: Date, cine: CineScrie, versiuneCalendar: string | null = null): Promise<RandSaptamana> {
+  const s = await saptamana(db, luni)
+  if (!s) throw new Error(`săptămâna ${luni} nu e scrisă încă`)
+  const t = acum()
+  const cand = prag.toISOString()
+  const n = await numarSlujbe(db, luni)
+  const cineAnume = cine.userId ?? 'sistem'
+  await batch(db, [
+    db
+      .prepare(`UPDATE saptamani SET stare = 'propus', validat_de = NULL, validat_la = NULL, programat_la = ?, programat_de = ?, versiune_calendar = COALESCE(?, versiune_calendar), modificat = ? WHERE luni = ?`)
+      .bind(cand, cineAnume, versiuneCalendar, t, luni),
+    declaratieIstoric(db, cine, 'programat', luni, null, { slujbe: n, programat_la: cand }),
+    declaratieEveniment(db, 'program.week.changed.v1', s, 'propus', n, cine),
+  ])
+  return { ...s, stare: 'propus', validat_de: null, validat_la: null, programat_la: cand, programat_de: cineAnume, versiune_calendar: versiuneCalendar ?? s.versiune_calendar, modificat: t }
+}
+
+/**
+ * ANULEAZA programarea: cele doua coloane se sterg, starea ramane `propus`.
+ *
+ * E ce face „retrage validarea" pe o saptamana programata — de aceea nu-si are butonul ei: omul
+ * spune acelasi lucru („las-o balta"), iar aplicatia stie singura ce inseamna acum.
+ */
+export async function anuleazaProgramarea(db: D1Database, luni: string, cine: CineScrie): Promise<RandSaptamana> {
+  const s = await saptamana(db, luni)
+  if (!s) throw new Error(`săptămâna ${luni} nu e scrisă încă`)
+  if (!eProgramata(s)) return s
+  const t = acum()
+  const n = await numarSlujbe(db, luni)
+  await batch(db, [
+    db.prepare(`UPDATE saptamani SET programat_la = NULL, programat_de = NULL, modificat = ? WHERE luni = ?`).bind(t, luni),
+    declaratieIstoric(db, cine, 'retras', luni, null, { slujbe: n, din: 'programat', programat_la: s.programat_la, programat_de: s.programat_de }),
+    declaratieEveniment(db, 'program.week.changed.v1', s, 'propus', n, cine),
+  ])
+  return { ...s, programat_la: null, programat_de: null, modificat: t }
+}
+
+/**
+ * CE ARE DE TRECUT CEASUL ACUM — saptamanile programate carora le-a venit clipa.
+ *
+ * Se cere INAINTE de trecere, ca `scheduled` sa stie CARE saptamani au apucat sa apara (pentru
+ * istoric si pentru anuntul fiecareia). `UPDATE … RETURNING` ar fi facut-o dintr-un drum, dar atunci
+ * o rulare fara nimic de facut — marea majoritate, ceasul bate la 5 minute — ar fi tot o SCRIERE.
+ */
+export async function programateleScadente(db: D1Database, cand: Date): Promise<RandSaptamana[]> {
+  return toate<RandSaptamana>(
+    db,
+    `SELECT * FROM saptamani WHERE stare = 'propus' AND programat_la IS NOT NULL AND programat_la <= ? ORDER BY luni`,
+    [cand.toISOString()],
+  )
+}
+
+/**
+ * TRECEREA — singurul loc din cod care scoate o saptamana din programare, de la sine.
+ *
+ * ⚠️ IDEMPOTENTA prin chiar forma ei: `WHERE stare = 'propus' AND programat_la IS NOT NULL` nu mai
+ * gaseste nimic la a doua bataie (si la a suta: cronul bate din cinci in cinci minute), fiindca
+ * randul e deja `validat` si cu coloanele sterse. De aceea nu-i trebuie nici zavor, nici tabel de
+ * rulari — se opreste singura mai sus, cand `programateleScadente` intoarce gol.
+ * ⚠️ `validat_la` = `programat_la`, NU clipa trecerii. Acolo sta ora ANUNTATA parohiei (duminica,
+ * 12:00), iar cronul se trezeste cand apuca; altfel „apare la 12:00" ar fi devenit, tacut, 12:03.
+ * Tot asa, `validat_de` = `programat_de`: validarea ramane a omului care a apasat, nu a masinii.
+ * ⚠️ ANUNTUL pleaca DE AICI (`program.week.validated.v1`, cate unul pe saptamana) — la programare
+ * s-a scris doar `changed`. Asa enoriasii afla programul duminica, odata cu buletinul.
+ *
+ * Intoarce saptamanile trecute, asa cum arata DUPA trecere.
+ */
+export async function treciLaValidat(db: D1Database, cand: Date, correlationId: string): Promise<RandSaptamana[]> {
+  const scadente = await programateleScadente(db, cand)
+  if (!scadente.length) return []
+  const t = acum()
+  const numere = await Promise.all(scadente.map((s) => numarSlujbe(db, s.luni)))
+  const declaratii: D1PreparedStatement[] = [
+    db
+      .prepare(
+        `UPDATE saptamani SET stare = 'validat', validat_de = programat_de, validat_la = programat_la,
+                              programat_la = NULL, programat_de = NULL, modificat = ?1
+         WHERE stare = 'propus' AND programat_la IS NOT NULL AND programat_la <= ?2`,
+      )
+      .bind(t, cand.toISOString()),
+  ]
+  scadente.forEach((s, i) => {
+    // Faptasul ramane omul care a programat: si in istoric, si in actorul evenimentului.
+    const cine: CineScrie = { userId: s.programat_de, correlationId }
+    declaratii.push(declaratieIstoric(db, cine, 'validat', s.luni, null, { slujbe: numere[i] ?? 0, din: 'programat', programat_la: s.programat_la }))
+    declaratii.push(declaratieEveniment(db, 'program.week.validated.v1', s, 'validat', numere[i] ?? 0, cine))
+  })
+  await batch(db, declaratii)
+  return scadente.map((s) => ({ ...s, stare: 'validat' as StareSaptamana, validat_de: s.programat_de, validat_la: s.programat_la, programat_la: null, programat_de: null, modificat: t }))
 }
 
 /**
@@ -547,10 +690,14 @@ export async function valideazaSaptamana(db: D1Database, luni: string, cine: Cin
  * ⚠️ De aici foaia de pe usa nu se mai da (ruta ei cere `validat`), iar anuntul NU pleaca a doua
  * oara: se scrie `program.week.changed.v1`, nu `...validated.v1` — automatizarile asculta la al
  * doilea.
+ * ⚠️ PE O SAPTAMANA PROGRAMATA (20.09.2026) inseamna ANULAREA PROGRAMARII, nu o eroare: starea ei
+ * scrisa e tot `propus`, deci vechiul „e deja propus, n-ai ce retrage" ar fi lasat-o sa se valideze
+ * singura duminica, dupa ce omul tocmai ceruse sa nu se intample asta.
  */
 export async function retrageValidarea(db: D1Database, luni: string, cine: CineScrie): Promise<RandSaptamana> {
   const s = await saptamana(db, luni)
   if (!s) throw new Error(`săptămâna ${luni} nu e scrisă încă`)
+  if (eProgramata(s)) return anuleazaProgramarea(db, luni, cine)
   if (s.stare === 'propus') return s
   const t = acum()
   const n = await numarSlujbe(db, luni)

@@ -753,3 +753,7 @@ export function faraDiacritice(s: string): string {
 
 // Hartiile (PDF/JPG/PNG prin Browser Rendering) si cache-ul lor — vezi hartie.ts
 export * from "./hartie.js"
+
+// Pragul de duminica, ora 12:00 a Bucurestiului — vezi prag.ts. Il cer buletinul (ziua numarului)
+// si programul (duminica dinaintea saptamanii): aceeasi clipa, o singura socoteala.
+export * from "./prag.js"

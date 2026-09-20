@@ -18,11 +18,14 @@ import { actiune, registru, Obiect, type ContextActiune } from '@xc/actiuni'
 import { Saptamana, Slujba, type IntrareVocabular, type SlujbaDeScris } from '@xc/contracts'
 import { golesteOutbox } from '@xc/events'
 import { adaugaZile, aziBucuresti, dataCeruta, dataCuZi, luneaSaptamanii, obiectDinHtml, obiectDinText, oraBucuresti } from '@xc/ui'
+import { candApareSaptamana, pragSaptamanii, seProgrameaza } from './ceas.js'
 import {
   adaugaSlujba,
   arhivaIntreaga,
   cautaInVocabular,
+  eProgramata,
   modificaSlujba,
+  programeazaSaptamana,
   retrageValidarea,
   scrieSaptamana,
   stergeSlujba,
@@ -594,29 +597,60 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
     },
   }),
 
+  /**
+   * VALIDEAZĂ ȘI PUBLICĂ — ori VALIDEAZĂ ȘI PROGRAMEAZĂ, după ceas (user, 20.09.2026: „La programul
+   * liturgic aceeași poveste cu Validare și publicare / Validare și programare, la fel ca la
+   * Buletinul bisericii").
+   *
+   * ⚠️ E O SINGURĂ ACȚIUNE, nu două. Omul spune același lucru — „programul e bun" —, iar ce se
+   * întâmplă hotărăște CEASUL, nu el: înainte de duminica dinaintea săptămânii, la 12:00, săptămâna
+   * se programează pentru clipa aceea; de la 12:00 încolo se validează pe loc. Nu există „publică
+   * oricum": săptămâna apare odată cu buletinul care o tipărește, altfel enoriașii ar fi primit
+   * anunțul miercuri, pentru o săptămână care încă n-a început.
+   */
   actiune({
     nume: 'program.valideaza_saptamana',
     descriere:
-      'Validează o săptămână: din acel moment se tipărește foaia de pe ușă și pleacă anunțul. ' +
-      'Dacă săptămâna nu e scrisă încă, se scrie întâi din propunere. Omul confirmă înainte.',
+      'Validează o săptămână. Ce se întâmplă hotărăște ceasul: dacă e înainte de duminica dinaintea ' +
+      'ei, ora 12:00, săptămâna se PROGRAMEAZĂ pentru clipa aceea (apare odată cu buletinul, iar ' +
+      'până atunci rămâne „propus" și se poate modifica); dacă a trecut de 12:00, se validează pe ' +
+      'loc — se tipărește foaia de pe ușă și pleacă anunțul. Dacă săptămâna nu e scrisă încă, se ' +
+      'scrie întâi din propunere. Omul confirmă înainte.',
     efect: 'scrie',
     permisiune: 'program.publish',
     intrare: z.object({ saptamana: SaptamanaCeruta }),
     iesire: Saptamana,
-    exemple: ['validează săptămâna viitoare', 'programul e bun, publică-l'],
+    exemple: [
+      'validează săptămâna viitoare',
+      'programul e bun, publică-l',
+      'programează săptămâna viitoare',
+      'validează și programează programul de săptămâna viitoare',
+    ],
     async rezuma({ saptamana: cerut }, c) {
       const luni = luneaSaptamanii(ziua(cerut))
       const s = await saptamanaOriPropunere(c.env, luni, await harta(c.env))
       if (s.rand?.stare === 'validat') throw new Error(`săptămâna ${titluSaptamanii(luni)} e deja validată`)
-      return `Validez săptămâna ${titluSaptamanii(luni)} (${s.slujbe.length} slujbe).${s.rand ? '' : ' Nu e scrisă încă — o scriu întâi din propunere.'}`
+      if (eProgramata(s.rand)) throw new Error(`săptămâna ${titluSaptamanii(luni)} e deja programată pentru ${candApareSaptamana(luni)}`)
+      const nescrisa = s.rand ? '' : ' Nu e scrisă încă — o scriu întâi din propunere.'
+      return seProgrameaza(luni)
+        ? `Validez și programez săptămâna ${titluSaptamanii(luni)} (${s.slujbe.length} slujbe) — apare ${candApareSaptamana(luni)}, odată cu buletinul.${nescrisa}`
+        : `Validez și public săptămâna ${titluSaptamanii(luni)} (${s.slujbe.length} slujbe).${nescrisa}`
     },
     async executa({ saptamana: cerut }, c) {
       const luni = luneaSaptamanii(ziua(cerut))
       const cine = cineScrie(c)
       const s = await saptamanaOriPropunere(c.env, luni, await harta(c.env))
       if (s.rand?.stare === 'validat') throw new Error(`săptămâna ${titluSaptamanii(luni)} e deja validată`)
+      if (eProgramata(s.rand)) throw new Error(`săptămâna ${titluSaptamanii(luni)} e deja programată pentru ${candApareSaptamana(luni)}`)
+      // ⚠️ ACELAȘI CEAS pentru hotărâre și pentru clipa scrisă: `seProgrameaza` și `pragSaptamanii`
+      // se cer pe `acum`-ul ăsta, nu fiecare pe al lui. Între două citiri ale ceasului poate trece
+      // chiar pragul, și atunci s-ar fi scris o programare pentru o clipă deja trecută.
+      const acum = new Date()
       if (!s.rand) await scrieSaptamana(c.env.DB, luni, s.slujbe.map(deScris), cine)
-      const rand = await valideazaSaptamana(c.env.DB, luni, cine, s.cal?.versiune ?? null)
+      const versiune = s.cal?.versiune ?? null
+      const rand = seProgrameaza(luni, acum)
+        ? await programeazaSaptamana(c.env.DB, luni, pragSaptamanii(luni), cine, versiune)
+        : await valideazaSaptamana(c.env.DB, luni, cine, versiune)
       c.ctxExec.waitUntil(golesteOutbox(c.env.DB, c.env.EVENIMENTE))
       return saptamanaDin(rand, await slujbeleSaptamanii(c.env.DB, luni))
     },
@@ -627,7 +661,8 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
     descriere:
       'Trece o săptămână VALIDATĂ înapoi în „propus", ca să poată fi modificată. De chemat înainte ' +
       'de orice schimbare într-o săptămână validată. Din acel moment foaia de pe ușă nu se mai ' +
-      'tipărește, până la o nouă validare. Omul confirmă înainte.',
+      'tipărește, până la o nouă validare. Pe o săptămână PROGRAMATĂ face altceva: îi anulează ' +
+      'programarea — rămâne „propus" și nu mai apare singură duminică. Omul confirmă înainte.',
     efect: 'scrie',
     permisiune: 'program.publish',
     intrare: z.object({ saptamana: SaptamanaCeruta }),
@@ -636,11 +671,18 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
       'treci săptămâna asta înapoi în propus',
       'retrage validarea săptămânii viitoare',
       'vreau să schimb ceva în săptămâna validată',
+      'anulează programarea săptămânii viitoare',
+      'nu mai publica programul duminică',
     ],
     async rezuma({ saptamana: cerut }, c) {
       const luni = luneaSaptamanii(ziua(cerut))
       const rand = await saptamana(c.env.DB, luni)
       if (!rand) throw new Error(`săptămâna ${titluSaptamanii(luni)} nu e scrisă încă — n-are ce validare să piardă`)
+      if (eProgramata(rand)) {
+        return `Anulez programarea săptămânii ${titluSaptamanii(luni)} — rămâne „propus", nu mai apare singură duminică.`
+      }
+      // ⚠️ „e deja propus" NUMAI dacă nu e programată: o săptămână programată are tot `stare = 'propus'`
+      // scris pe ea, iar refuzul de aici ar fi lăsat-o să se valideze singură duminică.
       if (rand.stare === 'propus') throw new Error(`săptămâna ${titluSaptamanii(luni)} e deja „propus" — se poate modifica așa cum e`)
       return `Retrag validarea săptămânii ${titluSaptamanii(luni)}: trece înapoi în „propus", ca să poată fi modificată. Foaia de pe ușă nu se mai tipărește până la o nouă validare.`
     },

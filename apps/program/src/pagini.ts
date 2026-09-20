@@ -40,6 +40,7 @@ import { JS_ABONARE, STIL_ABONARE, abonamentul, butonAbonare, fereastraAbonare }
 import { STIL_SETARI } from '@xc/setari'
 import type { CalendarSaptamana, ZiPeProgram } from './calendar.js'
 import { ziRosie } from './calendar.js'
+import { candApareSaptamana } from './ceas.js'
 import { PAROHIA, randurileSlujbei } from './foaie.js'
 
 export interface Ctx {
@@ -205,6 +206,23 @@ export const STIL = `
          padding:5px 9px; border-radius:999px; border:1px solid var(--rule); color:var(--soft); white-space:nowrap }
 .stare.validat { border-color:var(--azi); color:var(--ink); background:var(--azi-fund) }
 .stare.propus { border-color:var(--albastru); color:var(--albastru) }
+/* ── SAPTAMANA PROGRAMATA (20.09.2026): validata inainte de vreme, isi asteapta duminica. Scrisa
+   DOAR pentru adminul programului — pentru restul lumii saptamana e „propus", cum si este.
+   ⚠️ Verdele sobru al platformei (acelasi #0A6B41 / #5FBF8D ca la buletin, unde eticheta s-a nascut
+   cu o ora mai devreme): nu e o alarma, nimic nu s-a stricat. Rosul ramane al lucrului nefacut.
+   ⚠️ Fara majuscule si cu spatiere normala, spre deosebire de surorile ei: celelalte etichete poarta
+   un cuvant, asta poarta o propozitie intreaga, cu ziua si ora aparitiei in ea, iar cu
+   text-transform:uppercase s-ar fi citit ca un titlu strigat.
+   ⚠️ Si sa nu se scrie aici, in clar, chiar vorbele etichetei: comentariul ajunge in CSS-ul FIECAREI
+   pagini, deci proba „enoriasul nu vede vorbele acelea" le-ar fi gasit pe ele, aici, si ar fi cazut
+   pe o pagina in care eticheta nu se scrie deloc. Patit la scrierea probei.
+   ⚠️ Comentariul asta sta INTR-UN TEMPLATE LITERAL (const STIL): niciun accent grav inauntru, si
+   niciun dolar urmat de acolada — amandoua inchid sirul, iar eroarea iese la zeci de randuri de aici. */
+.stare.programat { --verde:#0A6B41; border-color:color-mix(in srgb, var(--verde) 35%, transparent);
+                   background:color-mix(in srgb, var(--verde) 8%, transparent); color:var(--verde);
+                   text-transform:none; letter-spacing:.01em; font-size:12px }
+@media (prefers-color-scheme: dark) { :root:not([data-tema="light"]) .stare.programat { --verde:#5FBF8D } }
+:root[data-tema="dark"] .stare.programat { --verde:#5FBF8D }
 
 /* ANTETUL, refacut la 15.09.2026 (cererea in sase puncte a userului), asezat ca la Calendar:
    PASTILA cat tot randul — bulina · zona de scris · sageata-dreapta · Arhiva · intrerupatorul —, iar
@@ -1343,6 +1361,16 @@ export interface OptiuniSaptamana {
   azi: string
   meniu: Meniu
   nelamuriri?: string[]
+  /**
+   * Săptămâna e PROGRAMATĂ și cine se uită are dreptul s-o știe (20.09.2026).
+   *
+   * ⚠️ DOI ÎNTR-UNUL, dinadins: „e programată" ȘI „omul e adminul programului". Pagina nu întreabă
+   * ea de al doilea — `eAdmin` din `ctx` e pe pagină, dar starea programării se citește din BAZĂ, iar
+   * `index.ts` are și rândul, și omul. Aici ar fi fost ușor de scris un `o.programata && ctx.eAdmin`
+   * pe jumătate, în două locuri, și greu de văzut când unul dintre ele ar fi rămas în urmă.
+   * Pentru oricine altcineva rămâne `false`, deci eticheta scrie „propus" — cum și este.
+   */
+  programata?: boolean
 }
 
 /**
@@ -1416,8 +1444,12 @@ export function paginaSaptamana(o: OptiuniSaptamana): string {
   // „propus"), „modificat după validare" si — din 15.09.2026, cerut de user — iar „validat", verde.
   // ⚠️ Rasturnare curata a cererii din 10.09.2026 („scoate eticheta Validat… lasă doar Propunere").
   // Nu o scoate inapoi fara o cerere care sa-i spuna pe nume.
-  const clasaStare = o.stare === 'propunere' ? 'propus' : o.stare
-  const eticheta = `<span class="stare ${esc(clasaStare)}">${esc(STARE[o.stare] ?? o.stare)}</span>`
+  // ⚠️ PROGRAMATĂ (20.09.2026) ia locul lui „propus", nu se adaugă lângă el: e aceeași stare scrisă în
+  // bază, spusă mai amănunțit celui care are de ce s-o știe. Două pastile una lângă alta („propus" +
+  // „programată") ar fi pus întrebarea „care din ele e adevărată?" fix acolo unde răspunsul e „amândouă".
+  const clasaStare = o.programata ? 'programat' : o.stare === 'propunere' ? 'propus' : o.stare
+  const textStare = o.programata ? `Programată — apare ${candApareSaptamana(o.luni)}` : (STARE[o.stare] ?? o.stare)
+  const eticheta = `<span class="stare ${esc(clasaStare)}">${esc(textStare)}</span>`
   // ⚠️ PROBA (11.09.2026) — MOMENTUL, scris in pagina deasupra datelor: „săptămâna trecută / aceasta /
   // viitoare". Paginile arata acelasi lucru in momente diferite, iar pana acum singurul semn al
   // momentului era in antet, pe butonul rosu. Se scrie doar pe cele trei saptamani de langa azi; pe

@@ -35,6 +35,8 @@ import {
   vocabularul,
   arhivaIntreaga,
   cautaInVocabular,
+  eProgramata,
+  treciLaValidat,
   slujbaCurenta,
   slujbeTrecuteDupaNume,
   tiparele,
@@ -254,6 +256,10 @@ export default {
             // `?din=arhiva` — pus de linkurile din pagina arhivei; de el atarna butonul „Înapoi la
             // arhivă" si marcajul ramas pe segmentul Arhivei (user, 11.09.2026, 16:24)
             meniu: { luni, foaie, azi, ani, dinArhiva: url.searchParams.get('din') === 'arhiva' },
+            // Programarea se SPUNE numai adminului programului (20.09.2026). Pentru restul lumii
+            // săptămâna rămâne „propus", fiindcă asta scrie pe ea în bază — programul n-a fost
+            // validat încă, doar și-a primit ceasul. Pagina adminului e oricum `private, no-store`.
+            programata: ctx.eAdmin && eProgramata(s.rand),
             nelamuriri: s.propunere?.nelamuriri,
           }),
           200,
@@ -315,9 +321,34 @@ export default {
     }
   },
 
+  /**
+   * CEASUL WORKERULUI (cronul din `wrangler.jsonc`, din cinci în cinci minute) — două treburi.
+   *
+   * 1. SĂPTĂMÂNILE PROGRAMATE cărora le-a venit clipa trec pe `validat` (20.09.2026). Trecerea scrie
+   *    și `program.week.validated.v1` în outbox — anunțul parohiei —, deci golirea vine DUPĂ ea, în
+   *    aceeași bătaie: altfel anunțul ar fi așteptat degeaba încă cinci minute.
+   * 2. OUTBOX-ul, ca până acum.
+   *
+   * ⚠️ IDEMPOTENT: `treciLaValidat` nu găsește nimic a doua oară (vezi `depozit.ts`), deci cele 288
+   * de bătăi zilnice nu scriu nimic în zilele obișnuite și nu umplu istoricul cu duplicate.
+   *
+   * ⚠️ TREABA ÎNTÂI NU ARE VOIE S-O ÎNECE PE A DOUA. Golirea outbox-ului e nervul aplicației și era
+   * aici de la început; trecerea săptămânilor s-a așezat ÎNAINTEA ei. Dacă migrația `0003` n-a apucat
+   * să fie rulată pe mediul acela (ordinea e migrația, apoi workerul — dar se încurcă ușor),
+   * interogarea de aici cade cu „no such column: programat_la" și, lăsată să curgă, ar fi oprit TOATE
+   * evenimentele programului, nu doar programarea. Se scrie în jurnal ca eroare și se merge mai
+   * departe: raza greșelii rămâne cât lucrul cel nou.
+   */
   async scheduled(_ev: ScheduledController, env: Env): Promise<void> {
+    const log = new Logger({ service: SERVICIU, correlationId: 'ceas' })
+    try {
+      const trecute = await treciLaValidat(env.DB, new Date(), 'ceas')
+      if (trecute.length) log.info('saptamani programate, trecute la validat', { saptamani: trecute.map((s) => s.luni), validat_la: trecute.map((s) => s.validat_la) })
+    } catch (e) {
+      log.error('trecerea saptamanilor programate a cazut', { eroare: e instanceof Error ? e.message : String(e) })
+    }
     const rezultat = await golesteOutbox(env.DB, env.EVENIMENTE)
-    if (rezultat.publicate > 0 || rezultat.esuate > 0) new Logger({ service: SERVICIU, correlationId: 'cron' }).info('outbox golit', rezultat)
+    if (rezultat.publicate > 0 || rezultat.esuate > 0) log.info('outbox golit', rezultat)
   },
 }
 

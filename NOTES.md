@@ -316,6 +316,20 @@ propunerea automată, ca în V1.
 
 ## NEXT
 
+00i. **PROGRAMAREA săptămânii la PROGRAM — scrisă pe 20.09.2026, seara (program 0.9.6 → 0.10.0). ⚠️ NEPUBLICATĂ.**
+    Cererea userului (22:47): „La programul liturgic aceeași poveste cu Validare și publicare / Validare și programare, la fel
+    ca la Buletinul bisericii." Regulile durabile: „Programul (A2)" → „Programarea, din 20.09.2026"; amănuntele zilei: jurnalul
+    din 20.09.2026. Probe: `tests/program-programare.test.ts` (52 noi), suita 1241/1241, typecheck 36/36, mutanți 11/11.
+    **DE FĂCUT, în ordinea asta**:
+    1. ⚠️ **deploy**: `node infrastructure/migrations/ruleaza.mjs --remote --env production --chiar-productia --doar program`
+       (aplică 0003; ALTER **fără** `IF NOT EXISTS`, deci o singură rulare pe mediu) **ÎNAINTEA** workerului, apoi
+       `wrangler deploy` pe program. **Buletinul NU se republică** — schimbarea lui e pur internă (pragul mutat în `@xc/ui`),
+       versiunea rămâne 0.17.0;
+    2. de verificat în `/schedules` că programul chiar are cronul înregistrat (buletinul căzuse acolo pe `0` ca zi a săptămânii;
+       al programului e `*/5 * * * *`, fără zi, deci n-ar trebui — dar se uită ușor);
+    3. aceeași santinelă lipsă ca la buletin (vezi 00h.1): un cron căzut lasă săptămâna `propus` cu ceasul pe ea, iar
+       programul NU apare duminică și nimeni nu află. Aici e mai rău decât la buletin: programul e pe ușa bisericii.
+
 00h. **PROGRAMAREA numărului de buletin (validare înainte de duminică, ora 12:00) — scrisă pe 20.09.2026, după-amiaza (buletin 0.17.0).**
     Cererea userului (13:56): „dacă este înainte de ziua pentru care este programat buletinul — adică înainte de ora 12.00,
     duminica aceea — se poate doar «Validează și programează»; dacă este duminică după ora 12.00 — «Validează și publică»";
@@ -1621,6 +1635,46 @@ care se strânge.
 - **În dev paginile nu se cachează** (`no-store`; pe staging `max-age=300`) — cele 5 minute făceau
   schimbările să pară nefăcute. (`calendar` n-are ramura asta: și local cachează 5 min.)
 
+### Programarea, din 20.09.2026
+
+User: „La programul liturgic aceeași poveste cu Validare și publicare / Validare și programare, la fel
+ca la Buletinul bisericii." Deci `program.valideaza_saptamana` face **același lucru**, iar ce se
+întâmplă hotărăște **ceasul**, nu omul. Nu există „publică oricum".
+
+- **PRAGUL unei săptămâni = DUMINICA DINAINTEA EI, ora 12:00 a Bucureștiului** (`luni − 1 zi`).
+  Nu lunea ei. Motivul e al hârtiei: buletinul de duminica D tipărește pe pagina a patra programul
+  săptămânii care începe luni D+1, iar cele două se dau enoriașilor în aceeași clipă, la ieșirea de la
+  Liturghie. **Aceeași clipă, o singură socoteală**: `packages/ui/src/prag.ts` (`pragPublicarii`,
+  `pragScris`, `seProgrameaza`, `candApare`, cu decalajul cerut de la ICU — 09:00Z vara, 10:00Z iarna).
+  `apps/program/src/ceas.ts` = doar traducerea „cheia săptămânii → ziua de prag"
+  (`duminicaDinainte`, `pragSaptamanii`, `seProgrameaza`, `candApareSaptamana`);
+  `apps/buletin/src/ceas.ts` = re-export din `@xc/ui`, cu numele buletinului.
+- **ÎN BAZĂ NU E NICIO STARE NOUĂ.** O săptămână e **programată** când `stare = 'propus'` **ȘI**
+  `programat_la IS NOT NULL` (migrația `0003_programare.sql`: două coloane + index pe `programat_la`).
+  CHECK-ul de pe `saptamani.stare` n-a fost atins — o stare nouă ar fi cerut refacerea tabelului peste
+  datele parohiei, pentru un cuvânt. Întrebarea se pune printr-un singur loc: `eProgramata(rand)` din
+  `depozit.ts`, care citește **COLOANA, nu ceasul** (lecția buletinului: un singur adevăr, cel din bază).
+- **`programat_la`** = clipa ANUNȚATĂ (ISO UTC); **`programat_de`** = cine a apăsat. La trecere ajung
+  chiar în `validat_la` / `validat_de`: validarea rămâne a omului, la ora pe care a citit-o pe buton.
+- **CRONUL** (`*/5 * * * *`, deja în toate trei blocurile din `wrangler.jsonc`): `scheduled` →
+  `treciLaValidat` (un singur `UPDATE … WHERE stare='propus' AND programat_la IS NOT NULL AND
+  programat_la <= ?`, deci idempotent prin chiar forma lui), istoric `'validat'` și eveniment
+  **`program.week.validated.v1` per săptămână** — de aici pleacă anunțul —, apoi `golesteOutbox`, în
+  aceeași bătaie. La PROGRAMARE se scrie doar `program.week.changed.v1`: trimis atunci, anunțul ar fi
+  ajuns la enoriași marți, pentru o săptămână care încă n-a început.
+- **RETRAGEREA pe o săptămână programată = anularea programării** (`programat_la/de = NULL`, starea
+  rămâne `propus`, istoric `'retras'` cu `din: 'programat'`). ⚠️ Refuzul vechi „e deja «propus»" se dă
+  **numai dacă nu e programată**: o programată are tot `propus` scris pe ea, iar refuzul ar fi lăsat-o
+  să apară singură duminică, după ce omul tocmai ceruse să n-o facă.
+- **MODIFICĂRILE RĂMÂN PERMISE** și nu strică programarea: cronul validează **ce e în bază la prag**,
+  nu ce era când s-a apăsat. O slujbă adăugată joi intră firesc în programul care apare duminică.
+- **VIZIBILITATE**: pentru lume (site, `/v1/*`, enorias) săptămâna e `propus`, cum și este — contractul
+  `STARI_SAPTAMANA` e neschimbat, `saptamanaDin` nu poartă coloanele noi, iar `arhivaIntreaga` își
+  scrie coloanele **pe nume** tocmai ca ele să nu iasă pe `/v1/arhiva.json`. Numai **adminul
+  programului** vede, pe pagina săptămânii, eticheta verde „Programată — apare duminică, …, la ora
+  12:00" în locul lui „propus" (`.stare.programat`, `#0A6B41` / `#5FBF8D`). Foaia A4 (`/v1/foaie`)
+  rămâne doar a săptămânilor `validat`.
+
 ### Hârtiile
 
 Trei, toate pe aceleași două trepte: **PDF** (foaia A4) și **JPG** (foaia ca poză) în rândul de
@@ -2575,6 +2629,20 @@ forța antetul `Host`**.
 - Două porți verificate înainte: (1) **V1 e mort** — toți cei 21 de workeri ai contului au prefix `xc-`, niciun `biserica-curatenie` / `biserica-biblioteca` / `biserica-cont`, deci nu există dublură la cutover; (2) **automation-worker n-are cron** (fără `triggers` nici sus, nici în `production`), singura regulă activă în `xc-automation-production` e `notificare-eveniment-publicat` (`calendar.event.published.v1`), declanșată de o publicare făcută de om, nu de ceas.
 - **Nimic nu pleacă retroactiv**: în `deliveries` de producție sunt 11 rânduri, toate `status='simulated'`, coada e goală — comutatorul se aplică doar cererilor de acum înainte.
 - Primele trimiteri reale așteptate: **biblioteca luni 21.09, 09:00** (dacă are ce anunța), **curățenia vineri 25.09, 09:00** (alerta, dacă duminica nu e plină) și **sâmbătă 26.09, 09:00** (săptămânalul).
+
+**PROGRAMAREA săptămânii la program** (22:47–). Cererea userului, într-un rând: „La programul liturgic aceeași poveste cu Validare și publicare / Validare și programare, la fel ca la Buletinul bisericii." Program **0.9.6 → 0.10.0**; buletinul rămâne **0.17.0** (schimbarea lui e pur internă). Regulile durabile au intrat în „Programul (A2)" → „Programarea, din 20.09.2026"; aici, drumul și ce s-a învățat.
+
+- **PRAGUL NU E AL LUNII, E AL DUMINICII DINAINTE** (`luni − 1 zi`, ora 12:00 a Bucureștiului). Asta a fost singura hotărâre care cerea gândit: buletinul de duminica D tipărește pe pagina a patra programul săptămânii care începe luni D+1, iar cele două se dau enoriașilor în aceeași clipă, la ieșirea de la Liturghie. Deci săptămâna 28.09–04.10 apare duminică, 27.09, odată cu numărul. Pe lunea ei, programul ar fi apărut pe site cu o zi DUPĂ foaia pe care o ține omul în mână — și nimic n-ar fi pârâit.
+- **SOCOTEALA A URCAT ÎN `@xc/ui`** (`packages/ui/src/prag.ts`: `pragPublicarii`, `pragScris`, `seProgrameaza`, `candApare`, `decalaj`, `ORA_APARITIEI`). A stat o zi la buletin; de când o cer doi, două exemplare ale ei ar fi fost exact felul în care numărul și programul ajung să apară la ore diferite. `apps/buletin/src/ceas.ts` a rămas ca NUME (re-export, semnături neatinse — cele 69 de probe ale lui au trecut nemodificate); `apps/program/src/ceas.ts` e mic și e doar traducerea „cheia săptămânii → ziua de prag". Probă care ține legătura, nu formulele: `pragSaptamanii(luni)` === `pragBuletin(luni − 1)`, pe patru săptămâni din tot anul.
+- **D1 fără stare nouă**: `0003_programare.sql` = `programat_la` + `programat_de` + index. CHECK-ul de pe `saptamani.stare` NU s-a atins — o stare nouă ar fi cerut un table-rebuild peste datele parohiei, pentru un cuvânt. Programată = `stare='propus' AND programat_la IS NOT NULL`, întrebat printr-un singur `eProgramata(rand)` care citește COLOANA, nu ceasul. `istoric.ce` n-are CHECK (doar un comentariu care înșiră valorile), deci `'programat'` a intrat curat. Aplicată pe baza LOCALĂ (656 de săptămâni, 0 programate); **producția neatinsă** — vezi NEXT 00i.
+- **Cronul exista deja** (`*/5 * * * *`, în toate trei blocurile) și golea outbox-ul; i s-a pus înainte `treciLaValidat`. Un singur `UPDATE … SET validat_de = programat_de, validat_la = programat_la, programat_la = NULL … WHERE stare='propus' AND programat_la IS NOT NULL AND programat_la <= ?` — idempotent prin chiar forma lui —, apoi istoric și `program.week.validated.v1` **pe săptămână**, și abia pe urmă `golesteOutbox`, ca anunțul să nu mai aștepte încă cinci minute. `validat_la` = clipa ANUNȚATĂ, nu a cronului. La programare pleacă doar `changed`: `validated` trimis marți ar fi dus programul la enoriași cu cinci zile înainte, adică exact ce înlătură programarea.
+- **Partea care era gata să scape — „e deja «propus»"**. Retragerea refuza orice săptămână `propus`. Cum una programată are tot `propus` scris pe ea, refuzul ar fi părut cuminte — și ar fi lăsat-o să se valideze singură duminică, după ce omul tocmai ceruse să n-o facă. Acum `retrage_validarea` pe o programată ANULEAZĂ programarea (istoric `'retras'` cu `din:'programat'`), iar refuzul vechi se dă numai unde e adevărat.
+- **A doua**: `arhivaIntreaga` făcea `SELECT *` și iese pe `/v1/arhiva.json`, ușă deschisă de mașini — cele două coloane noi ar fi plecat în lume de la sine, cu tot cu user-id-ul celui care a apăsat. Acum coloanele se scriu pe nume, cu proba lângă ele.
+- **Modificările pe o săptămână programată rămân permise** și nu strică programarea (hotărâre notată userului): cronul validează CE E ÎN BAZĂ la prag. O programare care ar cădea la prima îndreptare ar fi fost mai rea decât niciuna — omul n-ar fi aflat, și programul n-ar fi apărut.
+- **Eticheta verde** „Programată — apare duminică, …, la ora 12:00" în locul lui „propus", **numai pentru adminul programului** (`ctx.eAdmin && eProgramata(rand)`, hotărât în `index.ts`, nu în pagină). ⚠️ Pățit: comentariul CSS care scria în clar vorbele etichetei ajungea în CSS-ul FIECĂREI pagini, deci proba „enoriașul nu le vede" cădea pe o pagină în care eticheta nu se scrie deloc.
+- **Trecerea nu are voie să înece golirea outbox-ului**: `scheduled` o ține într-un `try` și scrie eroarea în jurnal. Cazul real e ordinea de deploy — workerul urcat înaintea migrației `0003` face interogarea să cadă cu „no such column: programat_la", iar fără plasă ar fi oprit TOATE evenimentele programului, nu doar programarea.
+- Probe: `tests/program-programare.test.ts` (**52 noi**) — fals de D1 care CITEȘTE SET-ul și WHERE-ul din SQL (parsare de condiții, `COALESCE`, coloană = coloană) și care întoarce COPII ale rândurilor, ca D1: prima variantă dădea chiar obiectele din tabel, iar `UPDATE`-ul le schimba sub cel care le citise — așa a trecut verde un `treciLaValidat` care întorcea `validat_la: null`. Suita întreagă **1241/1241**, `turbo typecheck` **36/36**, **mutanți 11/11** (clauza de timp din cron, `validat_la` rescris, `<` → `<=`, ramura de anulare din retragere, `changed` → `validated`, pragul pe lunea săptămânii, `SELECT *` în arhivă, eticheta arătată oricui, `eProgramata` fără `stare`, validarea care nu stinge ceasul, plasa de sub outbox).
+- **Nepublicat**: migrația 0003 pe producție ÎNAINTEA workerului, apoi `wrangler deploy` (NEXT 00i). Buletinul nu se republică.
 
 ### 2026-09-19
 
