@@ -1,6 +1,7 @@
 {
   // Singurul serviciu care VA avea vreodata dreptul sa livreze email/WhatsApp.
   // Cat timp LIVRARE_REALA nu e „da", totul merge in sandbox: se inregistreaza, nu pleaca nimic.
+  // Productia e pe „da" din 20.09.2026 (livrare reala); dev si staging raman pe „nu".
   // Cand se porneste, emailul merge prin Cloudflare Email Service (binding `send_email`), ca la identitate.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "xc-communication",
@@ -49,7 +50,7 @@
       "name": "xc-communication-production",
       "vars": {
         "MEDIU": "production",
-        "LIVRARE_REALA": "nu",
+        "LIVRARE_REALA": "da",
         "POSTA_DE_LA": "no-reply@posta.sfantul-ilie.ro",
         "POSTA_NUME": "Biserica Sfântul Ilie – Hanul Colței"
       },

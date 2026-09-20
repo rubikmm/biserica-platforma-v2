@@ -1294,6 +1294,7 @@ aparat.
     și ora din panou (`apps/curatenie/src/cron.ts`) — alertă vineri 9, săptămânal sâmbătă 16, lunar.
   - **Singura plasă e `LIVRARE_REALA: "nu"`** în `services/communication-worker/wrangler.jsonc`,
     pusă în toate cele trei medii. Cât e „nu", totul intră în nisip: se înregistrează, nu pleacă.
+  - ✅ **PORNITĂ pe producție pe 20.09.2026, seara** (user: „Reia"): `LIVRARE_REALA: "da"` numai în `env.production`; dev și staging rămân „nu".
   - **⚠️ ORDINEA LA CUTOVER: întâi se stinge ceasul V1, abia apoi `LIVRARE_REALA="da"` pe V2.**
     Invers, cei 29 de voluntari primesc câte două scrisori.
   - **Înainte de orice scriere în `xc-*-production`, întreabă-te ce cron s-ar putea trezi peste
@@ -2569,6 +2570,11 @@ forța antetul `Host`**.
 **Curățenie 0.4.3 → 0.4.4** (13:47, trei puncte ale userului): (1) nota de sub „Cine ești?" („Alege-ți numele… rămâne ținut minte…") a ieșit; (2) apăsarea pe un interval gol la vizitator NU mai deschide fereastra „Ești în modul vizualizare" (dialogul a ieșit cu tot cu CSS-ul lui), doar derulează la lista de nume; (3) „Comunicare = simulated" din Administrare e `LIVRARE_REALA: "nu"` pe `communication-worker` — pauza dinadins de la cutover, **neatinsă**: pornirea ar trimite CHIAR scrisorile curățeniei (cron orar, 29 de voluntari) și așteaptă hotărârea userului. Rămas orfan: `.contact-dialog` din `stil.ts` (~30 de linii CSS fără purtător). Probe: `curatenie-fantoma` adaptat.
 
 **Publicarea celor trei** (15:42, user: „Hai"; opus-high). Fetch curat, probe 68/68 pe cele trei fișiere, typecheck (turbo, din cache) 3/3, commit **`055b2df`**, push (backupul zilei exista deja). Înainte de publicare: `GET https://live.sfantul-ilie.ro/v1/stare` (rută publică, `apps/live/src/index.ts`) → `live:false`, `slujba:null`, următoarea „Sfântul Maslu" marți 22.09, 18:00; radioul difuza muzică. Publicate 15:50, în ordinea curatenie → **radio → live** (live nou + radio vechi = Setări fără panou): `a747a3b4`, `7f42aeba`, `cbbf4e05`. Verificate: subsoluri 0.4.4 / 0.2.0 / 0.2.0, `radio/admin` 303 `/setari`, `live/admin` 303 `https://radio.sfantul-ilie.ro/setari`, `/api/fisier` al radioului 200 `audio/mpeg`; ceasul radioului a mers neîntrerupt peste republicare (`secunda` a crescut pe aceeași piesă, `versiune:51`), deci DO-urile au repornit curat. ⚠️ Filtrele turbo se numesc `@xc/app-<nume>`, nu `@xc/<nume>`.
+
+**Livrarea reală de email PORNITĂ pe producție** (seara, user: „Reia"). `LIVRARE_REALA: "nu" → "da"` numai în `env.production` din `services/communication-worker/wrangler.jsonc`; blocul de sus (dev) și `env.staging` rămân „nu". communication-worker **0.1.1 → 0.1.2**, publicat cu `wrangler deploy --env production`, **version id `60b15fb7-6608-48f9-8bed-93201841d585`** (ultima versiune 100% în `deployments list`; bindingurile confirmă `env.LIVRARE_REALA ("da")` și `env.POSTA`). Probe 47/47 (`contracte`, `admini-pe-aplicatie`).
+- Două porți verificate înainte: (1) **V1 e mort** — toți cei 21 de workeri ai contului au prefix `xc-`, niciun `biserica-curatenie` / `biserica-biblioteca` / `biserica-cont`, deci nu există dublură la cutover; (2) **automation-worker n-are cron** (fără `triggers` nici sus, nici în `production`), singura regulă activă în `xc-automation-production` e `notificare-eveniment-publicat` (`calendar.event.published.v1`), declanșată de o publicare făcută de om, nu de ceas.
+- **Nimic nu pleacă retroactiv**: în `deliveries` de producție sunt 11 rânduri, toate `status='simulated'`, coada e goală — comutatorul se aplică doar cererilor de acum înainte.
+- Primele trimiteri reale așteptate: **biblioteca luni 21.09, 09:00** (dacă are ce anunța), **curățenia vineri 25.09, 09:00** (alerta, dacă duminica nu e plină) și **sâmbătă 26.09, 09:00** (săptămânalul).
 
 ### 2026-09-19
 
