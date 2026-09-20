@@ -146,8 +146,9 @@ describe('ușa Website-ului — butoanele arată la fel pentru toată lumea', ()
     expect(claseDeStare(text)).toEqual([])
   })
 
-  it('nici adminul, nici super-adminul nu mai văd chenare', async () => {
-    for (const rol of ['admin', 'super-admin']) {
+  // ⚠️ Rolul global `admin` a dispărut pe 19.09.2026; au rămas utilizatorul și super-adminul.
+  it('nici utilizatorul, nici super-adminul nu mai văd chenare', async () => {
+    for (const rol of ['user', 'super-admin']) {
       const text = await (await usa(mediu(sesiune([rol])))).text()
       expect(claseDeStare(text), rol).toEqual([])
     }
@@ -177,7 +178,7 @@ describe('ușa Website-ului — butoanele arată la fel pentru toată lumea', ()
     expect(alOmului.length).toBeGreaterThan(0)
     for (const [cine, env] of [
       ['cu cont', mediu(sesiune(['user']))],
-      ['admin platformă', mediu(sesiune(['admin']))],
+      ['super-admin', mediu(sesiune(['super-admin']))],
       ['admin Website', mediu(sesiune(['user']), ['website.manage'])],
     ] as const) {
       expect(butoaneleUsii(await (await usa(env)).text()), cine).toEqual(alOmului)
@@ -190,7 +191,7 @@ describe('ușa Website-ului — butoanele arată la fel pentru toată lumea', ()
    * regulii — ce e al unuia să nu ajungă prin cache la altul.
    */
   it('pagina omului intrat nu se ține în niciun cache, cea anonimă da', async () => {
-    const alAdminului = await usa(mediu(sesiune(['admin'])))
+    const alAdminului = await usa(mediu(sesiune(['super-admin'])))
     expect(alAdminului.headers.get('cache-control')).toBe('private, no-store')
     const alOmului = await usa(mediu(sesiune([], false)), false)
     expect(alOmului.headers.get('cache-control')).toContain('public')

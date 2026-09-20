@@ -35,7 +35,6 @@ import {
   type AplicatieAdministrabila,
   type AplicatieCuMembri,
   type Asociere,
-  type Masca,
   type Permisiune,
   type Principal,
 } from '@xc/contracts'
@@ -68,7 +67,7 @@ export interface UneltleSetarilor {
   /** cine e pe sesiune acum; `null` = neautentificat */
   principal: Principal | null
   /**
-   * MASCA „vezi ca" purtată de sesiune, dacă e (`user` · `admin` · `anonim`); `null`/lipsă = fără
+   * MASCA „vezi ca" purtată de sesiune, dacă e (`user` · `anonim` · `admin:<cod>`); `null`/lipsă = fără
    * mască. Sub masca „neautentificat" identitatea întoarce o sesiune anonimă, deci `principal` e
    * `null` deși la tastatură e un super-admin — de aici pagina știe să nu-l trimită la intrare.
    */
@@ -726,7 +725,7 @@ ${o.rubriciApp}
  * „Cont" din antet ține comutatoarele măștii, deci întoarcerea e la o apăsare.
  */
 function corpulMastii(o: { nume: string; prefix: string; veziCa: string }): string {
-  const cine = esc(numeMasca(o.veziCa as Masca))
+  const cine = esc(numeMasca(o.veziCa))
   return `<div class="cap">
   <h1 class="titlu-lista">Setări — ${esc(o.nume)}</h1>
   <p class="sursa">Te uiți ca ${cine} — așa arată pagina asta cu ochii unui om neintrat.</p>

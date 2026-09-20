@@ -316,6 +316,20 @@ propunerea automată, ca în V1.
 
 ## NEXT
 
+00g. **RETRAGEREA unui număr publicat greșit + justify la piciorul coloanelor — scrise pe 20.09.2026, dimineața (buletin 0.16.0).**
+    Cererea userului (08:07): „Trebuie să avem și buton de ne-publicare — dacă s-a publicat greșit — și să poată face asta
+    și chat-ul"; (08:11): „col2, jos, nu mai este justify". Amănuntele în jurnalul zilei (20.09.2026).
+    ⚠️ **Publicarea buletinului poartă și runda de aseară** (rolul global `admin` stins, carcasa cu `ca=admin:<cod>`,
+    authz 0.4.0, identity 0.4.0, account 0.2.5, 11 aplicații) — ordinea authz → identity → cont → aplicații. Cele două
+    rânduri `role='admin'` din producție s-au mutat pe 20.09, 08:05 (Gabriel → super-admin, Laura → admin la curățenie).
+    **Deschise, în ordinea în care dor**:
+    1. `buletin.retrage` apare ca bifă NEbifată în Setări → „Chat AI" (lista vine din manifest). Azi e cosmetic — harta
+       deterministă nu trece prin poarta `unelte` din KV —, dar dacă harta iese vreodată, retragerea ar tăcea;
+    2. curgerea lasă un `<p class="t">` GOL într-o coloană rămasă fix fără loc (`taie()` cu `bun = 0`, `foaie.ts`) —
+       invizibil, nu strică socoteala, dar e gunoi în DOM; de curățat;
+    3. `schita/arhiva/…` nu se curăță niciodată (câțiva KB pe număr publicat) — lăsat așa dinadins;
+    4. retragerea n-are prag de timp: cât nu apare alt număr, cel curent se poate retrage oricând.
+
 00f. **BULETINUL 616 — harta, cedările, semnătura, marcajele; scris și PUBLICAT pe 19.09.2026.**
     Vezi jurnalul zilei (19.09.2026) și „BULETINUL — foaia tipărită". Pe producție: buletin **0.15.1**,
     chat-worker **0.6.2**, program **0.9.3**.
@@ -2438,6 +2452,21 @@ forța antetul `Host`**.
   copiere în fiecare aplicație** — de aici costul oricărei schimbări transversale (antetul în 12 locuri).
 
 ## Jurnal
+
+### 2026-09-20
+
+**Retragerea (ne-publicarea) unui număr publicat greșit — buton + chat** (08:07–09:10, mod auto, trei subagenți). Cererea userului: „Trebuie să avem și buton de ne-publicare — dacă s-a publicat greșit — și să poată face asta și chat-ul." Buletin **0.16.0**.
+
+- **Ce e retragerea**: inversul EXACT al validării. Rândul iese din D1 (`stergeBuletin`, `depozit.ts` — `DELETE … AND sursa='site'`; încuietoarea e în SQL: cele 619 numere din arhiva Word nu se retrag de nicăieri, „nu îndreptăm noi arhiva"), iar numărul se ÎNTOARCE ca schiță pe `/nou`, cu același nr., aceeași zi și tot ce avea. Fișierele (PDF, copertă, broșuri, `compus/…json`, poze) RĂMÂN — sunt ale ciornei, `ciornaDinDepozit` le servește mai departe; pe `/nou` omul vede FOAIA publicată, nu o variantă zero recompusă. Se retrage NUMAI numărul curent (cel fără urmaș) și numai `sursa='site'`.
+- **O singură ușă**: `POST /nou` cu `fapta=retrage` (`index.ts`), lângă `valideaza` — publicarea și ne-publicarea sunt aceeași hotărâre în două sensuri. Fapta o face `retrageNumarul()` (`actiuni.ts`), chemată la fel de buton și de acțiunea de chat `buletin.retrage` (`efect: 'scrie'` → Da/Nu; `rezuma` ARUNCĂ când nu se poate, deci omul află de ce ÎNAINTE de orice ștergere). Cernerea stă într-un singur loc, `deRetras()`. `nr`/`data` sunt VERIFICARE, nu țintă: ținta o află serverul (`ultimul`), fiindcă bula stă numai pe `/nou`, unde numărul tocmai publicat nu mai e „următorul", ci CURENTUL. Audit `buletin.retrage` cu `summary.izvor`. Refuzurile ies 409 prin `nuMerge`, izbânda redirectează la `/nou`.
+- **Butonul „Retrage"** (`pagini.ts` → `retragerea`, `IC_RETRAGE`, `JS_RETRAGE`): al patrulea de sub copertă, pe `/` și `/buletin/<nr>-<data>`, NUMAI la `ctx.eAdmin && acum && b.sursa === 'site'` (`butoaneleNumarului` a primit al patrulea parametru, `acum`, din `m.acum` deja calculat în ambii apelanți; ciorna de pe `/nou` nu-l capătă). Confirmare într-un `<dialog class="modal">` (regula ferestrelor; stilurile existau în `stil.ts`), cu `window.confirm()` de rezervă unde nu e `<dialog>`.
+- **Schița se PUNE DEOPARTE la validare, nu se mai șterge** (`arhiveazaSchita` → `schita/arhiva/<nr>-<data>.json`, `schita.ts`; mutată, nu copiată): retragerea o aduce înapoi întreagă (`dezarhiveazaSchita`), cu ADRESELE POZELOR — cererea din `compus/` ține doar `poza: true/false`, deci refăcută din ea poza s-ar fi pierdut fără nicio eroare. Trei izvoare, în ordine: `arhiva` (drumul bun) → `cerere` (`schitaDinCerere`, pentru numerele publicate înainte de 20.09; poza se dă din nou și i se spune omului) → `implicita`. Schița refăcută din cerere are `gata` PLIN pe toate subiectele, altfel `/nou` ar socoti-o neatinsă și ar porni singur „varianta zero" peste foaia de îndreptat, iar bula ar relua chestionarul. Prefixul `schita/arhiva/` nu se prinde în listarea `schita/<nr>-` (probă anume). Schița se scrie ÎNAINTE de redirect, fără `waitUntil` — altfel `/nou` s-ar putea deschide înaintea ei.
+- **`urmatorulCuSchita`** (`pagini.ts`, lângă `buletinulNou`): TOATE locurile care întreabă „ce număr urmează" (`/nou`, `/nou/compune`, `urmatorul()`, `schitaNumarului()`) preferă o schiță existentă pentru `nr+1` (un `R2.list` cu prefix; cea mai veche zi). Fără asta, un număr retras luni (616/20.09) rămânea orfan: ecranul ar fi cerut 616/27.09. ⚠️ Schimbă purtarea și în afara retragerii: o ciornă lăsată peste duminică nu mai sare pe duminica următoare — îndreptare, necerută în cuvinte de user.
+- **Harta** (`harta.ts`): fapta `retrage` (subiect `numar`, `confirma: true`, `ascunsa: true` ca `valideaza` — nu se oferă pe butoanele nivelului 2, lângă „compune numărul", ar fi capcană; se recunoaște din vorbe: „retrage numărul", „anulează publicarea", „nepublică", „scoate din arhivă", „dă înapoi la schiță", „l-am publicat greșit", „retrage-l" — ultimele două adăugate după verificare, la început cădeau pe `necunoscut`). `traduFapta` → `buletin.retrage` fără argumente.
+- **Poarta `unelte` din KV `modul:chat:buletin` NU se aplică**: buletinul e „cu hartă", `peHarta` din chat-worker cheamă acțiunea direct (`cereActiune`); `adunaUneltele` e doar pe drumul cu model. Deci userul n-are nimic de bifat în Setări → „Chat AI" — dar `buletin.retrage` apare acolo ca bifă nebifată (cosmetic, vezi NEXT 00g).
+- Probe: `tests/buletin-retrage.test.ts` (nou, 31 — D1 fals cu tabelă adevărată, ca DELETE-ul să scoată rândul; R2 fals cu `list({prefix})`; `waitUntil` care se poate aștepta), `buletin-harta` (+4, apoi frazele de mai sus), `buletin-ciorna` (+1: ciorna de pe `/nou` NU capătă „Retrage"). Suita întreagă: 1105/1105 (înainte de frazele adăugate la hartă), `turbo typecheck` 36/36.
+
+**Justify la piciorul coloanelor** (08:11; user: „La fiecare pagină ciornă — colțul dreapta jos — adică col2, jos, nu mai este justify — propoziția nu se duce până la capăt"). Cauza, dovedită cu `chromium --dump-dom` + `Range.getClientRects()` pe `proba-foaie.mjs --gol --secundari 2`: curgerea (`CURGE` din `foaie.ts`) taie paragraful la piciorul FIECĂREI coloane și lasă bucata ca `<p>` întreg, iar CSS-ul nu întinde niciodată ultimul rând al unui bloc. NU e regresie: marcajele din 19.09 n-au nicio vină, `text-align-last` n-a existat niciodată în repo. Era la TOATE coloanele — gol dreapta măsurat (coloana 321 px): 1b 91 px, 3b 91 px, 3a 15 px —, dar la col1 golul e ascuns de șanț, la col2 cade în colțul foii, lângă chenar. Leac: `p.t.continua { text-align-last: justify }` + `bucata.className += ' continua'` NUMAI pe ramura `if (coada)` din `curge()` — un paragraf care se încheie în coloană rămâne cu rândul scurt, cum se cuvine. După: 0.00 px la toate cele 6 hotare; raportul curgerii identic (`intrate` 7801, `peDinafara` 0, `coloaneFolosite` 7); `--verifica` verde pe toate 3 variantele; măsurile socotelii neatinse. Capturi în `dist/jos-inainte-1.png` / `dist/jos-dupa-1.png` (gitignorat). Probe: `buletin-foaie` +3 (server-side: regula CSS, atribuirea unică în `if (coada)`, `foaieHtml()` nu scrie clasa). Găsit pe drum, neatins: `<p class="t">` GOL lăsat de `taie()` cu `bun = 0` într-o coloană fără loc (NEXT 00g).
 
 ### 2026-09-19
 

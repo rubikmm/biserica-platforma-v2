@@ -13,14 +13,15 @@
  * (`parish:`, `team:`, `audience:`), dar toate aplicatiile intreaba autorizarea cu `global`, deci un
  * rol cu scope ingust ar fi fost refuzat peste tot: cheia e singura axa care lucreaza cu adevarat.
  *
- * ⚠️ Rolul de admin GLOBAL ramane neatins: `PERMISIUNI_IMPLICITE.admin` are toate cheile de mai jos,
- * deci parintele face peste tot ce facea si pana acum. Deosebirea se vede la RETRAGERE: dreptul
- * venit din rol nu se poate lua din aplicatie (ar trebui coborat rolul, ceea ce e altceva) —
- * autorizarea le si deosebeste, in `/cine-are` si `/harta-admini`.
+ * ⚠️ DIN 19.09.2026 REGISTRUL ASTA E SINGURUL DRUM spre cheile aplicatiilor: rolul global `admin` s-a
+ * stins (vezi `ROLURI` din `permisiuni.ts`), deci nu mai exista nicio treapta care sa le dea pe toate
+ * deodata, afara de super-admin. Cine tinea o aplicatie „din rol" se numeste de acum aici, la ea.
+ * Prin rol mai vin cheile doar super-adminului — de aceea `prinRol` din `/cine-are` si `/harta-admini`
+ * inseamna acum, practic, „e super-admin".
  *
- * ⚠️ Cine e sub masca „vezi ca" NU capata granturi: autorizarea decide cu permisiunile implicite ale
- * rolului imprumutat. Deci un super-admin „ca utilizator" nu vede panourile niciunei aplicatii, chiar
- * daca omul adevarat ar avea cheia — asa se cuvine, altfel previzualizarea ar minti.
+ * ⚠️ Cine e sub masca „vezi ca" NU capata granturi: autorizarea decide cu `permisiunileMastii`. Un
+ * super-admin „ca utilizator" nu vede panourile niciunei aplicatii, chiar daca omul adevarat ar avea
+ * cheia; „ca `admin:<cod>`" vede exact cheile aplicatiei aceleia, si nimic in plus.
  */
 import type { Permisiune } from './permisiuni.js'
 

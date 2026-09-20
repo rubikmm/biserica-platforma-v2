@@ -6,6 +6,8 @@ import {
   PERMISIUNI_IMPLICITE,
   aplicatiaAdministrabila,
   cheileAdminului,
+  permisiunileMastii,
+  type Masca,
 } from '../packages/contracts/src/index.js'
 import { eAdminulAplicatiei } from '../packages/authorization/src/index.js'
 import { ruteazaSetari, type MediuSetari } from '../packages/setari/src/index.js'
@@ -38,11 +40,13 @@ describe('registrul aplicațiilor administrabile', () => {
     }
   })
 
-  /** Altfel părintele ar pierde în tăcere o aplicație pe care o ținea prin rol. */
-  it('toate cheile de admin vin cu rolul global de administrator', () => {
+  /**
+   * ⚠️ Rolul global `admin` s-a stins pe 19.09.2026, deci singurul rol care mai ține toate aplicațiile
+   * e super-adminul. Dacă o cheie iese din lista lui, el pierde în tăcere o aplicație.
+   */
+  it('toate cheile de admin vin cu rolul de super-admin', () => {
     for (const a of APLICATII_ADMINISTRABILE) {
       for (const cheie of cheileAdminului(a.cod)) {
-        expect(PERMISIUNI_IMPLICITE.admin, `${a.cod} → ${cheie}`).toContain(cheie)
         expect(PERMISIUNI_IMPLICITE['super-admin'], `${a.cod} → ${cheie}`).toContain(cheie)
       }
     }
@@ -110,7 +114,7 @@ function autorizare(roluri: string[], granturi: string[] = [], masca?: string) {
         cereri.push(cheie)
         // sub mască se uită atât rolurile adevărate, cât și granturile — ca în authorization-worker
         const dinRol = masca
-          ? (PERMISIUNI_IMPLICITE[masca as keyof typeof PERMISIUNI_IMPLICITE] ?? []).includes(cheie as never)
+          ? (permisiunileMastii(masca as Masca) as readonly string[]).includes(cheie)
           : roluri.some((r) =>
               (PERMISIUNI_IMPLICITE[r as keyof typeof PERMISIUNI_IMPLICITE] ?? []).includes(cheie as never),
             )
@@ -136,8 +140,9 @@ describe('`eAdminulAplicatiei` — cine ține aplicația', () => {
     expect(a.cereri).toContain('program.write')
   })
 
-  it('adminul global le ține pe toate, ca până acum', async () => {
-    const a = autorizare(['admin'])
+  /** ⚠️ Rolul global `admin` nu mai există (19.09.2026): singurul care le ține pe toate e super-adminul. */
+  it('super-adminul le ține pe toate', async () => {
+    const a = autorizare(['super-admin'])
     for (const app of APLICATII_ADMINISTRABILE) {
       expect(await eAdminulAplicatiei(a.serviciu, 'p', OM, app.cod), app.cod).toBe(true)
     }
@@ -151,19 +156,29 @@ describe('`eAdminulAplicatiei` — cine ține aplicația', () => {
   })
 
   /**
-   * ⚠️ Masca „vezi ca administrator" arată tot — și asta e chiar lucrul pe care userul îl simulează
-   * din meniul Contului. Masca „vezi ca utilizator" nu arată nimic, NICI dacă omul are granturi.
+   * ⚠️ Masca „→ Administrator" e a APLICAȚIEI în care stai (19.09.2026), nu a platformei: deschide
+   * exact aplicația aceea și niciuna în plus — chiar asta e ce vrea userul să simuleze din meniul
+   * Contului. Masca „vezi ca utilizator" nu arată nimic, NICI dacă omul are granturi.
    */
-  it('masca „administrator" deschide toate aplicațiile, masca „utilizator" niciuna', async () => {
-    const caAdmin = autorizare(['super-admin'], [], 'admin')
+  it('masca `admin:<cod>` deschide numai aplicația ei; masca „utilizator" niciuna', async () => {
+    const caAdminProgram = autorizare(['super-admin'], [], 'admin:program')
     const caOm = autorizare(['super-admin'], ['program.write'], 'user')
-    expect(await eAdminulAplicatiei(caAdmin.serviciu, 'p', OM, 'program')).toBe(true)
-    expect(await eAdminulAplicatiei(caAdmin.serviciu, 'p', OM, 'tipic')).toBe(true)
+    expect(await eAdminulAplicatiei(caAdminProgram.serviciu, 'p', OM, 'program')).toBe(true)
+    expect(await eAdminulAplicatiei(caAdminProgram.serviciu, 'p', OM, 'tipic')).toBe(false)
+    expect(await eAdminulAplicatiei(caAdminProgram.serviciu, 'p', OM, 'curatenie')).toBe(false)
     expect(await eAdminulAplicatiei(caOm.serviciu, 'p', OM, 'program')).toBe(false)
   })
 
+  /** LIVE și Radio împart cheia, deci masca uneia deschide și panoul celeilalte — dinadins. */
+  it('masca `admin:live` deschide și Radio, fiindcă e aceeași cheie', async () => {
+    const a = autorizare(['super-admin'], [], 'admin:live')
+    expect(await eAdminulAplicatiei(a.serviciu, 'p', OM, 'live')).toBe(true)
+    expect(await eAdminulAplicatiei(a.serviciu, 'p', OM, 'radio')).toBe(true)
+    expect(await eAdminulAplicatiei(a.serviciu, 'p', OM, 'biblia')).toBe(false)
+  })
+
   it('fără om intrat sau fără serviciu, răspunsul e NU', async () => {
-    const a = autorizare(['admin'])
+    const a = autorizare(['super-admin'])
     expect(await eAdminulAplicatiei(a.serviciu, 'p', null, 'program')).toBe(false)
     expect(await eAdminulAplicatiei(undefined, 'p', OM, 'program')).toBe(false)
   })

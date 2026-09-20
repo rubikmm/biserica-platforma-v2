@@ -123,7 +123,9 @@ describe('„vezi ca" — masca ajunge la autorizare', () => {
 
   it('principalul poartă masca, ca decizia să se ia sub ea', () => {
     expect(principalDin(cuMasca('user'))?.veziCa).toBe('user')
-    expect(principalDin(cuMasca('admin'))?.veziCa).toBe('admin')
+    // ⚠️ Masca de administrator poartă ÎNTREG codul aplicației (19.09.2026): dacă pe drum s-ar
+    // pierde partea de după „:", autorizarea ar da cheile altei aplicații sau ale niciuneia.
+    expect(principalDin(cuMasca('admin:curatenie'))?.veziCa).toBe('admin:curatenie')
   })
 
   it('fără mască, principalul nu inventează una', () => {

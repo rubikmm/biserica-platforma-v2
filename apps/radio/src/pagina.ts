@@ -53,6 +53,8 @@ function contDin(ctx: Ctx): Cont {
      * doua administrare. Regula „panoul e unul singur" priveste comanda emisiei, nu randul asta.
      */
     urlSetari: `${ctx.prefix}/setari`,
+    // Codul aplicației din registru — de el atârnă rândul „→ Administrator" din „Vezi ca".
+    cod: 'radio',
     poateVedeaCa: ctx.poateVedeaCa,
     veziCa: ctx.veziCa,
     spre: ctx.spre,

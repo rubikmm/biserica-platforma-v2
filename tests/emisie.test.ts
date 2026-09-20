@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PERMISIUNI_IMPLICITE, STRUCTURA_CANONICA, type BibliotecaRadio, type SelectieRadio } from '../packages/contracts/src/index.js'
+import { PERMISIUNI_IMPLICITE, STRUCTURA_CANONICA, permisiunileMastii, type BibliotecaRadio, type SelectieRadio } from '../packages/contracts/src/index.js'
 import { ceSeAude, ordineNaturala, pieseDin, playlist, toateDirectoarele } from '../packages/comanda/src/ceas.js'
 import { corpPanou, jsPanou } from '../packages/comanda/src/panou.js'
 import { corpPlayer, jsPlayer } from '../packages/comanda/src/player.js'
@@ -342,8 +342,13 @@ describe('meniul contului duce la panoul emisiei', () => {
 })
 
 describe('dreptul de a comanda emisia', () => {
-  it('administratorul parohiei poate comanda (în V1 `/control` cerea chiar rolul admin)', () => {
-    expect(PERMISIUNI_IMPLICITE.admin).toContain('broadcast.manage')
+  /**
+   * În V1 `/control` cerea chiar rolul `admin`. Rolul acela nu mai există (19.09.2026): cine comandă
+   * emisia e omul NUMIT la LIVE sau la Radio — amândouă pe aceeași cheie — plus super-adminul.
+   */
+  it('cine ține emisia poate comanda: numitul la aplicație și super-adminul', () => {
+    expect(permisiunileMastii('admin:live')).toContain('broadcast.manage')
+    expect(permisiunileMastii('admin:radio')).toContain('broadcast.manage')
     expect(PERMISIUNI_IMPLICITE['super-admin']).toContain('broadcast.manage')
   })
 

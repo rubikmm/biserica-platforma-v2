@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  APLICATII_CU_MEMBRI, PERMISIUNI_IMPLICITE, aplicatieCuMembri, type MembruAplicatie,
+  APLICATII_CU_MEMBRI, PERMISIUNI_IMPLICITE, aplicatieCuMembri, cheileAdminului,
+  permisiunileMastii, type MembruAplicatie,
 } from '../packages/contracts/src/index.js'
 import { CarteaOamenilor, ETICHETA_ADMIN, ETICHETA_MONITOR, ETICHETA_VOLUNTAR, CHEIE_ADMIN } from '../apps/curatenie/src/oameni.js'
 import { imbina, numeScurt, type RandVoluntar } from '../apps/curatenie/src/depozit.js'
@@ -124,19 +125,22 @@ describe('numirea unui administrator al curățeniei', () => {
     expect(app?.etichetaAdmin).toEqual({ cod: ETICHETA_ADMIN, permisiune: CHEIE_ADMIN })
   })
 
-  it('cheia de administrare a curățeniei vine din oficiu cu rolul de admin și de super-admin', () => {
+  it('cheia de administrare a curățeniei vine din oficiu numai cu super-adminul', () => {
     // De asta un super-admin poate întotdeauna să intre în panou și să primească pe cineva în
     // echipă, chiar dacă toți administratorii curățeniei au fost scoși.
-    expect(PERMISIUNI_IMPLICITE['admin']).toContain(CHEIE_ADMIN)
+    // ⚠️ Din 19.09.2026 nu mai există rol intermediar: restul oamenilor o primesc prin numire.
     expect(PERMISIUNI_IMPLICITE['super-admin']).toContain(CHEIE_ADMIN)
     expect(PERMISIUNI_IMPLICITE['user']).not.toContain(CHEIE_ADMIN)
+    expect(cheileAdminului('curatenie')).toContain(CHEIE_ADMIN)
   })
 
   it('numirea de ROLURI rămâne numai a super-adminului', () => {
     // „Eu pot să fac pe cineva super-admin — adică doar eu (alt super-admin)" (user, 14.09.2026).
     // Ecranul „Oameni" din Administrare e păzit de `roles.manage`.
     expect(PERMISIUNI_IMPLICITE['super-admin']).toContain('roles.manage')
-    expect(PERMISIUNI_IMPLICITE['admin']).not.toContain('roles.manage')
+    expect(PERMISIUNI_IMPLICITE['user']).not.toContain('roles.manage')
+    // Nici administratorul unei aplicații n-o capătă — nici măcar sub mască.
+    expect(permisiunileMastii('admin:curatenie')).not.toContain('roles.manage')
   })
 })
 

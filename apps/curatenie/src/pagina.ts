@@ -69,6 +69,8 @@ function contDin(ctx: Ctx): Cont {
     // Setarile APLICATIEI, nu ale platformei (user, 15.09.2026) — de aceea adresa e a noastra.
     // Carcasa scrie randul numai cand `intrat` e adevarat, deci fantoma nu-l vede.
     urlSetari: `${ctx.prefix}/setari`,
+    // Codul aplicației din registru — de el atârnă rândul „→ Administrator" din „Vezi ca".
+    cod: 'curatenie',
     poateVedeaCa: ctx.poateVedeaCa,
     veziCa: ctx.veziCa,
     spre: ctx.spre,

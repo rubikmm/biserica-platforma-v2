@@ -9,6 +9,8 @@ import {
   type AtribuireRol,
   type Decizie,
   type Masca,
+  numeMasca,
+  permisiunileMastii,
   scopeAcopera,
 } from '@xc/contracts'
 import { acum, id, ruleaza, toate } from '@xc/db'
@@ -39,6 +41,8 @@ async function roluri(db: D1Database, userId: string): Promise<AtribuireRol[]> {
     `SELECT role, scope FROM role_assignments WHERE user_id = ? AND revoked_at IS NULL`,
     [userId],
   )
+  // ⚠️ Un rand cu rol necunoscut se trece cu vederea, TACUT. Din 19.09.2026 asta priveste si
+  // randurile `role = 'admin'` ramase in baza: rolul global s-a stins, deci ele nu mai dau nimic.
   const iesire: AtribuireRol[] = []
   for (const rand of randuri) {
     const rol = Rol.safeParse(rand.role)
@@ -64,9 +68,12 @@ async function granturi(db: D1Database, userId: string): Promise<RandGrant[]> {
 
 /**
  * Decizia. Cand principalul poarta o masca „vezi ca", NU se mai uita nici la rolurile lui
- * adevarate, nici la granturile lui personale: conteaza exact ce poate rolul imprumutat, si
+ * adevarate, nici la granturile lui personale: conteaza exact ce poate omul imprumutat, si
  * atat. Altfel previzualizarea ar minti — un super-admin „mascat ca utilizator" ar putea in
  * continuare sa publice, iar intrebarea „ce vede un utilizator?" ar ramane fara raspuns.
+ *
+ * ⚠️ Din 19.09.2026 masca nu mai e un ROL imprumutat: `permisiunileMastii` da cheile: `user` cat un
+ * utilizator, `admin:<cod>` cat un utilizator PLUS cheile aplicatiei aceleia (si numai ale ei).
  *
  * Masca `anonim` nu ajunge niciodata pana aici (identitatea intoarce sesiune anonima, deci
  * aplicatia n-are principal de trimis); daca totusi ajunge, e refuz.
@@ -85,10 +92,10 @@ async function decide(
     if (!scopeAcopera(SCOPE_GLOBAL, resourceScope)) {
       return { allowed: false, reason: `masca ${veziCa} nu acopera ${resourceScope}`, matchedScopes: [] }
     }
-    if (!PERMISIUNI_IMPLICITE[veziCa].includes(permission)) {
+    if (!permisiunileMastii(veziCa).includes(permission)) {
       return {
         allowed: false,
-        reason: `te uiti ca ${veziCa}, iar rolul acesta nu are ${permission}`,
+        reason: `te uiti ca ${numeMasca(veziCa)}, iar el nu are ${permission}`,
         matchedScopes: [],
       }
     }
@@ -283,6 +290,10 @@ export default {
          * aplicatie (se poate retrage de acolo), `prinRol` e dreptul care vine din rolul global (nu
          * se poate retrage din aplicatie — ar trebui coborat rolul). Un tabel care le-ar amesteca ar
          * arata un buton „Scoate" care n-are ce scoate.
+         *
+         * ⚠️ Din 19.09.2026 `prinRol` inseamna, practic, SUPER-ADMIN: e singurul rol ramas cu chei de
+         * aplicatie (le are pe toate). Randurile `role = 'admin'` ramase in baza cad la `Rol.safeParse`
+         * si nu mai aprind nicio bulina — de aceea tabelul e si dovada ca numirile au fost mutate.
          */
         case '/harta-admini': {
           const date = z

@@ -110,6 +110,9 @@ const IC_DESCARCA = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none"
 const IC_REVERS = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h18"/><path d="M7 9V4h10l-3 5"/><path d="M7 15v5h10l-3-5"/></svg>`
 const IC_TIPAR = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 8V3h10v5"/><path d="M5 8h14a2 2 0 0 1 2 2v6h-4"/><path d="M5 16H3v-6a2 2 0 0 1 2-2"/><rect x="7" y="14" width="10" height="7" rx="1"/></svg>`
 
+/** Sageata intoarsa spre stanga, peste o linie: semnul faptei care se DESFACE — retragerea. */
+const IC_RETRAGE = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10h12a5 5 0 0 1 0 10H9"/><path d="m7 6-4 4 4 4"/></svg>`
+
 /** Cartea deschisa: semnul rasfoitului. */
 const IC_CARTE = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 6.5S10 4.8 6.8 4.8c-1.4 0-2.3.3-2.8.5v13c.5-.2 1.4-.5 2.8-.5C10 17.8 12 19.5 12 19.5"/><path d="M12 6.5S14 4.8 17.2 4.8c1.4 0 2.3.3 2.8.5v13c-.5-.2-1.4-.5-2.8-.5C14 17.8 12 19.5 12 19.5"/><path d="M12 6.5v13"/></svg>`
 
@@ -126,6 +129,8 @@ function contDin(ctx: Ctx) {
     urlAdmin: ctx.nav.admin,
     // Setarile APLICATIEI, nu ale platformei (user, 15.09.2026) — de aceea adresa e a noastra.
     urlSetari: `${ctx.prefix}/setari`,
+    // Codul aplicației din registru — de el atârnă rândul „→ Administrator" din „Vezi ca".
+    cod: 'buletin',
     poateVedeaCa: ctx.poateVedeaCa ?? false,
     veziCa: ctx.veziCa ?? null,
     spre: ctx.spre ?? '',
@@ -566,7 +571,7 @@ function sablon(ctx: Ctx, m: Meniu, titluPagina: string | undefined, corp: strin
     // numai sa fie scrisa o data. Barele, insa, trebuie sa stea CHIAR sub randul de unelte.
     subantet: `${baraAnilor(ctx, m)}\n    ${baraCautarii(ctx, m)}\n    ${fereastraBuletinului(ctx)}`,
     corp: `${vesteaAbonarii(m)}${corp}`,
-    scripturi: JS_BARE + JS_REVERS + JS_PAGINI + JS_ABONARE,
+    scripturi: JS_BARE + JS_REVERS + JS_PAGINI + JS_ABONARE + JS_RETRAGE,
     // Bula de chat, cand e pusa — azi numai pe `/nou`. Carcasa o aseaza singura (stil, HTML, script).
     ...(ctx.chat ? { chat: ctx.chat } : {}),
   })
@@ -611,9 +616,14 @@ const fisa = (ctx: Ctx, b: BuletinScurt): string =>
  * intr-o pastila cu doua segmente (user: „e legat de ea… ca să includă și funcția asta"). Aprins se
  * vede ca orice segment activ din platforma: rosu, cu fundal palid — nu bec.
  *
+ * ⚠️ **Retrage** — al patrulea buton, dar NUMAI pentru cine ține buletinul si NUMAI pe numarul
+ * CURENT publicat de aici (user, 20.09.2026: „trebuie să avem și buton de ne-publicare — dacă s-a
+ * publicat greșit"). De aceea functia are nevoie de `acum`: pe un numar din mijlocul arhivei butonul
+ * n-are ce cauta. Vezi `retragerea`.
+ *
  * Fara PDF (doua numere vechi au ramas doar cu poza), butoanele se sting in loc sa duca in gol.
  */
-function butoaneleNumarului(ctx: Ctx, b: Buletin, v?: string | null): string {
+function butoaneleNumarului(ctx: Ctx, b: Buletin, v?: string | null, acum = false): string {
   if (!b.cheie_pdf) {
     return (
       `<span class="btn intreg gol" title="Numărul acesta a rămas în arhivă doar ca poză">` +
@@ -636,9 +646,70 @@ function butoaneleNumarului(ctx: Ctx, b: Buletin, v?: string | null): string {
     ` aria-label="Revers: întoarce coala a doua cu 180°"` +
     ` title="Revers: întoarce coala a doua cu 180°, pentru imprimantele care întorc pe latura scurtă">` +
     `${IC_REVERS}</button>` +
-    `</span>`
+    `</span>` +
+    retragerea(ctx, b, acum)
   )
 }
+
+/**
+ * RETRAGEREA (ne-publicarea) unui număr publicat greșit — cererea userului, 20.09.2026: „trebuie să
+ * avem și buton de ne-publicare — dacă s-a publicat greșit — și să poată face asta și chat-ul".
+ *
+ * E inversul validării, și se vede doar acolo unde are înțeles. TREI condiții, toate trei:
+ *   - **adminul buletinului** — aceeași poartă ca la validare (`ctx.eAdmin`);
+ *   - **numărul CURENT** (`acum`) — cel fără urmaș. Un număr din mijlocul arhivei nu se mai retrage:
+ *     după el a apărut altul, iar parohia l-a împărțit pe hârtie;
+ *   - **`sursa === 'site'`** — publicat de aici. Cele 619 numere aduse din V1 nu se ating: nu
+ *     îndreptăm noi arhiva parohiei.
+ *
+ * ⚠️ CONFIRMAREA E O FEREASTRĂ, nu un `confirm()` al browserului: e regula ferestrelor platformei
+ * (`<dialog>`, `showModal` îmbrăcat în carcasă), iar apăsarea asta scoate un număr din arhivă — nu e
+ * locul unde se economisește un ecran. Scrisul din ea spune limpede ce NU se pierde: fișierele.
+ * ⚠️ Formularul postează la `/nou` cu `fapta=retrage`, ca formularul-pereche al validării: o singură
+ * ușă hotărăște și publicarea, și retragerea unui număr.
+ */
+function retragerea(ctx: Ctx, b: Buletin, acum: boolean): string {
+  if (!ctx.eAdmin || !acum || b.sursa !== 'site') return ''
+  const spune = 'Retrage numărul din arhivă și adu-l înapoi ca schiță pe „Numărul următor"'
+  return (
+    `<button type="button" class="btn intreg" id="b-retrage" title="${esc(spune)}" aria-label="${esc(spune)}">` +
+    `${IC_RETRAGE} Retrage</button>` +
+    `<dialog class="modal" id="d-retrage" aria-labelledby="t-retrage">
+  <form class="modal-cutie" id="f-retrage" method="post" action="${esc(ctx.prefix)}/nou">
+    <div class="modal-cap">
+      <h2 id="t-retrage">Retragi nr. ${b.nr}?</h2>
+      <button type="submit" formmethod="dialog" formnovalidate value="inchide" class="modal-x" aria-label="Închide fereastra">&times;</button>
+    </div>
+    <p class="modal-spune">Numărul ${b.nr} din ${dataLunga(b.data)} iese din arhivă și se întoarce ca
+    schiță pe „Numărul următor", cu tot ce are, ca să-l îndrepți și să-l publici iar. Fișierele lui —
+    foaia, coperta, broșurile de tipar, pozele — nu se pierd.</p>
+    <input type="hidden" name="fapta" value="retrage">
+    <input type="hidden" name="nr" value="${b.nr}">
+    <input type="hidden" name="data" value="${esc(b.data)}">
+    <div class="modal-jos"><button type="submit" class="btn-plin">Retrage nr. ${b.nr}</button></div>
+  </form>
+</dialog>`
+  )
+}
+
+/**
+ * JS-ul retragerii: deschide fereastra de confirmare. ES5, ca tot ce se scrie în paginile astea.
+ *
+ * ⚠️ Cine n-are `<dialog>` (telefoane vechi) nu rămâne cu un buton mort: primește întrebarea
+ * browserului și, la „da", formularul pleacă la fel. Aceeași socoteală ca la răsfoit.
+ */
+const JS_RETRAGE = `
+(function(){
+  var b = document.getElementById("b-retrage");
+  var d = document.getElementById("d-retrage");
+  var f = document.getElementById("f-retrage");
+  if (!b || !d || !f) return;
+  b.addEventListener("click", function(){
+    if (d.showModal) { d.showModal(); return; }
+    if (window.confirm("Retragi numarul din arhiva? Se intoarce ca schita pe Numarul urmator.")) f.submit();
+  });
+})();
+`
 
 /**
  * FEREASTRA DE RĂSFOIT — peste pagină, pe tot ecranul (cerere user, 13.09.2026), ca la
@@ -706,7 +777,7 @@ export function paginaAcasa(ctx: Ctx, m: Meniu, b: Buletin | null, dinainte: Bul
   <p class="cand">${dataCuZi(b.data)}</p>
 </div>
 ${coperta(ctx, b)}
-<nav class="btns hartii">${butoaneleNumarului(ctx, b)}</nav>${fereastraRasfoit(ctx, b)}
+<nav class="btns hartii">${butoaneleNumarului(ctx, b, null, m.acum === true)}</nav>${fereastraRasfoit(ctx, b)}
 ${
   dinainte.length
     ? `<h3 class="titlu-fasie">Numerele dinainte</h3>
@@ -720,6 +791,8 @@ ${
  * Pagina unui numar din arhiva: aceeasi asezare ca prima pagina.
  * ⚠️ Sagetile „◀ numărul dinainte / numărul următor ▶" de jos AU IESIT (user, 17.09.2026, seara:
  * „jos de tot este o navigare — scoate-o"). Vecinii se mai cer doar ca sa se stie daca e numarul curent.
+ * ⚠️ Si de `m.acum` atarna acum ceva ce se vede: butonul „Retrage" (20.09.2026). Un numar care are
+ * urmas nu se mai retrage, deci acolo butonul nici nu se scrie.
  */
 export function paginaBuletin(ctx: Ctx, m: Meniu, b: Buletin): string {
   return sablon(
@@ -732,7 +805,7 @@ export function paginaBuletin(ctx: Ctx, m: Meniu, b: Buletin): string {
   <p class="cand">${dataCuZi(b.data)}${b.pagini ? ` · ${b.pagini} pagini` : ''}</p>
 </div>
 ${coperta(ctx, b)}
-<nav class="btns hartii">${butoaneleNumarului(ctx, b)}</nav>${fereastraRasfoit(ctx, b)}`,
+<nav class="btns hartii">${butoaneleNumarului(ctx, b, null, m.acum === true)}</nav>${fereastraRasfoit(ctx, b)}`,
   )
 }
 
@@ -767,6 +840,42 @@ export function buletinulNou(
   azi: string,
 ): { nr: number | null; data: string } {
   return { nr: curent ? curent.nr + 1 : null, data: duminicaNoua(curent?.data ?? null, azi) }
+}
+
+/**
+ * NUMĂRUL CARE URMEAZĂ, DAR CU SCHIȚA LUI CU TOT — socoteala pe care o fac TOATE locurile care
+ * întreabă „care e numărul următor?": ecranul `/nou`, butonul „Compune numărul", chestionarul din
+ * bulă și acțiunile hărții. Una singură, ca ecranul și chatul să vadă același număr.
+ *
+ * ⚠️ DE CE NU AJUNGE `buletinulNou` (20.09.2026, odată cu RETRAGEREA). `buletinulNou` socotește ziua
+ * din ZIUA DE AZI: un număr retras luni — 616 / duminica trecută — ar rămâne orfan, fiindcă ecranul
+ * ar cere de a doua zi 616 / duminica următoare, iar schița lui, scrisă sub cheia zilei vechi, n-ar
+ * mai fi găsită de nimeni. Tot ce s-a strâns ar părea pierdut, fără nicio eroare nicăieri. Aceeași
+ * pățanie o are și o ciornă obișnuită lăsată peste duminică.
+ *
+ * Deci: dacă în depozit e o schiță ÎNCEPUTĂ pentru numărul acesta (orice zi), ea are întâietate —
+ * numărul și ziua ei. O singură cerere către depozit (`list` cu prefixul numărului), iar dacă
+ * depozitul tace se cade înapoi pe socoteala din calendar: ecranul nu rămâne închis pentru atât.
+ */
+export async function urmatorulCuSchita(
+  env: { FISIERE: R2Bucket },
+  curent: { nr: number; data: string } | null,
+  azi: string,
+): Promise<{ nr: number | null; data: string }> {
+  const nou = buletinulNou(curent, azi)
+  if (nou.nr === null) return nou
+  try {
+    const lista = await env.FISIERE.list({ prefix: `schita/${nou.nr}-` })
+    const tipar = new RegExp(`^schita/${nou.nr}-(\\d{4}-\\d{2}-\\d{2})\\.json$`)
+    // cea mai VECHE zi: aceea e schița rămasă în urmă, cea pe care omul o caută
+    const zile = (lista.objects ?? [])
+      .map((o) => tipar.exec(o.key)?.[1])
+      .filter((d): d is string => Boolean(d))
+      .sort()
+    return zile[0] ? { nr: nou.nr, data: zile[0] } : nou
+  } catch {
+    return nou
+  }
 }
 
 /**

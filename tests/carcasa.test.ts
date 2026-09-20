@@ -14,11 +14,15 @@ function randeaza(cont: Record<string, unknown>): string {
   return html.slice(html.indexOf('</head>'))
 }
 
-const SUPER_ADMIN = { intrat: true, nume: 'rubikmm@gmail.com', admin: true, urlCont: '/cont', urlAdmin: '/admin', poateVedeaCa: true, spre: '/program/' }
+/**
+ * ⚠️ `cod` e codul aplicației din registru (`program` aici). De el atârnă rândul „→ Administrator":
+ * din 19.09.2026 masca de administrator e a APLICAȚIEI, deci carcasa trebuie să știe unde e.
+ */
+const SUPER_ADMIN = { intrat: true, nume: 'rubikmm@gmail.com', admin: true, urlCont: '/cont', urlAdmin: '/admin', cod: 'program', poateVedeaCa: true, spre: '/program/' }
 
 describe('carcasă — masca „vezi ca"', () => {
   it('nu mai desenează banda de jos, sub nicio mască', () => {
-    for (const masca of [null, 'user', 'admin', 'anonim']) {
+    for (const masca of [null, 'user', 'admin:program', 'anonim']) {
       expect(randeaza({ ...SUPER_ADMIN, veziCa: masca })).not.toContain('banda-vezica')
     }
   })
@@ -34,6 +38,48 @@ describe('carcasă — masca „vezi ca"', () => {
     expect(html).not.toContain('Revino la super admin')
   })
 
+  /**
+   * ⚠️ Rândul de mijloc poartă CODUL APLICAȚIEI CURENTE (19.09.2026): „→ Administrator" din Program
+   * cere `ca=admin:program`, nu un „admin" pe toată platforma — acela nu mai există.
+   */
+  it('rândul „→ Administrator" cere masca aplicației curente', () => {
+    expect(randeaza({ ...SUPER_ADMIN, veziCa: null })).toContain('href="/cont/vezi-ca?ca=admin:program&spre=%2Fprogram%2F">→ Administrator<')
+    expect(randeaza({ ...SUPER_ADMIN, cod: 'calendar', veziCa: null })).toContain('ca=admin:calendar')
+  })
+
+  /**
+   * ⚠️ Fără `cod` (Contul, Administrarea — nu sunt aplicații administrabile) rândul LIPSEȘTE, dar
+   * celelalte două rămân: altfel super-adminul din Cont ar rămâne fără drum de întoarcere.
+   */
+  it('fără cod de aplicație, rândul „→ Administrator" nu se scrie', () => {
+    const html = randeaza({ ...SUPER_ADMIN, cod: undefined, veziCa: null })
+    expect(html).not.toContain('→ Administrator')
+    expect(html).not.toContain('ca=admin')
+    expect(html).toContain('→ Utilizator')
+    expect(html).toContain('→ Neautentificat')
+  })
+
+  it('un cod care nu e în registru se poartă ca și cum n-ar fi', () => {
+    expect(randeaza({ ...SUPER_ADMIN, cod: 'aplicatie-inexistenta', veziCa: null })).not.toContain('→ Administrator')
+  })
+
+  /**
+   * Masca de admin a ALTEI aplicații: rândul de aici rămâne apăsabil (schimbă masca), nu aprins —
+   * altfel omul ar trebui să iasă din mască și s-o pună la loc ca să treacă dintr-o aplicație în alta.
+   */
+  it('masca altei aplicații lasă rândul de aici apăsabil, nu aprins', () => {
+    const html = randeaza({ ...SUPER_ADMIN, veziCa: 'admin:curatenie' })
+    expect(html).toContain('href="/cont/vezi-ca?ca=admin:program&spre=%2Fprogram%2F">→ Administrator<')
+    expect(html).not.toMatch(/class="cont-acum"[^>]*>→ Administrator</)
+  })
+
+  it('masca aplicației curente e aprinsă și, apăsată din nou, se scoate', () => {
+    const html = randeaza({ ...SUPER_ADMIN, veziCa: 'admin:program' })
+    expect(html).toMatch(/class="cont-acum"[^>]*>→ Administrator</)
+    expect(html).toContain('/cont/vezi-ca?ca=real&spre=%2Fprogram%2F')
+    expect(html).toContain('Te uiți ca administrator al aplicației „Programul liturgic&quot;')
+  })
+
   it('masca purtată e scrisă roșu și, apăsată din nou, scoate masca', () => {
     const html = randeaza({ ...SUPER_ADMIN, veziCa: 'user' })
     expect(html).toContain('<a class="cont-acum" href="/cont/vezi-ca?ca=real&spre=%2Fprogram%2F"')
@@ -43,7 +89,7 @@ describe('carcasă — masca „vezi ca"', () => {
   })
 
   it('numele din antet e roșu cât timp masca e pusă, și numai atunci', () => {
-    expect(randeaza({ ...SUPER_ADMIN, veziCa: 'admin' })).toContain('<summary class="cont mascat">')
+    expect(randeaza({ ...SUPER_ADMIN, veziCa: 'admin:program' })).toContain('<summary class="cont mascat">')
     expect(randeaza({ ...SUPER_ADMIN, veziCa: null })).toContain('<summary class="cont">')
   })
 

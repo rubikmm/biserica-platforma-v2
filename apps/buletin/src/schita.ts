@@ -20,7 +20,8 @@
  * ⚠️ ÎN R2, NU ÎN D1 (18.09.2026, seara): o coloană nouă ar fi cerut o migrație pe producție într-o
  * seară în care se publică și alte lucruri. Forma e un JSON sub `schita/<nr>-<data>.json`, lângă
  * PDF-ul și cererea numărului. Se poate muta într-un rând D1 mai târziu fără să se schimbe nimic
- * din ce urmează: tot codul de aici vorbește cu `citesteSchita` / `scrieSchita` / `stergeSchita`.
+ * din ce urmează: tot codul de aici vorbește cu `citesteSchita` / `scrieSchita` / `stergeSchita` /
+ * `arhiveazaSchita` / `dezarhiveazaSchita`.
  *
  * ⚠️ MAȘINA DE STĂRI E DETERMINISTĂ. `urmatoareaIntrebare` nu cheamă nimic și nu ghicește: din ce
  * scrie în schiță iese o singură întrebare următoare. Așa chestionarul se poate proba cap-coadă
@@ -28,7 +29,7 @@
  * se strică nimic.
  */
 import { LUNI } from '@xc/ui'
-import { SECUNDARI_MAXIM, type NumarCerut, semne, socoteste } from './masuri.js'
+import { SECUNDARI_MAXIM, type ArticolCerut, type NumarCerut, semne, socoteste } from './masuri.js'
 import { CAMPURI_CU_VARIANTE, eRefuz } from './refuz.js'
 import { DE_PROBA, TEXT_IMPLICIT, eDeProba } from './umplere.js'
 
@@ -283,11 +284,79 @@ export async function scrieSchita(env: EnvSchita, s: Schita, pas?: Schita['pas']
 }
 
 /**
- * ⚠️ Schița se șterge LA VALIDARE, nu la compunere: până se publică numărul, omul mai recompune de
- * câteva ori, iar a doua compunere pornește tot de la ce a răspuns.
+ * ⚠️ Schița se scoate de pe masa de lucru LA VALIDARE, nu la compunere: până se publică numărul,
+ * omul mai recompune de câteva ori, iar a doua compunere pornește tot de la ce a răspuns.
  */
 export async function stergeSchita(env: EnvSchita, n: { nr: number | null; data: string }): Promise<void> {
   await env.FISIERE.delete(cheiaSchitei(n)).catch(() => undefined)
+}
+
+/**
+ * Unde stă schița unui număr DEJA PUBLICAT — aceeași formă, altă poliță.
+ *
+ * ⚠️ PREFIXUL E ALES ANUME ca să NU se prindă în listarea din `urmatorulCuSchita` (`pagini.ts`),
+ * care caută `schita/<nr>-`: după „arhiva/" vine un slash, nu o cifră, deci `schita/arhiva/616-…`
+ * nu se potrivește cu `schita/616-`. Altfel ecranul `/nou` ar crede că numărul publicat e tot în
+ * lucru și l-ar chema înapoi la infinit. E singura listare pe `schita/` din tot codul.
+ */
+export const cheiaSchiteiArhivate = (n: { nr: number | null; data: string }): string =>
+  `schita/arhiva/${n.nr ?? 0}-${n.data}.json`
+
+/** JSON-ul mutat dintr-o cheie în alta LITERĂ CU LITERĂ: nu se reface, nu se normalizează nimic. */
+const puneBrut = (env: EnvSchita, cheie: string, brut: string, n: { nr: number | null; data: string }) =>
+  env.FISIERE.put(cheie, brut, {
+    httpMetadata: { contentType: 'application/json; charset=utf-8' },
+    customMetadata: { nr: String(n.nr ?? 0), data: n.data },
+  })
+
+/**
+ * SCHIȚA NU SE MAI ȘTERGE LA VALIDARE, SE PUNE DEOPARTE (20.09.2026, odată cu RETRAGEREA).
+ *
+ * ⚠️ DE CE: retragerea unui număr publicat greșit trebuie să-l aducă înapoi ÎNTREG. Drumul de
+ * rezervă — refacerea schiței din cererea păstrată (`schitaDinCerere`) — pierde ADRESA POZEI:
+ * cererea ține doar `poza: true/false`, fiindcă atâta îi trebuie foii. Omul ar fi recompus numărul
+ * cu locul pozei gol, fără nicio eroare nicăieri. Schița pusă deoparte are adresa, deci numărul se
+ * întoarce exact cum l-a lăsat.
+ *
+ * ⚠️ Mutată, nu copiată: de pe masa de lucru (`schita/<nr>-<data>.json`) trebuie să dispară, altfel
+ * `urmatorulCuSchita` ar chema la nesfârșit înapoi numărul tocmai publicat.
+ *
+ * Întoarce `false` dacă n-a fost nicio schiță de pus deoparte — la validare nu e o pățanie
+ * (numărul poate fi compus din argumente, fără chestionar), deci nu cade nimic.
+ */
+export async function arhiveazaSchita(
+  env: EnvSchita,
+  n: { nr: number | null; data: string },
+): Promise<boolean> {
+  try {
+    const obiect = await env.FISIERE.get(cheiaSchitei(n))
+    if (!obiect) return false
+    await puneBrut(env, cheiaSchiteiArhivate(n), await obiect.text(), n)
+    await stergeSchita(env, n)
+    return true
+  } catch {
+    // Publicarea e deja scrisă în arhivă: o schiță rămasă pe masă nu întoarce numărul din drum.
+    return false
+  }
+}
+
+/**
+ * INVERSUL: schița pusă deoparte la validare se întoarce pe masa de lucru — drumul CEL BUN al
+ * retragerii (`retrageNumarul`). `false` = nu era nimic la arhivă, deci se cade pe cerere.
+ */
+export async function dezarhiveazaSchita(
+  env: EnvSchita,
+  n: { nr: number | null; data: string },
+): Promise<boolean> {
+  try {
+    const obiect = await env.FISIERE.get(cheiaSchiteiArhivate(n))
+    if (!obiect) return false
+    await puneBrut(env, cheiaSchitei(n), await obiect.text(), n)
+    await env.FISIERE.delete(cheiaSchiteiArhivate(n)).catch(() => undefined)
+    return true
+  } catch {
+    return false
+  }
 }
 
 export const articolul = (s: Schita, care: Articol): ArticolSchitei =>
@@ -912,6 +981,72 @@ export function catreCerere(s: Schita): NumarCerut {
     principal: caArticol(s.principal),
     secundari: s.secundari.map(caArticol),
     floare: true,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Din ce a cerut compunerea înapoi în schiță — drumul RETRAGERII
+// ---------------------------------------------------------------------------
+
+/**
+ * Subiectele pe care chestionarul le întreabă la FIECARE articol. Un număr care a apucat să fie
+ * publicat a trecut prin toate: de aceea se însemnează `gata` la refacerea schiței.
+ */
+const ALE_ARTICOLULUI_INTREBATE: CheieIntrebare[] = ['text', 'autor', 'ani', 'pomenire', 'titlu', 'sursa']
+
+/**
+ * Reversul lui `caArticol`: articolul, cum a plecat el la compunere, înapoi ca articol de schiță.
+ *
+ * ⚠️ `gata` SE PUNE PLIN, nu gol. Numărul ăsta a fost publicat o dată: tot ce avea de întrebat
+ * chestionarul s-a întrebat. Lăsat gol, bula ar relua de la „Care este textul articolului
+ * principal?" peste un număr scris de-a-ntregul, iar `/nou` ar socoti schița NEATINSĂ și ar porni
+ * singur o recompunere de la zero — adică exact „varianta zero" peste foaia care trebuie îndreptată.
+ * ⚠️ POZA SE PIERDE, și e știut: cererea păstrată ține doar `poza: true/false` (foaia are nevoie de
+ * un da/nu), pe când schița ține ADRESA ei. Fișierul din depozit rămâne (nu se șterge nimic), dar
+ * după retragere poza trebuie dată din nou, din clemă, dacă numărul se recompune.
+ */
+const dinArticol = (a: Partial<ArticolCerut> | undefined): ArticolSchitei => {
+  const v = a ?? {}
+  return {
+    ...(v.autor ? { autor: v.autor } : {}),
+    ...(v.ani ? { ani: v.ani } : {}),
+    ...(v.pomenire ? { pomenire: v.pomenire } : {}),
+    ...(v.titlu ? { titlu: v.titlu } : {}),
+    ...(v.semnatura ? { semnatura: v.semnatura } : {}),
+    ...(v.text ? { text: v.text } : {}),
+    ...(v.sursa ? { sursa: v.sursa } : {}),
+    ...(v.nota ? { nota: v.nota } : {}),
+    gata: [...ALE_ARTICOLULUI_INTREBATE],
+  }
+}
+
+/**
+ * SCHIȚA UNUI NUMĂR RETRAS, refăcută din cererea păstrată lângă PDF (`compus/<an>/…json`).
+ *
+ * Se cheamă la RETRAGERE (ne-publicare): rândul iese din arhivă, iar numărul se întoarce pe `/nou`
+ * cu același nr., aceeași zi și tot ce avea în el — ca omul să îndrepte ce era greșit și să-l
+ * publice iar, nu să-l scrie de la capăt.
+ *
+ * ⚠️ Izvorul e CEREREA, nu foaia: în ea stă ce a scris OMUL, fără umplerea de probă (vezi
+ * `pastreazaCererea`). Când lipsește (un număr compus înainte să se păstreze cererile), retragerea
+ * tot se face, dar schița pornește de la cea implicită — și i se spune omului.
+ */
+export function schitaDinCerere(
+  c: Pick<NumarCerut, 'motto' | 'motoAutor' | 'principal' | 'secundari'>,
+  n: { nr: number | null; data: string },
+): Schita {
+  const motto = (c.motto ?? '').trim()
+  const motoAutor = (c.motoAutor ?? '').trim()
+  return {
+    nr: n.nr,
+    data: n.data,
+    ...(motto ? { motto } : {}),
+    ...(motoAutor ? { motoAutor } : {}),
+    principal: dinArticol(c.principal),
+    secundari: (Array.isArray(c.secundari) ? c.secundari : []).slice(0, SECUNDARI_MAXIM).map(dinArticol),
+    // motto-ul și „mai adăugăm?" sunt ale NUMĂRULUI, nu ale unui articol: și ele s-au hotărât deja
+    gata: ['motto', 'mai_adaugam'],
+    actualizat: new Date().toISOString(),
   }
 }
 

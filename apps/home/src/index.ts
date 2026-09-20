@@ -238,6 +238,8 @@ export default {
         // Setarile APLICATIEI (user, 15.09.2026). Home-ul n-are abonare si n-are echipa, deci aici
         // omul gaseste preferinta lui de e-mail, iar super-adminul jurnalul `home.`.
         urlSetari: '/setari',
+        // Codul aplicației din registru (`home` = Website) — de el atârnă rândul „→ Administrator".
+        cod: 'home',
         poateVedeaCa: sesiune.poateVedeaCa,
         veziCa: sesiune.veziCa,
         spre: adresaPaginii(cfg, url),

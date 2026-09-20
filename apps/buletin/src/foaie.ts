@@ -198,6 +198,15 @@ body { font-family: "Caladea", Cambria, Georgia, serif; color: #000; font-size: 
    DE DINAINTE, deci fara al doilea caz linia ar fi disparut tocmai la articolele semnate. */
 .titlu-articol + .rigla, .semnatura + .rigla { border-top: .5pt solid #000; margin: 0 0 1.6mm; height: 0; }
 p.t { margin: 0; text-align: justify; text-indent: 10mm; hyphens: none; }
+/* ⚠️ RANDUL DE PE URMA AL UNEI BUCATI CARE CONTINUA (user, 20.09.2026: „coltul dreapta jos, adica
+   col2, jos, nu mai este justify — propozitia nu se duce pana la capat"). CSS-ul nu intinde NICIODATA
+   ultimul rand al unui bloc, iar curgerea noastra taie paragraful la piciorul FIECAREI coloane: acolo
+   randul de pe urma e „ultimul" doar pentru CSS, fraza merge mai departe in coloana urmatoare.
+   Regula: bucata care CONTINUA primeste clasa „continua" de la scriptul curgerii si i se intinde si
+   randul de pe urma; un paragraf care chiar se INCHEIE acolo ramane cu randul scurt, cum se cuvine.
+   Se vedea la coloana a doua, fiindca acolo golul cade in coltul foii, langa chenar — dar era la
+   piciorul fiecarei coloane, si in a intaia. */
+p.t.continua { text-align-last: justify; }
 /* Marcajele din corpul textului — Caladea are si fata aldina, si cea cursiva, incorporate mai sus. */
 p.t b { font-weight: 700; }
 p.t i { font-style: italic; }
@@ -525,6 +534,10 @@ const CURGE = `
       var coada = taie(col, bucata);
       intrate += (bucata.textContent || '').length;
       if (coada) {
+        // Coada exista, deci bucata din coloana CONTINUA dincolo: randul ei de pe urma nu e sfarsit
+        // de fraza, ci hotar de coloana — se intinde pana la marginea din dreapta (vezi p.t.continua).
+        // Doar aici, niciodata pe un paragraf care se incheie in coloana.
+        bucata.className += ' continua';
         var p = document.createElement('p');
         p.className = 't';
         p.style.textIndent = '0';

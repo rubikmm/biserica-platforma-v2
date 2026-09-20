@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
   Cod,
-  MASTI,
+  MASTI_SIMPLE,
   NIVEL_ROL,
+  NIVEL_MASCA_ADMIN,
   PERMISIUNI_IMPLICITE,
+  ROLURI,
+  Rol,
   nivelMasca,
   numeMasca,
+  permisiunileMastii,
   parseEveniment,
   redacteaza,
   scopeAcopera,
@@ -40,10 +44,16 @@ describe('roluri', () => {
     expect(PERMISIUNI_IMPLICITE['super-admin']).toContain('communication.send')
   })
 
-  it('admin nu poate trimite comunicări în masă și nu gestionează roluri', () => {
-    expect(PERMISIUNI_IMPLICITE.admin).not.toContain('communication.send')
-    expect(PERMISIUNI_IMPLICITE.admin).not.toContain('roles.manage')
-    expect(PERMISIUNI_IMPLICITE.admin).not.toContain('identity.manage')
+  /**
+   * ⚠️ ROLUL GLOBAL `admin` S-A STINS (user, 19.09.2026). Cheile de lucru ale aplicațiilor nu mai vin
+   * dintr-o treaptă intermediară, ci din numirea pe aplicație (`admini.ts`). Proba păzește chiar
+   * dispariția: dacă cineva îl pune la loc, aici se aprinde roșu.
+   */
+  it('rolurile sunt două: `user` și `super-admin` — `admin` nu mai există', () => {
+    expect([...ROLURI]).toEqual(['user', 'super-admin'])
+    expect(Rol.safeParse('admin').success).toBe(false)
+    expect(Object.keys(PERMISIUNI_IMPLICITE).sort()).toEqual(['super-admin', 'user'])
+    expect(Object.keys(NIVEL_ROL).sort()).toEqual(['super-admin', 'user'])
   })
 
   it('user obișnuit doar citește programul', () => {
@@ -143,17 +153,16 @@ describe('codul de intrare (contract)', () => {
 })
 
 describe('„vezi ca" — treptele măștii', () => {
-  it('are exact cele trei măști din V1', () => {
-    expect([...MASTI]).toEqual(['user', 'admin', 'anonim'])
+  it('măștile simple sunt două; a treia poartă codul unei aplicații', () => {
+    expect([...MASTI_SIMPLE]).toEqual(['user', 'anonim'])
   })
 
   it('masca merge doar SUB treapta ta', () => {
     const super_ = NIVEL_ROL['super-admin']
-    expect(nivelMasca('admin')).toBeLessThan(super_)
-    expect(nivelMasca('user')).toBeLessThan(nivelMasca('admin'))
+    expect(nivelMasca('admin:calendar')).toBeLessThan(super_)
+    expect(nivelMasca('user')).toBeLessThan(nivelMasca('admin:calendar'))
     expect(nivelMasca('anonim')).toBe(0)
-    // Un admin nu se poate masca drept admin: nu coboară.
-    expect(nivelMasca('admin')).toBeGreaterThanOrEqual(NIVEL_ROL.admin)
+    expect(nivelMasca('admin:calendar')).toBe(NIVEL_MASCA_ADMIN)
   })
 
   it('treapta cea mai înaltă e a rolului cel mai mare deținut', () => {
@@ -162,15 +171,25 @@ describe('„vezi ca" — treptele măștii', () => {
     expect(treaptaCeaMaiInalta([])).toBe(0)
   })
 
-  it('sub mască, permisiunile sunt exact ale rolului împrumutat', () => {
-    expect(PERMISIUNI_IMPLICITE.user).not.toContain('calendar.manage')
-    expect(PERMISIUNI_IMPLICITE.admin).toContain('calendar.manage')
-    expect(PERMISIUNI_IMPLICITE.admin).not.toContain('roles.manage')
+  it('sub mască, permisiunile sunt ale omului împrumutat — nu ale unui rol', () => {
+    expect(permisiunileMastii('anonim')).toEqual([])
+    expect(permisiunileMastii('user')).toEqual(['program.read'])
+    // Administratorul unei aplicații e un UTILIZATOR cu cheile ei: le are pe amândouă.
+    expect(permisiunileMastii('admin:calendar')).toContain('program.read')
+    expect(permisiunileMastii('admin:calendar')).toContain('calendar.manage')
+    // …și nimic din alta, nici cheile platformei.
+    expect(permisiunileMastii('admin:calendar')).not.toContain('cleaning.manage')
+    expect(permisiunileMastii('admin:calendar')).not.toContain('roles.manage')
+    // Cheile însoțitoare vin odată cu numirea, deci și cu masca.
+    expect(permisiunileMastii('admin:program')).toEqual(
+      expect.arrayContaining(['program.read', 'program.write', 'program.publish']),
+    )
   })
 
   it('numele măștii e cel arătat omului', () => {
     expect(numeMasca('anonim')).toBe('neautentificat')
-    expect(numeMasca('admin')).toBe('administrator')
     expect(numeMasca('user')).toBe('utilizator')
+    expect(numeMasca('admin:calendar')).toBe('administrator al aplicației „Calendarul"')
+    expect(numeMasca('admin:curatenie')).toBe('administrator al aplicației „Curățenia bisericii"')
   })
 })

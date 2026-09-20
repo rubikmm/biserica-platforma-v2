@@ -32,7 +32,6 @@ import { ceSeAude, corpPanou, corpPlayer, jsPanou, jsPlayer } from '@xc/comanda'
 import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
 import {
   CererePanou,
-  type Masca,
   SCOPE_GLOBAL,
   SESIUNE_ANONIMA,
   type StareEmisie,
@@ -90,7 +89,7 @@ function eDeTrimisLaCont(ctx: Ctx): boolean {
 /** Sub mască, refuzul e o previzualizare, nu o ușă închisă — se spune pe față a cui e vina. */
 function faraAcces(ctx: Ctx, motiv: string): string {
   if (!ctx.veziCa) return motiv
-  return `${motiv} Te uiți ca ${numeMasca(ctx.veziCa as Masca)} — apasă „Cont" în antet ca să revii la contul tău.`
+  return `${motiv} Te uiți ca ${numeMasca(ctx.veziCa)} — apasă „Cont" în antet ca să revii la contul tău.`
 }
 
 export default {

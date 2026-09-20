@@ -57,6 +57,10 @@ function contDin(ctx: Ctx): Cont {
      * se afla, nu o a doua administrare a emisiei.
      */
     urlSetari: `${ctx.prefix}/setari`,
+    // Codul aplicației din registru — de el atârnă rândul „→ Administrator" din „Vezi ca".
+    // ⚠️ `live` și `radio` au aceeași cheie, dar coduri DEOSEBITE: masca poartă codul aplicației în
+    // care stai, iar cheia pe care o împrumută e tot `broadcast.manage` la amândouă.
+    cod: 'live',
     poateVedeaCa: ctx.poateVedeaCa,
     veziCa: ctx.veziCa,
     spre: ctx.spre,

@@ -241,6 +241,24 @@ export async function scrieBuletin(
     .run()
 }
 
+/**
+ * NUMĂRUL IESE DIN ARHIVĂ — retragerea unui număr publicat greșit (user, 20.09.2026: „trebuie să
+ * avem și buton de ne-publicare — dacă s-a publicat greșit"). E inversul EXACT al lui
+ * `scrieBuletin`: rândul dispare din arhivă, iar numărul se întoarce ca schiță pe `/nou`, cu
+ * același număr și aceeași zi, ca omul să-l îndrepte și să-l publice iar.
+ *
+ * ⚠️ `AND sursa = 'site'` e o ÎNCUIETOARE, nu o îngustare: cele 619 numere aduse din V1 (`arhiva`)
+ * nu se retrag de nicăieri — nu îndreptăm noi arhiva parohiei. Ruta și acțiunea cern asta mai
+ * devreme, cu vorbe omenești; rândul de aici e plasa de dedesubt, ca o chemare greșită să nu poată
+ * șterge o hârtie apărută acum zece ani.
+ * ⚠️ FIȘIERELE RĂMÂN — foaia, coperta, broșurile, cererea păstrată de sub `compus/` și pozele. Ele
+ * sunt de acum ale CIORNEI, iar `ciornaDinDepozit` le servește mai departe pe `/nou`: ștergerea lor
+ * ar face din retragere o pierdere, nu o îndreptare.
+ */
+export async function stergeBuletin(db: D1Database, nr: number, data: string): Promise<void> {
+  await db.prepare("DELETE FROM buletine WHERE nr = ?1 AND data = ?2 AND sursa = 'site'").bind(nr, data).run()
+}
+
 export async function numaratoare(db: D1Database): Promise<{ buletine: number; ani: number; ultimul: string | null }> {
   const r = await db
     .prepare('SELECT COUNT(*) AS buletine, COUNT(DISTINCT an) AS ani, MAX(data) AS ultimul FROM buletine')

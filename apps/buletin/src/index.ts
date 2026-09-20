@@ -37,6 +37,7 @@ import {
   actiuniBuletin,
   chestionarul,
   compuneNumarul,
+  retrageNumarul,
   rezumatAuditCompunere,
   rezumatAuditEroare,
   schitaNumarului,
@@ -80,6 +81,7 @@ import {
   NUMELE_ZONEI,
   articolul,
   catreCerere,
+  arhiveazaSchita,
   cautaPomenirile,
   citesteSchita,
   eSchitaNeatinsa,
@@ -87,7 +89,6 @@ import {
   normalizeazaChestionar,
   scrieRaspuns,
   scrieSchita,
-  stergeSchita,
   urmatoareaIntrebare,
 } from './schita.js'
 import { abonamentul, ruteazaAbonare } from '@xc/abonare'
@@ -95,7 +96,6 @@ import { ruteazaSetari } from '@xc/setari'
 import {
   type Ctx,
   type Meniu,
-  buletinulNou,
   paginaAcasa,
   paginaArhiva,
   paginaBuletin,
@@ -105,6 +105,7 @@ import {
   paginaNou,
   rubricaChestionar,
   schitaPeEcran,
+  urmatorulCuSchita,
 } from './pagini.js'
 
 /**
@@ -965,7 +966,14 @@ export default {
         const b = await ultimul(env.DB)
         const azi = new Date().toISOString().slice(0, 10)
         const m = await cuAni({ nou: true, gol: !b })
-        const nou = buletinulNou(b, azi)
+        /*
+         * ⚠️ `urmatorulCuSchita`, NU `buletinulNou`: dacă numărul are deja o schiță începută (o
+         * ciornă rămasă peste duminică, ori un număr tocmai RETRAS, care se întoarce cu ziua lui de
+         * dinainte), ecranul se deschide pe ea. Socotită doar din ziua de azi, schița aceea ar fi
+         * rămas orfană în depozit — tot ce s-a strâns ar fi părut pierdut. Aceeași funcție o cheamă
+         * și chatul (`urmatorul`, `schitaNumarului`), ca ecranul și bula să vadă același număr.
+         */
+        const nou = await urmatorulCuSchita(env, b, azi)
         /*
          * Socoteala se face cu calendarul săptămânii tipărite: el hotărăște cât loc rămâne pe
          * pagina a patra. ⚠️ Din 17.09.2026, seara, programul NEVALIDAT nu mai oprește nimic: se ia
@@ -1087,11 +1095,46 @@ export default {
         const scris: Record<string, string> = {}
         for (const [k, v] of f.entries()) if (typeof v === 'string') scris[k] = v
 
+        const cerNr = Number(scris.nr ?? '0') || 0
+        const cerData = scris.data ?? ''
+        const nuMerge = (motiv: string, status: 409) =>
+          html(paginaNou(ctx, m, nou, { calendar, motto, raspuns: { facut: false, plangeri: [motiv] } }), status, alLui)
+
         /*
-         * ⚠️ `POST /nou` FACE DE ACUM UN SINGUR LUCRU: validează (18.09.2026, seara). Ramura de
-         * compunere din formular a ieșit odată cu formularul — numărul se compune prin
-         * `buletin.compune`, chemat de bulă din schiță, și tot acolo e confirmarea cu Da/Nu. Un al
-         * doilea drum de compunere ar fi fost al doilea adevăr despre același număr.
+         * RETRAGEREA (ne-publicarea) — inversul validării (user, 20.09.2026: „trebuie să avem și
+         * buton de ne-publicare — dacă s-a publicat greșit — și să poată face asta și chat-ul").
+         *
+         * ⚠️ DE CE TOT AICI, și nu la o rută a numărului: publicarea și ne-publicarea aceluiași
+         * număr sunt aceeași hotărâre, luată în două sensuri. Ținute la două uși, a doua ar fi ajuns
+         * cu altă poartă și cu alte vorbe de refuz decât prima. Butonul stă însă pe PAGINA numărului
+         * (`/` și `/buletin/<nr>-<data>`), de unde postează încoace — vezi `retragerea` din `pagini.ts`.
+         * ⚠️ Fapta o face `retrageNumarul`, aceeași funcție pe care o cheamă și acțiunea
+         * `buletin.retrage` din chat: un singur adevăr despre același număr.
+         * ⚠️ `nr` și `data` din formular sunt o VERIFICARE, nu o țintă — dacă între timp s-a publicat
+         * altceva, apăsarea nu șterge numărul greșit, ci spune ce s-a schimbat.
+         */
+        if (scris.fapta === 'retrage') {
+          const r = await retrageNumarul(env, { nr: cerNr, data: cerData })
+          if (!r.facut) return nuMerge(r.text, 409)
+          ctxExec.waitUntil(
+            scrieAudit(env, {
+              action: 'buletin.retrage', target: `${r.nr}-${r.data}`, outcome: 'success',
+              correlationId: cid, actorId: principal?.userId,
+              // ⚠️ Din schița pusă deoparte, din cererea păstrată ori de la varianta de probă:
+              // a doua zi asta e întrebarea — de ea atârnă dacă pozele s-au întors sau nu.
+              summary: { izvor: r.izvor },
+            }),
+          )
+          // Numărul nu mai are pagină în arhivă: omul se duce acolo unde îl găsește de acum — schița.
+          return redirect(`${prefix}/nou`)
+        }
+
+        /*
+         * ⚠️ `POST /nou` FACE DOUĂ LUCRURI, amândouă despre publicare: VALIDEAZĂ (18.09.2026) și
+         * RETRAGE (20.09.2026). Ramura de compunere din formular a ieșit odată cu formularul —
+         * numărul se compune prin `buletin.compune`, chemat de bulă din schiță, și tot acolo e
+         * confirmarea cu Da/Nu. Un al doilea drum de compunere ar fi fost al doilea adevăr despre
+         * același număr.
          */
         if (scris.fapta !== 'valideaza') return redirect(`${prefix}/nou`)
 
@@ -1107,11 +1150,6 @@ export default {
          * ⚠️ Poarta e tot rolul de admin, ca la compunere: o cheie nouă de permisiune ar fi cerut
          * republicarea lui `xc-authz` (aceeași socoteală ca la `/nou`).
          */
-        const cerNr = Number(scris.nr ?? '0') || 0
-        const cerData = scris.data ?? ''
-        const nuMerge = (motiv: string, status: 409) =>
-          html(paginaNou(ctx, m, nou, { calendar, motto, raspuns: { facut: false, plangeri: [motiv] } }), status, alLui)
-
         if (!nou.nr || cerNr !== nou.nr || cerData !== nou.data) {
           return nuMerge(
             `numărul de pe ecran (${cerNr} / ${cerData}) nu mai e cel care urmează (${nou.nr} / ${nou.data}) — ` +
@@ -1138,11 +1176,15 @@ export default {
           text: dateleNumarului ? textCurat(dateleNumarului) : '',
         })
         /*
-         * ⚠️ SCHIȚA SE ȘTERGE ABIA AICI, nu la compunere: până la validare omul mai recompune de
-         * câteva ori, iar a doua compunere pornește tot din ce a răspuns. După publicare însă ea
-         * n-are ce căuta: numărul următor are cheia lui, și trebuie să înceapă de la o foaie albă.
+         * ⚠️ SCHIȚA IESE DE PE MASĂ ABIA AICI, nu la compunere: până la validare omul mai recompune
+         * de câteva ori, iar a doua compunere pornește tot din ce a răspuns. După publicare ea n-are
+         * ce căuta pe `/nou`: numărul următor are cheia lui, și începe de la o foaie albă.
+         * ⚠️ DAR NU SE ȘTERGE, SE PUNE DEOPARTE la `schita/arhiva/…` (20.09.2026): dacă numărul se
+         * dovedește publicat greșit, RETRAGEREA îl aduce înapoi ÎNTREG de acolo — cu adresa pozei cu
+         * tot, pe care cererea păstrată n-o are (ea ține doar `poza: true/false`). Vezi
+         * `arhiveazaSchita` din `schita.ts`.
          */
-        ctxExec.waitUntil(stergeSchita(env, { nr: nou.nr, data: nou.data }))
+        ctxExec.waitUntil(arhiveazaSchita(env, { nr: nou.nr, data: nou.data }))
         ctxExec.waitUntil(
           scrieAudit(env, {
             action: 'buletin.valideaza', target: `${nou.nr}-${nou.data}`, outcome: 'success',

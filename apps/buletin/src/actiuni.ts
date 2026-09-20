@@ -26,12 +26,14 @@ import {
   NUMELE_TREPTEI,
   calendarulNumarului,
   cheiaNumarului,
+  citesteCererea,
   compune,
   mottoDinainte,
   pastreazaNumarul,
   plangeriDeForma,
   programulFolosit,
 } from './compune.js'
+import type { Buletin } from './depozit.js'
 import { CUPRINS, type StareHarta, potriveste, traduFapta } from './harta.js'
 import { SECUNDARI_MAXIM, type NumarCerut, semne, socoteste, variante } from './masuri.js'
 import {
@@ -42,11 +44,13 @@ import {
   catreCerere,
   cautaPomenirile,
   citesteSchita,
+  dezarhiveazaSchita,
   intrebarile,
   masuraArticolului,
   normalizeazaChestionar,
   pozeleSchitei,
   rezumatulSchitei,
+  schitaDinCerere,
   schitaImplicita,
   scrieRaspuns,
   scrieSchita,
@@ -135,11 +139,16 @@ const caCerut = (n: z.infer<typeof Numar>, urmator: { nr: number | null; data: s
   floare: true,
 })
 
-/** Numărul și duminica ce urmează, din arhivă — aceeași socoteală ca pe ecranul `/nou`. */
+/**
+ * Numărul și duminica ce urmează — ACEEAȘI socoteală ca pe ecranul `/nou` (`urmatorulCuSchita`):
+ * dacă numărul are deja o schiță începută, ziua e a ei, nu duminica socotită din ziua de azi.
+ * ⚠️ Fără asta, ecranul și chatul ar lucra la două numere deosebite îndată ce o schiță rămâne peste
+ * duminică — ori după o RETRAGERE, unde numărul se întoarce cu ziua lui de dinainte.
+ */
 async function urmatorul(env: EnvActiuniBuletin): Promise<{ nr: number | null; data: string }> {
   const { ultimul } = await import('./depozit.js')
-  const { buletinulNou } = await import('./pagini.js')
-  return buletinulNou(await ultimul(env.DB), new Date().toISOString().slice(0, 10))
+  const { urmatorulCuSchita } = await import('./pagini.js')
+  return await urmatorulCuSchita(env, await ultimul(env.DB), new Date().toISOString().slice(0, 10))
 }
 
 // ---------------------------------------------------------------------------
@@ -176,9 +185,9 @@ export async function schitaNumarului(
   env: EnvActiuniBuletin,
 ): Promise<{ schita: Schita; noua: boolean }> {
   const { ultimul } = await import('./depozit.js')
-  const { buletinulNou } = await import('./pagini.js')
+  const { urmatorulCuSchita } = await import('./pagini.js')
   const b = await ultimul(env.DB)
-  const urm = buletinulNou(b, new Date().toISOString().slice(0, 10))
+  const urm = await urmatorulCuSchita(env, b, new Date().toISOString().slice(0, 10))
   const gasita = await citesteSchita(env, urm)
   if (gasita) return { schita: gasita, noua: false }
   const motto = await mottoDinainte(env, b).catch(() => null)
@@ -272,6 +281,153 @@ export async function compuneNumarul(
     cedat,
     atentie: r.atentie,
     plangeri: [],
+  }
+}
+
+// ---------------------------------------------------------------------------
+// RETRAGEREA (ne-publicarea) unui număr publicat greșit
+// ---------------------------------------------------------------------------
+
+/**
+ * CE SE POATE RETRAGE ACUM — cernerea, într-un singur loc.
+ *
+ * O cheamă și previzualizarea acțiunii (`rezuma`, adică propunerea cu Da/Nu din bulă), și fapta
+ * însăși (`retrageNumarul`, chemată de buton și de acțiune). Scrisă o dată fiindcă altfel butonul ar
+ * putea refuza cu alte vorbe decât chatul, despre același număr.
+ *
+ * Două încuietori, amândouă hotărâte pe 20.09.2026:
+ *   - numai numărul CURENT (`ultimul`) — cel care n-are urmaș. Unul din mijlocul arhivei a fost
+ *     deja împărțit pe hârtie, iar după el au apărut altele;
+ *   - numai `sursa = 'site'` — publicat de aici. Numerele aduse din arhiva parohiei nu se ating.
+ * ⚠️ `nr`/`data` cerute sunt o VERIFICARE, nu o țintă: cine vrea alt număr decât cel curent primește
+ * refuz, nu o ștergere. Așa două ferestre deschise nu se calcă una pe alta.
+ */
+export async function deRetras(
+  env: EnvActiuniBuletin,
+  cerut: { nr?: number; data?: string } = {},
+): Promise<{ numarul: Buletin } | { piedica: string }> {
+  const { ultimul } = await import('./depozit.js')
+  const b = await ultimul(env.DB)
+  if (!b) return { piedica: 'arhiva e goală: nu e niciun număr de retras' }
+  if (b.sursa !== 'site') {
+    return {
+      piedica:
+        `numărul curent (${b.nr} din ${dataLunga(b.data)}) vine din arhiva parohiei, nu s-a publicat ` +
+        'de aici — numerele acelea nu se retrag',
+    }
+  }
+  if ((cerut.nr !== undefined && cerut.nr !== b.nr) || (cerut.data !== undefined && cerut.data !== b.data)) {
+    return {
+      piedica:
+        `se retrage doar numărul CURENT (${b.nr} din ${dataLunga(b.data)}); ` +
+        `${cerut.nr ?? b.nr} / ${cerut.data ?? b.data} nu mai e el — un număr care are urmaș rămâne în arhivă`,
+    }
+  }
+  return { numarul: b }
+}
+
+/**
+ * RETRAGEREA, ÎNTR-UN SINGUR LOC — o cheamă și butonul „Retrage" din pagina numărului
+ * (`POST /nou`, `fapta=retrage`), și acțiunea `buletin.retrage` din chat.
+ *
+ * Cererea userului, 20.09.2026: „trebuie să avem și buton de ne-publicare — dacă s-a publicat greșit
+ * — și să poată face asta și chat-ul." E inversul exact al validării, în doi pași:
+ *   1. rândul IESE din arhivă (`stergeBuletin`) — din clipa aceea numărul nu mai e pe prima pagină,
+ *      nici în arhivă, nici în căutare, nici în `/v1`;
+ *   2. numărul se ÎNTOARCE ca schiță pe `/nou`, cu același nr., aceeași zi și tot ce avea în el.
+ *
+ * ⚠️ TREI IZVOARE PENTRU SCHIȚĂ, în ordinea asta — și omul află pe care din ele s-a mers:
+ *   - `arhiva`: schița pusă deoparte la validare (`schita/arhiva/…`, vezi `arhiveazaSchita`). E
+ *     drumul CEL BUN: numărul se întoarce cum l-a lăsat omul, cu ADRESELE POZELOR cu tot;
+ *   - `cerere`: cererea păstrată sub `compus/` (`schitaDinCerere`), pentru numerele publicate
+ *     înainte de 20.09.2026, care n-au schiță pusă deoparte. ⚠️ Pe drumul ăsta POZA SE PIERDE:
+ *     cererea ține doar `poza: true/false`, deci adresa trebuie dată din nou;
+ *   - `implicita`: nici una, nici alta (număr vechi, compus din argumente) — schița pornește de la
+ *     varianta de probă. Retragerea TOT se face: rândul a ieșit oricum din arhivă.
+ *
+ * ⚠️ FIȘIERELE NU SE ȘTERG (foaia, coperta, broșurile, pozele, cererea): ele sunt de acum ale
+ * ciornei, iar `/nou` le arată mai departe — omul vede pe ecran FOAIA publicată, cea pe care are
+ * de îndreptat ceva, nu o variantă zero recompusă.
+ */
+/** De unde s-a luat schița unui număr retras. Ordinea e și cea a încercărilor. */
+export type IzvorulSchitei = 'arhiva' | 'cerere' | 'implicita'
+
+/**
+ * CE I SE SPUNE OMULUI, pentru fiecare izvor — sfârșitul frazei de la `retrageNumarul`.
+ *
+ * ⚠️ Deosebirea nu e una de amănunt, ci singurul lucru pe care omul TREBUIE să-l afle înainte să
+ * recompună: pe drumul cererii POZA nu s-a întors (cererea ține doar `poza: true/false`), deci
+ * locul ei ar ieși gol pe hârtie dacă nu i se dă iar adresa.
+ */
+const VORBA_IZVORULUI: Record<IzvorulSchitei, string> = {
+  arhiva:
+    ', întreg, cu tot ce avea — pozele cu tot. Fișierele nu s-au pierdut: foaia de pe ecran e ' +
+    'chiar cea publicată.',
+  cerere:
+    ', cu tot ce avea. ⚠️ Schița de la publicare nu s-a găsit, deci numărul s-a refăcut din cererea ' +
+    'păstrată: ADRESELE POZELOR trebuie date din nou. Fișierele nu s-au pierdut: foaia de pe ecran ' +
+    'e chiar cea publicată.',
+  implicita:
+    '. ⚠️ Nici schița de la publicare, nici cererea păstrată nu s-au găsit, deci schița pornește de ' +
+    'la varianta de probă; foaia din depozit a rămas cea publicată.',
+}
+
+/*
+ * ⚠️ FĂRĂ `ctxExec`, spre deosebire de `compuneNumarul`: aici nu se amână NIMIC. Schița trebuie
+ * scrisă până la capăt înainte ca omul să fie dus la `/nou` — amânată într-un `waitUntil`, pagina
+ * s-ar putea deschide înaintea ei și ar arăta numărul următor, gol, în locul celui retras.
+ */
+export async function retrageNumarul(
+  env: EnvActiuniBuletin,
+  cerut: { nr?: number; data?: string } = {},
+): Promise<{
+  facut: boolean
+  nr: number | null
+  data: string | null
+  /** ce i se citește omului — aceleași vorbe în bulă și sub butonul din pagină */
+  text: string
+  /** de unde s-a luat schița întoarsă pe `/nou` — vezi cele trei izvoare de mai sus */
+  izvor: IzvorulSchitei
+}> {
+  const { stergeBuletin } = await import('./depozit.js')
+  const cernut = await deRetras(env, cerut)
+  if ('piedica' in cernut) {
+    return { facut: false, nr: cerut.nr ?? null, data: cerut.data ?? null, text: cernut.piedica, izvor: 'implicita' }
+  }
+  const b = cernut.numarul
+
+  // 1. rândul iese din arhivă
+  await stergeBuletin(env.DB, b.nr, b.data)
+
+  /*
+   * 2. numărul se întoarce ca schiță, sub cheia lui de dinainte (`schita/<nr>-<data>.json`). De
+   * aceea `urmatorulCuSchita` o caută după NUMĂR, nu după duminica socotită din ziua de azi: retras
+   * luni, numărul ar fi rămas altfel orfan.
+   *
+   * ⚠️ ÎNTÂI ARHIVA. Schița pusă deoparte la validare se mută înapoi pe masa de lucru AȘA CUM E —
+   * nu se reface, nu se rescrie nimic peste ea: acolo stau și adresele pozelor, singurul lucru pe
+   * care refacerea din cerere nu-l poate aduce înapoi.
+   */
+  let izvor: IzvorulSchitei = 'arhiva'
+  if (!(await dezarhiveazaSchita(env, { nr: b.nr, data: b.data }))) {
+    const cerere = await citesteCererea(env, { nr: b.nr, data: b.data }).catch(() => null)
+    izvor = cerere ? 'cerere' : 'implicita'
+    const schita = cerere
+      ? schitaDinCerere(cerere, { nr: b.nr, data: b.data })
+      : schitaImplicita({ nr: b.nr, data: b.data })
+    const intrebari = await chestionarul(env)
+    const i = urmatoareaIntrebare(schita, intrebari)
+    await scrieSchita(env, schita, { subiect: i.subiect, articol: i.articol })
+  }
+
+  return {
+    facut: true,
+    nr: b.nr,
+    data: b.data,
+    text:
+      `Numărul ${b.nr} din ${dataLunga(b.data)} a ieșit din arhivă și e înapoi ca schiță pe ` +
+      '„Numărul următor"' + VORBA_IZVORULUI[izvor],
+    izvor,
   }
 }
 
@@ -809,6 +965,79 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
     // ⚠️ Un singur loc care compune, pentru amândoi chemătorii (chatul și butonul din `/nou`).
     async executa(a, c) {
       return await compuneNumarul(c.env, a, c.ctxExec)
+    },
+  }),
+
+  /**
+   * RETRAGEREA — ne-publicarea unui număr publicat greșit (user, 20.09.2026: „trebuie să avem și
+   * buton de ne-publicare … și să poată face asta și chat-ul").
+   *
+   * ⚠️ ȚINTA O AFLĂ SINGURĂ, nu o cere de la model. Bula buletinului stă NUMAI pe `/nou`, iar după
+   * publicare omul e pe pagina numărului — deci, când se întoarce în bulă, numărul tocmai publicat
+   * NU mai e „următorul", ci CURENTUL din arhivă. Un model care ar fi ghicit nr./data ar fi cerut
+   * retragerea altui număr. `nr`/`data` rămân doar ca verificare.
+   * ⚠️ NICIO LOGICĂ AICI: tot ce se întâmplă stă în `retrageNumarul`, chemată la fel de butonul din
+   * pagină. Două drumuri, un singur adevăr despre același număr.
+   */
+  actiune({
+    nume: 'buletin.retrage',
+    descriere:
+      'RETRAGE din arhivă numărul publicat greșit — inversul validării. Rândul lui iese din arhivă ' +
+      '(nu mai e pe prima pagină, nici în arhivă, nici în căutare), iar numărul se întoarce ca ' +
+      'SCHIȚĂ pe ecranul „Numărul următor", cu același număr, aceeași zi și tot ce avea în el, ca ' +
+      'omul să-l îndrepte și să-l publice iar. Fișierele — foaia, coperta, broșurile, pozele — NU ' +
+      'se pierd. Se retrage NUMAI numărul curent și numai dacă s-a publicat de aici: numerele aduse ' +
+      'din arhiva parohiei nu se ating. CHEAM-O FĂRĂ ARGUMENTE: ținta o află serverul singur.',
+    efect: 'scrie',
+    permisiune: 'bulletin.write',
+    intrare: z.object({
+      nr: z.number().int().positive().optional()
+        .describe('LASĂ GOL: se retrage numărul curent. Scris, e doar o verificare — dacă nu e chiar el, cererea se refuză'),
+      data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+        .describe('LASĂ GOL: ziua numărului curent. Scrisă, e tot o verificare'),
+    }),
+    iesire: z.object({
+      facut: z.boolean(),
+      /** ce număr s-a retras — nu-l știa modelul, l-a aflat arhiva */
+      nr: z.number().nullable(),
+      data: z.string().nullable(),
+      /** ce s-a făcut, ori de ce nu s-a putut, în vorbele omului */
+      text: z.string(),
+      /**
+       * De unde s-a întors schița: `arhiva` = cea pusă deoparte la publicare (întreagă, cu pozele),
+       * `cerere` = refăcută din cererea păstrată (FĂRĂ adresele pozelor), `implicita` = varianta de
+       * probă. Spune-i omului când e `cerere`: are de dat pozele din nou.
+       */
+      izvor: z.enum(['arhiva', 'cerere', 'implicita']),
+    }),
+    exemple: [
+      'retrage numărul',
+      'l-am publicat greșit, dă-l înapoi la schiță',
+      'anulează publicarea',
+    ],
+    /*
+     * ⚠️ PROPUNEREA SPUNE NUMĂRUL ADEVĂRAT, luat din arhivă — el e ce citește omul înainte să apese
+     * „Da". Iar când retragerea nu se poate (număr din arhiva veche, ori altul decât cel curent) se
+     * ARUNCĂ aici: atunci nu se mai propune nimic, iar omul află de ce, înainte de orice ștergere.
+     */
+    async rezuma(a, c) {
+      const cernut = await deRetras(c.env, a)
+      if ('piedica' in cernut) throw new Error(`nu pot retrage: ${cernut.piedica}`)
+      const b = cernut.numarul
+      return `Retrag numărul ${b.nr} din ${dataLunga(b.data)} din arhivă; se întoarce ca schiță pe ` +
+        '„Numărul următor", cu tot ce are. Fișierele nu se pierd.'
+    },
+    // Acțiunea se cheamă fără argumente, deci un rând de audit cu `{ argumente: {} }` n-ar spune ce
+    // număr a ieșit din arhivă — tocmai singurul lucru care contează a doua zi.
+    auditDetalii: ({ date, eroare }) =>
+      date
+        ? { facut: date.facut, nr: date.nr, data: date.data, izvor: date.izvor, text: taiatPentruAudit(date.text) }
+        : { facut: false, eroare: taiatPentruAudit(eroare ?? 'retragerea n-a răspuns') },
+    // Refuzul cuminte (număr din arhiva veche) ajunge la OM, nu doar în audit — ca la compunere.
+    raportul: ({ date }) => ({ facut: date.facut, text: date.text }),
+    async executa(a, c) {
+      const r = await retrageNumarul(c.env, a)
+      return { facut: r.facut, nr: r.nr, data: r.data, text: r.text, izvor: r.izvor }
     },
   }),
 

@@ -220,14 +220,23 @@ type Om = { userId: string; email: string; displayName: string | null; disabledA
  * ⚠️ Rolurile nu se mai SCRIU în listă (coloana „Acum" a ieșit azi), dar se CITESC mai departe —
  * de aici. Dacă cineva scoate vreodată `roluriPentru` fiindcă „nu se mai vede nicăieri", cade
  * gruparea asta, nu doar o coloană.
+ *
+ * ⚠️ CEATA DIN MIJLOC NU MAI E UN ROL (19.09.2026): rolul global `admin` s-a stins, deci
+ * „administratorii" sunt de acum oamenii NUMIȚI la vreo aplicație — cine are măcar o cheie de admin
+ * dată punctual (`prinGrant` din `/harta-admini`). Ordinea cerută pe 15.09.2026 rămâne aceeași;
+ * doar întrebarea din spatele ei s-a mutat de la `role_assignments` la `permission_grants`.
  */
-const CETE = ['super-admin', 'admin', 'restul'] as const
+const CETE = ['super-admin', 'admin-aplicatie', 'restul'] as const
 type Ceata = (typeof CETE)[number]
 
-function ceataOmului(roluri: { role: string; scope: string }[] | undefined): Ceata {
+function ceataOmului(
+  roluri: { role: string; scope: string }[] | undefined,
+  userId: string,
+  adminiDeAplicatie: ReadonlySet<string>,
+): Ceata {
   const ale = roluri ?? []
   if (ale.some((r) => r.role === 'super-admin')) return 'super-admin'
-  if (ale.some((r) => r.role === 'admin')) return 'admin'
+  if (adminiDeAplicatie.has(userId)) return 'admin-aplicatie'
   return 'restul'
 }
 
@@ -235,6 +244,8 @@ function paginaOameni(o: {
   comune: ReturnType<typeof comune>
   oameni: Om[]
   roluri: Record<string, { role: string; scope: string }[]>
+  /** cine e numit administrator la măcar o aplicație — ceata din mijloc */
+  adminiDeAplicatie: ReadonlySet<string>
   prefix: string
   /** ce s-a scris în căutare; lista de mai sus vine deja cernută prin el */
   q?: string
@@ -242,7 +253,9 @@ function paginaOameni(o: {
 }): string {
   const numeleDe = (u: Om) => (u.displayName ?? '').trim() || u.email
   const cete = new Map<Ceata, Om[]>(CETE.map((c) => [c, []]))
-  for (const u of o.oameni) cete.get(ceataOmului(o.roluri[u.userId]))!.push(u)
+  for (const u of o.oameni) {
+    cete.get(ceataOmului(o.roluri[u.userId], u.userId, o.adminiDeAplicatie))!.push(u)
+  }
   for (const lista of cete.values()) lista.sort((a, b) => numeleDe(a).localeCompare(numeleDe(b), 'ro'))
 
   const randOm = (u: Om) => `<tr>
@@ -265,7 +278,7 @@ ${cautarea(o.prefix, o.q)}
 <p class="ajutor">${
       o.q
         ? `${o.oameni.length} ${o.oameni.length === 1 ? 'om găsit' : 'oameni găsiți'} pentru „${esc(o.q)}".`
-        : `Cine are cont pe platformă — ${o.oameni.length} ${o.oameni.length === 1 ? 'om' : 'oameni'}. Întâi super-administratorii, apoi administratorii, apoi restul.`
+        : `Cine are cont pe platformă — ${o.oameni.length} ${o.oameni.length === 1 ? 'om' : 'oameni'}. Întâi super-administratorii, apoi administratorii de aplicații, apoi restul.`
     }</p>
 ${o.oameni.length ? `<table class="oameni"><tbody>${randuri}</tbody></table>` : '<p class="ajutor">Nimeni.</p>'}`,
   })
@@ -303,10 +316,11 @@ function paginaAdmini(o: {
     APLICATII_ADMINISTRABILE.some(
       (a) => are(a.cheieAdmin, u.userId, 'prinGrant') || are(a.cheieAdmin, u.userId, 'prinRol'),
     )
+  // ⚠️ Două trepte, nu trei (19.09.2026): rolul global `admin` s-a stins. Cine ține o aplicație
+  // apare tot aici, dar prin bulina ei — nu printr-un rol pe platformă.
   const rolulLui = (u: Om) => {
     const ale = o.roluri[u.userId] ?? []
     if (ale.some((r) => r.role === 'super-admin')) return 'super-admin'
-    if (ale.some((r) => r.role === 'admin')) return 'admin'
     return 'utilizator'
   }
 
@@ -687,8 +701,10 @@ ${SCHEMA_CORP}`,
         if (!userId || !rolCerut.success) {
           return html(pagina({ ...comuneAici, corp: `<h2>Oameni</h2>${alerta('rea', 'Cerere incompletă.')}` }), 400)
         }
-        // Un singur rol global pe om: cel nou se pune, celelalte se sting. Altfel „coborât la
-        // utilizator" ar lasa in urma un `admin` vechi care ar continua sa lucreze.
+        // Un singur rol global pe om: cel nou se pune, celelalte se sting.
+        // ⚠️ Lista e `ROLURI`, adică rolurile care EXISTĂ azi (`user`, `super-admin`). Un rând vechi
+        // `role = 'admin'` rămas în bază nu se stinge de aici — nici n-are cum, `/revoca` validează
+        // rolul cu aceeași schemă —, dar nici nu mai dă nimic: autorizarea îl trece cu vederea.
         for (const r of ROLURI) {
           if (r === rolCerut.data) continue
           await apelAutorizare(env, '/revoca', { userId, role: r, scope: SCOPE_GLOBAL }, cid)
@@ -702,6 +718,23 @@ ${SCHEMA_CORP}`,
       // ⚠️ Rolurile se cer pentru TOȚI, nu doar pentru cei găsiți: gruparea pe cete e a listei
       // întregi, iar o căutare nu schimbă cui i se cuvine ce loc.
       const roluri = await roluriPentru(env, toti.map((u) => u.userId), cid)
+      // Ceata din mijloc: cine e NUMIT administrator la vreo aplicație. O singură întrebare pentru
+      // toate cheile deodată; dacă autorizarea nu răspunde, ceata rămâne goală și lista tot se vede.
+      const adminiDeAplicatie = new Set<string>()
+      const raspunsHartaOameni = await apelAutorizare(
+        env,
+        '/harta-admini',
+        { chei: APLICATII_ADMINISTRABILE.map((a) => a.cheieAdmin) },
+        cid,
+      )
+      if (raspunsHartaOameni.ok) {
+        const { harta } = (await raspunsHartaOameni.json()) as {
+          harta: Record<string, { prinGrant: string[]; prinRol: string[] }>
+        }
+        for (const felii of Object.values(harta)) for (const u of felii.prinGrant) adminiDeAplicatie.add(u)
+      } else {
+        log.error('harta adminilor nu a venit la Oameni', { stare: raspunsHartaOameni.status })
+      }
       const q = (url.searchParams.get('q') ?? '').trim()
       // Căutarea se face fără diacritice și fără majuscule: „stefan" îl găsește pe „Ștefan".
       const cheie = faraDiacritice(q)
@@ -709,7 +742,15 @@ ${SCHEMA_CORP}`,
         ? toti.filter((u) => faraDiacritice(`${u.displayName ?? ''} ${u.email}`).includes(cheie))
         : toti
       return html(
-        paginaOameni({ comune: comuneAici, oameni, roluri, prefix, ...(q ? { q } : {}), ...(mesaj ? { mesaj } : {}) }),
+        paginaOameni({
+          comune: comuneAici,
+          oameni,
+          roluri,
+          adminiDeAplicatie,
+          prefix,
+          ...(q ? { q } : {}),
+          ...(mesaj ? { mesaj } : {}),
+        }),
         200,
         csrf.setCookie ? { 'set-cookie': csrf.setCookie } : {},
       )
@@ -980,6 +1021,8 @@ function comune(
       admin: eAdmin,
       urlCont: nav.cont,
       urlAdmin: nav.admin,
+      // ⚠️ Fără `cod`: Administrarea nu e o aplicație din `APLICATII_ADMINISTRABILE`, deci în meniul
+      // ei „Vezi ca" are două rânduri, nu trei — n-ar avea ce cheie de aplicație să împrumute aici.
       poateVedeaCa: sesiune.poateVedeaCa,
       veziCa: sesiune.veziCa,
       spre,

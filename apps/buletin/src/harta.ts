@@ -120,6 +120,19 @@ export const CUPRINS: SubiectHarta[] = [
         ascunsa: true,
         raspuns: 'Validarea nu se face din chat: apasă „Validează" pe ecranul „buletin nou". Publicarea e a ta.',
       },
+      /*
+       * RETRAGEREA (ne-publicarea) — user, 20.09.2026: „trebuie să avem și buton de ne-publicare —
+       * dacă s-a publicat greșit — și să poată face asta și chat-ul".
+       *
+       * ⚠️ CONFIRMĂ MEREU, ca `de_la_capat`: scoate un număr din arhiva parohiei. Ce se șterge e
+       * doar RÂNDUL — fișierele rămân, iar numărul se întoarce ca schiță —, dar între apăsare și
+       * urmare stă tot un Da/Nu cu numărul scris în el (rezumatul vine de la `buletin.retrage`).
+       * ⚠️ ASCUNSĂ, ca și validarea: nu se oferă pe butoanele nivelului 2. E fapta cea mai rară a
+       * buletinului, iar un buton „retrage numărul" pus lângă „compune numărul", pe ecranul unde
+       * omul lucrează la ciornă, ar fi o capcană. Se recunoaște însă din vorbe („retrage numărul",
+       * „l-am publicat greșit"), deci chatul o poate face — doar nu o propune singur.
+       */
+      { id: 'retrage', nume: 'retrage numărul publicat', cere: 'nimic', confirma: true, ascunsa: true },
     ],
   },
   {
@@ -250,6 +263,30 @@ const SCURTE: Array<{ tipar: RegExp; subiect: string; actiune: string }> = [
   { tipar: /^((ia-?o |luam |o luam )?de la capat|reseteaza|sterge tot|golesc|goleste tot)[\s.!]*$/, subiect: 'numar', actiune: 'de_la_capat' },
   { tipar: /^(mai adaugam|mai adaug|inca un (text|articol|secundar)|adauga (un )?secundar)[\s.!?]*$/, subiect: 'numar', actiune: 'mai_adaugam' },
   { tipar: /^(valideaza|validam|validare|publica|publicam)([\s.!]|numarul|buletinul)*$/, subiect: 'numar', actiune: 'valideaza' },
+  /*
+   * RETRAGEREA, în toate hainele ei (20.09.2026). ⚠️ Scrise FĂRĂ diacritice: `curatat` le scoate
+   * înainte de potrivire, deci „retrage numărul" ajunge aici „retrage numarul". CRATIMA însă RĂMÂNE
+   * („retrage-l", „da-l"), deci pronumele lipit se scrie pe față în tipar.
+   */
+  {
+    tipar:
+      /^((hai,? )?(sa )?(o )?)?(retrage|retrag|retragem|retragere|ne-?public(a|am|are)|depublic(a|am|are)|anuleaza publicarea|anulam publicarea|scoate din arhiva|scoatem din arhiva|da(-?(l|mi))? inapoi la schita)(-?(l|o|le|il))?([\s.!]|numarul|buletinul|din arhiva|la schita)*$/,
+    subiect: 'numar',
+    actiune: 'retrage',
+  },
+  /*
+   * „L-AM PUBLICAT GREȘIT" — retragerea spusă ca pățanie, nu ca poruncă (20.09.2026): e chiar fraza
+   * din exemplul acțiunii `buletin.retrage`, și tot ea e prima care-i vine omului. Coada („dă-l
+   * înapoi la schiță") e opțională: capul spune deja tot.
+   * ⚠️ Nu se încurcă cu validarea: tiparul ei de mai sus cere „publica/publicam" ÎNTREG, iar aici
+   * vorba e „publicat", altă formă — „publică numărul" nu ajunge niciodată până aici.
+   */
+  {
+    tipar:
+      /^((l|le|i)-?am|am|s-?a|ne-?am|a fost) ?publicat(-?(l|o|le))?( din)? gresit[\s.!,]*((si )?(hai,? )?(sa )?(da|dal|du|adu|pune|intoarce|trage)(-?(l|o|le|mi-?l))?)?([\s.!,]|inapoi|la|in|schita|ciorna|arhiva|numarul|buletinul|il)*$/,
+    subiect: 'numar',
+    actiune: 'retrage',
+  },
 ]
 
 /** „scoate secundarul 2", „șterge ultimul secundar". */
@@ -281,6 +318,24 @@ const CUVINTELE_ACTIUNILOR: Array<{ actiune: string; cuvinte: string[]; doarLa?:
   { actiune: 'de_la_capat', cuvinte: ['de la capat', 'reseteaza'], doarLa: ['numar'] },
   { actiune: 'mai_adaugam', cuvinte: ['mai adaugam', 'inca un text', 'inca un articol'], doarLa: ['numar'] },
   { actiune: 'valideaza', cuvinte: ['valideaza', 'publica'], doarLa: ['numar'] },
+  /*
+   * ⚠️ „RETRAGE" STĂ DUPĂ „PUBLICA", dar nu se încurcă cu el: potrivirea e pe cuvinte întregi, iar
+   * „nepublica"/„depublica" sunt alte cuvinte decât „publica". Ce se putea încurca — „scoate", care
+   * la secundari înseamnă ștergere — nu ajunge aici: `sterge` e `doarLa: ['s1','s2']`, iar vorba de
+   * aici e întreagă, „scoate din arhiva".
+   */
+  {
+    actiune: 'retrage',
+    cuvinte: [
+      'retrage', 'retragem', 'retragerea', 'retras', 'retrage-l', 'retrage-o',
+      'nepublica', 'nepublicare', 'ne-publica', 'ne-publicare',
+      'depublica', 'depublicare',
+      'anuleaza publicarea', 'scoate din arhiva', 'da inapoi la schita', 'da-l inapoi la schita',
+      // ⚠️ „publicat gresit" ≠ „publica": potrivirea e pe cuvinte întregi, deci nu fură validarea.
+      'publicat gresit',
+    ],
+    doarLa: ['numar'],
+  },
   { actiune: 'stare', cuvinte: ['cum sta', 'e validat', 'starea'], doarLa: ['program'] },
 ]
 
@@ -734,6 +789,19 @@ export function traduFapta(alegere: {
       return gata(
         { actiune: 'buletin.raspunde', argumente: { subiect: 'de_la_capat' } },
         'Iau schița DE LA CAPĂT: se șterge tot ce s-a strâns (motto-ul numărului trecut rămâne).',
+        true,
+      )
+    }
+    /*
+     * ⚠️ FĂRĂ ARGUMENTE, dinadins: ținta retragerii e numărul CURENT din arhivă, pe care îl află
+     * serverul — nu cel de pe ecranul `/nou`. Modelul n-are ce ghici aici, iar rezumatul adevărat,
+     * cu numărul în el, vine de la previzualizarea acțiunii (`buletin.retrage`, `rezuma`).
+     */
+    if (alegere.actiune === 'retrage') {
+      return gata(
+        { actiune: 'buletin.retrage', argumente: {} },
+        'Retrag din arhivă numărul publicat și îl aduc înapoi ca schiță pe „Numărul următor", cu tot ' +
+        'ce are. Fișierele nu se pierd.',
         true,
       )
     }

@@ -387,6 +387,9 @@ export default {
           const utilizator = await utilizatorDupaId(env.DB, sesiune.user_id)
           if (!utilizator || utilizator.disabled_at) return json(SESIUNE_ANONIMA)
 
+          // ⚠️ O masca pe care schema n-o mai cunoaste se poarta ca „fara masca". Asa ies singure din
+          // joc mastile vechi `admin` ramase pe sesiuni deschise inainte de 19.09.2026: omul se vede
+          // iar cu ochii lui, nu cu ai unei trepte care nu mai exista.
           const masca = Masca.safeParse(sesiune.vezi_ca)
           const veziCa = masca.success ? masca.data : null
           let roluriReale = await roluriUtilizator(env, utilizator.id)
@@ -422,10 +425,17 @@ export default {
             return json({ ...SESIUNE_ANONIMA, veziCa, poateVedeaCa })
           }
 
+          /*
+           * ⚠️ SUB MASCA, ROLUL EFECTIV E `user` — si atat (19.09.2026). Masca nu mai imprumuta un rol
+           * (`admin` global nu mai exista), ci o PRIVIRE: `admin:<cod>` inseamna „utilizator care tine
+           * cheile aplicatiei <cod>", iar cheile le da autorizarea, din `veziCa`. Daca am pune aici un
+           * rol inventat `admin:calendar`, orice ecran care se uita la `roles` ar crede intr-o treapta
+           * care nu exista nicaieri altundeva.
+           */
           const raspuns: SesiuneCurenta = {
             authenticated: true,
             user: catreUtilizator(utilizator),
-            roles: veziCa ? [{ role: veziCa, scope: SCOPE_GLOBAL }] : roluriReale,
+            roles: veziCa ? [{ role: 'user', scope: SCOPE_GLOBAL }] : roluriReale,
             sessionId: sesiune.id,
             expiresAt: sesiune.expires_at,
             veziCa,

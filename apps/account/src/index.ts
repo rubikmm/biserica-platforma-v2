@@ -5,6 +5,7 @@ import {
   citesteCookie,
   construiesteCookie,
   cookieSters,
+  principalDin,
   sesiuneCurenta,
   verificaCsrf,
   verificaTokenCsrf,
@@ -16,7 +17,17 @@ import {
   type Navigatie,
   type VariabileComune,
 } from '@xc/config'
-import { APLICATII_CU_MEMBRI, Masca, SESIUNE_ANONIMA, aplicatieCuMembri, type Asociere } from '@xc/contracts'
+import { eAdminulAplicatiei } from '@xc/authorization'
+import {
+  APLICATII_ADMINISTRABILE,
+  APLICATII_CU_MEMBRI,
+  Masca,
+  SESIUNE_ANONIMA,
+  aplicatieCuMembri,
+  type AplicatieAdministrabila,
+  type Asociere,
+  type Principal,
+} from '@xc/contracts'
 import { Logger, correlationId } from '@xc/observability'
 import { dataVersiunii, html } from '@xc/ui'
 import pkg from '../package.json'
@@ -24,6 +35,11 @@ import { paginaCod, paginaContNou, paginaIntrare, paginaMesaj, paginaProfil } fr
 
 export interface Env {
   IDENTITATE: Fetcher
+  /**
+   * Autorizarea — de aici afla Profilul la ce aplicatii e omul administrator (19.09.2026). Optional
+   * fiindca un mediu fara binding-ul asta nu trebuie sa cada: fara el rubrica nu se deseneaza.
+   */
+  AUTORIZARE?: Fetcher
   MEDIU: string
   ORIGINE_PUBLICA: string
   DOMENIU_COOKIE: string
@@ -64,6 +80,26 @@ function adreseAplicatiilor(env: Env): Record<string, string> {
     if (typeof v === 'string' && v) out[app.cheieUrl] = v
   }
   return out
+}
+
+/**
+ * La ce aplicatii e omul ADMINISTRATOR, ca Profilul sa-i poata da legaturile spre Setarile lor.
+ *
+ * ⚠️ Cele unsprezece intrebari pleaca DEODATA (`Promise.all`): in serie ar fi unsprezece dus-intors
+ * pana la autorizare inaintea fiecarei deschideri a Profilului. Super-adminul nu se intreaba deloc —
+ * are toate cheile din rol si vede oricum o singura legatura, spre Administrare.
+ */
+async function aplicatiileAdministrate(
+  env: Env,
+  principal: Principal | null,
+  cid: string,
+): Promise<AplicatieAdministrabila[]> {
+  const autorizare = env.AUTORIZARE
+  if (!autorizare || !principal) return []
+  const raspunsuri = await Promise.all(
+    APLICATII_ADMINISTRABILE.map((app) => eAdminulAplicatiei(autorizare, cid, principal, app.cod)),
+  )
+  return APLICATII_ADMINISTRABILE.filter((_, i) => raspunsuri[i] === true)
 }
 
 /** Cere codul de intrare. Acelasi drum pentru „intra" si „cont nou" — difera doar numele purtat. */
@@ -461,7 +497,13 @@ export default {
               : url.searchParams.has('iesit')
                 ? 'Gata — nu mai ești în echipă.'
                 : undefined
-        const asocieri = sesiune.user ? await asocierileMele(env, sesiune.user.id, cid) : []
+        // ⚠️ Randul „Administrare" e NUMAI al super-adminului (user, 19.09.2026). `sesiune.roles`
+        // sunt rolurile EFECTIVE, deci masca „vezi ca" coboara singura si rubrica se schimba cu ea.
+        const eSuperAdmin = sesiune.roles.some((r) => r.role === 'super-admin')
+        const [asocieri, administrate] = await Promise.all([
+          sesiune.user ? asocierileMele(env, sesiune.user.id, cid) : Promise.resolve([]),
+          eSuperAdmin ? Promise.resolve([]) : aplicatiileAdministrate(env, principalDin(sesiune), cid),
+        ])
         return html(
           paginaProfil({
             ctx,
@@ -470,6 +512,8 @@ export default {
             spre: spreAici,
             asocieri,
             adrese: adreseAplicatiilor(env),
+            eSuperAdmin,
+            administrate,
             ...(mesaj ? { mesaj } : {}),
           }),
           200,

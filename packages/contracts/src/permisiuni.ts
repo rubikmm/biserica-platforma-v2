@@ -1,8 +1,9 @@
 import { z } from 'zod'
+import { aplicatiaAdministrabila, cheileAdminului } from './admini.js'
 
 /**
  * Cheile de permisiuni ale platformei. Adaugarea unei chei noi se face AICI, o singura data;
- * aplicatiile nu inventeaza chei proprii si nu verifica niciodata `rol === 'admin'`.
+ * aplicatiile nu inventeaza chei proprii si nu verifica niciodata un rol anume.
  */
 export const CHEI_PERMISIUNI = [
   'identity.manage',
@@ -63,7 +64,21 @@ export const CHEI_PERMISIUNI = [
 export const Permisiune = z.enum(CHEI_PERMISIUNI)
 export type Permisiune = z.infer<typeof Permisiune>
 
-export const ROLURI = ['user', 'admin', 'super-admin'] as const
+/**
+ * ROLURILE PLATFORMEI — doua, si atat (user, 19.09.2026).
+ *
+ * ⚠️ Rolul global `admin` S-A STINS. Modelul e acum: oricine e autentificat e UTILIZATOR;
+ * „administratorul unei aplicatii" e un utilizator care tine CHEILE acelei aplicatii (registrul din
+ * `admini.ts`, date prin `permission_grants`); super-adminul e admin pe toate, fiindca are toate
+ * cheile. Nu mai exista „admin pe platforma" — o treapta care dadea peste tot, dar nu se putea
+ * retrage de nicaieri.
+ *
+ * ⚠️ Consecinta pe date: randurile `role = 'admin'` ramase in `role_assignments` nu mai trec de
+ * `Rol.safeParse` si sunt IGNORATE tacit de autorizare (vezi `roluri()` din authorization-worker).
+ * Cine avea rolul asta ramane, practic, utilizator: ce trebuie sa pastreze i se da inapoi ca
+ * numire pe aplicatie, din Setarile fiecarei aplicatii.
+ */
+export const ROLURI = ['user', 'super-admin'] as const
 export const Rol = z.enum(ROLURI)
 export type Rol = z.infer<typeof Rol>
 
@@ -85,34 +100,13 @@ export const SCOPE_GLOBAL = 'global' satisfies Scope
 /**
  * Ce poate fiecare rol, implicit. Atribuirile individuale de permisiuni (grant direct pe user)
  * se adauga peste, in `authorization-worker`.
+ *
+ * ⚠️ Lista are DOUA intrari, nu trei (19.09.2026). Cheile de lucru ale aplicatiilor — `calendar.manage`,
+ * `program.write`, `cleaning.manage`, `broadcast.manage`… — nu mai vin din niciun rol intermediar: ele
+ * se dau OM CU OM, la aplicatia lui, din Setarile ei. Vezi `admini.ts`.
  */
 export const PERMISIUNI_IMPLICITE: Record<Rol, readonly Permisiune[]> = {
   user: ['program.read'],
-  admin: [
-    'calendar.manage',
-    'program.read',
-    'program.write',
-    'program.publish',
-    'bulletin.write',
-    'bulletin.publish',
-    'cleaning.manage',
-    'library.manage',
-    // ⚠️ Cheile aplicatiilor adaugate pe 18.09.2026 vin CU rolul de admin, ca pana atunci: adminul
-    // global (parintele) trebuie sa poata face in Newsletter, Tipic, Biblia si Website exact ce
-    // facea inainte prin rol. Daca una din ele lipseste de aici, el pierde in tacere o aplicatie.
-    'newsletter.manage',
-    'typicon.manage',
-    'bible.manage',
-    'website.manage',
-    // Parintele comanda emisia din panou — in V1 `/control` cerea chiar rolul `admin`.
-    'broadcast.manage',
-    'communication.create',
-    // Adminul vede abonatii aplicatiei lui si poate scoate pe cineva din lista (user, 15.09.2026).
-    'audience.manage',
-    'automation.manage',
-    // ⚠️ `audit.read` A IESIT de aici pe 15.09.2026 — vezi lamurirea de la cheia ei. Jurnalul e al
-    // super-adminului; nu o pune inapoi fara sa-l intrebi pe user.
-  ],
   'super-admin': [...CHEI_PERMISIUNI],
 }
 
@@ -125,21 +119,82 @@ export const PERMISIUNI_IMPLICITE: Record<Rol, readonly Permisiune[]> = {
  * cerere user 10.09.2026). NU e un rol: rolul adevarat din `role_assignments` ramane neatins.
  * Masca sta pe SESIUNE, la identitate, si coboara si ce vezi, si ce poti face — decizia o ia
  * tot autorizarea centrala (user, 10.09.2026), altfel previzualizarea ar fi doar un desen.
+ *
+ * ⚠️ MASCA DE ADMINISTRATOR E PE APLICATIE, NU PE PLATFORMA (user, 19.09.2026). Cat timp a existat
+ * rolul global `admin`, masca „→ Administrator" imprumuta ACEL rol — adica o treapta care nu mai
+ * exista. Acum super-adminul care alege randul din meniul unei aplicatii se uita la platforma ca un
+ * UTILIZATOR care tine cheile ACELEI aplicatii: `admin:calendar`, `admin:curatenie`…
+ *
+ * Valorile mastii: `user` · `anonim` · `admin:<cod>`, unde `<cod>` e un cod din
+ * `APLICATII_ADMINISTRABILE`. Un cod care nu e in registru NU e masca valida — altfel masca ar
+ * deschide un panou fantoma.
  */
-export const MASTI = ['user', 'admin', 'anonim'] as const
-export const Masca = z.enum(MASTI)
-export type Masca = z.infer<typeof Masca>
+export const MASTI_SIMPLE = ['user', 'anonim'] as const
+export type MascaSimpla = (typeof MASTI_SIMPLE)[number]
 
-/** Numele mastii pentru om, in romana — pentru meniu si pentru banda de jos. */
-export function numeMasca(m: Masca): string {
-  return m === 'anonim' ? 'neautentificat' : m === 'admin' ? 'administrator' : 'utilizator'
+export const PREFIX_MASCA_ADMIN = 'admin:'
+
+export type Masca = MascaSimpla | `admin:${string}`
+
+/**
+ * Codul aplicatiei dintr-o masca `admin:<cod>`, DACA e in registru; altfel `null`.
+ * Pentru `user`/`anonim` raspunsul e tot `null` — ele nu tin de nicio aplicatie.
+ */
+export function codulMastii(m: string): string | null {
+  if (!m.startsWith(PREFIX_MASCA_ADMIN)) return null
+  return aplicatiaAdministrabila(m.slice(PREFIX_MASCA_ADMIN.length))?.cod ?? null
+}
+
+/** E `v` o masca valida? Singurul loc in care se hotaraste asta. */
+export function eMasca(v: unknown): v is Masca {
+  if (typeof v !== 'string') return false
+  return (MASTI_SIMPLE as readonly string[]).includes(v) || codulMastii(v) !== null
+}
+
+export const Masca = z
+  .string()
+  .refine(eMasca, 'masca invalida: astept `user`, `anonim` sau `admin:<cod-aplicatie>`')
+  .transform((v) => v as Masca)
+
+/** Numele mastii pentru om, in romana — pentru meniu, pentru Profil si pentru Setari. */
+export function numeMasca(m: Masca | string): string {
+  if (m === 'anonim') return 'neautentificat'
+  if (m === 'user') return 'utilizator'
+  const cod = codulMastii(m)
+  const app = cod ? aplicatiaAdministrabila(cod) : undefined
+  return app ? `administrator al aplicației „${app.nume}"` : 'administrator'
+}
+
+/**
+ * CE POATE MASCA. Nu mai e o cautare in `PERMISIUNI_IMPLICITE` (rolul `admin` a disparut de acolo):
+ *  - `anonim` → nimic;
+ *  - `user` → cat un utilizator obisnuit;
+ *  - `admin:<cod>` → cat un utilizator PLUS cheile aplicatiei, exact cele care se dau la numire.
+ *
+ * ⚠️ Granturile personale si rolurile adevarate raman in afara: sub masca se vede numai ce vede
+ * omul imprumutat, altfel previzualizarea ar minti.
+ */
+export function permisiunileMastii(m: Masca): readonly Permisiune[] {
+  if (m === 'anonim') return []
+  const cod = codulMastii(m)
+  if (!cod) return PERMISIUNI_IMPLICITE.user
+  return [...new Set<Permisiune>([...PERMISIUNI_IMPLICITE.user, ...cheileAdminului(cod)])]
 }
 
 /** Treapta rolului. O masca se imprumuta doar SUB treapta ta; `anonim` e sub oricare. */
-export const NIVEL_ROL: Record<Rol, number> = { user: 1, admin: 2, 'super-admin': 3 }
+export const NIVEL_ROL: Record<Rol, number> = { user: 1, 'super-admin': 3 }
+
+/**
+ * Treapta mastii de administrator de aplicatie: intre utilizator si super-admin. Nu e un rol —
+ * e locul din care validarea „numai in jos" (`/vezi-ca`) stie ca super-adminul poate cobori aici,
+ * iar un utilizator nu.
+ */
+export const NIVEL_MASCA_ADMIN = 2
 
 export function nivelMasca(m: Masca): number {
-  return m === 'anonim' ? 0 : NIVEL_ROL[m]
+  if (m === 'anonim') return 0
+  if (m === 'user') return NIVEL_ROL.user
+  return NIVEL_MASCA_ADMIN
 }
 
 /** Cea mai inalta treapta pe care o are omul, dupa atribuirile lui. */

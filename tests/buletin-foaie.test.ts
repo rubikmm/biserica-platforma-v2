@@ -121,6 +121,59 @@ describe('măsurile cerute de user pe 18.09.2026', () => {
 })
 
 /**
+ * RÂNDUL DE PE URMĂ AL BUCĂȚII TĂIATE LA HOTARUL COLOANEI (user, 20.09.2026, 08:11: „la fiecare
+ * pagină ciornă — colțul dreapta jos, adică col2, jos — nu mai este justify: propoziția nu se duce
+ * până la capăt").
+ *
+ * ⚠️ De ce contează: CSS-ul nu întinde NICIODATĂ ultimul rând al unui bloc, iar curgerea noastră
+ * taie paragraful la piciorul FIECĂREI coloane — acolo rândul de pe urmă e „ultimul" doar pentru
+ * CSS, fraza merge mai departe în coloana următoare. Se vedea la coloana a doua fiindcă golul cade
+ * în colțul foii, lângă chenar, dar era la piciorul fiecărei coloane.
+ *
+ * Măsurat în Chromium pe foaia de probă (20.09.2026, `unelte/proba-foaie.mjs --gol --secundari 2`):
+ * înainte, ultimul rând al coloanei se oprea cu până la 91.17 px din 321.48 înainte de margine;
+ * după, toate cele șase hotare de coloană ating marginea (gol 0.00 px), iar paragrafele care se
+ * încheie cu adevărat — cele dinaintea rândului „Sursa:" — au rămas cu rândul scurt, cum se cuvine.
+ *
+ * Probele de aici sunt cele care se pot face fără randare: că regula CSS există, că marcajul se
+ * pune într-un singur loc — ramura „a rămas coadă" a curgerii — și că foaia nu-l scrie niciodată
+ * ea însăși pe vreun paragraf.
+ */
+describe('justify la piciorul coloanei (user, 20.09.2026)', () => {
+  it('are o regulă numai a ei, peste justify-ul obișnuit al paragrafului', () => {
+    const html = foaia()
+    expect(html).toContain('p.t { margin: 0; text-align: justify; text-indent: 10mm; hyphens: none; }')
+    expect(html).toContain('p.t.continua { text-align-last: justify; }')
+  })
+
+  /**
+   * ⚠️ Rostul e „DOAR pe ramura cu coadă": un paragraf care chiar se încheie în coloană (cel dinaintea
+   * rândului „Sursa:") trebuie să rămână cu rândul de pe urmă scurt — întins, ar arăta ca o greșeală
+   * de cules. De aceea atribuirea trebuie să fie una singură și să stea în `if (coada)`.
+   */
+  it('pune marcajul doar pe bucata care a rămas cu coadă, și nicăieri altundeva', () => {
+    const html = foaia()
+    const curgerea = html.slice(html.indexOf('function curge()'), html.indexOf('</script>'))
+    expect(curgerea.match(/className \+= ' continua'/g)).toHaveLength(1)
+    expect(curgerea).toMatch(/if \(coada\) \{[\s\S]{0,400}?bucata\.className \+= ' continua';/)
+    // coada plecată mai departe începe curată: dacă ea se încheie în coloana următoare, rămâne scurtă
+    expect(curgerea).toMatch(/p\.className = 't';/)
+  })
+
+  it('nu iese din worker pe niciun paragraf: îl pune numai curgerea, în pagină', () => {
+    const html = foaieHtml({
+      cerut: { ...cerut, principal: { ...cerut.principal, text: 'Un paragraf scurt.\n\nȘi încă unul.' } },
+      dataScrisa: '20 septembrie 2026',
+      calendar: null,
+    })
+    expect(html).toContain('<p class="t prim">Un paragraf scurt.</p>')
+    expect(html).toContain('<p class="t">Și încă unul.</p>')
+    expect(html).not.toContain('class="t continua"')
+    expect(html).not.toContain('class="t prim continua"')
+  })
+})
+
+/**
  * MARCAJELE OMULUI (user, 19.09.2026, 18:01: „aș vrea atât în texte cât și în titluri să am italic
  * și bold: plain text: `_italic_` și `*bold*`… și la sursa și la textul mare conținut articol").
  *

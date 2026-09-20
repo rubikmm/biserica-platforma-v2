@@ -38,6 +38,8 @@ function contDin(ctx: Ctx) {
     urlAdmin: ctx.nav.admin,
     // Setarile APLICATIEI, nu ale platformei (user, 15.09.2026) — de aceea adresa e a noastra.
     urlSetari: `${ctx.prefix}/setari`,
+    // Codul aplicației din registru — de el atârnă rândul „→ Administrator" din „Vezi ca".
+    cod: 'biblia',
     poateVedeaCa: ctx.poateVedeaCa ?? false,
     veziCa: ctx.veziCa ?? null,
     spre: ctx.spre ?? "",

@@ -131,15 +131,15 @@ const SESIUNE_MASCATA = {
 }
 
 /**
- * ⚠️ Sub masca „→ Administrator" identitatea PĂSTREAZĂ omul și îi ÎNLOCUIEȘTE rolurile cu rolul
- * global `admin` (`services/identity-worker/src/index.ts`, `roles: veziCa ? [{ role: veziCa… }]`).
- * Deci exact asta vede aplicația și de la un administrator global adevărat, nemascat: aceeași
- * sesiune servește ambele cazuri, și tocmai de aceea proba de mai jos le acoperă pe amândouă.
+ * ⚠️ Sub masca „→ Administrator" (din 19.09.2026: `admin:<cod>`, administratorul ACESTEI aplicații)
+ * identitatea PĂSTREAZĂ omul, dar rolul efectiv e `user` — cheile aplicației nu vin din rol, ci de la
+ * autorizare, care le citește din mască. Deci exact asta vede aplicația și de la un administrator de
+ * aplicație adevărat, nemascat: aceeași sesiune servește ambele cazuri.
  */
 const SESIUNE_ADMIN = {
   ...SESIUNE_SUPER,
-  roles: [{ role: 'admin', scope: 'global' }],
-  veziCa: 'admin',
+  roles: [{ role: 'user', scope: 'global' }],
+  veziCa: 'admin:curatenie',
 }
 
 function mediu(DB: unknown) {
@@ -221,6 +221,16 @@ function meniulCalendarului(o: { utilizator: string | null; eAdminPlatforma: boo
   return meniulContului(paginaLuna({ ctx, an: 2026, luna: 9, randuri: [], calculat: false, azi: '2026-09-19' }))
 }
 
+/**
+ * ⚠️ UN SINGUR RÂND SE DEOSEBEȘTE LEGITIM de la o aplicație la alta, din 19.09.2026: „→ Administrator"
+ * poartă CODUL aplicației curente (`ca=admin:curatenie` la curățenie, `ca=admin:calendar" la calendar)
+ * și se aprinde numai acolo unde masca purtată e chiar a ei. Restul meniului trebuie să rămână
+ * identic — de aceea rândul se scoate înainte de comparație și se probează separat, mai jos.
+ */
+function faraRandulAdmin(meniu: string | null): string | null {
+  return meniu === null ? null : meniu.replace(/\n *<a[^>]*>→ Administrator<\/a>/, '')
+}
+
 // ===========================================================================
 
 describe('(a) meniul contului: curățenia desenează exact ce desenează Calendarul', () => {
@@ -229,9 +239,11 @@ describe('(a) meniul contului: curățenia desenează exact ce desenează Calend
     const alCuratenie = meniulContului(html)
 
     expect(alCuratenie).not.toBeNull()
-    expect(alCuratenie).toBe(
-      meniulCalendarului({ utilizator: NUME_SUPER, eAdminPlatforma: true, veziCa: null, poateVedeaCa: true }),
+    expect(faraRandulAdmin(alCuratenie)).toBe(
+      faraRandulAdmin(meniulCalendarului({ utilizator: NUME_SUPER, eAdminPlatforma: true, veziCa: null, poateVedeaCa: true })),
     )
+    // …iar rândul scos poartă CODUL curățeniei, nu pe al calendarului.
+    expect(alCuratenie).toContain('vezi-ca?ca=admin:curatenie')
 
     /*
      * ⚠️ Și rândurile pe nume, ca proba să spună CE lipsește atunci când cade — o comparație de
@@ -255,8 +267,8 @@ describe('(a) meniul contului: curățenia desenează exact ce desenează Calend
     const alCuratenie = meniulContului(html)
 
     expect(alCuratenie).not.toBeNull()
-    expect(alCuratenie).toBe(
-      meniulCalendarului({ utilizator: null, eAdminPlatforma: false, veziCa: 'anonim', poateVedeaCa: true }),
+    expect(faraRandulAdmin(alCuratenie)).toBe(
+      faraRandulAdmin(meniulCalendarului({ utilizator: null, eAdminPlatforma: false, veziCa: 'anonim', poateVedeaCa: true })),
     )
 
     const meniu = alCuratenie ?? ''
@@ -340,16 +352,19 @@ describe('(c) masca nu te scoate din curățenie', () => {
 /**
  * ⚠️ HOTĂRÂREA USERULUI, 19.09.2026: „văd că un admin are acces la Administrare globală — nu ar
  * trebui să vadă altceva decât Setări". Adică rândul „Administrare" din meniul contului, care duce
- * la panoul PLATFORMEI, e al super-adminului și atât. Un administrator — de aplicație sau chiar cu
- * rolul global `admin` — vede Profil / Setări / Ieșire; adminii de aplicație se numesc din Setări.
+ * la panoul PLATFORMEI, e al super-adminului și atât. Un administrator de aplicație vede
+ * Profil / Setări / Ieșire; adminii de aplicație se numesc din Setări.
  *
- * Până acum rândul se aprindea în ZECE aplicații cu `role === 'admin' || role === 'super-admin'`,
+ * Până atunci rândul se aprindea în ZECE aplicații cu `role === 'admin' || role === 'super-admin'`,
  * deci și sub masca „→ Administrator" — tocmai cazul în care userul l-a văzut pe producție. Cum
- * masca doar COBOARĂ treapta (identity-worker: rolurile reale se înlocuiesc cu rolul mascat), un
- * rând legat numai de `super-admin` dispare de la sine sub orice mască. Asta se probează aici.
+ * masca doar COBOARĂ treapta (identity-worker: sub mască rolul efectiv e `user`), un rând legat
+ * numai de `super-admin` dispare de la sine sub orice mască. Asta se probează aici.
+ *
+ * ⚠️ Din 19.09.2026 rolul global `admin` nici nu mai există: masca „→ Administrator" e `admin:<cod>`,
+ * adică „utilizator care ține cheile acestei aplicații". Concluzia probei e aceeași.
  */
 describe('(d) rândul „Administrare" din meniu e numai al super-adminului', () => {
-  it('rolul global `admin` (și masca „→ Administrator") nu-l vede — dar are Setări', async () => {
+  it('masca „→ Administrator" (administratorul aplicației) nu-l vede — dar are Setări', async () => {
     const html = await (await cere(mediu(echipa()), '/', CA_ADMIN)).text()
     const meniu = meniulContului(html) ?? ''
     expect(meniu).not.toBe('')
@@ -364,10 +379,23 @@ describe('(d) rândul „Administrare" din meniu e numai al super-adminului', ()
     expect(meniu).toContain('>Profil</a>')
     expect(meniu).toContain('>Ieșire</a>')
 
-    // Aceeași sesiune, desenată de Calendar: etalonul spune la fel.
-    expect(meniu).toBe(
-      meniulCalendarului({ utilizator: NUME_SUPER, eAdminPlatforma: false, veziCa: 'admin', poateVedeaCa: true }),
+    // Aceeași sesiune, desenată de Calendar: etalonul spune la fel (fără rândul care poartă codul).
+    expect(faraRandulAdmin(meniu)).toBe(
+      faraRandulAdmin(
+        meniulCalendarului({ utilizator: NUME_SUPER, eAdminPlatforma: false, veziCa: 'admin:curatenie', poateVedeaCa: true }),
+      ),
     )
+
+    /*
+     * ⚠️ Iar rândul scos: la CURĂȚENIE masca e chiar a ei, deci e aprins (roșu) și, apăsat din nou, o
+     * scoate; la CALENDAR același om poartă masca altei aplicații, deci rândul rămâne apăsabil și
+     * schimbă masca. Asta e singura deosebire îngăduită între cele două meniuri.
+     */
+    expect(meniu).toMatch(/class="cont-acum"[^>]*>→ Administrator</)
+    const alCalendarului =
+      meniulCalendarului({ utilizator: NUME_SUPER, eAdminPlatforma: false, veziCa: 'admin:curatenie', poateVedeaCa: true }) ?? ''
+    expect(alCalendarului).not.toMatch(/class="cont-acum"[^>]*>→ Administrator</)
+    expect(alCalendarului).toContain('vezi-ca?ca=admin:calendar')
   })
 
   it('super-adminul adevărat îl vede mai departe', async () => {

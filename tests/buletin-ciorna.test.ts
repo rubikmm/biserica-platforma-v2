@@ -107,6 +107,19 @@ describe('numărul compus, arătat în pagină ca unul gata de validat', () => {
   })
 
   /**
+   * ⚠️ CIORNA N-ARE „RETRAGE" (20.09.2026). Butonul de ne-publicare stă pe pagina unui număr
+   * PUBLICAT (`sursa: 'site'`), nu pe foaia care abia așteaptă validarea: n-ar avea ce retrage, iar
+   * lângă „Validează și publică" ar fi două fapte opuse pe același ecran. Rândul de butoane al
+   * ciornei e același cod ca la un număr din arhivă (`butoaneleNumarului`), deci fără proba asta
+   * condiția s-ar putea slăbi fără să se vadă nimic.
+   */
+  it('nu are butonul „Retrage": ciorna nu e publicată, deci n-are ce ieși din arhivă', () => {
+    const h = dupaCompunere()
+    expect(h).not.toContain('id="b-retrage"')
+    expect(h).not.toContain('value="retrage"')
+  })
+
+  /**
    * ⚠️ Din 18.09.2026, seara, dedesubt nu mai e formularul, ci SCHIȚA (răspunsurile din chat) —
    * dar ordinea a rămas cea cerută: întâi se vede foaia, apoi la ce s-a ajuns cu scrisul.
    */

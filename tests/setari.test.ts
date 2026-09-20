@@ -23,14 +23,19 @@ describe('cheile, după hotărârile din 15.09.2026', () => {
    * ⚠️ Cererea userului: zona de loguri e a SUPER-ADMINULUI. Cât timp `audit.read` venea din oficiu
    * și cu rolul de administrator, ea n-ar fi închis nimic.
    */
-  it('`audit.read` NU mai vine cu rolul de administrator', () => {
-    expect(PERMISIUNI_IMPLICITE.admin).not.toContain('audit.read')
+  it('`audit.read` e numai a super-adminului', () => {
     expect(PERMISIUNI_IMPLICITE['super-admin']).toContain('audit.read')
+    expect(PERMISIUNI_IMPLICITE.user).not.toContain('audit.read')
   })
 
-  it('adminul vede abonații aplicației lui: `audience.manage`', () => {
+  /**
+   * ⚠️ Din 19.09.2026 `audience.manage` nu mai vine din niciun rol în afară de super-admin: rolul
+   * global `admin` s-a stins, iar cheia se dă omului la aplicația lui. De aceea proba nu mai
+   * întreabă un rol, ci masca de administrator al unei aplicații — drumul pe care ajunge azi.
+   */
+  it('cheia abonaților nu vine cu rolul de utilizator; o are super-adminul', () => {
     expect(CHEI_PERMISIUNI).toContain('audience.manage')
-    expect(PERMISIUNI_IMPLICITE.admin).toContain('audience.manage')
+    expect(PERMISIUNI_IMPLICITE['super-admin']).toContain('audience.manage')
     expect(PERMISIUNI_IMPLICITE.user).not.toContain('audience.manage')
   })
 })

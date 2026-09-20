@@ -1,6 +1,13 @@
 import type { Navigatie } from '@xc/config'
 import { alerta, esc, pagina } from '@xc/ui'
-import { APLICATII_CU_MEMBRI, type AplicatieCuMembri, type Asociere, type SesiuneCurenta } from '@xc/contracts'
+import {
+  APLICATII_CU_MEMBRI,
+  type AplicatieAdministrabila,
+  type AplicatieCuMembri,
+  type Asociere,
+  type SesiuneCurenta,
+  numeMasca,
+} from '@xc/contracts'
 
 export interface Ctx {
   prefix: string
@@ -76,6 +83,8 @@ function comune(ctx: Ctx, cine: Cine = {}) {
       nume: cine.nume ?? 'Cont',
       urlCont: ctx.nav.cont,
       urlAdmin: ctx.nav.admin,
+      // ⚠️ Fără `cod`: Contul nu e o aplicație din `APLICATII_ADMINISTRABILE`, deci „Vezi ca" are aici
+      // două rânduri, nu trei — masca de administrator e a unei aplicații anume.
       poateVedeaCa: cine.poateVedeaCa ?? false,
       veziCa: cine.veziCa ?? null,
       spre: cine.spre ?? '',
@@ -316,6 +325,49 @@ function aplicatiaMea(
 </div>`
 }
 
+/**
+ * APLICATIILE PE CARE LE ADMINISTREAZA OMUL — doar legaturi, nicio setare adusa aici
+ * (user, 19.09.2026: „este bine sa afisam doar legaturi catre aplicatii din profil-admin — nu
+ * importam toate setarile aici"). Setarile raman la ele acasa, o singura pagina pentru fiecare.
+ *
+ * ⚠️ Trei stari, nu doua: super-adminul vede O SINGURA legatura, spre Administrare (are oricum toate
+ * cheile, o lista de unsprezece randuri n-ar spune nimic); adminul de aplicatie vede exact
+ * aplicatiile lui; omul fara nicio cheie nu vede rubrica deloc — cel care n-are unde sa intre n-are
+ * de ce sa afle ca exista o usa.
+ */
+function rubricaAdministrate(
+  nav: Navigatie,
+  eSuperAdmin: boolean,
+  administrate: readonly AplicatieAdministrabila[],
+): string {
+  if (!eSuperAdmin && administrate.length === 0) return ''
+  const randuri = eSuperAdmin
+    ? `<div class="app-rand">
+  <div>Ești super-administrator: toate aplicațiile, din
+       <a href="${esc(nav.admin)}/">Administrare</a>.</div>
+</div>`
+    : administrate
+        .map(
+          (app) => `<div class="app-rand">
+  <div><strong><a href="${esc(adresaAplicatiei(nav, app.cod))}/setari">${esc(app.nume)}</a></strong></div>
+</div>`,
+        )
+        .join('\n')
+  return `
+<h3>Aplicațiile pe care le administrezi</h3>
+${randuri}
+`
+}
+
+/**
+ * Adresa aplicatiei, dupa codul ei din registru. `Navigatie` e deja harta adreselor platformei,
+ * cu aceleasi chei ca si codurile (`program`, `calendar`, `home`…) si cu implicitul de dev (cai pe
+ * acelasi host) — deci nu se mai scrie inca o lista de `URL_*` in pagina asta.
+ */
+function adresaAplicatiei(nav: Navigatie, cod: string): string {
+  return (nav as unknown as Record<string, string | undefined>)[cod] ?? ''
+}
+
 export function paginaProfil(o: {
   ctx: Ctx
   sesiune: SesiuneCurenta
@@ -326,6 +378,10 @@ export function paginaProfil(o: {
   asocieri?: Asociere[]
   /** Adresele aplicatiilor, dupa cheia `URL_*` din registrul asocierilor. */
   adrese?: Record<string, string>
+  /** Rolul REAL (efectiv, deci coborat de masca „vezi ca"): vede o singura legatura, Administrarea. */
+  eSuperAdmin?: boolean
+  /** Aplicatiile la care omul are cheia de admin, in ordinea registrului. */
+  administrate?: readonly AplicatieAdministrabila[]
 }): string {
   const u = o.sesiune.user
   if (!u) return paginaIntrare({ ctx: o.ctx, csrf: o.csrf })
@@ -351,7 +407,7 @@ ${o.mesaj ? alerta('buna', esc(o.mesaj)) : ''}
   <tr><th>Nume</th><td>${esc(u.displayName ?? '—')}</td></tr>
   <tr><th>Roluri</th><td class="roluri">${roluri}${
     o.sesiune.veziCa
-      ? ` <small>(te uiți ca ${esc(o.sesiune.veziCa)}; rolul tău a rămas neatins)</small>`
+      ? ` <small>(te uiți ca ${esc(numeMasca(o.sesiune.veziCa))}; rolul tău a rămas neatins)</small>`
       : ''
   }</td></tr>
   <tr><th>Sesiunea expiră</th><td>${esc(o.sesiune.expiresAt ?? '—')}</td></tr>
@@ -382,7 +438,7 @@ ${o.mesaj ? alerta('buna', esc(o.mesaj)) : ''}
 ${APLICATII_CU_MEMBRI.map((app) =>
   aplicatiaMea(p, o.csrf, app, asocieri.find((a) => a.aplicatie === app.cod), adrese[app.cheieUrl] ?? ''),
 ).join('\n')}
-
+${rubricaAdministrate(o.ctx.nav, o.eSuperAdmin ?? false, o.administrate ?? [])}
 <h3>Siguranță</h3>
 <p>Închide toate sesiunile deschise, pe orice dispozitiv. Ca să intri din nou, ceri alt cod.</p>
 <form method="post" action="${p}/auth/revoca-tot">

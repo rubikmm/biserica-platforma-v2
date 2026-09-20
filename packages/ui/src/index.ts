@@ -14,6 +14,7 @@
  *   <main>     continutul                                                [corp]
  *   subsol     tema + versiunea + copyright, la fel peste tot
  */
+import { PREFIX_MASCA_ADMIN, aplicatiaAdministrabila, numeMasca } from '@xc/contracts'
 
 export function esc(text: unknown): string {
   return String(text ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
@@ -368,17 +369,22 @@ export interface Cont {
    * Aplicatia care nu da nimic aici (Contul insusi, unde Profilul E pagina) nu capata randul.
    */
   urlSetari?: string
+  /**
+   * CODUL APLICATIEI CURENTE, cum il stie registrul `APLICATII_ADMINISTRABILE` (`calendar`,
+   * `curatenie`, `home`…) — acelasi cu `UneltleSetarilor.cod`.
+   *
+   * ⚠️ De el atarna randul „→ Administrator" din grupul „Vezi ca": din 19.09.2026 masca de
+   * administrator e PE APLICATIE (`admin:<cod>`), deci carcasa trebuie sa stie in ce aplicatie e.
+   * Aplicatiile din afara registrului (Contul, Administrarea) nu-l dau si nu capata randul — n-ar
+   * avea ce cheie sa imprumute acolo.
+   */
+  cod?: string
   /** `true` pentru super-admin (si pentru cine poarta deja o masca): apare grupul „Vezi ca". */
   poateVedeaCa?: boolean
-  /** Masca purtata acum, daca exista: `user`, `admin` sau `anonim`. */
+  /** Masca purtata acum, daca exista: `user`, `anonim` sau `admin:<cod>`. */
   veziCa?: string | null
   /** Pagina de acum, ca intoarcerea de la comutator sa cada exact aici. */
   spre?: string
-}
-
-/** Numele mastii pentru om — acelasi cuvant in meniu si pe banda. */
-function numeleMastii(m: string): string {
-  return m === 'anonim' ? 'neautentificat' : m === 'admin' ? 'administrator' : 'utilizator'
 }
 
 function comutatorVeziCa(urlCont: string, ca: string, spre: string): string {
@@ -398,6 +404,12 @@ function comutatorVeziCa(urlCont: string, ca: string, spre: string): string {
  * ⚠️ Cuvintele „Vezi ca" au IESIT din cele trei randuri (user, 12.09.2026: „în loc de «vezi ca…» să
  * fie o săgeată"): a rămas săgeata si rolul — „→ Utilizator". Doar numele s-a schimbat; comutatorul,
  * randul rosu si drumul inapoi sunt neatinse.
+ *
+ * ⚠️ „→ Administrator" e acum ADMINISTRATORUL ACESTEI APLICATII (19.09.2026): trimite `admin:<cod>`,
+ * cu codul aplicatiei curente, si de aceea apare NUMAI acolo unde carcasa a primit un `cod` din
+ * registru. In Cont si in Administrare — care nu sunt aplicatii administrabile — raman doua randuri.
+ * Randul ramane apasabil si cand omul poarta deja masca de admin a ALTEI aplicatii: atunci schimba
+ * masca dintr-o apasare, in loc s-o scoata.
  */
 function randuriVeziCa(c: Cont): string {
   const urlCont = c.urlCont ?? ''
@@ -405,11 +417,12 @@ function randuriVeziCa(c: Cont): string {
   const cere = (ca: string, text: string) =>
     c.veziCa === ca
       ? `\n          <a class="cont-acum" href="${comutatorVeziCa(urlCont, 'real', spre)}" aria-current="true"` +
-        ` title="Te uiți ca ${esc(numeleMastii(ca))} — apasă din nou ca să revii la contul tău">${text}</a>`
+        ` title="Te uiți ca ${esc(numeMasca(ca))} — apasă din nou ca să revii la contul tău">${text}</a>`
       : `\n          <a href="${comutatorVeziCa(urlCont, ca, spre)}">${text}</a>`
+  const app = c.cod ? aplicatiaAdministrabila(c.cod) : undefined
   return (
     cere('user', '→ Utilizator') +
-    cere('admin', '→ Administrator') +
+    (app ? cere(`${PREFIX_MASCA_ADMIN}${app.cod}`, '→ Administrator') : '') +
     cere('anonim', '→ Neautentificat')
   )
 }

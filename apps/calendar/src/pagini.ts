@@ -73,6 +73,9 @@ function contDin(ctx: Ctx) {
     urlAdmin: ctx.nav.admin,
     // Setarile APLICATIEI, nu ale platformei (user, 15.09.2026) — de aceea adresa e a noastra.
     urlSetari: `${ctx.prefix}/setari`,
+    // Codul aplicației din registru: de el atârnă rândul „→ Administrator" din „Vezi ca", fiindcă
+    // masca de administrator e pe APLICAȚIE, nu pe platformă (19.09.2026).
+    cod: 'calendar',
     poateVedeaCa: ctx.poateVedeaCa ?? false,
     veziCa: ctx.veziCa ?? null,
     spre: ctx.spre ?? '',

@@ -209,6 +209,44 @@ describe('comenzile scurte', () => {
     expect(f?.apel?.argumente).toEqual({ subiect: 'de_la_capat' })
   })
 
+  /**
+   * RETRAGEREA (ne-publicarea), 20.09.2026: „trebuie să avem și buton de ne-publicare — dacă s-a
+   * publicat greșit — și să poată face asta și chat-ul."
+   *
+   * ⚠️ Ce se poate strica tăcut: fraza omului („l-am publicat greșit") ar cădea în „nu înțeleg", iar
+   * drumul fără AI s-ar rupe exact la fapta cea mai grabnică — un număr greșit stă pe prima pagină a
+   * parohiei până se înțelege cineva cu ea.
+   */
+  it('retragerea se recunoaște în toate hainele ei, și CONFIRMĂ mereu', () => {
+    for (const fraza of [
+      'retrage numărul',
+      'retrage',
+      'retragem buletinul',
+      'nepublică',
+      'ne-publică numărul',
+      'depublicare',
+      'anulează publicarea',
+      'scoate din arhivă',
+      'dă-l înapoi la schiță',
+      // pățania spusă ca pățanie — fraza din exemplul acțiunii `buletin.retrage`
+      'l-am publicat greșit, dă-l înapoi la schiță',
+      'l-am publicat greșit',
+      // pronumele lipit cu cratimă: `curatat` scoate diacriticele, nu cratimele
+      'retrage-l',
+    ]) {
+      expect(potriveste(fraza, gata), fraza).toMatchObject({
+        nivel: 'sigur', subiect: 'numar', actiune: 'retrage', confirma: true,
+      })
+    }
+    // și la mijlocul chestionarului: e o poruncă, nu răspunsul la întrebarea de atunci
+    expect(potriveste('retrage numărul', la('text'))).toMatchObject({ subiect: 'numar', actiune: 'retrage' })
+  })
+
+  it('⚠️ „retrage" nu se încurcă cu „publică": validarea rămâne ce era', () => {
+    expect(potriveste('publică numărul', gata)).toMatchObject({ subiect: 'numar', actiune: 'valideaza' })
+    expect(potriveste('validează', gata)).toMatchObject({ subiect: 'numar', actiune: 'valideaza' })
+  })
+
   it('ștergerea unui secundar spune care', () => {
     expect(potriveste('scoate secundarul 2', gata)).toMatchObject({ nivel: 'sigur', subiect: 's2', actiune: 'sterge', confirma: true })
     expect(potriveste('șterge secundarul', { intrebare: null, secundari: 1 })).toMatchObject({ subiect: 's1', actiune: 'sterge' })
@@ -362,6 +400,26 @@ describe('ce nu se face de aici', () => {
     const valideaza = traduFapta({ subiect: 'numar', actiune: 'valideaza' })
     expect(valideaza?.apel).toBeNull()
     expect(valideaza?.raspuns).toContain('Validează')
+  })
+})
+
+/**
+ * RETRAGEREA, TRADUSĂ — spre deosebire de validare, ea CHIAR se face din chat (user, 20.09.2026:
+ * „și să poată face asta și chat-ul"). Ce se poate strica tăcut: argumentele. Ținta retragerii e
+ * numărul CURENT din arhivă, aflat de server; dacă harta ar trimite un `nr`/o `data` ghicite de
+ * model, s-ar cere retragerea altui număr decât cel publicat greșit.
+ */
+describe('retragerea, tradusă în acțiunea buletinului', () => {
+  it('cheamă `buletin.retrage` FĂRĂ argumente și cere confirmare', () => {
+    const f = traduFapta({ subiect: 'numar', actiune: 'retrage' })
+    expect(f?.apel).toEqual({ actiune: 'buletin.retrage', argumente: {} })
+    expect(f?.confirma).toBe(true)
+    expect(f?.rezumat).toContain('schiță')
+    expect(f?.rezumat).toContain('nu se pierd')
+  })
+
+  it('⚠️ nu se oferă pe butoanele nivelului 2: e fapta cea mai rară, nu una de propus', () => {
+    expect(actiunileCaOptiuni('numar').map((a) => a.id)).not.toContain('retrage')
   })
 })
 
