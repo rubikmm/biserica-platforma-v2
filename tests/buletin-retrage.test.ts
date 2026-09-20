@@ -384,6 +384,53 @@ describe('butonul „Retrage" — numai admin, numai numărul curent, numai publ
     expect(h).toContain('nu se pierd')
   })
 
+  /**
+   * ⚠️ DOAR ICONIȚA, ca „Descarcă" (user, 20.09.2026, 09:00: „butonul să fie în rând cu celelalte
+   * și doar icona"). Cuvântul scris umfla rândul de sub copertă peste lățimea unui telefon, iar
+   * `flex-wrap` al lui `.btns.hartii` îl cobora pe al doilea rând. Proba se uită la ce rămâne ÎNTRE
+   * `>` și `</button>`: doar SVG-ul, niciun cuvânt.
+   */
+  it('e DOAR iconiță: cuvântul „Retrage" stă în aria-label și title, nu scris pe buton', () => {
+    const h = paginaBuletin(CTX, MENIU_CURENT, AL_NOSTRU)
+    const buton = h.match(/<button[^>]*id="b-retrage"[^>]*>([\s\S]*?)<\/button>/)
+    expect(buton, 'butonul #b-retrage trebuie să fie în pagină').not.toBeNull()
+    const inauntru = buton![1]
+    expect(inauntru).toContain('<svg')
+    // scos SVG-ul, nu mai rămâne nimic de citit — nici „Retrage", nici un spațiu cu text
+    expect(inauntru.replace(/<svg[\s\S]*?<\/svg>/g, '').trim()).toBe('')
+    // dar cuvântul E acolo pentru cine nu vede iconița
+    const capul = buton![0].slice(0, buton![0].indexOf('>') + 1)
+    expect(capul).toContain('aria-label="Retrage numărul din arhivă')
+    expect(capul).toContain('title="Retrage numărul din arhivă')
+    // aceeași carcasă ca „Descarcă": `btn intreg`, ca să stea la fel în rând
+    expect(capul).toContain('class="btn intreg"')
+    expect(h).toContain('<a class="btn intreg" id="b-descarca"')
+  })
+
+  /**
+   * ⚠️ FEREASTRA STĂ ÎN AFARA `<nav>`-ului, ca `fereastraRasfoit`: butoanele sunt navigare, un
+   * `<dialog>` cu formular nu. Proba taie nav-ul din pagină și cere ca `#d-retrage` să nu fie în el.
+   */
+  it('fereastra de confirmare stă DUPĂ </nav>, nu printre butoane', () => {
+    const h = paginaBuletin(CTX, MENIU_CURENT, AL_NOSTRU)
+    const nav = h.match(/<nav class="btns hartii">[\s\S]*?<\/nav>/)
+    expect(nav, 'rândul de butoane trebuie să fie în pagină').not.toBeNull()
+    expect(nav![0]).toContain('id="b-retrage"')
+    expect(nav![0]).not.toContain('<dialog')
+    expect(nav![0]).not.toContain('id="d-retrage"')
+    expect(h.indexOf('id="d-retrage"')).toBeGreaterThan(h.indexOf(nav![0]) + nav![0].length - 1)
+    // ultimul din rând: după pastila lui Tipărește
+    expect(nav![0].indexOf('id="b-retrage"')).toBeGreaterThan(nav![0].indexOf('id="b-revers"'))
+  })
+
+  it('și pe prima pagină fereastra iese din nav, lângă cea de răsfoit', () => {
+    const h = paginaAcasa(CTX, { ...MENIU_CURENT }, AL_NOSTRU, [])
+    const nav = h.match(/<nav class="btns hartii">[\s\S]*?<\/nav>/)!
+    expect(nav[0]).toContain('id="b-retrage"')
+    expect(nav[0]).not.toContain('<dialog')
+    expect(h).toContain('id="d-retrage"')
+  })
+
   it('se vede și pe prima pagină, care E chiar numărul curent', () => {
     expect(paginaAcasa(CTX, { ...MENIU_CURENT }, AL_NOSTRU, [])).toContain('id="b-retrage"')
   })

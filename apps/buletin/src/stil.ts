@@ -371,6 +371,17 @@ a.coperta:hover img { border-color:var(--rosu) }
 .btns.hartii .com-revers:hover { color:var(--rosu); background:var(--paper) }
 .btns.hartii .com-revers[aria-pressed="true"] { color:var(--rosu);
                  background:color-mix(in srgb, var(--rosu) 11%, transparent) }
+/* ⚠️ RANDUL ASTA NU SE RUPE (user, 20.09.2026, 09:00: „butonul să fie în rând cu celelalte").
+   Retragerea, al patrulea buton, a umflat randul: cu cuvantul scris cerea ~423 px, iar pe telefon
+   zona are ~350 (390 px ecran, minus padingul de 20 al corpului) — flex-wrap:wrap de mai sus il
+   cobora singur pe al doilea rand. Cuvantul a iesit (a ramas in aria-label), dar socoteala tot e
+   stransa la 390, de aceea sub 480 padingul lateral al butoanelor scade. Ruperea o lasam, ca ultima
+   plasa: mai bine doua randuri decat un buton taiat, daca maine mai intra ceva in rand. */
+@media (max-width:480px) {
+  .btns.hartii { gap:6px }
+  .btns.hartii .btn.intreg { padding-left:13px; padding-right:13px }
+  .btns.hartii .com-revers { padding-left:11px; padding-right:11px }
+}
 
 /* ── RAFTUL: fisele numerelor, cu pagina intai deasupra. Cate incap pe rand — patru pe ecran de
    birou, doua pe telefon — le hotaraste latimea minima a fisei, nu un numar de coloane scris de noi. */

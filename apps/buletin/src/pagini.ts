@@ -619,7 +619,8 @@ const fisa = (ctx: Ctx, b: BuletinScurt): string =>
  * ⚠️ **Retrage** — al patrulea buton, dar NUMAI pentru cine ține buletinul si NUMAI pe numarul
  * CURENT publicat de aici (user, 20.09.2026: „trebuie să avem și buton de ne-publicare — dacă s-a
  * publicat greșit"). De aceea functia are nevoie de `acum`: pe un numar din mijlocul arhivei butonul
- * n-are ce cauta. Vezi `retragerea`.
+ * n-are ce cauta. E DOAR ICONITA, ca Descarcă — cuvantul sta in `aria-label`/`title` (user,
+ * 20.09.2026, 09:00: „butonul să fie în rând cu celelalte și doar icona"). Vezi `retragerea`.
  *
  * Fara PDF (doua numere vechi au ramas doar cu poza), butoanele se sting in loc sa duca in gol.
  */
@@ -662,19 +663,40 @@ function butoaneleNumarului(ctx: Ctx, b: Buletin, v?: string | null, acum = fals
  *   - **`sursa === 'site'`** — publicat de aici. Cele 619 numere aduse din V1 nu se ating: nu
  *     îndreptăm noi arhiva parohiei.
  *
+ * ⚠️ E DOAR ICONIȚA, exact ca „Descarcă" — aceleași clase (`btn intreg`), cuvântul în `title` și
+ * `aria-label`, nimic scris între `>` și `</button>` în afară de SVG (user, 20.09.2026, 09:00:
+ * „butonul să fie în rând cu celelalte și doar icona"). Cu cuvântul scris, rândul de sub copertă
+ * trecea de lățimea ecranului pe telefon și `flex-wrap` al lui `.btns.hartii` îl cobora singur.
+ * ⚠️ FEREASTRA NU SE MAI SCRIE AICI, ci în `fereastraRetragerii`, pusă DUPĂ `</nav>` — ca
+ * `fereastraRasfoit`. Un `<dialog>` n-are ce căuta printre butoanele unui `<nav>`: e conținutul
+ * paginii, nu o destinație de navigare. Cele două merg mereu împreună: fără fereastră, JS-ul de mai
+ * jos iese din prima linie și butonul rămâne mort.
+ */
+function retragerea(ctx: Ctx, b: Buletin, acum: boolean): string {
+  if (!seRetrage(ctx, b, acum)) return ''
+  return (
+    `<button type="button" class="btn intreg" id="b-retrage" title="${esc(SPUNE_RETRAGE)}"` +
+    ` aria-label="${esc(SPUNE_RETRAGE)}">${IC_RETRAGE}</button>`
+  )
+}
+
+/** Cele TREI condiții ale retragerii, într-un singur loc: le cer și butonul, și fereastra lui. */
+const seRetrage = (ctx: Ctx, b: Buletin, acum: boolean) => ctx.eAdmin && acum && b.sursa === 'site'
+
+const SPUNE_RETRAGE = 'Retrage numărul din arhivă și adu-l înapoi ca schiță pe „Numărul următor"'
+
+/**
+ * FEREASTRA RETRAGERII — perechea butonului de mai sus, scrisă după `</nav>`.
+ *
  * ⚠️ CONFIRMAREA E O FEREASTRĂ, nu un `confirm()` al browserului: e regula ferestrelor platformei
  * (`<dialog>`, `showModal` îmbrăcat în carcasă), iar apăsarea asta scoate un număr din arhivă — nu e
  * locul unde se economisește un ecran. Scrisul din ea spune limpede ce NU se pierde: fișierele.
  * ⚠️ Formularul postează la `/nou` cu `fapta=retrage`, ca formularul-pereche al validării: o singură
  * ușă hotărăște și publicarea, și retragerea unui număr.
  */
-function retragerea(ctx: Ctx, b: Buletin, acum: boolean): string {
-  if (!ctx.eAdmin || !acum || b.sursa !== 'site') return ''
-  const spune = 'Retrage numărul din arhivă și adu-l înapoi ca schiță pe „Numărul următor"'
-  return (
-    `<button type="button" class="btn intreg" id="b-retrage" title="${esc(spune)}" aria-label="${esc(spune)}">` +
-    `${IC_RETRAGE} Retrage</button>` +
-    `<dialog class="modal" id="d-retrage" aria-labelledby="t-retrage">
+function fereastraRetragerii(ctx: Ctx, b: Buletin, acum: boolean): string {
+  if (!seRetrage(ctx, b, acum)) return ''
+  return `<dialog class="modal" id="d-retrage" aria-labelledby="t-retrage">
   <form class="modal-cutie" id="f-retrage" method="post" action="${esc(ctx.prefix)}/nou">
     <div class="modal-cap">
       <h2 id="t-retrage">Retragi nr. ${b.nr}?</h2>
@@ -689,7 +711,6 @@ function retragerea(ctx: Ctx, b: Buletin, acum: boolean): string {
     <div class="modal-jos"><button type="submit" class="btn-plin">Retrage nr. ${b.nr}</button></div>
   </form>
 </dialog>`
-  )
 }
 
 /**
@@ -777,7 +798,7 @@ export function paginaAcasa(ctx: Ctx, m: Meniu, b: Buletin | null, dinainte: Bul
   <p class="cand">${dataCuZi(b.data)}</p>
 </div>
 ${coperta(ctx, b)}
-<nav class="btns hartii">${butoaneleNumarului(ctx, b, null, m.acum === true)}</nav>${fereastraRasfoit(ctx, b)}
+<nav class="btns hartii">${butoaneleNumarului(ctx, b, null, m.acum === true)}</nav>${fereastraRasfoit(ctx, b)}${fereastraRetragerii(ctx, b, m.acum === true)}
 ${
   dinainte.length
     ? `<h3 class="titlu-fasie">Numerele dinainte</h3>
@@ -805,7 +826,7 @@ export function paginaBuletin(ctx: Ctx, m: Meniu, b: Buletin): string {
   <p class="cand">${dataCuZi(b.data)}${b.pagini ? ` · ${b.pagini} pagini` : ''}</p>
 </div>
 ${coperta(ctx, b)}
-<nav class="btns hartii">${butoaneleNumarului(ctx, b, null, m.acum === true)}</nav>${fereastraRasfoit(ctx, b)}`,
+<nav class="btns hartii">${butoaneleNumarului(ctx, b, null, m.acum === true)}</nav>${fereastraRasfoit(ctx, b)}${fereastraRetragerii(ctx, b, m.acum === true)}`,
   )
 }
 
