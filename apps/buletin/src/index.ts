@@ -1220,6 +1220,17 @@ export default {
             ? programulSaSchimbat(cerereaVeche?.program, 'eroare' in cal ? null : cal)
             : null
           /*
+           * PROGRAMUL E ÎNCĂ O PROPUNERE — rândul de sub butonul de validare (21.09.2026, user
+           * 20.09.2026, 23:33: „Buletinul preia la momentul validării ce program era validat").
+           *
+           * ⚠️ SE UITĂ LA PROGRAMUL DE ACUM, nu la cel cu care s-a compus foaia — fiindcă validarea
+           * îl cere tot pe cel de acum (`valideazaNumarul` îl cere din nou). Un program validat între
+           * timp ar fi lăsat altfel pe ecran un avertisment care nu mai e adevărat: apăsarea ar
+           * merge, recompunând singură pagina a patra. Cel păstrat lângă foaie rămâne ca rezervă,
+           * pentru clipele în care programul n-a răspuns deloc.
+           */
+          const programPropus = (calendar?.stare ?? cerereaVeche?.program?.stare) === 'propus'
+          /*
            * NUMERELE PROGRAMATE, SUS PE `/nou` (20.09.2026). Cât timp 617 e scris în bază dar n-a
            * apărut, ecranul lucrează deja la 618 — iar fără rândurile astea nimic n-ar spune unde
            * s-a dus 617: în arhivă nu-l vede nimeni, pe prima pagină e tot cel dinainte, pentru
@@ -1250,6 +1261,7 @@ export default {
               ...(schita.atinsa || foaia ? { seStergeCiorna: true } : {}),
               ...(masura ? { masura } : {}),
               ...(programSchimbat ? { programSchimbat } : {}),
+              ...(programPropus ? { programPropus: true } : {}),
               ...(foaia
                 ? {
                     raspuns: {
@@ -1274,7 +1286,9 @@ export default {
 
         const cerNr = Number(scris.nr ?? '0') || 0
         const cerData = scris.data ?? ''
-        const nuMerge = (motiv: string, status: 409) =>
+        // ⚠️ 503 lângă 409 de la 21.09.2026: validarea care nu poate afla starea programului nu e o
+        // apăsare greșită („nu se poate așa"), ci o legătură căzută — și se citește altfel în loguri.
+        const nuMerge = (motiv: string, status: 409 | 503) =>
           html(paginaNou(ctx, m, nou, { calendar, motto, raspuns: { facut: false, plangeri: [motiv] } }), status, alLui)
 
         /*
@@ -1374,7 +1388,7 @@ export default {
          * republicarea lui `xc-authz` (aceeași socoteală ca la `/nou`).
          */
         const validat = await valideazaNumarul(env, { nr: cerNr, data: cerData }, acum)
-        if (!validat.facut) return nuMerge(validat.text, 409)
+        if (!validat.facut) return nuMerge(validat.text, validat.status ?? 409)
         /*
          * ⚠️ SCHIȚA IESE DE PE MASĂ ABIA AICI, nu la compunere: până la validare omul mai recompune
          * de câteva ori, iar a doua compunere pornește tot din ce a răspuns. După publicare ea n-are

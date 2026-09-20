@@ -30,9 +30,18 @@ import { pragPublicarii as pragBuletin } from '../apps/buletin/src/ceas.js'
 import program from '../apps/program/src/index.js'
 import { ACTIUNI } from '../apps/program/src/actiuni.js'
 import { candApareSaptamana, duminicaDinainte, pragSaptamanii, seProgrameaza } from '../apps/program/src/ceas.js'
-import { arhivaIntreaga, eProgramata, programateleScadente, saptamanaDin, treciLaValidat, valideazaSaptamana, type RandSaptamana } from '../apps/program/src/depozit.js'
+import { arhivaIntreaga, eProgramata, programateleScadente, saptamanaDin, treciLaValidat, valideazaSaptamana, VEDE_TOT } from '../apps/program/src/depozit.js'
 import { paginaSaptamana, type Ctx, type Meniu } from '../apps/program/src/pagini.js'
 import { STARI_SAPTAMANA } from '../packages/contracts/src/index.js'
+import {
+  dbFals,
+  evenimentele,
+  saptamanaDeProba,
+  SLUJBE,
+  type Orice,
+  type Rand,
+  type RandSlujbaProba as RandSlujba,
+} from './program-fals.js'
 
 // ---------------------------------------------------------------------------
 // 1. PRAGUL — duminica DINAINTEA săptămânii, ora 12:00 a Bucureștiului
@@ -105,33 +114,9 @@ describe('marginea: înainte se programează, de la 12:00:00 se publică', () =>
 })
 
 // ---------------------------------------------------------------------------
-// Săptămânile de probă
+// Săptămânile de probă (ele și D1-ul fals stau în `tests/program-fals.ts`, ca să le folosească și
+// proba vizibilității — un singur fals care citește SQL-ul, nu două care se despart în tăcere)
 // ---------------------------------------------------------------------------
-
-type Rand = RandSaptamana
-type RandSlujba = {
-  id: string; luni: string; data: string; ora: string; nume: string; cod_nume: string
-  slujitor: string | null; loc: string; detalii: string; observatii: string | null
-  curatenie: number; transmisie: number; ordine: number; creat: string; modificat: string
-}
-
-const saptamanaDeProba = (luni: string, peste: Partial<Rand> = {}): Rand => ({
-  luni,
-  duminica: new Date(Date.parse(`${luni}T00:00:00Z`) + 6 * 86400000).toISOString().slice(0, 10),
-  stare: 'propus',
-  titlu: '',
-  sursa: 'propunere',
-  sursa_id: null,
-  sursa_link: null,
-  versiune_calendar: null,
-  validat_de: null,
-  validat_la: null,
-  programat_la: null,
-  programat_de: null,
-  creat: '2026-09-20T08:00:00.000Z',
-  modificat: '2026-09-20T08:00:00.000Z',
-  ...peste,
-})
 
 /** Scrisă, nevalidată, fără ceas — starea de pornire a oricărei săptămâni. */
 const PROPUSA = saptamanaDeProba(LUNI)
@@ -139,269 +124,6 @@ const PROPUSA = saptamanaDeProba(LUNI)
 const PROGRAMATA = saptamanaDeProba(LUNI, { programat_la: PRAGUL, programat_de: 'u1' })
 /** Validată de mână, săptămâna trecută. */
 const VALIDATA = saptamanaDeProba('2026-09-21', { stare: 'validat', validat_de: 'u1', validat_la: '2026-09-20T09:02:00.000Z' })
-
-const slujbaDeProba = (luni: string, data: string, ora: string, cod: string, nume: string, i: number): RandSlujba => ({
-  id: `${data}-${cod}`, luni, data, ora, nume, cod_nume: cod,
-  slujitor: null, loc: 'biserica', detalii: '[]', observatii: null,
-  curatenie: 1, transmisie: 1, ordine: i,
-  creat: '2026-09-20T08:00:00.000Z', modificat: '2026-09-20T08:00:00.000Z',
-})
-
-const SLUJBE = (luni: string): RandSlujba[] => [
-  slujbaDeProba(luni, luni, '07:00', 'utrenia_liturghie', 'Utrenia și Sfânta Liturghie', 0),
-  slujbaDeProba(luni, `${luni.slice(0, 8)}${String(Number(luni.slice(8)) + 2).padStart(2, '0')}`, '17:00', 'maslu', 'Sfântul Maslu', 1),
-]
-
-const VOCABULAR = [
-  { cod_nume: 'utrenia_liturghie', nume: 'Utrenia și Sfânta Liturghie', categorie: 'dimineata', ordine: 1, activ: 1 },
-  { cod_nume: 'maslu', nume: 'Sfântul Maslu', categorie: 'alte', ordine: 22, activ: 1 },
-  { cod_nume: 'vecernia', nume: 'Vecernia', categorie: 'seara', ordine: 8, activ: 1 },
-]
-
-// ---------------------------------------------------------------------------
-// D1 de probă — unul care CHIAR citește clauzele din SQL
-// ---------------------------------------------------------------------------
-
-/**
- * ⚠️ DE CE NU UN FALS CARE „ȘTIE" CE FACE INTEROGAREA. Lecția zilei, învățată la buletin cu câteva
- * ore înainte: un fals care-și pune singur condițiile trece verde și peste ștergerea lor din SQL —
- * adică exact peste greșeala care ar face săptămâna să apară cu o săptămână mai devreme, ori
- * niciodată. Aici SET-ul și WHERE-ul se CITESC din interogare și se aplică pe rânduri; o clauză
- * scoasă din `treciLaValidat` cade pe loc, într-una din probele de mai jos.
- * ⚠️ Iar unde se leagă un CEAS, falsul cere o clipă ISO întreagă: cu alt argument nimerit acolo,
- * comparația ar ieși din întâmplare falsă, proba ar trece, și s-ar vedea abia în duminica în care
- * programul NU apare.
- */
-const CLIPA = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
-
-type Orice = Record<string, unknown>
-
-/** `?` fără număr capătă numărul lui, în ordinea în care apare — ca în D1. */
-function numeroteaza(sql: string): string {
-  if (/\?\d/.test(sql) && /\?(?!\d)/.test(sql)) throw new Error(`interogare cu semne de întrebare amestecate (cu și fără număr): ${sql}`)
-  let i = 0
-  return sql.replace(/\?(?!\d)/g, () => `?${++i}`)
-}
-
-/** Valoarea unui simbol din SQL: `?N`, `NULL`, `'literal'`, `COALESCE(?N, col)` sau o COLOANĂ. */
-function valoarea(tok: string, legat: unknown[], rand: Orice): unknown {
-  const t = tok.trim()
-  if (t === 'NULL') return null
-  let m = /^\?(\d+)$/.exec(t)
-  if (m) return legat[Number(m[1]) - 1]
-  m = /^'(.*)'$/.exec(t)
-  if (m) return m[1]
-  m = /^COALESCE\(\s*\?(\d+)\s*,\s*(\w+)\s*\)$/i.exec(t)
-  if (m) return legat[Number(m[1]) - 1] ?? rand[m[2]!]
-  if (/^\w+$/.test(t)) return rand[t]
-  throw new Error(`nu știu să citesc „${t}" din SQL`)
-}
-
-/** O condiție de WHERE, aplicată pe un rând. Ce nu e aici cade cu zgomot, nu în tăcere. */
-function conditia(c: string, legat: unknown[]): (r: Orice) => boolean {
-  const s = c.trim()
-  let m = /^(\w+)\s+IS\s+NOT\s+NULL$/i.exec(s)
-  if (m) return (r) => r[m![1]!] !== null && r[m![1]!] !== undefined
-  m = /^(\w+)\s+IS\s+NULL$/i.exec(s)
-  if (m) return (r) => r[m![1]!] === null || r[m![1]!] === undefined
-  m = /^(\w+)\s*(<=|>=|=|<|>)\s*(.+)$/.exec(s)
-  if (m) {
-    const [, col, op, tok] = m as unknown as [string, string, string, string]
-    return (r) => {
-      const a = r[col]
-      const b = valoarea(tok, legat, r)
-      if (a === null || a === undefined || b === null || b === undefined) return op === '=' ? a === b : false
-      switch (op) {
-        case '=': return a === b
-        case '<=': return (a as string) <= (b as string)
-        case '>=': return (a as string) >= (b as string)
-        case '<': return (a as string) < (b as string)
-        default: return (a as string) > (b as string)
-      }
-    }
-  }
-  throw new Error(`condiție necunoscută în WHERE: „${s}"`)
-}
-
-/** Taie o listă la virgulele din afara parantezelor (`COALESCE(?, x)` rămâne întreg). */
-function bucati(s: string): string[] {
-  const out: string[] = []
-  let adanc = 0
-  let curent = ''
-  for (const ch of s) {
-    if (ch === '(') adanc++
-    if (ch === ')') adanc--
-    if (ch === ',' && adanc === 0) { out.push(curent); curent = '' } else curent += ch
-  }
-  if (curent.trim()) out.push(curent)
-  return out.map((x) => x.trim()).filter(Boolean)
-}
-
-function dbFals(inceput: { saptamani?: Rand[]; slujbe?: RandSlujba[] } = {}) {
-  const stare = {
-    saptamani: (inceput.saptamani ?? []).map((s) => ({ ...s })) as unknown as Orice[],
-    slujbe: (inceput.slujbe ?? []).map((s) => ({ ...s })) as unknown as Orice[],
-    vocabular: VOCABULAR.map((v) => ({ ...v })) as unknown as Orice[],
-    istoric: [] as Orice[],
-    outbox: [] as Orice[],
-  }
-
-  const prepare = (sqlBrut: string) => {
-    const s = numeroteaza(sqlBrut.replace(/\s+/g, ' ').trim())
-    let legat: unknown[] = []
-
-    /** Clipa legată la un ceas, cerută întreagă — vezi lămurirea de mai sus. */
-    const ceasul = (i: number): string => {
-      const x = legat[i]
-      if (typeof x !== 'string' || !CLIPA.test(x)) {
-        throw new Error(`ceasul se leagă la ?${i + 1}, dar acolo e ${JSON.stringify(x)} — în: ${s}`)
-      }
-      return x
-    }
-
-    /**
-     * ⚠️ D1 ÎNTOARCE COPII, nu rândurile din tabel. Falsul trebuie să facă la fel: prima lui variantă
-     * dădea chiar obiectele din `stare`, iar un `UPDATE` de după le schimba SUB cel care le citise
-     * deja. Așa trecea verde un `treciLaValidat` care întorcea `validat_la: null` — clipa anunțată
-     * se pierdea din răspuns, adică tocmai din ce scrie workerul în jurnal când o săptămână apare.
-     */
-    const copii = (r: Orice[]): Orice[] => r.map((x) => ({ ...x }))
-    const copie = (r: Orice | undefined): Orice | null => (r ? { ...r } : null)
-
-    const eu = {
-      bind: (...a: unknown[]) => { legat = a; return eu },
-
-      async first() {
-        if (s.startsWith('SELECT * FROM saptamani WHERE luni = ?1')) {
-          return copie(stare.saptamani.find((r) => r.luni === legat[0]))
-        }
-        if (s.startsWith('SELECT COUNT(*) AS n FROM slujbe WHERE luni = ?1')) {
-          return { n: stare.slujbe.filter((r) => r.luni === legat[0]).length }
-        }
-        if (s.startsWith('SELECT * FROM slujbe WHERE id = ?1')) {
-          return copie(stare.slujbe.find((r) => r.id === legat[0]))
-        }
-        throw new Error(`first() nu știe: ${s}`)
-      },
-
-      async all() {
-        if (s.startsWith('SELECT * FROM vocabular')) return { results: copii(stare.vocabular) }
-        if (s.startsWith('SELECT * FROM slujbe WHERE luni = ?1')) {
-          return { results: copii(stare.slujbe.filter((r) => r.luni === legat[0])) }
-        }
-        if (s.startsWith('SELECT id FROM slujbe WHERE id = ?1')) {
-          const baza = String(legat[0])
-          return { results: copii(stare.slujbe.filter((r) => r.id === baza || String(r.id).startsWith(`${baza}-`))) }
-        }
-        // ⚠️ INTEROGAREA CEASULUI: se citește din SQL, clauză cu clauză
-        if (s.startsWith('SELECT * FROM saptamani WHERE')) {
-          const unde = s.slice(s.indexOf(' WHERE ') + 7).replace(/ ORDER BY .*$/, '')
-          const cond = unde.split(/\s+AND\s+/i).map((c) => conditia(c, legat))
-          const cuCeas = /programat_la <= \?(\d+)/.exec(unde)
-          if (cuCeas) ceasul(Number(cuCeas[1]) - 1)
-          return { results: copii(stare.saptamani.filter((r) => cond.every((f) => f(r)))).sort((a, b) => String(a.luni).localeCompare(String(b.luni))) }
-        }
-        // arhiva publică: COLOANELE CERUTE, nimic pe deasupra
-        if (/^SELECT [\w, ]+ FROM saptamani ORDER BY luni$/.test(s)) {
-          const coloane = bucati(s.slice('SELECT '.length, s.indexOf(' FROM ')))
-          return {
-            results: [...stare.saptamani]
-              .sort((a, b) => String(a.luni).localeCompare(String(b.luni)))
-              .map((r) => Object.fromEntries(coloane.map((c) => [c, r[c] ?? null]))),
-          }
-        }
-        if (s.startsWith('SELECT DISTINCT substr(luni, 1, 4) AS an FROM saptamani')) {
-          return { results: [...new Set(stare.saptamani.map((r) => String(r.luni).slice(0, 4)))].sort().reverse().map((an) => ({ an })) }
-        }
-        if (s.startsWith('SELECT * FROM slujbe WHERE data')) return { results: [] }
-        if (s.startsWith('SELECT * FROM slujbe ORDER BY')) return { results: copii(stare.slujbe) }
-        if (s.startsWith('SELECT id, envelope_json, attempts FROM outbox')) {
-          return { results: copii(stare.outbox.filter((r) => r.published_at === null)) }
-        }
-        throw new Error(`all() nu știe: ${s}`)
-      },
-
-      async run() {
-        if (s.startsWith('UPDATE saptamani SET ')) {
-          const [pusul = '', unde = ''] = s.slice('UPDATE saptamani SET '.length).split(' WHERE ')
-          const seteaza = bucati(pusul).map((p) => {
-            const [col, ...rest] = p.split('=')
-            return { col: col!.trim(), tok: rest.join('=').trim() }
-          })
-          const cond = unde.split(/\s+AND\s+/i).map((c) => conditia(c, legat))
-          const cuCeas = /programat_la <= \?(\d+)/.exec(unde)
-          if (cuCeas) ceasul(Number(cuCeas[1]) - 1)
-          let cate = 0
-          for (const r of stare.saptamani) {
-            if (!cond.every((f) => f(r))) continue
-            // ⚠️ valorile se socotesc TOATE pe rândul dinainte: `validat_de = programat_de` și
-            // `programat_de = NULL` stau în aceeași interogare, iar SQL-ul nu le face pe rând.
-            const noi = seteaza.map((x) => [x.col, valoarea(x.tok, legat, r)] as const)
-            for (const [col, val] of noi) r[col] = val
-            cate++
-          }
-          return { meta: { changes: cate } }
-        }
-        if (s.startsWith('INSERT INTO istoric')) {
-          const [moment, user_id, ce, luni, slujba_id, detalii] = legat
-          stare.istoric.push({ moment, user_id, ce, luni, slujba_id, detalii })
-          return { meta: { changes: 1 } }
-        }
-        if (s.startsWith('INSERT INTO outbox')) {
-          const [id, type, envelope_json, created_at] = legat
-          stare.outbox.push({ id, type, envelope_json, created_at, published_at: null, attempts: 0 })
-          return { meta: { changes: 1 } }
-        }
-        if (s.startsWith('UPDATE outbox SET published_at')) {
-          const r = stare.outbox.find((x) => x.id === legat[1])
-          if (r) r.published_at = legat[0]
-          return { meta: { changes: r ? 1 : 0 } }
-        }
-        if (s.startsWith('INSERT INTO slujbe')) {
-          const [id, luni, data, ora, nume, cod_nume, slujitor, loc, detalii, observatii, curatenie, transmisie, ordine, creat, modificat] = legat
-          stare.slujbe.push({ id, luni, data, ora, nume, cod_nume, slujitor, loc, detalii, observatii, curatenie, transmisie, ordine, creat, modificat })
-          return { meta: { changes: 1 } }
-        }
-        if (s.startsWith('DELETE FROM slujbe WHERE id = ?1')) {
-          const inainte = stare.slujbe.length
-          stare.slujbe = stare.slujbe.filter((r) => r.id !== legat[0])
-          return { meta: { changes: inainte - stare.slujbe.length } }
-        }
-        if (s.startsWith('UPDATE slujbe SET ')) {
-          const [pusul = '', unde = ''] = s.slice('UPDATE slujbe SET '.length).split(' WHERE ')
-          const seteaza = bucati(pusul).map((p) => {
-            const [col, ...rest] = p.split('=')
-            return { col: col!.trim(), tok: rest.join('=').trim() }
-          })
-          const cond = unde.split(/\s+AND\s+/i).map((c) => conditia(c, legat))
-          let cate = 0
-          for (const r of stare.slujbe) {
-            if (!cond.every((f) => f(r))) continue
-            for (const x of seteaza) r[x.col] = valoarea(x.tok, legat, r)
-            cate++
-          }
-          return { meta: { changes: cate } }
-        }
-        throw new Error(`run() nu știe: ${s}`)
-      },
-    }
-    return eu
-  }
-
-  const db = {
-    prepare,
-    async batch(declaratii: Array<{ run: () => Promise<unknown> }>) {
-      const out = []
-      for (const d of declaratii) out.push(await d.run())
-      return out
-    },
-  }
-  return { stare, db: db as unknown as D1Database }
-}
-
-/** Evenimentele puse în outbox, desfăcute. */
-const evenimentele = (stare: { outbox: Orice[] }) =>
-  stare.outbox.map((r) => JSON.parse(String(r.envelope_json)) as { type: string; actor: { type: string; id?: string }; payload: Orice })
 
 // ---------------------------------------------------------------------------
 // Mediul: cât atinge programarea
@@ -855,7 +577,7 @@ describe('pentru lume, o săptămână programată e „propus" — și atât', 
    */
   it('arhiva publică nu scoate nici ceasul, nici pe cine a apăsat', async () => {
     const { env } = mediu({ saptamani: [PROGRAMATA, VALIDATA] })
-    const a = await arhivaIntreaga((env as { DB: D1Database }).DB)
+    const a = await arhivaIntreaga((env as { DB: D1Database }).DB, VEDE_TOT)
     expect(a.saptamani).toHaveLength(2)
     for (const s of a.saptamani) {
       expect(Object.keys(s)).not.toContain('programat_la')
@@ -936,14 +658,19 @@ describe('pagina săptămânii, cerută de la worker', () => {
   })
 
   /**
-   * ⚠️ PENTRU ENORIAȘ NU S-A ÎNTÂMPLAT NIMIC, și așa trebuie: programul chiar n-a fost validat. Dacă
-   * pagina i-ar spune „apare duminică", ar afla de pe site un program pe care parohia încă îl poate
-   * schimba până în ultima clipă.
+   * ⚠️ PENTRU ENORIAȘ SĂPTĂMÂNA NICI NU EXISTĂ — schimbat la 20.09.2026, 23:55 („Public arătăm doar
+   * ce e curent"). Până atunci i se arăta programul cu eticheta „propus"; acum pagina lui e cea care
+   * spune că nu s-a publicat nimic încă, și atât. Nu „apare duminică", fiindcă programul parohiei nu
+   * se anunță înainte de a fi al parohiei, și nici măcar conținutul, fiindcă se mai poate schimba
+   * până în ultima clipă. Amănuntele sunt în `program-vizibilitate.test.ts`.
    */
-  it('omul de rând vede „propus", fără niciun cuvânt despre duminică', async () => {
+  it('omul de rând nu vede săptămâna programată deloc — 404, fără program și fără „propus"', async () => {
     const { env } = mediu({ saptamani: [PROGRAMATA], admin: false })
-    const h = await laCeasul(MARTI, async () => await (await cere(env, `/saptamana/${LUNI}`)).text())
-    expect(h).toContain('class="stare propus"')
+    const r = await laCeasul(MARTI, () => cere(env, `/saptamana/${LUNI}`))
+    const h = await r.text()
+    expect(r.status).toBe(404)
+    expect(h).toContain('Programul nu e publicat încă')
+    expect(h).not.toContain('class="stare propus"')
     expect(h).not.toContain('Programată — apare')
   })
 })

@@ -316,19 +316,44 @@ propunerea automată, ca în V1.
 
 ## NEXT
 
-00i. **PROGRAMAREA săptămânii la PROGRAM — scrisă pe 20.09.2026, seara (program 0.9.6 → 0.10.0). ⚠️ NEPUBLICATĂ.**
+00i. **PROGRAMAREA săptămânii + „PUBLIC DOAR CE E CURENT" la PROGRAM — scrise pe 20.09.2026, seara (program 0.9.6 → 0.11.0). ⚠️ NEPUBLICATE.**
     Cererea userului (22:47): „La programul liturgic aceeași poveste cu Validare și publicare / Validare și programare, la fel
-    ca la Buletinul bisericii." Regulile durabile: „Programul (A2)" → „Programarea, din 20.09.2026"; amănuntele zilei: jurnalul
-    din 20.09.2026. Probe: `tests/program-programare.test.ts` (52 noi), suita 1241/1241, typecheck 36/36, mutanți 11/11.
-    **DE FĂCUT, în ordinea asta**:
-    1. ⚠️ **deploy**: `node infrastructure/migrations/ruleaza.mjs --remote --env production --chiar-productia --doar program`
-       (aplică 0003; ALTER **fără** `IF NOT EXISTS`, deci o singură rulare pe mediu) **ÎNAINTEA** workerului, apoi
-       `wrangler deploy` pe program. **Buletinul NU se republică** — schimbarea lui e pur internă (pragul mutat în `@xc/ui`),
-       versiunea rămâne 0.17.0;
-    2. de verificat în `/schedules` că programul chiar are cronul înregistrat (buletinul căzuse acolo pe `0` ca zi a săptămânii;
+    ca la Buletinul bisericii."; apoi (23:33) „Buletinul și programul sunt programate D-12:00, adică atunci devin curente și
+    publice" + „Public arătăm doar ce e curent". Regulile durabile: „Programul (A2)" → „Programarea, din 20.09.2026" și
+    „Vizibilitatea și săptămâna curentă, din 20.09.2026"; amănuntele zilei: jurnalul din 20.09.2026.
+    Probe: `tests/program-programare.test.ts` (52) + `tests/program-vizibilitate.test.ts` (51 noi), suita 1292/1292,
+    typecheck 36/36, mutanți 11/11 pe cernere.
+    **DE FĂCUT, în ordinea asta** — ⚠️ **migrația 0003 → program → buletin**, fiindcă buletinul are nevoie de UȘA INTERNĂ
+    (`x-xc-intern`) ca să mai primească tabelul unei săptămâni nepublicate:
+    1. ⚠️ **migrația**: `node infrastructure/migrations/ruleaza.mjs --remote --env production --chiar-productia --doar program`
+       (aplică 0003; ALTER **fără** `IF NOT EXISTS`, deci o singură rulare pe mediu) **ÎNAINTEA** workerului;
+    2. `wrangler deploy` pe **program** (0.11.0);
+    3. **apoi buletinul** — ✅ **SCRIS 21.09.2026, buletin 0.17.0 → 0.18.0, ⚠️ NEPUBLICAT. FĂRĂ MIGRAȚIE** (nicio
+       coloană nouă; tot ce se păstrează în plus intră în JSON-ul din R2, `compus/…json`). Are antetul intern pe
+       `/v1/tabel-tipar` (`apps/buletin/src/compune.ts`) și, la validare, cere programul VALIDAT — 409 pe propus,
+       503 pe program mut, recompunere când s-a schimbat (regulile durabile: „BULETINUL — foaia tipărită" →
+       „PROGRAMUL VALIDAT LA VALIDARE, din 21.09.2026"; amănuntele: jurnalul 20.09, blocul de la 21.09, 00:10).
+       ⚠️ ÎNTRE 2 și 3 E O FEREASTRĂ în care compunerea buletinului pe o săptămână încă nevalidată primește
+       `404 {ok:false, cod:'nepublicat'}` și ecranul `/nou` scrie „Programul nu e publicat încă." Nimic nu se strică, dar
+       cele două urcări se fac una după alta, nu la zile distanță. (Nota veche „Buletinul NU se republică" NU mai e valabilă.)
+       ⚠️ **De verificat ÎNAINTE de deploy** că `SECRET_INTERN` e pus pe `xc-buletin-staging` ȘI pe
+       `xc-buletin-production` (`npx wrangler secret list --env staging|production` din `apps/buletin`): e secret
+       Cloudflare, nu `vars`, deci nu se vede în `wrangler.jsonc`. Pe producție a fost pus pe 20.09.2026 (rotit pe
+       toți cinci — `infrastructure/cutover/secrete-productie.sh` are `apps/buletin` în `CU_ACTIUNI`, dar rulează
+       **numai `--env production`**); pe **staging nu e nicăieri scris că s-a pus** (lista din 11.09 avea doar
+       program/calendar/tipic/chat), iar **pe local nu există deloc**: singurul `.dev.vars` din arbore e al lui
+       `chat-worker` și n-are `SECRET_INTERN`. Fără el, ușa internă rămâne închisă și `/nou` nu mai compune
+       săptămâna viitoare — iar mesajul din ecran o spune pe nume.
+    4. de verificat în `/schedules` că programul chiar are cronul înregistrat (buletinul căzuse acolo pe `0` ca zi a săptămânii;
        al programului e `*/5 * * * *`, fără zi, deci n-ar trebui — dar se uită ușor);
-    3. aceeași santinelă lipsă ca la buletin (vezi 00h.1): un cron căzut lasă săptămâna `propus` cu ceasul pe ea, iar
-       programul NU apare duminică și nimeni nu află. Aici e mai rău decât la buletin: programul e pe ușa bisericii.
+    5. aceeași santinelă lipsă ca la buletin (vezi 00h.1): un cron căzut lasă săptămâna `propus` cu ceasul pe ea, iar
+       programul NU apare duminică și nimeni nu află. Aici e mai rău decât la buletin: acum, cu „public doar ce e curent",
+       un cron căzut înseamnă că prima pagină rămâne pe săptămâna trecută — vizibil pentru toată parohia.
+    6. **WordPress-ul (prima pagină) n-are nevoie de nicio schimbare** — verificat în
+       `docs/runbooks/wp-program-prima-pagina.md`: `sfilie_program_bucata()` cere `200` ȘI `'validat' === $d['stare']`, iar
+       la orice altceva ține ultima copie bună (`sfilie_program_ultima_buna`) și reîncearcă peste 5 minute. Un 404
+       `nepublicat` cade exact pe ramura aceea. Rămâne o îndreptare **de dorit, nu de nevoie**: ritmul orar aliniat la
+       minutul 0 face ca săptămâna apărută duminică la 12:00 să ajungă pe prima pagină la 13:00 (vezi jurnalul 20.09).
 
 00h. **PROGRAMAREA numărului de buletin (validare înainte de duminică, ora 12:00) — scrisă pe 20.09.2026, după-amiaza (buletin 0.17.0).**
     Cererea userului (13:56): „dacă este înainte de ziua pentru care este programat buletinul — adică înainte de ora 12.00,
@@ -1675,6 +1700,73 @@ ca la Buletinul bisericii." Deci `program.valideaza_saptamana` face **același l
   12:00" în locul lui „propus" (`.stare.programat`, `#0A6B41` / `#5FBF8D`). Foaia A4 (`/v1/foaie`)
   rămâne doar a săptămânilor `validat`.
 
+### Vizibilitatea și săptămâna curentă, din 20.09.2026
+
+User (23:33): „Buletinul și programul sunt programate D-12:00, adică atunci devin curente și publice";
+„Public arătăm doar ce e curent" — confirmat anume **și pentru live**: transmisiunea pornește numai din
+săptămâni validate. Program **0.11.0**.
+
+- **PUBLICAT ⟺ `validat`.** O săptămână `propus` — inclusiv una PROGRAMATĂ, care tot `propus` scrie pe ea —
+  nu există pentru lume: nici pagina ei, nici arhiva, nici `/v1/*`, nici ca slujbă întoarsă de
+  `/v1/urmatoarea`. Publicarea o face **ceasul** (`treciLaValidat`), la prag; nu se deduce nicăieri dintr-o
+  dată pusă lângă `Date.now()`.
+- **O SINGURĂ CLAUZĂ**, în `apps/program/src/depozit.ts`, după chipul buletinului:
+  `Vedere = VEDE_TOT | LUMEA`, `vedereaLui(eAdmin)`, `cerne(v, alias?)` = `stare = 'validat'` și
+  `cerneSlujbe(v)` = `luni IN (SELECT luni FROM saptamani WHERE stare = 'validat')` — o slujbă se vede dacă
+  **săptămâna ei** se vede. Toate citirile o cer ca parametru **obligatoriu** (`saptamana`,
+  `slujbeleSaptamanii`, `slujbeInterval`, `saptamaniInterval`, `saptamanileAnului`, `aniiArhivei`, `vecinele`,
+  `istoriculSlujbelor`, `urmatoareaSlujba`, `slujbaCurenta`, `slujbeTrecuteDupaNume`, `urmatoareaDupaNume`,
+  `tiparele`, `arhivaIntreaga`). ⚠️ **Obligatoriu, nu cu implicit `VEDE_TOT`**: un implicit ar fi lăsat orice
+  apelant nou să vadă tot, tăcut. Clauza n-are niciun `?N` (e o constantă), deci nu mișcă numerele celorlalte.
+- **SĂPTĂMÂNA CURENTĂ = ULTIMA PUBLICATĂ**, nu cea calendaristică: `saptamanaCurenta(db, azi)` =
+  `MAX(luni)` dintre `validat` cu `luni <= luneaSaptamanii(azi) + 7`. ⚠️ **Marginea** taie o săptămână
+  validată din import, prea departe în viitor. Duminică de la 12:00, după ce cronul a trecut săptămâna
+  următoare, **ea** e curentă — pe `/`, în bulina din antet (`Meniu.curenta`, `pagini.ts`) și pe prima pagină
+  a sitului. **La fel pentru admin**: „adminul vede ce vede lumea, plus în plus".
+  Fără nimic publicat: admin → săptămâna calendaristică cu propunerea ei (de acolo o validează);
+  lume → pagina „Programul nu e publicat încă." (fără propunere).
+- **Paginile**: `/saptamana/<data>` public doar pe `validat`, altfel **404** cu același mesaj (ca la o adresă
+  greșită). Adminul deschide tot, cu eticheta lui. **Săgeata „săptămâna viitoare" se STINGE la enoriaș**
+  (`.btn viit gol`, title „apare duminică, la ora 12:00") — nu se ascunde (regula rândului de unelte) — fiindcă
+  săptămâna de după cea curentă nu e publicată **prin definiție**. Arhiva publică ține numai `validat`.
+- **UȘA INTERNĂ — CONTRACT FIX, nu-l schimba.** Cerere cu `x-xc-intern` (`ANTET_SECRET` din `@xc/actiuni`) =
+  `env.SECRET_INTERN`, comparat **în timp constant** (`egaleInTimpConstant`, ca în
+  `packages/actiuni/src/montare.ts`); **secret nescris în mediu ⇒ ușă ÎNCHISĂ**. Cu ea, `/v1/*` se citește cu
+  `VEDE_TOT`, iar răspunsul e `private, no-store`. De ce există: user, 23:55 — „Trebuie să putem să lucrăm și
+  la buletin cu un program în pagină, altfel nu putem calcula spațiul. Deci aș pune refuz, dar întârzierea
+  lucrului la buletin ar fi nejustificată."
+  `/v1/tabel-tipar` și `/v1/bucata-site` poartă, pe lângă `amprenta` și `modificat_la`:
+  | câmp | înseamnă |
+  |---|---|
+  | `stare: 'validat'\|'propus'` | **gestul OMULUI**: o săptămână PROGRAMATĂ contează `validat`. De el atârnă dacă buletinul scrie „PROPUS" pe pagina a patra. |
+  | `publica: boolean` | `stare = 'validat'` în bază — e chiar afară, o vede enoriașul |
+  | `programata: boolean` | validată înainte de vreme, își așteaptă pragul |
+  | `apare: string\|null` | ISO-ul pragului: `programat_la`, altfel `validat_la` |
+  ⚠️ **`stare` și `publica` nu sunt același lucru, și de aceea sunt două**: validarea e a omului, publicarea e a
+  ceasului. Confundate, ori buletinul ar scrie „PROPUS" pe programul programat de paroh, ori site-ul ar da
+  afară o săptămână care n-a apărut încă.
+  **FĂRĂ antet**, cele două rute dau numai săptămâni publicate; altfel **404 `{ok:false, cod:'nepublicat'}`**
+  (formă plată dinadins: `apps/buletin/src/compune.ts` citește `corp.cod`/`corp.mesaj` de la rădăcină, nu
+  `eroareApi`-ul înfășurat în `{eroare:{…}}`). **`?data=azi` (ori lipsa lui) = SĂPTĂMÂNA CURENTĂ**, nu
+  săptămâna zilei de azi — aici stă toată regula 1: duminică la 12:05 prima pagină a sitului arată săptămâna
+  nouă, deși `azi` cade încă în cea care se încheie.
+- **ACȚIUNILE (`/_actiuni`) citesc cu `VEDE_TOT`**: modulul cere deja secretul platformei, deci cine ajunge
+  acolo e înăuntru. ⚠️ Poarta e atunci **modulul de Chat**, nu cernerea: dacă vreodată chatul se deschide
+  enoriașilor, citirile din `actiuni.ts` trebuie să primească `vedereaLui(...)`.
+- **LIVE-ul n-a fost atins**: `apps/live/src/program.ts` cere `/v1/urmatoarea` pe Service Binding **fără**
+  antet, deci cu ochii lumii; forma răspunsului (`{urmatoarea: Slujba|null}`) e neschimbată și `null` era deja
+  tratat („ultima versiune bună"). ⚠️ `urmatoareaSlujba` **sare peste** slujbele săptămânilor nepublicate, nu
+  se oprește la prima ascunsă.
+- **HÂRTIILE au rămas cu `VEDE_TOT`, dinadins**: `/v1/foaie` (se apără singură — cere `validat`),
+  `/v1/propunere` (socoteală din istoric, nu rândurile parohiei), `/v1/poza/saptamana`, `/v1/sfintii-zilei`.
+  Butonul de descărcare e al adminului, dar el cere adresele astea **din browser**, fără secret: cernute,
+  adminul n-ar mai fi putut lua poza săptămânii pe care tocmai o are pe ecran.
+  ⚠️ **Gaura rămasă, cu bună știință**: `/v1/poza/saptamana/<luni>.jpg` arată rândurile din bază ale unei
+  săptămâni nepublicate oricui îi ghicește adresa. Era așa și înainte; de îndreptat când `/v1` va ști cine
+  întreabă (azi nu citește sesiunea deloc, și e cache-uit public).
+- **CACHE**: publicul rămâne la `public, max-age=300`, deci **o săptămână apărută la 12:00 poate fi văzută cu
+  până la 5 minute mai târziu** — aceeași notă ca la buletin. Internul e `private, no-store`.
+
 ### Hârtiile
 
 Trei, toate pe aceleași două trepte: **PDF** (foaia A4) și **JPG** (foaia ca poză) în rândul de
@@ -2384,6 +2476,44 @@ duminică, <data>, la ora 12:00." → „Validează și **publică** nr. N"; aud
   ⚠️ **Lecția mutanților** (6/6 prinse abia după înăsprirea falsului de D1): un D1 fals care „știe" ce ar trebui
   să facă interogarea **nu probează interogarea** — falsul trebuie să urmeze WHERE/SET din SQL.
 
+⚠️ **PROGRAMUL VALIDAT LA VALIDARE, din 21.09.2026** (buletin 0.18.0; user, 20.09.2026, 23:33: „Buletinul preia
+la momentul validării ce program era validat"; 23:55, la întrebarea refuz-sau-propunere: „Trebuie să putem să
+lucrăm și la buletin cu un program în pagină, altfel nu putem calcula spațiul. Deci aș pune refuz, dar întârzierea
+lucrului la buletin ar fi nejustificată"). **Cele două apăsări au reguli deosebite** — ține minte deosebirea, e
+toată regula:
+
+- **COMPUNEREA merge pe ORICE program, și pe o propunere.** Altfel nu s-ar putea socoti spațiul paginii a patra cu
+  o săptămână înainte. Atenția „PROPUS" rămâne cum era (`atentiePropus`, `compune.ts`).
+- **VALIDAREA cere programul VALIDAT**, cerut DIN NOU în clipa apăsării (`valideazaNumarul`, `actiuni.ts`),
+  **înainte de orice scriere** în D1 sau R2:
+  - `stare !== 'validat'` → **409**: „Programul săptămânii <interval> nu e validat — validează-l întâi, în
+    Program. Buletinul preia la validare programul validat.";
+  - programul nu răspunde deloc → **503**, fără nicio scriere (`nuMerge` din `index.ts` primește de acum și 503);
+  - `amprenta` ≠ cea din cererea păstrată la compunere → **se RECOMPUNE** numărul (`compuneNumarul`, drumul
+    butonului: din schiță, cu pozele ei) și se validează foaia nouă; recompunerea care nu încape → 409, cu
+    plângerile ei. Amprentă **egală** (ori necunoscută, la numere vechi) → se validează ce e compus.
+- ⚠️ **O săptămână PROGRAMATĂ contează `validat`** (`stare` de la ușa internă, nu `publica`): validarea e gestul
+  omului, publicarea e a ceasului — iar buletinul se validează cu zile înainte de săptămâna lui.
+- ⚠️ **Recompunerea la validare e drumul OBIȘNUIT, nu un caz rar**: `stare` intră în amprentă (vezi
+  `tabelulSaptamanii` din program), deci un număr compus pe propunere are ÎNTOTDEAUNA altă amprentă după ce
+  programul s-a validat.
+- **Tabelul se cere pe UȘA INTERNĂ**: `calendarulNumarului` (`compune.ts`) trimite `x-xc-intern` =
+  `env.SECRET_INTERN` (`EnvCompunere.SECRET_INTERN`), **numai dacă secretul există**. Fără el, programul răspunde
+  cu ochii lumii și săptămâna viitoare dă `404 {cod:'nepublicat'}` — adică `/nou` nu mai poate compune deloc. De
+  aceea 404-ul acela are mesaj PROPRIU, care numește `SECRET_INTERN` și ușa internă, nu „program indisponibil".
+  ⚠️ `SECRET_INTERN` e **secret Cloudflare**, nu `vars`: nu se vede în `wrangler.jsonc`, se pune cu
+  `wrangler secret put SECRET_INTERN [--env staging]`. La buletin a fost pus pe producție abia pe 20.09.2026
+  (vezi jurnalul: „Nu am putut trimite mesajul"), deci **pe staging se verifică înainte de deploy**.
+- **Lângă cererea păstrată** (`compus/…json`) stau de acum și `publica`, `programata`, `apare` — semnele ușii
+  interne. Ele NU intră în amprentă, deci se împrospătează și când nu se recompune nimic: lângă numărul validat
+  trebuie să rămână ce era programul CHIAR ATUNCI.
+- Pe `/nou`, sub butonul de validare, când programul e propus se scrie un rând în plus: „Validarea va cere
+  programul validat." (`StareaCompunerii.programPropus`). ⚠️ Se uită la programul **de acum**, nu la cel cu care
+  s-a compus foaia: unul validat între timp ar fi lăsat altfel pe ecran un avertisment neadevărat.
+- ⚠️ `calendarulNumarului` **nu mai aruncă** la o legătură căzută (întoarce `{cod:'program_mut'}`): până pe
+  21.09.2026, un program oprit dărâma tot ecranul `/nou` cu 500 — tocmai ecranul de pe care se afla că tace.
+- Probe: `tests/buletin-validare-program.test.ts` (14); suita 1306/1306, typecheck 36/36.
+
 ## Aplicațiile portate — amănunte
 
 - **`calendar`** (A1): D1 `xc-calendar-staging`, 730 de zile (2025+2026) + sinaxare, `/v1` în forma
@@ -2642,7 +2772,31 @@ forța antetul `Host`**.
 - **Eticheta verde** „Programată — apare duminică, …, la ora 12:00" în locul lui „propus", **numai pentru adminul programului** (`ctx.eAdmin && eProgramata(rand)`, hotărât în `index.ts`, nu în pagină). ⚠️ Pățit: comentariul CSS care scria în clar vorbele etichetei ajungea în CSS-ul FIECĂREI pagini, deci proba „enoriașul nu le vede" cădea pe o pagină în care eticheta nu se scrie deloc.
 - **Trecerea nu are voie să înece golirea outbox-ului**: `scheduled` o ține într-un `try` și scrie eroarea în jurnal. Cazul real e ordinea de deploy — workerul urcat înaintea migrației `0003` face interogarea să cadă cu „no such column: programat_la", iar fără plasă ar fi oprit TOATE evenimentele programului, nu doar programarea.
 - Probe: `tests/program-programare.test.ts` (**52 noi**) — fals de D1 care CITEȘTE SET-ul și WHERE-ul din SQL (parsare de condiții, `COALESCE`, coloană = coloană) și care întoarce COPII ale rândurilor, ca D1: prima variantă dădea chiar obiectele din tabel, iar `UPDATE`-ul le schimba sub cel care le citise — așa a trecut verde un `treciLaValidat` care întorcea `validat_la: null`. Suita întreagă **1241/1241**, `turbo typecheck` **36/36**, **mutanți 11/11** (clauza de timp din cron, `validat_la` rescris, `<` → `<=`, ramura de anulare din retragere, `changed` → `validated`, pragul pe lunea săptămânii, `SELECT *` în arhivă, eticheta arătată oricui, `eProgramata` fără `stare`, validarea care nu stinge ceasul, plasa de sub outbox).
-- **Nepublicat**: migrația 0003 pe producție ÎNAINTEA workerului, apoi `wrangler deploy` (NEXT 00i). Buletinul nu se republică.
+- **Nepublicat**: migrația 0003 pe producție ÎNAINTEA workerului, apoi `wrangler deploy` (NEXT 00i). ⚠️ Nota „buletinul nu se republică" a căzut o oră mai târziu — vezi blocul următor.
+
+**PUBLIC DOAR CE E CURENT — programul** (23:55–). Cele trei reguli ale userului (23:33): 1. „Buletinul și programul sunt programate D-12:00, adică atunci devin curente și publice." 2. „Public arătăm doar ce e curent." (confirmat anume și pentru live: transmisiunea pornește doar din săptămâni validate). 3. Buletinul preia la validarea LUI programul validat. Întrebat ce se face cu buletinul care are nevoie de program CÂT E ÎNCĂ PROPUS, userul (23:55): „**1. Trebuie să putem să lucrăm și la buletin cu un program în pagină, altfel nu putem calcula spațiul. Deci aș pune refuz, dar întârzierea lucrului la buletin ar fi nejustificată. 2. Da**" — de aici ușa internă. Program **0.10.0 → 0.11.0**. Regulile durabile: „Programul (A2)" → „Vizibilitatea și săptămâna curentă, din 20.09.2026".
+
+- **O singură clauză, ca la buletin** (`depozit.ts`): `Vedere = VEDE_TOT | LUMEA`, `cerne()` = `stare = 'validat'`, `cerneSlujbe()` = subselect pe `saptamani`. Publicată ⟺ validată, fiindcă programarea o face **ceasul**, nu omul. Parametrul e **obligatoriu** la toate cele 14 citiri — un implicit `VEDE_TOT` ar fi lăsat orice apelant nou să vadă tot, tăcut; așa compilatorul a arătat el însuși fiecare loc de atins (24 de erori la prima trecere, toate în `actiuni.ts`).
+- **⚠️ Ce s-a învățat aici: cernerea săptămânilor NU e de ajuns.** Slujbele stau în alt tabel, iar `/v1/urmatoarea`, `/v1/curenta`, `/v1/cauta`, `/v1/paternuri` le citesc **direct**, fără să treacă prin `saptamani` — deci cu clauza pusă numai pe săptămâni, live-ul ar fi pornit transmisiunea dintr-o săptămână nepublicată și chatul ar fi spus „următorul Maslu e pe 30" dintr-un program pe care parohia încă nu-l dăduse afară. De aceea a doua clauză, pe `slujbe`, prin **săptămâna lor**.
+- **„Curentă" nu mai vine din calendar**: `saptamanaCurenta()` = ultima `validat` cu `luni <= luneaSaptamanii(azi) + 7`. Marginea nu e de prisos — o săptămână validată din import, de peste două luni, ar fi tras prima pagină după ea. Duminică la 12:05, `azi` cade încă în săptămâna care se încheie, dar curentă e cea care începe mâine: exact cea tipărită în buletinul din mâna omului. Lunea ei coboară în antet prin `Meniu.curenta` (bulina, zona de scris, săgeata) și prin `?data=azi` la `/v1/bucata-site`.
+- **Ușa internă**: `x-xc-intern` = `env.SECRET_INTERN`, în timp constant, **secret lipsă ⇒ ușă închisă**; răspuns `private, no-store`. Pe `/v1/tabel-tipar` și `/v1/bucata-site` pleacă în plus `stare` / `publica` / `programata` / `apare`. ⚠️ **`stare` ≠ `publica`, și de aceea sunt două**: o săptămână PROGRAMATĂ de un om contează `validat` (validarea e gestul omului, publicarea e a ceasului) — buletinul se uită la prima ca să știe dacă scrie „PROPUS", site-ul la a doua. Fără antet, cele două rute dau 404 `{ok:false, cod:'nepublicat'}` — formă **plată** dinadins, fiindcă `compune.ts` citește `corp.cod`/`corp.mesaj` de la rădăcină, nu `eroareApi`-ul înfășurat în `{eroare:{…}}`.
+- **Săgeata „săptămâna viitoare" se stinge la enoriaș** (`.gol`), nu se ascunde: săptămâna de după cea curentă nu e publicată **prin definiție**, deci linkul ar fi dus mereu în zid. Pagina „nu e publicat încă" nu spune nici starea, nici conținutul — doar regula casei („apare duminică, la ora 12:00").
+- **Acțiunile (`/_actiuni`) citesc cu `VEDE_TOT`**, fiindcă modulul cere deja secretul. ⚠️ Urmarea, scrisă lângă ele: poarta devine **modulul de Chat**, nu cernerea — dacă vreodată chatul se deschide enoriașilor, `actiuni.ts` are nevoie de `vedereaLui(...)`.
+- **Hârtiile au rămas cu `VEDE_TOT`, cu bună știință**: butonul de descărcare e al adminului, dar el cere `/v1/poza`, `/v1/propunere` din **browser**, fără secret — cernute, adminul n-ar mai fi putut lua poza săptămânii de pe ecran. Rămâne o gaură știută: `/v1/poza/saptamana/<luni>.jpg` arată rândurile unei săptămâni nepublicate oricui ghicește adresa (era așa și înainte).
+- **Live neatins**, verificat: `apps/live/src/program.ts` cere fără antet, forma `{urmatoarea: Slujba|null}` e neschimbată, `null` era deja tratat („ultima versiune bună"). `urmatoareaSlujba` **sare peste** săptămânile nepublicate, nu se oprește la prima ascunsă.
+- **WordPress n-are nevoie de nicio schimbare** (verificat în `docs/runbooks/wp-program-prima-pagina.md`): `sfilie_program_bucata()` cere `200` **și** `'validat' === $d['stare']`, iar la orice altceva ține ultima copie bună și reîncearcă peste 5 minute — un 404 `nepublicat` cade exact acolo. **De dorit, nu de nevoie**: cronul orar aliniat la minutul 0 face ca săptămâna apărută la 12:00 să ajungă pe prima pagină abia la 13:00.
+- **Falsul de D1 a ieșit în `tests/program-fals.ts`**, ca să-l folosească amândouă probele. A fost și generalizat (SELECT cu coloane/ORDER BY/LIMIT, `LIKE`, `OR`, aliasuri, și **subselectul cernerii, RULAT, nu presupus**) — altfel o clauză schimbată în `cerneSlujbe` ar fi trecut neobservată. ⚠️ Tăierea WHERE-ului nu se mai face cu `split(/\s+AND\s+/)`: un `AND` ajuns vreodată în subselect ar fi rupt condiția în două jumătăți fără înțeles, tăcut.
+- **Două purtări schimbate, de știut**: enoriașul nu mai vede săptămâna „propus" (până acum o vedea cu eticheta ei — proba veche din `program-programare` a fost rescrisă); iar `/v1/tabel-tipar` fără antet nu mai dă nimic nevalidat, deci **buletinul trebuie urcat DUPĂ program, cu antetul pus** (NEXT 00i.3).
+- Probe: `tests/program-vizibilitate.test.ts` (**51 noi**). Suita întreagă **1292/1292**, `turbo typecheck` **36/36**, **mutanți 11/11** (`cerne()` gol → 18 căderi, `cerneSlujbe()` gol → 14, marginea săptămânii curente scoasă, curenta luată din calendar, ușa internă mereu deschisă, ușa deschisă când lipsește secretul, programata care nu mai contează `validat`, săgeata vie la enoriaș, `?data=azi` fără săptămâna curentă, paginile fără cernere, `/v1` mereu `VEDE_TOT` → 15).
+
+**BULETINUL PREIA LA VALIDARE PROGRAMUL VALIDAT** (00:10–01:00, 21.09; subagent). Regula userului (20.09, 23:33): „Buletinul și programul sunt programate D-12:00, adică atunci devin curente și publice. Public arătăm doar ce e curent. **Buletinul preia la momentul validării ce program era validat.**" Întrebat dacă, la validarea buletinului cu programul încă propus, se face refuz ori se merge pe propunere, a răspuns (23:55): „**Trebuie să putem să lucrăm și la buletin cu un program în pagină, altfel nu putem calcula spațiul. Deci aș pune refuz, dar întârzierea lucrului la buletin ar fi nejustificată.**" Adică cele două apăsări se despart: **compunerea** merge pe orice program, **validarea** cere programul validat. Buletin **0.17.0 → 0.18.0**. Regulile durabile: „BULETINUL — foaia tipărită" → „PROGRAMUL VALIDAT LA VALIDARE, din 21.09.2026".
+
+- **Antetul intern pe cererea tabelului** (`compune.ts`, `calendarulNumarului`): `x-xc-intern: env.SECRET_INTERN`, pus **doar dacă secretul există** (unul gol e la fel de închis, dar ascunde cauza). `EnvCompunere` a primit `SECRET_INTERN`. Închide NEXT 00i.3 din partea codului.
+- **404 `nepublicat` nu mai e „program indisponibil"**: cererea noastră poartă antetul, deci un 404 înseamnă **ușa închisă** — mesajul spune „programul a refuzat ușa internă (secret) … verifică `SECRET_INTERN`". Fără rândul ăsta, omul ar fi căutat prin aplicația Programul, unde totul e la locul lui.
+- **Validarea cere programul DIN NOU**, înainte de orice scriere în D1/R2: `stare !== 'validat'` → **409** („Programul săptămânii <interval> nu e validat — validează-l întâi, în Program. Buletinul preia la validare programul validat."); program mut → **503**, fără nicio scriere; amprentă schimbată față de compunere → **se recompune** numărul pe același drum ca butonul (`compuneNumarul`, din schiță, cu pozele ei), apoi se validează foaia nouă. ⚠️ O săptămână **programată** contează `validat` — altfel buletinul n-ar fi putut fi validat niciodată înaintea săptămânii lui.
+- ⚠️ **Recompunerea la validare e DRUMUL ZILEI, nu un caz rar**: `stare` intră în amprentă, deci un număr compus pe propunere are întotdeauna altă amprentă decât săptămâna validată între timp. Amprentă **egală** → nu se randează nimic, dar semnele (`publica`, `programata`, `apare`) se scriu proaspete lângă cerere: ele NU intră în amprentă.
+- **O reparație găsită pe drum**: `calendarulNumarului` lăsa o legătură căzută să **arunce**, iar `/nou` răspundea 500 — tocmai ecranul de pe care omul ar fi trebuit să afle că programul tace. Acum întoarce `{cod:'program_mut'}`, ca orice alt refuz al programului, iar 503-ul validării chiar ajunge la buton.
+- Probe: `tests/buletin-validare-program.test.ts` (**14 noi**). Suita întreagă **1306/1306**, `turbo typecheck` **36/36**. ⚠️ `turbo typecheck` a picat o dată pe `@xc/contracts` imediat după suită (flake de resurse: singur, `tsc --noEmit` dă 0; a doua rulare, 36/36).
 
 ### 2026-09-19
 

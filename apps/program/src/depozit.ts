@@ -41,6 +41,57 @@ export interface RandSaptamana {
 export const eProgramata = (s: { stare?: StareSaptamana | null; programat_la?: string | null } | null | undefined): boolean =>
   !!s && s.stare === 'propus' && !!s.programat_la
 
+// ---------------------------------------------------------------------------
+// VIZIBILITATEA: cine vede o săptămână NEPUBLICATĂ (20.09.2026)
+// ---------------------------------------------------------------------------
+
+/**
+ * CU CE OCHI SE CITEȘTE PROGRAMUL (user, 20.09.2026, 23:33: „Buletinul și programul sunt programate
+ * D-12:00, adică atunci devin curente și publice"; „Public arătăm doar ce e curent").
+ *
+ * O săptămână PROPUSĂ — ori una programată, care tot `propus` scrie pe ea — e în bază, dar pentru
+ * lumea de afară nu există NICĂIERI: nici pe pagina ei, nici în arhivă, nici pe `/v1/*`, nici ca
+ * slujbă întoarsă de `/v1/urmatoarea` (deci nici transmisiunea live nu pornește din ea). Publicată
+ * ⟺ `validat`: programarea n-o face omul, o face ceasul (`treciLaValidat`), la prag.
+ *
+ * ⚠️ O SINGURĂ CLAUZĂ, într-un singur loc (`cerne` / `cerneSlujbe`), pusă la TOATE citirile de mai
+ * jos — de săptămâni ȘI de slujbe. Împrăștiată pe la apelanți, ar fi fost de ajuns o citire uitată
+ * ca programul săptămânii viitoare să iasă pe site cu zile înainte, iar nimic nu s-ar fi văzut.
+ * ⚠️ NICIO COMPARAȚIE DE CEAS AICI (lecția buletinului, aceeași zi): interogarea întreabă ce SCRIE
+ * pe rând, nu ce s-ar deduce dintr-o dată pusă lângă ceasul de acum.
+ * ⚠️ Și de aceea clauza n-are nicio legătură (`?N`): e o constantă, deci nu se amestecă în numerele
+ * semnelor de întrebare ale interogării în care intră.
+ */
+export interface Vedere {
+  /** `true` = adminul programului (`ctx.eAdmin`) ori un worker al platformei, pe ușa internă. */
+  vedeTot: boolean
+}
+
+/** Ochii adminului și ai platformei: nimic nu se cerne. */
+export const VEDE_TOT: Vedere = { vedeTot: true }
+
+/** Ochii lumii: ce nu e `validat` nu există. */
+export const LUMEA: Vedere = { vedeTot: false }
+
+/** Vederea unui om, după cum e ori nu adminul programului. */
+export const vedereaLui = (eAdmin: boolean): Vedere => (eAdmin ? VEDE_TOT : LUMEA)
+
+/** Clauza pe `saptamani`. `alias` pentru interogările care dau tabelului un nume scurt (`s.`). */
+export const cerne = (v: Vedere, alias = ''): string => (v.vedeTot ? '' : `${alias}stare = 'validat'`)
+
+/**
+ * Clauza pe `slujbe`: o slujbă se vede dacă SĂPTĂMÂNA ei se vede. Subselect, nu join — interogările
+ * de mai jos sunt simple, iar `luni` e cheia săptămânii și e indexată în amândouă tabelele.
+ */
+export const cerneSlujbe = (v: Vedere, alias = ''): string =>
+  v.vedeTot ? '' : `${alias}luni IN (SELECT luni FROM saptamani WHERE stare = 'validat')`
+
+/** `WHERE …` gata scris (ori nimic), ca interogările să rămână citibile. */
+const unde = (...bucati: string[]): string => {
+  const ale = bucati.filter(Boolean)
+  return ale.length ? `WHERE ${ale.join(' AND ')} ` : ''
+}
+
 export interface RandSlujba {
   id: string
   luni: string
@@ -102,8 +153,34 @@ export async function vocabularul(db: D1Database): Promise<IntrareVocabular[]> {
   return r.map((v) => ({ cod_nume: v.cod_nume, nume: v.nume, categorie: v.categorie as IntrareVocabular['categorie'], ordine: v.ordine, activ: v.activ === 1 }))
 }
 
-export async function saptamana(db: D1Database, luni: string): Promise<RandSaptamana | null> {
-  return unul<RandSaptamana>(db, `SELECT * FROM saptamani WHERE luni = ?`, [luni])
+export async function saptamana(db: D1Database, luni: string, v: Vedere): Promise<RandSaptamana | null> {
+  return unul<RandSaptamana>(db, `SELECT * FROM saptamani ${unde('luni = ?', cerne(v))}`, [luni])
+}
+
+/**
+ * SĂPTĂMÂNA CURENTĂ = ULTIMA PUBLICATĂ, nu săptămâna calendaristică (user, 20.09.2026, 23:33:
+ * „atunci devin curente și publice").
+ *
+ * Duminică la 12:00 ceasul trece săptămâna care începe a doua zi pe `validat`; din clipa aceea EA e
+ * cea curentă — și pe prima pagină a aplicației, și pe prima pagină a sitului parohiei, și în bulina
+ * din antet. Fără regula asta, duminică după-amiază omul ar fi citit încă programul săptămânii care
+ * se încheie, deși foaia pe care tocmai o primise în mână arată altceva.
+ *
+ * ⚠️ MARGINEA `luneaSaptamanii(azi) + 7` nu e de prisos: un import poate aduce validată o săptămână
+ * de peste două luni, iar fără ea aceea ar deveni „curentă" și prima pagină ar sări în viitor.
+ * Mai departe de săptămâna următoare nimic nu e „curent", oricât ar fi de validat.
+ *
+ * ⚠️ ACEEAȘI și pentru admin: adminul vede ce vede lumea, plus în plus. Altfel cei doi ar fi vorbit
+ * despre „săptămâna curentă" înțelegând două lucruri.
+ *
+ * `null` = nu s-a publicat nimic încă (bază goală, ori numai propuneri).
+ */
+export async function saptamanaCurenta(db: D1Database, azi: string): Promise<RandSaptamana | null> {
+  return unul<RandSaptamana>(
+    db,
+    `SELECT * FROM saptamani WHERE stare = 'validat' AND luni <= ? ORDER BY luni DESC LIMIT 1`,
+    [adaugaZile(luneaSaptamanii(azi), 7)],
+  )
 }
 
 /**
@@ -127,16 +204,16 @@ export async function ultimaSchimbareaSaptamanii(db: D1Database, luni: string): 
   return r?.modificat ?? null
 }
 
-export async function slujbeleSaptamanii(db: D1Database, luni: string): Promise<RandSlujba[]> {
-  return toate<RandSlujba>(db, `SELECT * FROM slujbe WHERE luni = ? ORDER BY data, ora, ordine`, [luni])
+export async function slujbeleSaptamanii(db: D1Database, luni: string, v: Vedere): Promise<RandSlujba[]> {
+  return toate<RandSlujba>(db, `SELECT * FROM slujbe ${unde('luni = ?', cerneSlujbe(v))}ORDER BY data, ora, ordine`, [luni])
 }
 
-export async function slujbeInterval(db: D1Database, deLa: string, panaLa: string): Promise<RandSlujba[]> {
-  return toate<RandSlujba>(db, `SELECT * FROM slujbe WHERE data >= ? AND data <= ? ORDER BY data, ora, ordine`, [deLa, panaLa])
+export async function slujbeInterval(db: D1Database, deLa: string, panaLa: string, v: Vedere): Promise<RandSlujba[]> {
+  return toate<RandSlujba>(db, `SELECT * FROM slujbe ${unde('data >= ?', 'data <= ?', cerneSlujbe(v))}ORDER BY data, ora, ordine`, [deLa, panaLa])
 }
 
-export async function saptamaniInterval(db: D1Database, deLa: string, panaLa: string): Promise<RandSaptamana[]> {
-  return toate<RandSaptamana>(db, `SELECT * FROM saptamani WHERE duminica >= ? AND luni <= ? ORDER BY luni`, [deLa, panaLa])
+export async function saptamaniInterval(db: D1Database, deLa: string, panaLa: string, v: Vedere): Promise<RandSaptamana[]> {
+  return toate<RandSaptamana>(db, `SELECT * FROM saptamani ${unde('duminica >= ?', 'luni <= ?', cerne(v))}ORDER BY luni`, [deLa, panaLa])
 }
 
 export interface RezumatSaptamana {
@@ -149,20 +226,19 @@ export interface RezumatSaptamana {
 }
 
 /** Saptamanile unui an: anul e cel al ZILEI DE LUNI (ca in V1) — nicio saptamana nu iese din anul ei, nici in arhiva, nici in `/v1/saptamani`. */
-export async function saptamanileAnului(db: D1Database, an?: number): Promise<RezumatSaptamana[]> {
-  const conditie = an ? `WHERE s.luni LIKE ?` : ''
+export async function saptamanileAnului(db: D1Database, v: Vedere, an?: number): Promise<RezumatSaptamana[]> {
   const legaturi = an ? [`${an}-%`] : []
   return toate<RezumatSaptamana>(
     db,
     `SELECT s.luni, s.duminica, s.titlu, s.stare, s.sursa, COUNT(l.id) AS nr_slujbe
-     FROM saptamani s LEFT JOIN slujbe l ON l.luni = s.luni ${conditie}
+     FROM saptamani s LEFT JOIN slujbe l ON l.luni = s.luni ${unde(an ? 's.luni LIKE ?' : '', cerne(v, 's.'))}
      GROUP BY s.luni ORDER BY s.luni DESC`,
     legaturi,
   )
 }
 
-export async function aniiArhivei(db: D1Database): Promise<number[]> {
-  const r = await toate<{ an: string }>(db, `SELECT DISTINCT substr(luni, 1, 4) AS an FROM saptamani ORDER BY an DESC`)
+export async function aniiArhivei(db: D1Database, v: Vedere): Promise<number[]> {
+  const r = await toate<{ an: string }>(db, `SELECT DISTINCT substr(luni, 1, 4) AS an FROM saptamani ${unde(cerne(v))}ORDER BY an DESC`)
   return r.map((x) => Number(x.an))
 }
 
@@ -175,9 +251,9 @@ export async function acoperire(db: D1Database): Promise<{ de_la: string | null;
 }
 
 /** Saptamanile vecine care EXISTA in baza (pentru 404-ul de saptamana). */
-export async function vecinele(db: D1Database, luni: string): Promise<{ inainte: string | null; dupa: string | null }> {
-  const inainte = await unul<{ luni: string }>(db, `SELECT luni FROM saptamani WHERE luni < ? ORDER BY luni DESC LIMIT 1`, [luni])
-  const dupa = await unul<{ luni: string }>(db, `SELECT luni FROM saptamani WHERE luni > ? ORDER BY luni ASC LIMIT 1`, [luni])
+export async function vecinele(db: D1Database, luni: string, v: Vedere): Promise<{ inainte: string | null; dupa: string | null }> {
+  const inainte = await unul<{ luni: string }>(db, `SELECT luni FROM saptamani ${unde('luni < ?', cerne(v))}ORDER BY luni DESC LIMIT 1`, [luni])
+  const dupa = await unul<{ luni: string }>(db, `SELECT luni FROM saptamani ${unde('luni > ?', cerne(v))}ORDER BY luni ASC LIMIT 1`, [luni])
   return { inainte: inainte?.luni ?? null, dupa: dupa?.luni ?? null }
 }
 
@@ -190,16 +266,23 @@ export interface RandIstoricSlujba {
   /** JSON-ul din coloana `detalii` — de acolo ia propunerea numele sfantului privegherii. */
   detalii: string | null
 }
-export async function istoriculSlujbelor(db: D1Database, inainteDe: string): Promise<RandIstoricSlujba[]> {
-  return toate<RandIstoricSlujba>(db, `SELECT data, ora, cod_nume, luni, detalii FROM slujbe WHERE data < ? ORDER BY data`, [inainteDe])
+export async function istoriculSlujbelor(db: D1Database, inainteDe: string, v: Vedere): Promise<RandIstoricSlujba[]> {
+  return toate<RandIstoricSlujba>(db, `SELECT data, ora, cod_nume, luni, detalii FROM slujbe ${unde('data < ?', cerneSlujbe(v))}ORDER BY data`, [inainteDe])
 }
 
-/** Urmatoarea slujba de la un moment incolo, in cel mult N zile. */
-export async function urmatoareaSlujba(db: D1Database, data: string, ora: string, zile = 21): Promise<RandSlujba | null> {
+/**
+ * Urmatoarea slujba de la un moment incolo, in cel mult N zile.
+ *
+ * ⚠️ CU OCHII LUMII SARE PESTE SĂPTĂMÂNILE NEPUBLICATE, slujbă cu slujbă — nu se oprește la prima
+ * ascunsă. De aici își ia live-ul (`apps/live/src/program.ts`) următoarea slujbă, prin Service
+ * Binding și FĂRĂ antetul intern: transmisiunea pornește numai din săptămâni validate (user,
+ * 20.09.2026, confirmat anume pentru live).
+ */
+export async function urmatoareaSlujba(db: D1Database, data: string, ora: string, v: Vedere, zile = 21): Promise<RandSlujba | null> {
   return unul<RandSlujba>(
     db,
-    `SELECT * FROM slujbe WHERE (data > ? OR (data = ? AND ora >= ?)) AND data <= ? ORDER BY data, ora, ordine LIMIT 1`,
-    [data, data, ora, adaugaZile(data, zile)],
+    `SELECT * FROM slujbe ${unde('(data > ?1 OR (data = ?1 AND ora >= ?2))', 'data <= ?3', cerneSlujbe(v))}ORDER BY data, ora, ordine LIMIT 1`,
+    [data, ora, adaugaZile(data, zile)],
   )
 }
 
@@ -218,8 +301,8 @@ export { luneaSaptamanii }
  * „in curs" e o conventie: a inceput de cel mult `oreDeViata` ore (implicit 3) — cat tine o
  * Liturghie cu tot cu Utrenie — si n-a inceput alta dupa ea. Pentru live si radio.
  */
-export async function slujbaCurenta(db: D1Database, data: string, ora: string, oreDeViata = 3): Promise<RandSlujba | null> {
-  const r = await unul<RandSlujba>(db, `SELECT * FROM slujbe WHERE data = ? AND ora <= ? ORDER BY ora DESC, ordine DESC LIMIT 1`, [data, ora])
+export async function slujbaCurenta(db: D1Database, data: string, ora: string, v: Vedere, oreDeViata = 3): Promise<RandSlujba | null> {
+  const r = await unul<RandSlujba>(db, `SELECT * FROM slujbe ${unde('data = ?', 'ora <= ?', cerneSlujbe(v))}ORDER BY ora DESC, ordine DESC LIMIT 1`, [data, ora])
   if (!r) return null
   const [h1, m1] = r.ora.split(':').map(Number)
   const [h2, m2] = ora.split(':').map(Number)
@@ -228,13 +311,13 @@ export async function slujbaCurenta(db: D1Database, data: string, ora: string, o
 }
 
 /** Aparitiile trecute ale unei slujbe (dupa `cod_nume`), cele mai noi intai. */
-export async function slujbeTrecuteDupaNume(db: D1Database, codNume: string, inainteDe: string, limita = 12): Promise<RandSlujba[]> {
-  return toate<RandSlujba>(db, `SELECT * FROM slujbe WHERE cod_nume = ? AND data < ? ORDER BY data DESC, ora DESC LIMIT ?`, [codNume, inainteDe, limita])
+export async function slujbeTrecuteDupaNume(db: D1Database, codNume: string, inainteDe: string, v: Vedere, limita = 12): Promise<RandSlujba[]> {
+  return toate<RandSlujba>(db, `SELECT * FROM slujbe ${unde('cod_nume = ?', 'data < ?', cerneSlujbe(v))}ORDER BY data DESC, ora DESC LIMIT ?`, [codNume, inainteDe, limita])
 }
 
 /** Urmatoarea aparitie programata a unei slujbe (dupa `cod_nume`), de la ziua data inainte. */
-export async function urmatoareaDupaNume(db: D1Database, codNume: string, deLa: string): Promise<RandSlujba | null> {
-  return unul<RandSlujba>(db, `SELECT * FROM slujbe WHERE cod_nume = ? AND data >= ? ORDER BY data, ora LIMIT 1`, [codNume, deLa])
+export async function urmatoareaDupaNume(db: D1Database, codNume: string, deLa: string, v: Vedere): Promise<RandSlujba | null> {
+  return unul<RandSlujba>(db, `SELECT * FROM slujbe ${unde('cod_nume = ?', 'data >= ?', cerneSlujbe(v))}ORDER BY data, ora LIMIT 1`, [codNume, deLa])
 }
 
 export interface TiparSlujba {
@@ -258,12 +341,15 @@ const NUME_ZILE = ['duminică', 'luni', 'marți', 'miercuri', 'joi', 'vineri', '
  * („Sfantul Maslu se face marti seara") si tine cateva KB, nu tot istoricul — se plateste la
  * fiecare mesaj. Se socoteste pe ultimii `ani` (implicit 2), ca obiceiurile vechi sa nu traga.
  */
-export async function tiparele(db: D1Database, azi: string, ani = 2): Promise<TiparSlujba[]> {
+export async function tiparele(db: D1Database, azi: string, v: Vedere, ani = 2): Promise<TiparSlujba[]> {
   const deLa = `${Number(azi.slice(0, 4)) - ani}${azi.slice(4)}`
+  // ⚠️ Și obiceiul se cerne, nu doar „următoarea": altfel `/v1/paternuri` și `/v1/cauta` ar fi spus
+  // lumii CÂND se face data viitoare Sfântul Maslu dintr-o săptămână încă nepublicată — adică tocmai
+  // programul pe care parohia nu l-a dat încă afară, numai că pe altă ușă.
   const [randuri, vocabular, viitoare] = await Promise.all([
-    toate<{ data: string; ora: string; cod_nume: string }>(db, `SELECT data, ora, cod_nume FROM slujbe WHERE data >= ? AND data < ? ORDER BY data`, [deLa, azi]),
+    toate<{ data: string; ora: string; cod_nume: string }>(db, `SELECT data, ora, cod_nume FROM slujbe ${unde('data >= ?', 'data < ?', cerneSlujbe(v))}ORDER BY data`, [deLa, azi]),
     toate<{ cod_nume: string; nume: string }>(db, `SELECT cod_nume, nume FROM vocabular ORDER BY ordine`),
-    toate<{ cod_nume: string; data: string }>(db, `SELECT cod_nume, MIN(data) AS data FROM slujbe WHERE data >= ? GROUP BY cod_nume`, [azi]),
+    toate<{ cod_nume: string; data: string }>(db, `SELECT cod_nume, MIN(data) AS data FROM slujbe ${unde('data >= ?', cerneSlujbe(v))}GROUP BY cod_nume`, [azi]),
   ])
   const numeDupaCod = new Map(vocabular.map((v) => [v.cod_nume, v.nume]))
   const urmatoareaDupaCod = new Map(viitoare.map((v) => [v.cod_nume, v.data]))
@@ -302,15 +388,15 @@ export async function tiparele(db: D1Database, azi: string, ani = 2): Promise<Ti
  * plecat in lume de la sine — ceasul launtric al unei saptamani inca nevalidate si user-id-ul celui
  * care a apasat. Orice coloana noua trebuie ADAUGATA AICI ca sa iasa, si asta e tot rostul.
  */
-export async function arhivaIntreaga(db: D1Database): Promise<{ saptamani: RandSaptamana[]; slujbe: RandSlujba[] }> {
+export async function arhivaIntreaga(db: D1Database, v: Vedere): Promise<{ saptamani: RandSaptamana[]; slujbe: RandSlujba[] }> {
   const [saptamani, slujbe] = await Promise.all([
     toate<RandSaptamana>(
       db,
       `SELECT luni, duminica, stare, titlu, sursa, sursa_id, sursa_link, versiune_calendar,
               validat_de, validat_la, creat, modificat
-       FROM saptamani ORDER BY luni`,
+       FROM saptamani ${unde(cerne(v))}ORDER BY luni`,
     ),
-    toate<RandSlujba>(db, `SELECT * FROM slujbe ORDER BY data, ora, ordine`),
+    toate<RandSlujba>(db, `SELECT * FROM slujbe ${unde(cerneSlujbe(v))}ORDER BY data, ora, ordine`),
   ])
   return { saptamani, slujbe }
 }
@@ -436,7 +522,7 @@ function declaratieSlujbaNoua(db: D1Database, luni: string, id: string, s: Slujb
  */
 export async function scrieSaptamana(db: D1Database, luni: string, slujbe: SlujbaDeScris[], cine: CineScrie): Promise<RandSaptamana> {
   const duminica = adaugaZile(luni, 6)
-  const existenta = await saptamana(db, luni)
+  const existenta = await saptamana(db, luni, VEDE_TOT)
   const vocab = new Map((await vocabularul(db)).map((v) => [v.cod_nume, v.nume]))
   const t = acum()
   const declaratii: D1PreparedStatement[] = []
@@ -486,7 +572,7 @@ export interface SchimbariSlujba {
 export async function modificaSlujba(db: D1Database, id: string, schimbari: SchimbariSlujba, cine: CineScrie): Promise<RandSlujba> {
   const r = await unul<RandSlujba>(db, `SELECT * FROM slujbe WHERE id = ?`, [id])
   if (!r) throw new Error(`nu găsesc slujba ${id}`)
-  const s = await saptamana(db, r.luni)
+  const s = await saptamana(db, r.luni, VEDE_TOT)
   if (!s) throw new Error(`săptămâna ${r.luni} nu e în bază`)
 
   const set: string[] = []
@@ -520,7 +606,7 @@ export async function modificaSlujba(db: D1Database, id: string, schimbari: Schi
 /** ADAUGA o slujba intr-o saptamana scrisa. */
 export async function adaugaSlujba(db: D1Database, s: SlujbaDeScris, cine: CineScrie): Promise<RandSlujba> {
   const luni = luneaSaptamanii(s.data)
-  const sapt = await saptamana(db, luni)
+  const sapt = await saptamana(db, luni, VEDE_TOT)
   if (!sapt) throw new Error(`săptămâna ${luni} nu e scrisă încă`)
   const vocab = new Map((await vocabularul(db)).map((v) => [v.cod_nume, v.nume]))
   if (!vocab.has(s.cod_nume)) throw new Error(`„${s.cod_nume}" nu e în vocabularul slujbelor`)
@@ -541,7 +627,7 @@ export async function adaugaSlujba(db: D1Database, s: SlujbaDeScris, cine: CineS
 export async function stergeSlujba(db: D1Database, id: string, cine: CineScrie): Promise<void> {
   const r = await unul<RandSlujba>(db, `SELECT * FROM slujbe WHERE id = ?`, [id])
   if (!r) throw new Error(`nu găsesc slujba ${id}`)
-  const s = await saptamana(db, r.luni)
+  const s = await saptamana(db, r.luni, VEDE_TOT)
   if (!s) throw new Error(`săptămâna ${r.luni} nu e în bază`)
   const t = acum()
   const stare = stareaDupaSchimbare(s)
@@ -556,7 +642,7 @@ export async function stergeSlujba(db: D1Database, id: string, cine: CineScrie):
 
 /** VALIDEAZA o saptamana scrisa: de aici se poate tipari foaia de pe usa. */
 export async function valideazaSaptamana(db: D1Database, luni: string, cine: CineScrie, versiuneCalendar: string | null = null): Promise<RandSaptamana> {
-  const s = await saptamana(db, luni)
+  const s = await saptamana(db, luni, VEDE_TOT)
   if (!s) throw new Error(`săptămâna ${luni} nu e scrisă încă`)
   const t = acum()
   const n = await numarSlujbe(db, luni)
@@ -591,7 +677,7 @@ export async function valideazaSaptamana(db: D1Database, luni: string, cine: Cin
  * apasat, si el trebuie pomenit, nu cel de duminica.
  */
 export async function programeazaSaptamana(db: D1Database, luni: string, prag: Date, cine: CineScrie, versiuneCalendar: string | null = null): Promise<RandSaptamana> {
-  const s = await saptamana(db, luni)
+  const s = await saptamana(db, luni, VEDE_TOT)
   if (!s) throw new Error(`săptămâna ${luni} nu e scrisă încă`)
   const t = acum()
   const cand = prag.toISOString()
@@ -614,7 +700,7 @@ export async function programeazaSaptamana(db: D1Database, luni: string, prag: D
  * spune acelasi lucru („las-o balta"), iar aplicatia stie singura ce inseamna acum.
  */
 export async function anuleazaProgramarea(db: D1Database, luni: string, cine: CineScrie): Promise<RandSaptamana> {
-  const s = await saptamana(db, luni)
+  const s = await saptamana(db, luni, VEDE_TOT)
   if (!s) throw new Error(`săptămâna ${luni} nu e scrisă încă`)
   if (!eProgramata(s)) return s
   const t = acum()
@@ -695,7 +781,7 @@ export async function treciLaValidat(db: D1Database, cand: Date, correlationId: 
  * singura duminica, dupa ce omul tocmai ceruse sa nu se intample asta.
  */
 export async function retrageValidarea(db: D1Database, luni: string, cine: CineScrie): Promise<RandSaptamana> {
-  const s = await saptamana(db, luni)
+  const s = await saptamana(db, luni, VEDE_TOT)
   if (!s) throw new Error(`săptămâna ${luni} nu e scrisă încă`)
   if (eProgramata(s)) return anuleazaProgramarea(db, luni, cine)
   if (s.stare === 'propus') return s

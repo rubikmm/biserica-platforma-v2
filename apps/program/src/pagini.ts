@@ -77,8 +77,21 @@ export interface Meniu {
   luni: string | null
   /** adresa foii FARA extensie si FARA prefix (`/v1/foaie/<luni>`, `/v1/propunere/<luni>`); null = n-are foaie */
   foaie: string | null
-  /** ziua de azi (Bucuresti) — din ea ies cele trei trepte ale navigarii */
+  /** ziua de azi (Bucuresti) — din ea se socoteste `curenta` cand nu vine gata */
   azi: string
+  /**
+   * LUNEA SĂPTĂMÂNII CURENTE = a ULTIMEI PUBLICATE (20.09.2026), nu a celei calendaristice. Din ea
+   * ies bulina („săptămâna de azi"), zona de scris („Săptămâna curentă") și săgeata dinspre ea.
+   *
+   * ⚠️ De ce nu se mai socotește din `azi`: duminică la 12:00 ceasul publică săptămâna care începe a
+   * doua zi, și din clipa aceea EA e curentă — dar `luneaSaptamanii(azi)` ar fi arătat încă spre
+   * săptămâna care se încheie, deci bulina ar fi dus la programul vechi exact în ziua în care
+   * enoriașul tocmai primise foaia cea nouă în mână.
+   *
+   * Lipsa ei (paginile care n-au apucat să întrebe baza — verificarea CSRF, eroarea neașteptată)
+   * cade înapoi pe săptămâna calendaristică, cum era până acum.
+   */
+  curenta?: string
   /**
    * Pagina deschisa e Arhiva (butonul ei din pastila ramane aprins). ⚠️ Din 15.09.2026, 18:56, are si
    * a doua urmare: acolo fasia anilor se scrie COBORATA si nu se mai strange (vezi `baraAnilor`),
@@ -872,9 +885,19 @@ function intervalScurt(luni: string): string {
  *
  * Inapoi nu se mai merge dintr-un pas: saptamana trecuta se alege din Arhiva.
  */
+/**
+ * LUNEA SĂPTĂMÂNII CURENTE pentru antet și pentru momentul scris deasupra titlului — un singur loc.
+ *
+ * Vine gata din pagină (ultima publicată, `saptamanaCurenta` din `depozit.ts`); unde n-a apucat să
+ * fie întrebată baza, rămâne săptămâna calendaristică, ca până la 20.09.2026.
+ */
+function saptamanaCurenta(m: Meniu): string {
+  return m.curenta ?? luneaSaptamanii(m.azi)
+}
+
 function navigarea(ctx: Ctx, m: Meniu): string {
   const p = esc(ctx.prefix)
-  const aAzi = luneaSaptamanii(m.azi)
+  const aAzi = saptamanaCurenta(m)
   const urmatoarea = adaugaZile(aAzi, 7)
   const zile = intervalScurt(urmatoarea)
   // ⚠️ Segmentul „viitoare" a ramas NUMAI SAGEATA, la orice latime (user, 15.09.2026: „iconița cu
@@ -889,7 +912,16 @@ function navigarea(ctx: Ctx, m: Meniu): string {
   // mai sus. Desenul pus de-a dreptul in buton se blochifica singur si se centreaza la milimetru —
   // exact cum sta cutia Arhivei de langa el, care n-a avut niciodata invelis.
   const scris = IC_INAINTE
-  const viitoare = m.luni === urmatoarea
+  /**
+   * ⚠️ PENTRU ENORIAȘ SĂGEATA E STINSĂ, NU ASCUNSĂ (20.09.2026, regula randului de unelte: „butoanele
+   * se sting, nu se ascund"). Săptămâna de după cea curentă nu e publicată PRIN DEFINIȚIE — curentă e
+   * ultima publicată —, deci linkul ar fi dus mereu la „Programul nu e publicat încă". Stins, butonul
+   * spune și că locul există, și când se umple; title-ul e regula casei, nu o făgăduință.
+   */
+  const viitoare = !ctx.eAdmin
+    ? `<span class="btn viit gol" title="Săptămâna viitoare apare duminică, la ora 12:00"`
+      + ` aria-label="săptămâna viitoare — apare duminică, la ora 12:00">${scris}</span>`
+    : m.luni === urmatoarea
     ? `<button type="button" class="btn viit activ" aria-disabled="true" aria-current="page"`
       + ` title="Ești pe săptămâna viitoare, ${zile}" aria-label="săptămâna viitoare, ${zile}">${scris}</button>`
     : `<a class="btn viit" href="${p}/saptamana/${urmatoarea}" title="Treci la săptămâna viitoare, ${zile}"`
@@ -953,7 +985,7 @@ function scrisulSaptamanii(m: Meniu): string {
   const zona = (lung: string, scurt: string, titlu: string) =>
     `<span class="acum" title="${titlu}"><b class="lung">${lung}</b><b class="scurt">${scurt}</b></span>`
   if (!m.luni) return zona('Arhiva', 'Arhiva', 'Arhiva programelor')
-  const aAzi = luneaSaptamanii(m.azi)
+  const aAzi = saptamanaCurenta(m)
   const zile = intervalScurt(m.luni)
   // ⚠️ Forma de telefon e UN SINGUR CUVANT („Curentă", „Viitoare"), nu „Săpt. curentă": masurat pe un
   // telefon de 390, zonei ii raman ~79 px, iar „Săpt. curentă" cere ~85 si IESEA TAIATA la amandoua
@@ -1437,7 +1469,10 @@ export function paginaSaptamana(o: OptiuniSaptamana): string {
   // lui; zilele raman insa colorate dupa calendarul imprumutat (rosul sarbatorilor) si randurile „→"
   // ale slujbelor sunt tot de acolo. `cuCalendar` inseamna „coloana STA in pagina", nu „se vede":
   // aprinsul e al omului.
-  const aAzi = luneaSaptamanii(o.azi)
+  // „aceasta / trecută / viitoare" se socotesc față de săptămâna CURENTĂ (ultima publicată), ca și
+  // antetul de deasupra lor: altfel pagina ar fi scris „Săptămâna viitoare" peste fix săptămâna pe
+  // care pastila o marchează drept cea curentă.
+  const aAzi = saptamanaCurenta(o.meniu)
   const cuCalendar = areCalendarulSaptamanii(o.cal, o.luni)
   const zile = zileleSaptamanii({ ...o, cuCalendar })
   // Eticheta de langa titlu spune STAREA saptamanii, oricare ar fi ea: „propunere" (albastru, ca

@@ -11,6 +11,15 @@
  * Lista de la 11.09.2026 (user): următoarea și curenta (pentru live și radio), săptămâna curentă
  * și viitoare ca text / poză brută / pdf-tipar / jpg-tipar, arhiva ca fișier, plus tiparele
  * istoricului ca fundal — ca la „când e Sfântul Maslu?" chatul să răspundă din prima.
+ *
+ * ⚠️ TOATE CITIRILE DE AICI MERG CU `VEDE_TOT` (20.09.2026, odată cu cernerea săptămânilor
+ * nepublicate). Acțiunile răspund NUMAI pe ușa internă — `/_actiuni` cere `x-xc-intern` cu secretul
+ * platformei, altfel calea nici nu există (`packages/actiuni/src/montare.ts`) —, deci cine ajunge
+ * până aici e deja înăuntru: chatul adminului, buletinul, o automatizare a noastră. Cernută, unealta
+ * ar fi tăcut exact acolo unde e chemată: la lucrul pe săptămâna care încă nu s-a publicat.
+ * ⚠️ Deci POARTA E MODULUL DE CHAT, nu cernerea de aici: cine poate deschide bula poate întreba de
+ * programul nepublicat. Dacă vreodată chatul se deschide enoriașilor, citirile astea trebuie să
+ * primească `vedereaLui(...)`, nu `VEDE_TOT`.
  */
 import { z } from 'zod'
 import { citesteConfig, navigatieDin } from '@xc/config'
@@ -41,6 +50,7 @@ import {
   tiparele,
   urmatoareaDupaNume,
   urmatoareaSlujba,
+  VEDE_TOT,
   vocabularul,
 } from './depozit.js'
 import {
@@ -82,8 +92,8 @@ const SaptamanaCeruta = z
 /** Săptămâna cerută, în forma contractului: cea scrisă, iar dacă nu e — propunerea ei, ca pe pagină. */
 async function saptamanaCeruta(env: EnvActiuniProgram, cerut: string | undefined): Promise<Saptamana> {
   const luni = luneaSaptamanii(ziua(cerut))
-  const s = await saptamanaOriPropunere(env, luni, await harta(env))
-  if (s.rand) return saptamanaDin(s.rand, await slujbeleSaptamanii(env.DB, luni))
+  const s = await saptamanaOriPropunere(env, luni, await harta(env), VEDE_TOT)
+  if (s.rand) return saptamanaDin(s.rand, await slujbeleSaptamanii(env.DB, luni, VEDE_TOT))
   return {
     de_la: luni,
     pana_la: adaugaZile(luni, 6),
@@ -164,7 +174,7 @@ async function gasesteSlujba(
   // Fara nume („slujba de luni") se iau toate slujbele zilei; ora sau unicitatea o aleg.
   const coduri = numeSpus ? new Set(cautaInVocabular(vocab, numeSpus).map((v) => v.cod_nume)) : null
   if (coduri && !coduri.size) throw new Error(`nu cunosc nicio slujbă numită „${numeSpus}"`)
-  const s = await saptamanaOriPropunere(env, luni, new Map(vocab.map((v) => [v.cod_nume, v])))
+  const s = await saptamanaOriPropunere(env, luni, new Map(vocab.map((v) => [v.cod_nume, v])), VEDE_TOT)
   let candidate = s.slujbe.filter((x) => x.data === data && (!coduri || coduri.has(x.cod_nume)))
   if (ora) candidate = candidate.filter((x) => x.ora === ora)
   const ce = numeSpus ? `slujbă „${numeSpus}"` : 'slujbă'
@@ -190,7 +200,7 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
     async executa(_a, c) {
       const azi = aziBucuresti()
       const ora = oraBucuresti()
-      const r = await urmatoareaSlujba(c.env.DB, azi, ora)
+      const r = await urmatoareaSlujba(c.env.DB, azi, ora, VEDE_TOT)
       return { acum: { data: azi, ora }, slujba: r ? slujbaDin(r) : null }
     },
   }),
@@ -210,7 +220,7 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
     async executa(_a, c) {
       const azi = aziBucuresti()
       const ora = oraBucuresti()
-      const r = await slujbaCurenta(c.env.DB, azi, ora)
+      const r = await slujbaCurenta(c.env.DB, azi, ora, VEDE_TOT)
       return { acum: { data: azi, ora }, slujba: r ? slujbaDin(r) : null }
     },
   }),
@@ -226,7 +236,7 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
     async executa({ zi }, c) {
       // Ca pe pagina: saptamana scrisa, iar daca nu e — propunerea ei, cu starea „propunere".
       const data = ziua(zi)
-      const s = await saptamanaOriPropunere(c.env, luneaSaptamanii(data), await harta(c.env))
+      const s = await saptamanaOriPropunere(c.env, luneaSaptamanii(data), await harta(c.env), VEDE_TOT)
       return { data, stare: s.rand?.stare ?? 'propunere', slujbe: s.slujbe.filter((x) => x.data === data) }
     },
   }),
@@ -286,12 +296,12 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
       const azi = aziBucuresti()
       const potriviri = cautaInVocabular(await vocabularul(c.env.DB), nume).slice(0, 3)
       if (!potriviri.length) throw new Error(`nu cunosc nicio slujbă numită „${nume}"`)
-      const tipare = await tiparele(c.env.DB, azi)
+      const tipare = await tiparele(c.env.DB, azi, VEDE_TOT)
       const gasite = await Promise.all(
         potriviri.map(async (v) => ({
           slujba: { cod_nume: v.cod_nume, nume: v.nume },
-          urmatoarea: await urmatoareaDupaNume(c.env.DB, v.cod_nume, azi).then((r) => (r ? slujbaDin(r) : null)),
-          trecute: (await slujbeTrecuteDupaNume(c.env.DB, v.cod_nume, azi, cate)).map(slujbaDin),
+          urmatoarea: await urmatoareaDupaNume(c.env.DB, v.cod_nume, azi, VEDE_TOT).then((r) => (r ? slujbaDin(r) : null)),
+          trecute: (await slujbeTrecuteDupaNume(c.env.DB, v.cod_nume, azi, VEDE_TOT, cate)).map(slujbaDin),
           obicei: tipare.find((t) => t.cod_nume === v.cod_nume) ?? null,
         })),
       )
@@ -310,7 +320,7 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
     iesire: z.object({ azi: z.string(), text: z.string(), tipare: z.array(z.any()) }),
     async executa(_a, c) {
       const azi = aziBucuresti()
-      const tipare = await tiparele(c.env.DB, azi)
+      const tipare = await tiparele(c.env.DB, azi, VEDE_TOT)
       // `text` e ce citeste modelul: randuri simple, nu JSON. Masurat 11.09.2026 — JSON-ul cu
       // diacritice il incurca (citea „UUTrenia L liturgie") si se pierdea in el in loc sa cheme unealta.
       const text = tipare
@@ -329,7 +339,7 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
     intrare: z.object({}),
     iesire: Obiect,
     async executa(_a, c) {
-      const a = await arhivaIntreaga(c.env.DB)
+      const a = await arhivaIntreaga(c.env.DB, VEDE_TOT)
       const azi = aziBucuresti()
       return obiectDinText({
         media: c.env.MEDIA,
@@ -386,7 +396,7 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
     exemple: ['dă-mi foaia de pe ușă pentru săptămâna viitoare', 'vreau programul ca PDF de tipar'],
     async executa({ saptamana: cerut, fel, format }, c) {
       const data = ziua(cerut)
-      const f = await htmlFoaiaSaptamanii(c.env, data, fel)
+      const f = await htmlFoaiaSaptamanii(c.env, data, fel, VEDE_TOT)
       if (!f.ok) throw new Error(f.mesaj)
       return obiectDinHtml({
         media: c.env.MEDIA,
@@ -519,7 +529,7 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
     async rezuma({ zi, slujba, ora, loc }, c) {
       const data = ziua(zi)
       const v = await numeleDinVocabular(c.env, slujba)
-      const scrisa = Boolean(await saptamana(c.env.DB, luneaSaptamanii(data)))
+      const scrisa = Boolean(await saptamana(c.env.DB, luneaSaptamanii(data), VEDE_TOT))
       return `Adaug „${v.nume}" ${dataCuZi(data)}, la ${ora}${loc !== 'biserica' ? `, la ${loc}` : ''}.${scrisa ? '' : ' Săptămâna nu e scrisă încă — o scriu întâi din propunere.'}`
     },
     async executa({ zi, slujba, ora, loc, detalii, observatii }, c) {
@@ -527,8 +537,8 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
       const v = await numeleDinVocabular(c.env, slujba)
       const cine = cineScrie(c)
       const luni = luneaSaptamanii(data)
-      if (!(await saptamana(c.env.DB, luni))) {
-        const s = await saptamanaOriPropunere(c.env, luni, await harta(c.env))
+      if (!(await saptamana(c.env.DB, luni, VEDE_TOT))) {
+        const s = await saptamanaOriPropunere(c.env, luni, await harta(c.env), VEDE_TOT)
         await scrieSaptamana(c.env.DB, luni, s.slujbe.map(deScris), cine)
       }
       const r = await adaugaSlujba(c.env.DB, { data, ora, cod_nume: v.cod_nume, loc, detalii, observatii, curatenie: true, transmisie: true }, cine)
@@ -583,17 +593,17 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
     exemple: ['scrie propunerea pentru săptămâna viitoare', 'salvează programul propus'],
     async rezuma({ saptamana: cerut }, c) {
       const luni = luneaSaptamanii(ziua(cerut))
-      const s = await saptamanaOriPropunere(c.env, luni, await harta(c.env))
+      const s = await saptamanaOriPropunere(c.env, luni, await harta(c.env), VEDE_TOT)
       if (s.rand) throw new Error(`săptămâna ${titluSaptamanii(luni)} e deja scrisă (${s.rand.stare})`)
       return `Scriu propunerea săptămânii ${titluSaptamanii(luni)}: ${s.slujbe.length} slujbe, ca „propus".`
     },
     async executa({ saptamana: cerut }, c) {
       const luni = luneaSaptamanii(ziua(cerut))
-      const s = await saptamanaOriPropunere(c.env, luni, await harta(c.env))
+      const s = await saptamanaOriPropunere(c.env, luni, await harta(c.env), VEDE_TOT)
       if (s.rand) throw new Error(`săptămâna ${titluSaptamanii(luni)} e deja scrisă (${s.rand.stare})`)
       const rand = await scrieSaptamana(c.env.DB, luni, s.slujbe.map(deScris), cineScrie(c))
       c.ctxExec.waitUntil(golesteOutbox(c.env.DB, c.env.EVENIMENTE))
-      return saptamanaDin(rand, await slujbeleSaptamanii(c.env.DB, luni))
+      return saptamanaDin(rand, await slujbeleSaptamanii(c.env.DB, luni, VEDE_TOT))
     },
   }),
 
@@ -628,7 +638,7 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
     ],
     async rezuma({ saptamana: cerut }, c) {
       const luni = luneaSaptamanii(ziua(cerut))
-      const s = await saptamanaOriPropunere(c.env, luni, await harta(c.env))
+      const s = await saptamanaOriPropunere(c.env, luni, await harta(c.env), VEDE_TOT)
       if (s.rand?.stare === 'validat') throw new Error(`săptămâna ${titluSaptamanii(luni)} e deja validată`)
       if (eProgramata(s.rand)) throw new Error(`săptămâna ${titluSaptamanii(luni)} e deja programată pentru ${candApareSaptamana(luni)}`)
       const nescrisa = s.rand ? '' : ' Nu e scrisă încă — o scriu întâi din propunere.'
@@ -639,7 +649,7 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
     async executa({ saptamana: cerut }, c) {
       const luni = luneaSaptamanii(ziua(cerut))
       const cine = cineScrie(c)
-      const s = await saptamanaOriPropunere(c.env, luni, await harta(c.env))
+      const s = await saptamanaOriPropunere(c.env, luni, await harta(c.env), VEDE_TOT)
       if (s.rand?.stare === 'validat') throw new Error(`săptămâna ${titluSaptamanii(luni)} e deja validată`)
       if (eProgramata(s.rand)) throw new Error(`săptămâna ${titluSaptamanii(luni)} e deja programată pentru ${candApareSaptamana(luni)}`)
       // ⚠️ ACELAȘI CEAS pentru hotărâre și pentru clipa scrisă: `seProgrameaza` și `pragSaptamanii`
@@ -652,7 +662,7 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
         ? await programeazaSaptamana(c.env.DB, luni, pragSaptamanii(luni), cine, versiune)
         : await valideazaSaptamana(c.env.DB, luni, cine, versiune)
       c.ctxExec.waitUntil(golesteOutbox(c.env.DB, c.env.EVENIMENTE))
-      return saptamanaDin(rand, await slujbeleSaptamanii(c.env.DB, luni))
+      return saptamanaDin(rand, await slujbeleSaptamanii(c.env.DB, luni, VEDE_TOT))
     },
   }),
 
@@ -676,7 +686,7 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
     ],
     async rezuma({ saptamana: cerut }, c) {
       const luni = luneaSaptamanii(ziua(cerut))
-      const rand = await saptamana(c.env.DB, luni)
+      const rand = await saptamana(c.env.DB, luni, VEDE_TOT)
       if (!rand) throw new Error(`săptămâna ${titluSaptamanii(luni)} nu e scrisă încă — n-are ce validare să piardă`)
       if (eProgramata(rand)) {
         return `Anulez programarea săptămânii ${titluSaptamanii(luni)} — rămâne „propus", nu mai apare singură duminică.`
@@ -688,11 +698,11 @@ export const ACTIUNI = registru<EnvActiuniProgram>([
     },
     async executa({ saptamana: cerut }, c) {
       const luni = luneaSaptamanii(ziua(cerut))
-      const rand = await saptamana(c.env.DB, luni)
+      const rand = await saptamana(c.env.DB, luni, VEDE_TOT)
       if (!rand) throw new Error(`săptămâna ${titluSaptamanii(luni)} nu e scrisă încă — n-are ce validare să piardă`)
       const dupa = await retrageValidarea(c.env.DB, luni, cineScrie(c))
       c.ctxExec.waitUntil(golesteOutbox(c.env.DB, c.env.EVENIMENTE))
-      return saptamanaDin(dupa, await slujbeleSaptamanii(c.env.DB, luni))
+      return saptamanaDin(dupa, await slujbeleSaptamanii(c.env.DB, luni, VEDE_TOT))
     },
   }),
 ])

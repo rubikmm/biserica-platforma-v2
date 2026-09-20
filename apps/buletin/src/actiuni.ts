@@ -30,9 +30,11 @@ import {
   citesteCererea,
   compune,
   mottoDinainte,
+  pastreazaCererea,
   pastreazaNumarul,
   plangeriDeForma,
   programulFolosit,
+  programulSaSchimbat,
   textCurat,
 } from './compune.js'
 import type { Buletin } from './depozit.js'
@@ -552,6 +554,17 @@ export async function retrageNumarul(
  * (ele merg în `waitUntil`), fiindcă ele țin de CEREREA care a pornit validarea, nu de faptă.
  * ⚠️ `nr`/`data` sunt o VERIFICARE, nu o țintă — ca la retragere: două ferestre deschise nu publică
  * una peste alta, ci a doua află ce s-a schimbat.
+ *
+ * ⚠️ DIN 21.09.2026, VALIDAREA CERE PROGRAMUL VALIDAT (user, 20.09.2026, 23:33: „Buletinul preia la
+ * momentul validării ce program era validat"; la întrebarea „refuz sau propunere?", 23:55: „aș pune
+ * refuz, dar întârzierea lucrului la buletin ar fi nejustificată"). Deci cele două apăsări s-au
+ * despărțit:
+ *   - COMPUNEREA merge pe orice program, și pe o propunere — altfel nu se poate socoti spațiul
+ *     paginii a patra cu o săptămână înainte. Atenția „PROPUS" rămâne cum era;
+ *   - VALIDAREA nu: ea scoate numărul pe hârtia parohiei, iar hârtia nu se mai poate îndrepta. De
+ *     aceea programul se cere DIN NOU aici, pe ușa internă, ÎNAINTE de orice scriere.
+ * Trei răspunsuri, și fiecare cu statutul lui: propus → refuz; program mut → refuz; schimbat de la
+ * compunere → se RECOMPUNE numărul, ca pagina a patra să poarte programul de acum, nu pe cel de ieri.
  */
 export async function valideazaNumarul(
   env: EnvActiuniBuletin,
@@ -559,7 +572,8 @@ export async function valideazaNumarul(
   acum: Date = new Date(),
 ): Promise<
   | { facut: true; nr: number; data: string; publicat_la: string; programat: boolean; text: string }
-  | { facut: false; text: string }
+  /** `status` = ce se răspunde pe HTTP: 409 „nu se poate așa", 503 „programul n-a răspuns". */
+  | { facut: false; text: string; status?: 409 | 503 }
 > {
   const { scrieBuletin } = await import('./depozit.js')
   const { candApare, pragScris, seProgrameaza } = await import('./ceas.js')
@@ -573,14 +587,89 @@ export async function valideazaNumarul(
         'între timp s-a validat altceva; recompune-l pe cel de acum',
     }
   }
-  const ciorna = await ciornaDinDepozit(env, urm.nr, urm.data, PAGINI)
+  let ciorna = await ciornaDinDepozit(env, urm.nr, urm.data, PAGINI)
   if (!ciorna?.cheie_pdf) {
     return { facut: false, text: 'numărul nu e compus — compune-l întâi din chat, apoi validează-l' }
   }
 
+  /*
+   * PROGRAMUL SĂPTĂMÂNII, CERUT DIN NOU — înainte de orice scriere în bază sau în depozit.
+   *
+   * ⚠️ Nu se citește cel păstrat lângă foaie: acela spune ce ERA la compunere, iar între compunere și
+   * apăsarea asta pot trece zile. Întrebarea de aici e a clipei: e programul validat ACUM?
+   * ⚠️ Cererea trece pe ușa internă (antetul din `calendarulNumarului`), deci vede și o săptămână
+   * validată dar încă programată pentru duminică — pentru buletin aceea ESTE validată: validarea e
+   * gestul omului, publicarea e a ceasului.
+   */
+  const programulAcum = await calendarulNumarului(env, urm.data).catch(() => ({
+    cod: 'program_mut',
+    eroare: 'programul n-a răspuns deloc',
+  }))
+  if ('eroare' in programulAcum) {
+    /*
+     * ⚠️ 503, NU 409: n-am aflat că programul e nevalidat, am aflat că nu putem afla. Un 409 ar fi
+     * trimis omul să valideze un program care poate e de mult validat, iar vina e a legăturii.
+     */
+    return {
+      facut: false,
+      status: 503,
+      text:
+        `numărul NU s-a validat: nu se poate afla dacă programul săptămânii e validat — ${programulAcum.eroare}. ` +
+        'Nu s-a scris nimic; încearcă din nou.',
+    }
+  }
+  if (programulAcum.stare !== 'validat') {
+    return {
+      facut: false,
+      status: 409,
+      text:
+        `Programul săptămânii ${programulAcum.titlu} nu e validat — validează-l întâi, în Program. ` +
+        'Buletinul preia la validare programul validat.',
+    }
+  }
+
+  /*
+   * S-A SCHIMBAT PROGRAMUL DE LA COMPUNERE? Atunci foaia de pe ecran poartă programul de ieri, iar
+   * validarea ar fi tipărit-o așa. Se RECOMPUNE, pe același drum ca butonul „Compune numărul"
+   * (`compuneNumarul`, din schiță, cu pozele ei) — nu unul scris a doua oară aici.
+   *
+   * ⚠️ Cea mai deasă schimbare e chiar VALIDAREA programului: amprenta îl poartă pe `stare` în ea,
+   * deci un număr compus pe o propunere are ÎNTOTDEAUNA altă amprentă decât săptămâna validată de
+   * atunci. Adică drumul obișnuit al zilei, nu un caz rar.
+   * ⚠️ Amprenta necunoscută (număr compus înainte de 19.09.2026) NU e o schimbare: `programulSaSchimbat`
+   * tace, iar numărul se validează cu ce e compus. Vezi lămurirea de lângă funcție.
+   */
+  let cerere = await citesteCererea(env, { nr: urm.nr, data: urm.data }).catch(() => null)
+  if (programulSaSchimbat(cerere?.program, programulAcum)) {
+    const refacut = await compuneNumarul(env, {})
+    if (!refacut.facut) {
+      return {
+        facut: false,
+        status: 409,
+        text:
+          'numărul NU s-a validat: programul s-a schimbat de la compunere, iar recompunerea nu a ieșit — ' +
+          `${refacut.plangeri.join('; ') || 'nu încape pe hârtie'}. Îndreaptă textul și compune din nou.`,
+      }
+    }
+    // foaia, coperta și cererea sunt altele de acum: se citesc din nou, ca rândul din arhivă să
+    // poarte cheile și măsura foii PROASPETE, nu pe ale celei tocmai înlocuite
+    ciorna = await ciornaDinDepozit(env, urm.nr, urm.data, PAGINI)
+    cerere = await citesteCererea(env, { nr: urm.nr, data: urm.data }).catch(() => null)
+    if (!ciorna?.cheie_pdf) {
+      return { facut: false, status: 409, text: 'numărul s-a recompus, dar foaia nu s-a găsit în depozit — compune din nou' }
+    }
+  } else if (cerere) {
+    /*
+     * AMPRENTĂ EGALĂ: foaia e la zi, nu se recompune nimic. Se împrospătează totuși SEMNELE de lângă
+     * cerere (`publica`, `programata`, `apare`), fiindcă ele NU intră în amprentă: o săptămână
+     * validată marți și apărută duminică are același tabel, dar altă poveste. Lângă numărul validat
+     * trebuie să rămână ce era programul CHIAR ATUNCI.
+     */
+    await pastreazaCererea(env, cerere, programulFolosit(programulAcum))
+  }
+
   // textul pentru căutare iese din cererea păstrată lângă PDF; dacă lipsește, rândul intră fără text
   // (se caută după el, nu se tipărește din el)
-  const cerere = await citesteCererea(env, { nr: urm.nr, data: urm.data }).catch(() => null)
   const programat = seProgrameaza(urm.data, acum)
   const publicatLa = programat ? pragScris(urm.data) : acum.toISOString()
 

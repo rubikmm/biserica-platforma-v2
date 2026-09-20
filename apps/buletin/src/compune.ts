@@ -13,6 +13,7 @@
  * NU se dă drept bun, oricât de bine ar fi ieșit socoteala. Ordinea asta — întâi socoteala, la
  * urmă proba randării — e singura care nu minte nici pe repede, nici pe încet.
  */
+import { ANTET_SECRET } from '@xc/actiuni'
 import { dataLunga, pdfCuRaportSiCoperta } from '@xc/ui'
 import { type Buletin, capulTextului, mottoDinText } from './depozit.js'
 import { foaieHtml, textCurat } from './foaie.js'
@@ -25,6 +26,14 @@ export interface EnvCompunere {
   BROWSER: Fetcher
   PROGRAM: Fetcher
   FISIERE: R2Bucket
+  /**
+   * SECRETUL PLATFORMEI — cu el se deschide UȘA INTERNĂ a programului (20.09.2026).
+   *
+   * ⚠️ Fără el, `/v1/tabel-tipar` răspunde cu ochii LUMII: o săptămână nepublicată (propusă ori
+   * programată) nu există, deci vine 404 `nepublicat` — adică tocmai săptămâna pe care buletinul o
+   * compune, cu o săptămână înainte. Nu e o podoabă: fără antet, `/nou` nu mai poate compune deloc.
+   */
+  SECRET_INTERN?: string
 }
 
 export interface Calendar {
@@ -53,6 +62,20 @@ export interface Calendar {
   amprenta?: string
   /** ultima atingere a săptămânii, ISO 8601; `null` când săptămâna nu e în baza programului */
   modificat_la?: string | null
+  /**
+   * CE SE VEDE DINCOLO DE `stare` — semnele ușii interne (`SemneleSaptamanii`, în program).
+   *
+   * ⚠️ `stare` ȘI `publica` NU SUNT ACELAȘI LUCRU: `stare: 'validat'` e GESTUL OMULUI (validată,
+   * fie și programată pentru duminică), `publica` e ce vede deja lumea. Buletinul se uită la
+   * `stare` — un program programat de paroh nu mai e o presupunere —, iar celelalte două le
+   * păstrează lângă număr, ca să se știe mai târziu ce era programul în clipa validării.
+   * ⚠️ `undefined` la un program mai vechi de 20.09.2026 (înainte să existe ușa internă).
+   */
+  publica?: boolean
+  /** validată înainte de vreme, își așteaptă pragul de duminică */
+  programata?: boolean
+  /** clipa în care apare (ori a apărut) săptămâna, ISO 8601; `null` = niciuna */
+  apare?: string | null
 }
 
 /**
@@ -68,6 +91,16 @@ export interface ProgramulFolosit {
   amprenta?: string
   modificat_la?: string | null
   stare?: 'validat' | 'propus'
+  /**
+   * SEMNELE UȘII INTERNE, păstrate lângă număr din 21.09.2026 (user, 20.09.2026, 23:33: „Buletinul
+   * preia la momentul validării ce program era validat"). Lângă numărul VALIDAT ele spun ce era
+   * programul chiar atunci: validat și deja public, ori validat și încă programat pentru duminică.
+   * ⚠️ Toate trei `undefined` la cererile păstrate înainte de ușa internă — atunci nu se știe, și
+   * nu se inventează.
+   */
+  publica?: boolean
+  programata?: boolean
+  apare?: string | null
 }
 
 /** Cererea păstrată lângă PDF: numărul ca date și programul cu care s-a tipărit. */
@@ -77,7 +110,18 @@ export interface CerereaPastrata extends NumarCerut {
 
 /** Programul unui calendar primit, în forma în care se păstrează. */
 export const programulFolosit = (c: Calendar | null | undefined): ProgramulFolosit | undefined =>
-  c ? { amprenta: c.amprenta, modificat_la: c.modificat_la ?? null, stare: c.stare } : undefined
+  c
+    ? {
+        amprenta: c.amprenta,
+        modificat_la: c.modificat_la ?? null,
+        stare: c.stare,
+        // ⚠️ Scrise numai când chiar s-au primit: un `publica: false` pus din necunoaștere ar minți
+        // despre o săptămână care era de mult afară.
+        ...(c.publica === undefined ? {} : { publica: c.publica }),
+        ...(c.programata === undefined ? {} : { programata: c.programata }),
+        ...(c.apare === undefined ? {} : { apare: c.apare }),
+      }
+    : undefined
 
 /**
  * S-A SCHIMBAT PROGRAMUL DE LA ULTIMA COMPUNERE?
@@ -190,11 +234,52 @@ export async function calendarulNumarului(env: EnvCompunere, dataNumarului: stri
    * ⚠️ Numai ANTETE, nu `cf: { cacheTtl }`: `cf` nu are ce căuta pe o legătură de serviciu, iar de
    * aruncat aici ar însemna un `/nou` care nu se mai deschide deloc — tocmai ecranul pe care-l reparăm.
    */
-  const r = await env.PROGRAM.fetch(`https://xc-program/v1/tabel-tipar?data=${cerut}&strans=${strans}`, {
-    headers: { 'cache-control': 'no-cache', pragma: 'no-cache' },
-  })
+  /*
+   * ⚠️ ANTETUL INTERN, DE LA 21.09.2026 — fără el buletinul nu mai poate compune săptămâna viitoare.
+   * Programul arată de pe 20.09.2026 „doar ce e curent": o săptămână încă PROPUSĂ (ori validată, dar
+   * programată pentru duminică) nu există pentru lume, deci ruta dă 404 `nepublicat`. Or buletinul se
+   * compune tocmai cu o săptămână înainte, și are nevoie de tabel CÂT E ÎNCĂ PROPUS, ca să-și
+   * socotească spațiul (user, 20.09.2026, 23:55: „Trebuie să putem să lucrăm și la buletin cu un
+   * program în pagină, altfel nu putem calcula spațiul").
+   * ⚠️ Antetul se pune DOAR dacă secretul există: unul gol ar fi la fel de închis, dar ar ascunde
+   * cauza într-un 404 care pare al programului.
+   */
+  const antete: Record<string, string> = { 'cache-control': 'no-cache', pragma: 'no-cache' }
+  if (env.SECRET_INTERN) antete[ANTET_SECRET] = env.SECRET_INTERN
+  /*
+   * ⚠️ LEGĂTURA CĂZUTĂ SE ÎNTOARCE CA EROARE, NU CA ARUNCARE (21.09.2026). Până aici, o legătură de
+   * serviciu care arunca (program oprit, rețea) trecea prin `calendarulNumarului` netulburată și
+   * dărâma tot ecranul `/nou` cu 500 — tocmai ecranul de pe care omul ar fi trebuit să afle că
+   * programul tace. Acum răspunsul are aceeași formă ca la orice alt refuz al programului, iar cei
+   * de deasupra (pagina, compunerea, validarea) hotărăsc fiecare ce face cu el.
+   */
+  let r: Response
+  try {
+    r = await env.PROGRAM.fetch(`https://xc-program/v1/tabel-tipar?data=${cerut}&strans=${strans}`, { headers: antete })
+  } catch (e) {
+    return {
+      cod: 'program_mut',
+      eroare: `programul n-a răspuns deloc pentru săptămâna care începe ${cerut} (${e instanceof Error ? e.message : String(e)})`,
+    }
+  }
   if (!r.ok) {
-    const corp = (await r.json().catch(() => ({}))) as { cod?: string; mesaj?: string }
+    const corp = (await r.json().catch(() => ({}))) as { cod?: string; mesaj?: string; de_la?: string; pana_la?: string }
+    /*
+     * ⚠️ 404 `nepublicat` ÎNSEAMNĂ UȘA ÎNCHISĂ, nu „program indisponibil". Cererea noastră poartă
+     * antetul intern; dacă programul tot răspunde cu ochii lumii, secretul lipsește ori nu e același
+     * la cele două aplicații. Spus generic, omul ar fi căutat o săptămână în aplicația Programul, unde
+     * totul e la locul lui.
+     */
+    if (corp.cod === 'nepublicat') {
+      const cand = corp.de_la ? `${corp.de_la}–${corp.pana_la ?? ''}` : cerut
+      return {
+        cod: 'nepublicat',
+        eroare:
+          `programul a refuzat ușa internă (secret) pentru săptămâna ${cand}: fără antetul intern se ` +
+          'vede doar ce e deja public, iar săptămâna asta nu e încă. Verifică `SECRET_INTERN` — ' +
+          'aceeași valoare la buletin și la program, pe fiecare mediu.',
+      }
+    }
     return {
       cod: corp.cod ?? 'program_indisponibil',
       eroare: corp.mesaj ?? `programul a răspuns ${r.status} pentru săptămâna care începe ${cerut}`,

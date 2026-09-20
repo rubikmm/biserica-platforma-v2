@@ -29,6 +29,7 @@ import {
 import { type Ctx, buletinulNou, paginaNou } from '../apps/buletin/src/pagini.js'
 import type { NumarCerut } from '../apps/buletin/src/masuri.js'
 import { tabelulSaptamanii } from '../apps/program/src/hartii.js'
+import { VEDE_TOT } from '../apps/program/src/depozit.js'
 
 // ─────────────────────────────── programul: amprenta săptămânii ───────────────────────────────
 
@@ -102,7 +103,9 @@ const CELE_TREI: RandProba[] = [
 const CU_MASLUL: RandProba[] = [{ data: '2026-09-22', ora: '18:00', cod: 'maslu' }, ...CELE_TREI]
 
 const tabelul = async (slujbe: RandProba[], strans: 0 | 1 | 2 = 0) => {
-  const t = await tabelulSaptamanii(envProgram({ slujbe }), '2026-09-21', VOCABULAR, strans)
+  // `VEDE_TOT`: buletinul cere tabelul pe UȘA INTERNĂ (20.09.2026), deci vede și o săptămână
+  // nepublicată — altfel n-ar putea socoti spațiul paginii a patra înainte de duminică.
+  const t = await tabelulSaptamanii(envProgram({ slujbe }), '2026-09-21', VEDE_TOT, VOCABULAR, strans)
   if (!t.ok) throw new Error('tabelul n-a ieșit')
   return t
 }

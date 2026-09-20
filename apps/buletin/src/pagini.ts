@@ -1001,6 +1001,12 @@ export interface StareaCompunerii {
    * s-a luat ce era disponibil; `null` = programul n-a răspuns deloc.
    */
   calendar?: { titlu: string; slujbe: number; stare?: 'validat' | 'propus' } | null
+  /**
+   * PROGRAMUL CU CARE S-A COMPUS FOAIA E ÎNCĂ O PROPUNERE (21.09.2026) — atunci butonul de validare
+   * capătă un rând în plus: validarea cere programul validat (user, 20.09.2026, 23:33). Nu oprește
+   * nimic pe ecran; e singurul loc în care refuzul de mai târziu se poate vedea înainte de apăsare.
+   */
+  programPropus?: boolean
   /** motto-ul numărului trecut, cu care se precompletează câmpul (user, 17.09.2026) */
   motto?: { motto: string; motoAutor?: string } | null
   /**
@@ -1331,6 +1337,7 @@ function ciornaPeEcran(
   nou: { nr: number | null; data: string },
   r: NonNullable<StareaCompunerii['raspuns']>,
   acum: Date = new Date(),
+  programPropus = false,
 ): string {
   if (!r.cheie || !nou.nr) return `<p class="veste bine">Numărul e compus.</p>`
   const v = r.versiune ?? null
@@ -1373,6 +1380,14 @@ function ciornaPeEcran(
     programeaza
       ? `Numărul apare ${esc(candApare(nou.data))}. Până atunci îl vezi doar tu.`
       : 'Validarea îl publică: numărul intră în arhivă și devine numărul curent al parohiei.'
+  }${
+    /*
+     * ⚠️ UN RÂND ÎN PLUS CÂND PROGRAMUL E PROPUS (21.09.2026). Compunerea merge pe o propunere — așa
+     * a cerut userul, ca să se poată socoti spațiul —, dar VALIDAREA o refuză. Fără rândul ăsta,
+     * omul ar fi aflat-o abia din 409-ul de după apăsare; aici îl află înainte, lângă chiar butonul
+     * care i-ar fi răspuns „nu".
+     */
+    programPropus ? '<br><span class="rau">Validarea va cere programul validat.</span>' : ''
   }</p>
 ${fereastraRasfoit(ctx, ciorna, v)}
 </section>`
@@ -1475,7 +1490,7 @@ export function paginaNou(
    */
   const veste = stare.raspuns
     ? stare.raspuns.facut
-      ? ciornaPeEcran(ctx, nou, stare.raspuns, acum)
+      ? ciornaPeEcran(ctx, nou, stare.raspuns, acum, stare.programPropus === true)
       : `<div class="veste rau"><p>Nu s-a compus:</p><ul>${stare.raspuns.plangeri.map((p) => `<li>${esc(p)}</li>`).join('')}</ul></div>`
     : ''
 
