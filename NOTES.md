@@ -319,9 +319,18 @@ propunerea automată, ca în V1.
 00g. **RETRAGEREA unui număr publicat greșit + justify la piciorul coloanelor — scrise pe 20.09.2026, dimineața (buletin 0.16.0).**
     Cererea userului (08:07): „Trebuie să avem și buton de ne-publicare — dacă s-a publicat greșit — și să poată face asta
     și chat-ul"; (08:11): „col2, jos, nu mai este justify". Amănuntele în jurnalul zilei (20.09.2026).
-    ⚠️ **Publicarea buletinului poartă și runda de aseară** (rolul global `admin` stins, carcasa cu `ca=admin:<cod>`,
-    authz 0.4.0, identity 0.4.0, account 0.2.5, 11 aplicații) — ordinea authz → identity → cont → aplicații. Cele două
-    rânduri `role='admin'` din producție s-au mutat pe 20.09, 08:05 (Gabriel → super-admin, Laura → admin la curățenie).
+    ✅ **PUBLICATE pe 20.09.2026, 08:54** (user: „1" = tot, în ordine), împreună cu runda de aseară (rolul global `admin`
+    stins, carcasa cu `ca=admin:<cod>`): authz 0.4.0 → identity 0.4.0 → account 0.2.5 → admin 0.6.0, calendar 0.8.4,
+    program 0.9.6, buletin 0.16.0, curatenie 0.4.3, tipic 0.4.3, biblia 0.1.8, biblioteca 0.1.8, newsletter 0.6.5,
+    home 0.7.8 — toate 200 cu versiunea în subsol (cont/admin 303 la anonim, normal). Cele două rânduri `role='admin'` din
+    producție se mutaseră la 08:05 (Gabriel → super-admin, Laura → admin la curățenie).
+    ⚠️ **`live` 0.1.11 și `radio` 0.1.10 NU s-au publicat** — au Durable Objects (Direct, Aparat, Ascultători, Radio) și
+    era slujbă; o republicare le repornește și poate rupe ascultătorii. Schimbarea lor e un rând cosmetic fiecare
+    (`Cont.cod`, rândul „Administrare"). **De publicat după slujbă**, cu comanda obișnuită. Până atunci, pe `live`/`radio`
+    carcasa VECHE trimite `ca=admin` identității NOI → masca „→ Administrator" nu merge acolo (doar super-admin, temporar).
+    ⚠️ Găsit la publicare (wrangler `--dry-run`): la **calendar, program, tipic** `SECRET_INTERN` e la nivelul de sus al
+    `wrangler.jsonc`, nu în `env.production.vars` — wrangler avertizează că nu se moștenește. Probabil e secret Cloudflare
+    în producție (funcționau și înainte), dar de verificat că fluxurile interne care-l folosesc chiar merg.
     **Deschise, în ordinea în care dor**:
     1. `buletin.retrage` apare ca bifă NEbifată în Setări → „Chat AI" (lista vine din manifest). Azi e cosmetic — harta
        deterministă nu trece prin poarta `unelte` din KV —, dar dacă harta iese vreodată, retragerea ar tăcea;
@@ -2467,6 +2476,8 @@ forța antetul `Host`**.
 - Probe: `tests/buletin-retrage.test.ts` (nou, 31 — D1 fals cu tabelă adevărată, ca DELETE-ul să scoată rândul; R2 fals cu `list({prefix})`; `waitUntil` care se poate aștepta), `buletin-harta` (+4, apoi frazele de mai sus), `buletin-ciorna` (+1: ciorna de pe `/nou` NU capătă „Retrage"). Suita întreagă: 1105/1105 (înainte de frazele adăugate la hartă), `turbo typecheck` 36/36.
 
 **Justify la piciorul coloanelor** (08:11; user: „La fiecare pagină ciornă — colțul dreapta jos — adică col2, jos, nu mai este justify — propoziția nu se duce până la capăt"). Cauza, dovedită cu `chromium --dump-dom` + `Range.getClientRects()` pe `proba-foaie.mjs --gol --secundari 2`: curgerea (`CURGE` din `foaie.ts`) taie paragraful la piciorul FIECĂREI coloane și lasă bucata ca `<p>` întreg, iar CSS-ul nu întinde niciodată ultimul rând al unui bloc. NU e regresie: marcajele din 19.09 n-au nicio vină, `text-align-last` n-a existat niciodată în repo. Era la TOATE coloanele — gol dreapta măsurat (coloana 321 px): 1b 91 px, 3b 91 px, 3a 15 px —, dar la col1 golul e ascuns de șanț, la col2 cade în colțul foii, lângă chenar. Leac: `p.t.continua { text-align-last: justify }` + `bucata.className += ' continua'` NUMAI pe ramura `if (coada)` din `curge()` — un paragraf care se încheie în coloană rămâne cu rândul scurt, cum se cuvine. După: 0.00 px la toate cele 6 hotare; raportul curgerii identic (`intrate` 7801, `peDinafara` 0, `coloaneFolosite` 7); `--verifica` verde pe toate 3 variantele; măsurile socotelii neatinse. Capturi în `dist/jos-inainte-1.png` / `dist/jos-dupa-1.png` (gitignorat). Probe: `buletin-foaie` +3 (server-side: regula CSS, atribuirea unică în `if (coada)`, `foaieHtml()` nu scrie clasa). Găsit pe drum, neatins: `<p class="t">` GOL lăsat de `taie()` cu `bun = 0` într-o coloană fără loc (NEXT 00g).
+
+**Publicarea** (08:49, user: „1" — tot, în ordine). 13 workeri, unul câte unul, fără nicio eroare, 08:54: authz → identity → cont → admin, calendar, program, buletin, curatenie, tipic, biblia, biblioteca, newsletter, home; bindingul nou `AUTORIZARE` al contului confirmat în ieșirea wrangler; toate 200 cu versiunea în subsol, `buletin/nou` 403 la anonim (corect), `b-retrage` nu apare ca element la anonim (doar în scriptul defensiv). **`live` și `radio` lăsate nepublicate dinadins** — Durable Objects în timpul slujbei; de făcut după (NEXT 00g). Commit `b9ed8e5`.
 
 ### 2026-09-19
 
