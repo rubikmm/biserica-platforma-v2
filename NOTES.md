@@ -341,10 +341,10 @@ propunerea automată, ca în V1.
     program 0.9.6, buletin 0.16.0, curatenie 0.4.3, tipic 0.4.3, biblia 0.1.8, biblioteca 0.1.8, newsletter 0.6.5,
     home 0.7.8 — toate 200 cu versiunea în subsol (cont/admin 303 la anonim, normal). Cele două rânduri `role='admin'` din
     producție se mutaseră la 08:05 (Gabriel → super-admin, Laura → admin la curățenie).
-    ⚠️ **`live` 0.1.11 și `radio` 0.1.10 NU s-au publicat** — au Durable Objects (Direct, Aparat, Ascultători, Radio) și
-    era slujbă; o republicare le repornește și poate rupe ascultătorii. Schimbarea lor e un rând cosmetic fiecare
-    (`Cont.cod`, rândul „Administrare"). **De publicat după slujbă**, cu comanda obișnuită. Până atunci, pe `live`/`radio`
-    carcasa VECHE trimite `ca=admin` identității NOI → masca „→ Administrator" nu merge acolo (doar super-admin, temporar).
+    ✅ **`live` și `radio` publicate 20.09, 15:50, ca 0.2.0** (după slujbă, `/v1/stare` verificat: `live:false`, următoarea
+    slujbă marți 18:00) — poartă și rândul cosmetic de aici (`Cont.cod`, „→ Administrator" merge acum și pe ele), și
+    Setările cu rubrica „Emisia" (jurnal 20.09, după-amiaza). Regula rămâne: **Durable Objects → nu se republică în slujbă**;
+    întâi `GET https://live.sfantul-ilie.ro/v1/stare` (public), apoi radio ÎNAINTEA lui live.
     ⚠️ Găsit la publicare (wrangler `--dry-run`): la **calendar, program, tipic** `SECRET_INTERN` e la nivelul de sus al
     `wrangler.jsonc`, nu în `env.production.vars` — wrangler avertizează că nu se moștenește. Probabil e secret Cloudflare
     în producție (funcționau și înainte), dar de verificat că fluxurile interne care-l folosesc chiar merg.
@@ -2560,6 +2560,15 @@ forța antetul `Host`**.
 - Probe: `tests/buletin-programare.test.ts` (69 noi), `buletin-retrage` adaptat; **1189/1189**, typecheck 36/36. Mutanți 6/6 — dar abia după ce **falsul de D1 a fost înăsprit să urmeze WHERE/SET din SQL**: lecția zilei, un fals care „știe" ce ar trebui să facă interogarea nu probează interogarea, ci propria lui părere.
 - **Publicat 20.09, 14:59** — întâi migrația pe D1 de producție (`ruleaza.mjs --remote --env production --chiar-productia --doar buletin`: 0002 ok, 619 rânduri toate `publicat`), apoi `wrangler deploy` (versiunea `f8361da2`, subsol 0.17.0, `/`, `/arhiva`, `/v1/curent` 200). ⚠️ Prima publicare a CĂZUT la triggere: Cloudflare respinge `0` ca zi a săptămânii („invalid cron string", cod 10100) — ziua e 1-7 / SUN-SAT; codul se urcase, dar fără ceas. Reparat cu `*/5 9-10 * * SUN`, confirmat în `/schedules`. Regulă pentru orice worker cu cron.
 - **Rămâne deschis** (NEXT 00h): dacă cronul cade, numărul rămâne `programat` până duminica următoare — nu scapă public, dar nu apare și nimeni nu află; poarta fișierelor costă o căutare pe cheia primară la fiecare foaie cu ziua trecută.
+
+**Live și radio: panoul emisiei e „Setări", doar pentru admini** (09:25; user: „Trebuie reparat și la live și radio: panoul de administrare văzut doar de admini și să se numească Setări"). Radio **0.1.10 → 0.2.0**, live **0.1.11 → 0.2.0**, după tiparul curățeniei din 19.09.
+- **Radio**: panoul emisiei a devenit rubrica „Emisia" din `/setari` (poarta `eAdminApp` = `broadcast.manage`; `jsPlayer` + `jsPanou` intră pe carcasă numai când rubrica e în pagină). `GET /admin` → 303 `/setari`. Rutele de mașină `/admin/stare|inventar|comanda` sunt NEATINSE (CSRF de origine, cum erau).
+- **Live**: `/admin` → 303 `<radio>/setari`; rubrica „Emisia" din Setările lui e doar legătura spre setările radioului (emisia se conduce dintr-un singur loc). La amândouă, rândul „Administrare" din meniu = super-admin real → `nav.admin`; `urlPanou` a dispărut.
+- Probe: `tests/emisie-setari.test.ts` (nou, 12), `emisie` adaptat.
+
+**Curățenie 0.4.3 → 0.4.4** (13:47, trei puncte ale userului): (1) nota de sub „Cine ești?" („Alege-ți numele… rămâne ținut minte…") a ieșit; (2) apăsarea pe un interval gol la vizitator NU mai deschide fereastra „Ești în modul vizualizare" (dialogul a ieșit cu tot cu CSS-ul lui), doar derulează la lista de nume; (3) „Comunicare = simulated" din Administrare e `LIVRARE_REALA: "nu"` pe `communication-worker` — pauza dinadins de la cutover, **neatinsă**: pornirea ar trimite CHIAR scrisorile curățeniei (cron orar, 29 de voluntari) și așteaptă hotărârea userului. Rămas orfan: `.contact-dialog` din `stil.ts` (~30 de linii CSS fără purtător). Probe: `curatenie-fantoma` adaptat.
+
+**Publicarea celor trei** (15:42, user: „Hai"; opus-high). Fetch curat, probe 68/68 pe cele trei fișiere, typecheck (turbo, din cache) 3/3, commit **`055b2df`**, push (backupul zilei exista deja). Înainte de publicare: `GET https://live.sfantul-ilie.ro/v1/stare` (rută publică, `apps/live/src/index.ts`) → `live:false`, `slujba:null`, următoarea „Sfântul Maslu" marți 22.09, 18:00; radioul difuza muzică. Publicate 15:50, în ordinea curatenie → **radio → live** (live nou + radio vechi = Setări fără panou): `a747a3b4`, `7f42aeba`, `cbbf4e05`. Verificate: subsoluri 0.4.4 / 0.2.0 / 0.2.0, `radio/admin` 303 `/setari`, `live/admin` 303 `https://radio.sfantul-ilie.ro/setari`, `/api/fisier` al radioului 200 `audio/mpeg`; ceasul radioului a mers neîntrerupt peste republicare (`secunda` a crescut pe aceeași piesă, `versiune:51`), deci DO-urile au repornit curat. ⚠️ Filtrele turbo se numesc `@xc/app-<nume>`, nu `@xc/<nume>`.
 
 ### 2026-09-19
 
