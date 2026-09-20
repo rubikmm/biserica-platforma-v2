@@ -316,7 +316,7 @@ propunerea automată, ca în V1.
 
 ## NEXT
 
-00i. **PROGRAMAREA săptămânii + „PUBLIC DOAR CE E CURENT" la PROGRAM — scrise pe 20.09.2026, seara (program 0.9.6 → 0.11.0). ⚠️ NEPUBLICATE.**
+00i. ✅ **PUBLICAT 21.09.2026, 00:47–00:52** — PROGRAMAREA săptămânii + „PUBLIC DOAR CE E CURENT" la PROGRAM (program 0.9.6 → **0.11.0**, Version ID `110c4213-443c-41af-b179-ea558dfcc30b`) + buletin 0.17.0 → **0.18.0** (`64079844-bcd0-42da-9d9d-fc29824f995c`). Migrația 0003 aplicată pe producție înaintea workerului; cronurile păstrate. Amănuntele și probele de după publicare: jurnalul 20.09, blocul „Publicat 21.09". **Nimic de făcut mai jos — se păstrează doar ca istoric.**
     Cererea userului (22:47): „La programul liturgic aceeași poveste cu Validare și publicare / Validare și programare, la fel
     ca la Buletinul bisericii."; apoi (23:33) „Buletinul și programul sunt programate D-12:00, adică atunci devin curente și
     publice" + „Public arătăm doar ce e curent". Regulile durabile: „Programul (A2)" → „Programarea, din 20.09.2026" și
@@ -325,10 +325,11 @@ propunerea automată, ca în V1.
     typecheck 36/36, mutanți 11/11 pe cernere.
     **DE FĂCUT, în ordinea asta** — ⚠️ **migrația 0003 → program → buletin**, fiindcă buletinul are nevoie de UȘA INTERNĂ
     (`x-xc-intern`) ca să mai primească tabelul unei săptămâni nepublicate:
-    1. ⚠️ **migrația**: `node infrastructure/migrations/ruleaza.mjs --remote --env production --chiar-productia --doar program`
+    1. ✅ **migrația**: `node infrastructure/migrations/ruleaza.mjs --remote --env production --chiar-productia --doar program`
        (aplică 0003; ALTER **fără** `IF NOT EXISTS`, deci o singură rulare pe mediu) **ÎNAINTEA** workerului;
-    2. `wrangler deploy` pe **program** (0.11.0);
-    3. **apoi buletinul** — ✅ **SCRIS 21.09.2026, buletin 0.17.0 → 0.18.0, ⚠️ NEPUBLICAT. FĂRĂ MIGRAȚIE** (nicio
+       — **rulată 21.09, 00:47**: `0001 ok, 0002 ok, 0003 ok`, 656 săptămâni / 2625 slujbe neatinse. **Nu o repeta**: a doua oară cade pe „duplicate column name".
+    2. ✅ `wrangler deploy` pe **program** (0.11.0) — **21.09, 00:49**;
+    3. ✅ **apoi buletinul** — **PUBLICAT 21.09, 00:52**, buletin 0.17.0 → 0.18.0. **FĂRĂ MIGRAȚIE** (nicio
        coloană nouă; tot ce se păstrează în plus intră în JSON-ul din R2, `compus/…json`). Are antetul intern pe
        `/v1/tabel-tipar` (`apps/buletin/src/compune.ts`) și, la validare, cere programul VALIDAT — 409 pe propus,
        503 pe program mut, recompunere când s-a schimbat (regulile durabile: „BULETINUL — foaia tipărită" →
@@ -2797,6 +2798,15 @@ forța antetul `Host`**.
 - ⚠️ **Recompunerea la validare e DRUMUL ZILEI, nu un caz rar**: `stare` intră în amprentă, deci un număr compus pe propunere are întotdeauna altă amprentă decât săptămâna validată între timp. Amprentă **egală** → nu se randează nimic, dar semnele (`publica`, `programata`, `apare`) se scriu proaspete lângă cerere: ele NU intră în amprentă.
 - **O reparație găsită pe drum**: `calendarulNumarului` lăsa o legătură căzută să **arunce**, iar `/nou` răspundea 500 — tocmai ecranul de pe care omul ar fi trebuit să afle că programul tace. Acum întoarce `{cod:'program_mut'}`, ca orice alt refuz al programului, iar 503-ul validării chiar ajunge la buton.
 - Probe: `tests/buletin-validare-program.test.ts` (**14 noi**). Suita întreagă **1306/1306**, `turbo typecheck` **36/36**. ⚠️ `turbo typecheck` a picat o dată pe `@xc/contracts` imediat după suită (flake de resurse: singur, `tsc --noEmit` dă 0; a doua rulare, 36/36).
+
+**Publicat 21.09, 00:47–00:52** (subagent). Închide NEXT 00i: migrația 0003 + program **0.11.0** + buletin **0.18.0**, în ordinea cerută, pe producție.
+- **Starea săptămânilor înainte de orice** (citire pe `xc-program-production`): 14.09 `validat` (validat_la `2026-09-19T14:05:38Z`), **21.09 `validat`** (`2026-09-20T15:00:05Z`), 07.09 `validat` (fără `validat_la` — rând de import). Săptămâna **28.09 nu există ca rând**, deci nimic de arătat public pentru ea. Fereastra de la punctul 00i (buletin fără tabel până urcă programul) **nu s-a deschis**: 21.09 era deja validată.
+- **Migrația 0003**: `ruleaza.mjs --remote --env production --chiar-productia --doar program` → `0001 ok, 0002 ok, 0003 ok`. După ea: `programat_la` există, **656 săptămâni / 2625 slujbe / 29 termeni** de vocabular neatinse, **0 programate** (nimic nu era programat).
+  ⚠️ **Runnerul NU ține evidența migrațiilor aplicate** — rulează TOT directorul, de fiecare dată, și se oprește la prima cădere. Merge doar fiindcă 0001/0002 sunt idempotente (`CREATE TABLE IF NOT EXISTS`, `INSERT OR IGNORE`; `DROP TABLE IF EXISTS events` atinge doar tabelul pilot). **0003 nu e**: a doua rulare a comenzii de mai sus va cădea cu „duplicate column name: programat_la" înainte să scrie ceva. Nu e o pagubă, dar comanda nu e de repetat din obișnuință.
+- **Program** `xc-program-production`, Version ID **`110c4213-443c-41af-b179-ea558dfcc30b`**, trigger păstrat `*/5 * * * *` + producer `xc-events-production`. Verificat: `/` **200** cu `0.11.0` în subsol; `/v1/saptamana/2026-09-28` → **404** `saptamana_inexistenta` (cu vecinele `înainte: 2026-09-21`, `după: null`) — cernerea ține; `/v1/urmatoarea` → **200**, `2026-09-22-maslu`, 18:00.
+- **Buletin** `xc-buletin-production`, Version ID **`64079844-bcd0-42da-9d9d-fc29824f995c`**, trigger păstrat `*/5 9-10 * * SUN`. Verificat: `/` **200** cu `0.18.0` în subsol; `/v1/curent` → **200**, nr. **616** din 2026-09-20.
+- `SECRET_INTERN` confirmat pe **amândouă** înainte de deploy (`secret list --env production`), deci ușa internă a tabelului de tipar e deschisă.
+- ⚠️ De curățat cândva: `wrangler` avertizează la program că `SECRET_INTERN` stă în `vars`-ul de la rădăcină și **nu se moștenește** în `env.production` — inofensiv acum (pe producție e secret Cloudflare adevărat), dar avertismentul apare la fiecare deploy.
 
 ### 2026-09-19
 
