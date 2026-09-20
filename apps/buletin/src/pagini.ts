@@ -35,7 +35,8 @@
 import type { Navigatie } from '@xc/config'
 import { ICOANE, LUNI, LUNI_SCURT, dataCuZi, dataLunga, esc, pagina, type BucataChat } from '@xc/ui'
 import { JS_ABONARE, abonamentul, butonAbonare, fereastraAbonare } from '@xc/abonare'
-import { type Buletin, type BuletinScurt, type Gasit, plat } from './depozit.js'
+import { candApare, seProgrameaza } from './ceas.js'
+import { type Buletin, type BuletinScurt, type Gasit, eProgramat, plat } from './depozit.js'
 import type { ArticolSchitei, Schita } from './schita.js'
 import { LOCAL } from './stil.js'
 import { eDeProba } from './umplere.js'
@@ -89,6 +90,13 @@ export interface Meniu {
   anDeschis?: string
   /** vestea de dupa `POST /abonare` (`?abonat=1|2|0`) */
   veste?: 'inscris' | 'scos' | 'eroare' | null
+  /**
+   * SE MAI POATE RETRAGE numărul de pe ecran? `false` = nu, fiindcă s-a început ciorna celui
+   * următor (user, 20.09.2026). Îl cântărește SERVERUL (`deRetras` din `actiuni.ts`), fiindcă cere
+   * o citire din depozit; paginile rămân curate. Lipsa înseamnă „nimic de obiectat" — așa rămân
+   * neatinse cele câteva locuri care desenează o pagină fără să fi întrebat depozitul.
+   */
+  seRetrage?: boolean
 }
 
 /** Iconita Arhivei: cutie cu capac — aceeasi ca in V1 (venita acolo din A2). */
@@ -584,9 +592,25 @@ function poza(ctx: Ctx, b: { nr: number; cheie_poza_mica: string | null }, clasa
      width="460" height="650">`
 }
 
+/**
+ * ETICHETA „PROGRAMAT" — semnul unui număr scris în arhivă, dar încă neapărut (20.09.2026).
+ *
+ * ⚠️ O vede DOAR adminul, fiindcă doar el vede rândul: pentru restul lumii numărul nu e nicăieri.
+ * De aceea nu se cerne nimic aici — dacă rândul a ajuns pe ecran, ecranul e al lui.
+ * ⚠️ Fără invenții grafice: e rândul mărunt al paginii, în verdele pe care carcasa îl folosește deja
+ * pentru „numărul următor". Nu e o alarmă — nimic nu s-a stricat, numărul doar își așteaptă ziua.
+ */
+const semnProgramat = (b: Pick<BuletinScurt, 'data' | 'stare'>): string =>
+  eProgramat(b) ? `<p class="programat">Programat — apare ${esc(candApare(b.data))}</p>` : ''
+
+/** Aceeași veste, strânsă cât o fișă din raft. */
+const fisaProgramata = (b: BuletinScurt): string =>
+  eProgramat(b) ? `<em class="fisa-programat" title="Apare ${esc(candApare(b.data))}">programat</em>` : ''
+
 /** O fisa din raft: poza paginii intai, numarul si ziua. */
 const fisa = (ctx: Ctx, b: BuletinScurt): string =>
-  `<a class="fisa" href="${adresa(ctx, b)}">${poza(ctx, b, 'cop')}<b>Nr. ${b.nr}</b><span>${ziuaScurt(b.data)}</span></a>`
+  `<a class="fisa" href="${adresa(ctx, b)}">${poza(ctx, b, 'cop')}<b>Nr. ${b.nr}</b>` +
+  `<span>${ziuaScurt(b.data)}</span>${fisaProgramata(b)}</a>`
 
 /**
  * BUTOANELE de sub coperta: **Descarcă** și **Tipărește** (cerere user, 17.09.2026: „butonul
@@ -624,7 +648,7 @@ const fisa = (ctx: Ctx, b: BuletinScurt): string =>
  *
  * Fara PDF (doua numere vechi au ramas doar cu poza), butoanele se sting in loc sa duca in gol.
  */
-function butoaneleNumarului(ctx: Ctx, b: Buletin, v?: string | null, acum = false): string {
+function butoaneleNumarului(ctx: Ctx, b: Buletin, v?: string | null, acum = false, voie = true): string {
   if (!b.cheie_pdf) {
     return (
       `<span class="btn intreg gol" title="Numărul acesta a rămas în arhivă doar ca poză">` +
@@ -648,7 +672,7 @@ function butoaneleNumarului(ctx: Ctx, b: Buletin, v?: string | null, acum = fals
     ` title="Revers: întoarce coala a doua cu 180°, pentru imprimantele care întorc pe latura scurtă">` +
     `${IC_REVERS}</button>` +
     `</span>` +
-    retragerea(ctx, b, acum)
+    retragerea(ctx, b, acum, voie)
   )
 }
 
@@ -672,16 +696,40 @@ function butoaneleNumarului(ctx: Ctx, b: Buletin, v?: string | null, acum = fals
  * paginii, nu o destinație de navigare. Cele două merg mereu împreună: fără fereastră, JS-ul de mai
  * jos iese din prima linie și butonul rămâne mort.
  */
-function retragerea(ctx: Ctx, b: Buletin, acum: boolean): string {
-  if (!seRetrage(ctx, b, acum)) return ''
+function retragerea(ctx: Ctx, b: Buletin, acum: boolean, voie: boolean): string {
+  if (!seRetrage(ctx, b, acum, voie)) return ''
+  /*
+   * ⚠️ VERDE CÂT TIMP NUMĂRUL E PROGRAMAT (user, 20.09.2026: „iconița de Anulare să fie verde — doar
+   * simbolul — până când trece 12.00 duminică").
+   *
+   * Și e limpede de ce: până duminică la prânz, anularea nu strică nimic — numărul n-a ajuns la
+   * nimeni, iar retragerea lui e o îndreptare liniștită. După ce a apărut, ACEEAȘI apăsare scoate
+   * din arhiva parohiei o hârtie pe care oamenii au ținut-o în mână. Două fapte deosebite pe același
+   * buton: culoarea e singurul lucru care le desparte înainte de apăsare.
+   * ⚠️ DOAR SIMBOLUL, ca până acum: verdele stă pe iconiță, fără niciun cuvânt adăugat lângă ea. E
+   * verdele sobru al platformei, cel de la „Numărul următor" — nu unul nou, nu unul aprins.
+   */
+  const programat = eProgramat(b)
+  const spune = programat
+    ? `Anulează programarea nr. ${b.nr} și adu-l înapoi ca schiță pe „Numărul următor"`
+    : SPUNE_RETRAGE
   return (
-    `<button type="button" class="btn intreg" id="b-retrage" title="${esc(SPUNE_RETRAGE)}"` +
-    ` aria-label="${esc(SPUNE_RETRAGE)}">${IC_RETRAGE}</button>`
+    `<button type="button" class="btn intreg${programat ? ' verde' : ''}" id="b-retrage"` +
+    ` title="${esc(spune)}" aria-label="${esc(spune)}">${IC_RETRAGE}</button>`
   )
 }
 
-/** Cele TREI condiții ale retragerii, într-un singur loc: le cer și butonul, și fereastra lui. */
-const seRetrage = (ctx: Ctx, b: Buletin, acum: boolean) => ctx.eAdmin && acum && b.sursa === 'site'
+/**
+ * Condițiile retragerii, într-un singur loc: le cer și butonul, și fereastra lui.
+ *
+ * ⚠️ A PATRA CONDIȚIE — ciorna următoare neîncepută (user, 20.09.2026) — NU E AICI, ci în
+ * `deRetras` din `actiuni.ts`: ea cere o citire din depozit, iar funcțiile de pagină sunt curate,
+ * fără rețea. Ecranul o primește gata cântărită, prin `m.seRetrage`. Dinadins în ordinea asta:
+ * adevărul despre „se poate retrage?" trebuie să fie al serverului, nu al paginii — altfel butonul
+ * ar putea spune altceva decât răspunde ușa la apăsare.
+ */
+const seRetrage = (ctx: Ctx, b: Buletin, acum: boolean, voie: boolean) =>
+  ctx.eAdmin && acum && b.sursa === 'site' && voie
 
 const SPUNE_RETRAGE = 'Retrage numărul din arhivă și adu-l înapoi ca schiță pe „Numărul următor"'
 
@@ -694,8 +742,8 @@ const SPUNE_RETRAGE = 'Retrage numărul din arhivă și adu-l înapoi ca schiț�
  * ⚠️ Formularul postează la `/nou` cu `fapta=retrage`, ca formularul-pereche al validării: o singură
  * ușă hotărăște și publicarea, și retragerea unui număr.
  */
-function fereastraRetragerii(ctx: Ctx, b: Buletin, acum: boolean): string {
-  if (!seRetrage(ctx, b, acum)) return ''
+function fereastraRetragerii(ctx: Ctx, b: Buletin, acum: boolean, voie: boolean): string {
+  if (!seRetrage(ctx, b, acum, voie)) return ''
   return `<dialog class="modal" id="d-retrage" aria-labelledby="t-retrage">
   <form class="modal-cutie" id="f-retrage" method="post" action="${esc(ctx.prefix)}/nou">
     <div class="modal-cap">
@@ -796,9 +844,10 @@ export function paginaAcasa(ctx: Ctx, m: Meniu, b: Buletin | null, dinainte: Bul
   <p class="eticheta">Numărul curent</p>
   <h2>Nr. ${b.nr}</h2>
   <p class="cand">${dataCuZi(b.data)}</p>
+  ${semnProgramat(b)}
 </div>
 ${coperta(ctx, b)}
-<nav class="btns hartii">${butoaneleNumarului(ctx, b, null, m.acum === true)}</nav>${fereastraRasfoit(ctx, b)}${fereastraRetragerii(ctx, b, m.acum === true)}
+<nav class="btns hartii">${butoaneleNumarului(ctx, b, null, m.acum === true, m.seRetrage !== false)}</nav>${fereastraRasfoit(ctx, b)}${fereastraRetragerii(ctx, b, m.acum === true, m.seRetrage !== false)}
 ${
   dinainte.length
     ? `<h3 class="titlu-fasie">Numerele dinainte</h3>
@@ -824,9 +873,10 @@ export function paginaBuletin(ctx: Ctx, m: Meniu, b: Buletin): string {
   <p class="eticheta"><a href="${esc(ctx.prefix)}/arhiva?an=${b.an}">${b.an}</a> · ${LUNI[Number(b.luna) - 1]}</p>
   <h2>Nr. ${b.nr}</h2>
   <p class="cand">${dataCuZi(b.data)}${b.pagini ? ` · ${b.pagini} pagini` : ''}</p>
+  ${semnProgramat(b)}
 </div>
 ${coperta(ctx, b)}
-<nav class="btns hartii">${butoaneleNumarului(ctx, b, null, m.acum === true)}</nav>${fereastraRasfoit(ctx, b)}${fereastraRetragerii(ctx, b, m.acum === true)}`,
+<nav class="btns hartii">${butoaneleNumarului(ctx, b, null, m.acum === true, m.seRetrage !== false)}</nav>${fereastraRasfoit(ctx, b)}${fereastraRetragerii(ctx, b, m.acum === true, m.seRetrage !== false)}`,
   )
 }
 
@@ -966,6 +1016,25 @@ export interface StareaCompunerii {
    * `modificat_la` e ceasul schimbării (ISO), `null` când săptămâna nu e în baza programului.
    */
   programSchimbat?: { modificat_la: string | null } | null
+  /**
+   * NUMERELE PROGRAMATE, ÎNCĂ NEAPĂRUTE (20.09.2026) — cele validate înainte de duminica lor.
+   * Ecranul lucrează deja la următorul, iar rândurile de sus sunt singurul loc din care se mai află
+   * unde s-au dus: în arhivă nu le vede nimeni, pe prima pagină e tot cel dinainte.
+   * ⚠️ Un ȘIR, nu unul singur: nimic nu oprește omul să programeze 617 marți și 618 miercuri, iar
+   * scris doar cel mai nou, 617 ar fi dispărut cu totul de pe ecran.
+   */
+  programate?: Array<{ nr: number; data: string }>
+  /**
+   * SE POATE ȘTERGE CIORNA — adică e ceva de șters: o schiță atinsă ori o foaie compusă. Butonul
+   * „Șterge ciorna" e singurul drum înapoi când încuietoarea retragerii s-a închis; pe o masă goală
+   * n-ar avea însă ce face, deci nu se scrie.
+   */
+  seStergeCiorna?: boolean
+  /**
+   * CEASUL SERVERULUI la randare, ISO — de el atârnă butonul de validare („programează" ori
+   * „publică"). Dat din afară ca socoteala să se poată proba la o clipă anume; lipsă = chiar acum.
+   */
+  acum?: string
 }
 
 /* ─────────────────── SCHIȚA NUMĂRULUI, ARĂTATĂ (nu editată) ─────────────────── */
@@ -1261,6 +1330,7 @@ function ciornaPeEcran(
   ctx: Ctx,
   nou: { nr: number | null; data: string },
   r: NonNullable<StareaCompunerii['raspuns']>,
+  acum: Date = new Date(),
 ): string {
   if (!r.cheie || !nou.nr) return `<p class="veste bine">Numărul e compus.</p>`
   const v = r.versiune ?? null
@@ -1276,6 +1346,18 @@ function ciornaPeEcran(
     pagini: 4,
     sursa: 'ciorna',
   }
+  /*
+   * DOUĂ FELURI DE VALIDARE, ȘI SE CITESC DE PE BUTON (user, 20.09.2026: „dacă este înainte de ziua
+   * pentru care este programat buletinul — adică înainte de ora 12.00, duminica aceea — se poate
+   * doar «Validează și programează»; dacă este duminică după ora 12.00 — «Validează și publică»").
+   *
+   * ⚠️ NU E O ALEGERE A OMULUI, ci starea ceasului: butonul e unul singur și face ce se poate face
+   * acum. De aceea nu sunt două butoane și nicio bifă — un „publică oricum" ar fi scos pe hârtie o
+   * foaie care vestește o săptămână neîncepută.
+   * ⚠️ Se socotește LA SERVER, la randarea paginii, pe ora Bucureștiului (`ceas.ts`): ceasul
+   * telefonului omului n-are niciun cuvânt aici.
+   */
+  const programeaza = seProgrameaza(nou.data, acum)
   return `<section class="ciorna">
   ${coperta(ctx, ciorna, v)}
   <nav class="btns hartii">${butoaneleNumarului(ctx, ciorna, v)}</nav>
@@ -1283,12 +1365,64 @@ function ciornaPeEcran(
     <input type="hidden" name="fapta" value="valideaza">
     <input type="hidden" name="nr" value="${nou.nr}">
     <input type="hidden" name="data" value="${esc(nou.data)}">
-    <button type="submit" class="btn mare bun">Validează și publică nr. ${nou.nr}</button>
+    <button type="submit" class="btn mare bun">${
+      programeaza ? `Validează și programează nr. ${nou.nr}` : `Validează și publică nr. ${nou.nr}`
+    }</button>
   </form>
-  <p class="marunt">Validarea îl publică: numărul intră în arhivă și devine numărul curent al parohiei.</p>
+  <p class="marunt">${
+    programeaza
+      ? `Numărul apare ${esc(candApare(nou.data))}. Până atunci îl vezi doar tu.`
+      : 'Validarea îl publică: numărul intră în arhivă și devine numărul curent al parohiei.'
+  }</p>
 ${fereastraRasfoit(ctx, ciorna, v)}
 </section>`
 }
+
+/**
+ * „ȘTERGE CIORNA" — RESETAREA COMPLET LA ZERO (user, 20.09.2026: „dar să am posibilitatea să șterg
+ * ciorna — resetare complet la zero — și atunci reapare posibilitatea de a invalida acel număr").
+ *
+ * ⚠️ DE CE STĂ AICI, lângă validare, și nu printre uneltele foii: e perechea ei. Validarea scoate
+ * numărul de pe masă înainte; asta îl scoate înapoi, cu tot ce s-a strâns. Două fapte opuse, în
+ * același loc, ca omul să nu le caute pe două ecrane.
+ * ⚠️ CU FEREASTRĂ, ca „Retrage": e singura apăsare din aplicație care ARUNCĂ munca omului, nu o
+ * mută. Scrisul din ea spune limpede ce se pierde și ce nu.
+ * ⚠️ NU E ROȘU ȘI NU E MARE: rămâne un buton obișnuit, sub cel de validare. Roșul platformei e al
+ * lucrului NEFĂCUT (`.atentie-program`), nu al faptei primejdioase.
+ */
+function stergereaCiornei(ctx: Ctx, nou: { nr: number | null; data: string }): string {
+  if (!nou.nr) return ''
+  return `<nav class="btns sterge-ciorna"><button type="button" class="btn" id="b-sterge-ciorna">Șterge ciorna</button></nav>
+<dialog class="modal" id="d-sterge-ciorna" aria-labelledby="t-sterge-ciorna">
+  <form class="modal-cutie" id="f-sterge-ciorna" method="post" action="${esc(ctx.prefix)}/nou">
+    <div class="modal-cap">
+      <h2 id="t-sterge-ciorna">Ștergi ciorna nr. ${nou.nr}?</h2>
+      <button type="submit" formmethod="dialog" formnovalidate value="inchide" class="modal-x" aria-label="Închide fereastra">&times;</button>
+    </div>
+    <p class="modal-spune">Resetare completă la zero: se pierd toate răspunsurile din chat și foaia
+    compusă pentru nr. ${nou.nr} din ${dataLunga(nou.data)}. Numerele deja apărute nu se ating, iar
+    pozele urcate rămân în depozit. După ștergere, numărul curent se poate anula din nou.</p>
+    <input type="hidden" name="fapta" value="sterge-ciorna">
+    <input type="hidden" name="nr" value="${nou.nr}">
+    <input type="hidden" name="data" value="${esc(nou.data)}">
+    <div class="modal-jos"><button type="submit" class="btn-plin">Șterge ciorna nr. ${nou.nr}</button></div>
+  </form>
+</dialog>`
+}
+
+/** JS-ul ștergerii: deschide fereastra. ES5, ca tot ce se trimite în paginile astea. */
+const JS_STERGE_CIORNA = `
+(function(){
+  var b = document.getElementById("b-sterge-ciorna");
+  var d = document.getElementById("d-sterge-ciorna");
+  var f = document.getElementById("f-sterge-ciorna");
+  if (!b || !d || !f) return;
+  b.addEventListener("click", function(){
+    if (d.showModal) { d.showModal(); return; }
+    if (window.confirm("Stergi ciorna? Resetare completa la zero: se pierd raspunsurile si foaia compusa.")) f.submit();
+  });
+})();
+`
 
 /**
  * ECRANUL NUMĂRULUI CARE URMEAZĂ.
@@ -1312,7 +1446,21 @@ export function paginaNou(
   nou: { nr: number | null; data: string },
   stare: StareaCompunerii,
 ): string {
-  const capul = `<div class="cap-numar cap-nou">
+  const acum = stare.acum ? new Date(stare.acum) : new Date()
+  /*
+   * RÂNDURILE NUMERELOR PROGRAMATE, SUS DE TOT (user, 20.09.2026). Stau ÎNAINTEA capului, nu lângă
+   * buton: spun despre ALTE numere decât cel de pe ecran, iar omul care intră pe `/nou` și vede
+   * „Nr. 618" trebuie să afle din prima privire unde s-a dus 617. Legătura duce la pagina lui —
+   * singurul loc în care se mai poate privi și anula.
+   */
+  const programate = (stare.programate ?? [])
+    .map(
+      (p) =>
+        `<p class="veste-programat">Nr. ${p.nr} e programat pentru ${esc(candApare(p.data))}` +
+        ` — <a href="${adresa(ctx, p)}">vezi-l</a></p>`,
+    )
+    .join('')
+  const capul = `${programate}<div class="cap-numar cap-nou">
   <p class="eticheta urmator">Numărul următor</p>
   <h2>${nou.nr ? `Nr. ${nou.nr}` : 'Buletin nou'}</h2>
   <p class="cand">${dataCuZi(nou.data)}</p>
@@ -1327,7 +1475,7 @@ export function paginaNou(
    */
   const veste = stare.raspuns
     ? stare.raspuns.facut
-      ? ciornaPeEcran(ctx, nou, stare.raspuns)
+      ? ciornaPeEcran(ctx, nou, stare.raspuns, acum)
       : `<div class="veste rau"><p>Nu s-a compus:</p><ul>${stare.raspuns.plangeri.map((p) => `<li>${esc(p)}</li>`).join('')}</ul></div>`
     : ''
 
@@ -1349,8 +1497,10 @@ ${veste}
 ${calendar}
 ${schitaPeEcran(stare.schita, stare.masura)}
 ${butonulCompunerii(stare.compuneAcum === true, stare.programSchimbat)}
+${stare.seStergeCiorna ? stergereaCiornei(ctx, nou) : ''}
 <script>${VEZI_TOT}</script>
 <script>${JS_COMPUNE}</script>
+${stare.seStergeCiorna ? `<script>${JS_STERGE_CIORNA}</script>` : ''}
 ${ctx.chat ? `<script>${IMPROSPATEAZA}</script>` : ''}`,
   )
 }

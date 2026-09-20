@@ -262,6 +262,57 @@ export const LOCAL = `
 .cap-numar .eticheta a:hover { color:var(--rosu) }
 .cap-numar .cand { margin:6px 0 0; color:var(--soft); font-size:15px }
 
+/* ── NUMARUL PROGRAMAT (20.09.2026, user: "daca este inainte de ziua pentru care este programat
+   buletinul ... se poate doar «Valideaza si programeaza»"). Un numar validat inainte de duminica lui
+   sta in arhiva, dar nu-l vede decat adminul buletinului, pana duminica la 12:00.
+   ⚠️ NIMIC NOU GRAFIC, dinadins: e randul marunt al paginii, in verdele sobru al "numarului urmator"
+   (acelasi #0A6B41 din .cap-nou, scos aici ca sa-l poata folosi si capul unui numar aparut), pe un
+   fundal palid cat sa se desprinda de zi. Nu e o alarma — nimic nu s-a stricat, numarul isi asteapta
+   ziua. Rosul ramane al lucrului nefacut (.atentie-program), si nu se amesteca. */
+.programat, .veste-programat, .fisa-programat { --verde:#0A6B41 }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="light"]) .programat,
+  :root:not([data-tema="light"]) .veste-programat,
+  :root:not([data-tema="light"]) .fisa-programat { --verde:#5FBF8D }
+}
+:root[data-tema="dark"] .programat,
+:root[data-tema="dark"] .veste-programat,
+:root[data-tema="dark"] .fisa-programat { --verde:#5FBF8D }
+/* pe pagina numarului: sub ziua lui, in capul paginii */
+.cap-numar .programat { display:inline-block; margin:8px 0 0; padding:3px 10px; border-radius:999px;
+                        border:1px solid color-mix(in srgb, var(--verde) 35%, transparent);
+                        background:color-mix(in srgb, var(--verde) 8%, transparent);
+                        color:var(--verde); font:600 13px/1.4 ui-sans-serif,system-ui }
+/* sus pe /nou: unde s-a dus numarul de dinainte, cu legatura spre pagina lui */
+.veste-programat { max-width:560px; margin:18px auto 0; padding:8px 14px; border-radius:10px;
+                   border:1px solid color-mix(in srgb, var(--verde) 30%, transparent);
+                   background:color-mix(in srgb, var(--verde) 7%, transparent);
+                   color:var(--verde); font:14px/1.45 ui-sans-serif,system-ui; text-align:center }
+.veste-programat a { color:inherit; font-weight:600 }
+/* in raft (arhiva si fasia "numerele dinainte"): un cuvant sub ziua fisei, fara chenar — raftul e
+   o insiruire de poze, iar o pastila colorata in el ar sari peste tot ce e in jur */
+.fisa-programat { display:block; margin-top:1px; color:var(--verde);
+                  font:600 11px/1.3 ui-sans-serif,system-ui; font-style:normal;
+                  text-transform:uppercase; letter-spacing:.06em }
+
+/* ── ICONITA DE ANULARE, VERDE CAT TIMP NUMARUL E PROGRAMAT (user, 20.09.2026: "iconita de Anulare
+   sa fie verde — doar simbolul — pana cand trece 12.00 duminica").
+   Pana duminica la pranz, anularea nu strica nimic: numarul n-a ajuns la nimeni. Dupa aceea,
+   aceeasi apasare scoate din arhiva parohiei o hartie pe care oamenii au tinut-o in mana — si atunci
+   butonul se intoarce la culoarea randului, ca pana acum.
+   ⚠️ DOAR SIMBOLUL: culoarea sta pe iconita (SVG-ul deseneaza cu currentColor), nu se adauga niciun
+   cuvant si niciun fundal. Acelasi verde sobru ca la "Numarul urmator" — nu unul nou, nu unul aprins. */
+.btns .btn.verde { --verde:#0A6B41; color:var(--verde) }
+@media (prefers-color-scheme: dark) { :root:not([data-tema="light"]) .btns .btn.verde { --verde:#5FBF8D } }
+:root[data-tema="dark"] .btns .btn.verde { --verde:#5FBF8D }
+.btns .btn.verde:hover { color:var(--verde);
+                         background:color-mix(in srgb, var(--verde) 12%, transparent) }
+
+/* ── "STERGE CIORNA" — resetarea complet la zero, sub butonul de validare (user, 20.09.2026).
+   Un buton obisnuit, nu unul rosu si nu unul mare: rosul platformei e al lucrului NEFACUT
+   (.atentie-program), nu al faptei primejdioase. Ce o face cumpanita e FEREASTRA de confirmare. */
+.btns.sterge-ciorna { justify-content:center; margin-top:10px }
+
 /* ── BULETINUL NOU. Capul e cel de la ORICE numar (.cap-numar): eticheta marunta, numarul mare,
    ziua. Se schimba doua lucruri, cerute de user (17.09.2026: "textul cu verde de deasupra vroiam sa
    fie la fel ca la oricare buletin, un text mic unde scrie numarul curent. Aici vroiam sa scrie

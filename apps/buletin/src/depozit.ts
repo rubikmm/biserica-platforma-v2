@@ -20,7 +20,31 @@ export interface BuletinScurt {
   cheie_pdf: string | null
   cheie_poza_mica: string | null
   pagini: number | null
+  /**
+   * CE E RÂNDUL, SCRIS PE EL: `publicat` (îl vede toată lumea) ori `programat` (e în bază, dar
+   * pentru parohie numărul încă n-a apărut). Îl trece de la unul la altul CEASUL workerului
+   * (handlerul `scheduled` din `index.ts`), nu o socoteală făcută la fiecare citire.
+   * ⚠️ Opțional în tip, nu în bază: coloana e NOT NULL cu `DEFAULT 'publicat'`, dar ciornele
+   * întoarse în forma unui rând (`ciornaDinDepozit`) și fișele de probă n-au ce scrie în ea. Lipsa
+   * se citește peste tot ca `publicat`.
+   */
+  stare?: StareaNumarului
+  /**
+   * CLIPA DE LA CARE E PUBLIC (ISO UTC) — duminica lui, ora 12:00 a Bucureștiului (vezi `ceas.ts`).
+   * `null` = public dintotdeauna: așa stau cele 619 numere aduse din V1 și tot ce s-a publicat
+   * înainte de 20.09.2026, când numerele se publicau pe loc.
+   * ⚠️ Rămâne clipa ANUNȚATĂ și după ce ceasul trece numărul pe `publicat`: acolo scrie când s-a
+   * spus parohiei că apare, nu când s-a nimerit să bată cronul.
+   */
+  publicat_la?: string | null
 }
+
+/** Cele două stări ale unui rând. Nu sunt mai multe, și nu se inventează una a treia. */
+export type StareaNumarului = 'programat' | 'publicat'
+
+/** Un rând e programat dacă scrie pe el. Lipsa coloanei (ciornă, fișă de probă) = publicat. */
+export const eProgramat = (b: { stare?: StareaNumarului | null } | null | undefined): boolean =>
+  b?.stare === 'programat'
 
 /** Un numar intreg, pentru pagina lui. */
 export interface Buletin extends BuletinScurt {
@@ -34,8 +58,57 @@ export interface Gasit extends BuletinScurt {
   fragment: string
 }
 
-const CAMPURI_SCURT = 'nr, data, an, luna, cheie_pdf, cheie_poza_mica, pagini'
+const CAMPURI_SCURT = 'nr, data, an, luna, cheie_pdf, cheie_poza_mica, pagini, stare, publicat_la'
 const CAMPURI = `${CAMPURI_SCURT}, cheie_poza, marime_pdf, sursa`
+
+// ---------------------------------------------------------------------------
+// VIZIBILITATEA: cine vede un număr PROGRAMAT
+// ---------------------------------------------------------------------------
+
+/**
+ * CU CE OCHI SE CITEȘTE ARHIVA (20.09.2026, odată cu programarea).
+ *
+ * Un număr validat înainte de duminica lui are `publicat_la` în viitor: rândul E în bază, dar pentru
+ * lumea de afară el nu există NICĂIERI — nici ca număr curent, nici în arhivă, nici în căutare, nici
+ * în `/v1`, iar pagina lui dă 404. Pentru adminul buletinului, dimpotrivă, el se vede ca număr
+ * curent, cu eticheta „Programat" pe el: altfel n-ar avea de unde să-l retragă ori să-l privească.
+ *
+ * ⚠️ O SINGURĂ CLAUZĂ, într-un singur loc (`cerne`), pusă la TOATE citirile de mai jos. Împrăștiată
+ * pe la apelanți, ar fi fost de ajuns o citire uitată ca numărul să iasă public cu o săptămână mai
+ * devreme — și nimic nu s-ar fi văzut până atunci.
+ */
+export interface Vedere {
+  /** `true` = adminul buletinului (după `ctx.eAdmin` EFECTIV, deci și sub masca „vezi ca"). */
+  vedeTot: boolean
+}
+
+/** Ochii adminului: nimic nu se cerne. Îl folosesc `/nou`, acțiunile chatului și retragerea. */
+export const VEDE_TOT: Vedere = { vedeTot: true }
+
+/** Ochii lumii: numerele programate nu există. */
+export const LUMEA: Vedere = { vedeTot: false }
+
+/** Vederea unui om, după cum e ori nu adminul buletinului. */
+export const vedereaLui = (eAdmin: boolean): Vedere => (eAdmin ? VEDE_TOT : LUMEA)
+
+/**
+ * Clauza care ascunde numerele programate — singurul loc în care se scrie.
+ *
+ * ⚠️ NICIO COMPARAȚIE DE CEAS AICI, de la 20.09.2026, ora 14:11 („să fie o programare reală — adică
+ * din uneltele de cron din Cloudflare"). Interogarea întreabă ce SCRIE pe rând, nu ce s-ar deduce
+ * dintr-o dată pusă lângă ceasul de acum. Cine schimbă starea e ceasul workerului (`scheduled`).
+ * ⚠️ Și de aceea clauza n-are nicio legătură (`?N`): e o constantă. Toată socoteala de indici de
+ * placeholder din varianta dintâi — locul cel mai lesne de încurcat în tăcere — a ieșit cu totul.
+ */
+const CERNERE = "stare = 'publicat'"
+const cerne = (v: Vedere): string => (v.vedeTot ? '' : CERNERE)
+
+/** `WHERE …` gata scris (ori nimic), ca interogările să rămână citibile. */
+const unde = (...bucati: string[]): string => {
+  const ale = bucati.filter(Boolean)
+  return ale.length ? `WHERE ${ale.join(' AND ')} ` : ''
+}
+
 
 /**
  * ⚠️ Textul adus la forma dupa care se cauta: fara diacritice, cu litere mici — dar LITERA CU LITERA,
@@ -65,28 +138,41 @@ export function plat(s: string): string {
   return r.length === s.length ? r : s.toLowerCase()
 }
 
-/** Numarul cel mai nou. `null` cand baza e goala (migratia nerulata) — atunci pagina spune asta. */
-export async function ultimul(db: D1Database): Promise<Buletin | null> {
-  return await db.prepare(`SELECT ${CAMPURI} FROM buletine ORDER BY data DESC, nr DESC LIMIT 1`).first<Buletin>()
+/**
+ * Numarul cel mai nou. `null` cand baza e goala (migratia nerulata) — atunci pagina spune asta.
+ * ⚠️ Cu `VEDE_TOT` intră în socoteală și numărul PROGRAMAT — și așa trebuie pe `/nou`: numărul
+ * următor se numără din TOATE rândurile, altfel după programarea lui 617 ecranul ar cere iar 617.
+ */
+export async function ultimul(db: D1Database, v: Vedere): Promise<Buletin | null> {
+  return await db
+    .prepare(`SELECT ${CAMPURI} FROM buletine ${unde(cerne(v))}ORDER BY data DESC, nr DESC LIMIT 1`)
+    .first<Buletin>()
 }
 
 /** Ultimele `n` numere, cel mai nou primul — fasia „numerele dinainte" de pe prima pagina. */
-export async function ultimele(db: D1Database, n: number): Promise<BuletinScurt[]> {
+export async function ultimele(db: D1Database, n: number, v: Vedere): Promise<BuletinScurt[]> {
   const r = await db
-    .prepare(`SELECT ${CAMPURI_SCURT} FROM buletine ORDER BY data DESC, nr DESC LIMIT ?1`)
+    .prepare(`SELECT ${CAMPURI_SCURT} FROM buletine ${unde(cerne(v))}ORDER BY data DESC, nr DESC LIMIT ?1`)
     .bind(n)
     .all<BuletinScurt>()
   return r.results
 }
 
-export async function unul(db: D1Database, nr: number, data: string): Promise<Buletin | null> {
-  return await db.prepare(`SELECT ${CAMPURI} FROM buletine WHERE nr = ?1 AND data = ?2`).bind(nr, data).first<Buletin>()
+export async function unul(db: D1Database, nr: number, data: string, v: Vedere): Promise<Buletin | null> {
+  return await db
+    .prepare(`SELECT ${CAMPURI} FROM buletine ${unde('nr = ?1 AND data = ?2', cerne(v))}`)
+    .bind(nr, data)
+    .first<Buletin>()
 }
 
 /** Cel mai nou numar cu cifra asta pe hartie — pentru adresa la indemana `/buletin/615`. */
-export async function celMaiNouCuNumarul(db: D1Database, nr: number): Promise<{ nr: number; data: string } | null> {
+export async function celMaiNouCuNumarul(
+  db: D1Database,
+  nr: number,
+  v: Vedere,
+): Promise<{ nr: number; data: string } | null> {
   return await db
-    .prepare('SELECT nr, data FROM buletine WHERE nr = ?1 ORDER BY data DESC LIMIT 1')
+    .prepare(`SELECT nr, data FROM buletine ${unde('nr = ?1', cerne(v))}ORDER BY data DESC LIMIT 1`)
     .bind(nr)
     .first<{ nr: number; data: string }>()
 }
@@ -100,18 +186,22 @@ export async function vecini(
   db: D1Database,
   nr: number,
   data: string,
+  v: Vedere,
 ): Promise<{ inainte: BuletinScurt | null; dupa: BuletinScurt | null }> {
+  const c = cerne(v)
+  // ⚠️ SIRUL VECINILOR E O SINGURA CONDITIE, in paranteze: fara ele, `AND` al cernerii s-ar fi lipit
+  // numai de a doua ramura a lui `OR`, iar numarul programat ar fi iesit vecinul oricui.
   const [i, d] = await Promise.all([
     db
       .prepare(
-        `SELECT ${CAMPURI_SCURT} FROM buletine WHERE data < ?2 OR (data = ?2 AND nr < ?1)
+        `SELECT ${CAMPURI_SCURT} FROM buletine ${unde('(data < ?2 OR (data = ?2 AND nr < ?1))', c)}
                 ORDER BY data DESC, nr DESC LIMIT 1`,
       )
       .bind(nr, data)
       .first<BuletinScurt>(),
     db
       .prepare(
-        `SELECT ${CAMPURI_SCURT} FROM buletine WHERE data > ?2 OR (data = ?2 AND nr > ?1)
+        `SELECT ${CAMPURI_SCURT} FROM buletine ${unde('(data > ?2 OR (data = ?2 AND nr > ?1))', c)}
                 ORDER BY data ASC, nr ASC LIMIT 1`,
       )
       .bind(nr, data)
@@ -121,17 +211,17 @@ export async function vecini(
 }
 
 /** Anii din arhiva, cu cate numere are fiecare — bara de sus a Arhivei. */
-export async function anii(db: D1Database): Promise<{ an: string; cate: number }[]> {
+export async function anii(db: D1Database, v: Vedere): Promise<{ an: string; cate: number }[]> {
   const r = await db
-    .prepare('SELECT an, COUNT(*) AS cate FROM buletine GROUP BY an ORDER BY an DESC')
+    .prepare(`SELECT an, COUNT(*) AS cate FROM buletine ${unde(cerne(v))}GROUP BY an ORDER BY an DESC`)
     .all<{ an: string; cate: number }>()
   return r.results
 }
 
 /** Numerele unui an, cel mai nou primul. Un an are ~50 de randuri — incape lejer intr-o pagina. */
-export async function dintrUnAn(db: D1Database, an: string): Promise<BuletinScurt[]> {
+export async function dintrUnAn(db: D1Database, an: string, v: Vedere): Promise<BuletinScurt[]> {
   const r = await db
-    .prepare(`SELECT ${CAMPURI_SCURT} FROM buletine WHERE an = ?1 ORDER BY data DESC, nr DESC`)
+    .prepare(`SELECT ${CAMPURI_SCURT} FROM buletine ${unde('an = ?1', cerne(v))}ORDER BY data DESC, nr DESC`)
     .bind(an)
     .all<BuletinScurt>()
   return r.results
@@ -145,7 +235,7 @@ export async function dintrUnAn(db: D1Database, an: string): Promise<BuletinScur
  * Fragmentul se taie in SQL, nu in Worker: altfel ar trebui adus tot textul (pana la 24.000 de semne
  * pe rand) doar ca sa se arate 240 de semne din el.
  */
-export async function cauta(db: D1Database, q: string, limita = 60): Promise<Gasit[]> {
+export async function cauta(db: D1Database, q: string, v: Vedere, limita = 60): Promise<Gasit[]> {
   const cautat = plat(q.trim())
   if (cautat.length < 2) return []
   const tipar = `%${cautat.replace(/[\\%_]/g, (c) => `\\${c}`)}%`
@@ -155,7 +245,7 @@ export async function cauta(db: D1Database, q: string, limita = 60): Promise<Gas
       `SELECT ${CAMPURI_SCURT},
             substr(text, max(1, instr(text_plat, ?1) - 80), 240) AS fragment
      FROM buletine
-     WHERE text_plat LIKE ?2 ESCAPE '\\' OR nr = ?3
+     ${unde("(text_plat LIKE ?2 ESCAPE '\\' OR nr = ?3)", cerne(v))}
      ORDER BY data DESC, nr DESC
      LIMIT ?4`,
     )
@@ -185,7 +275,16 @@ export function mottoDinText(text: string | null | undefined): { motto: string; 
   return { motto: virgula(m[1]!.trim()), motoAutor: m[2] ? virgula(m[2].trim()) : undefined }
 }
 
-/** Textul paginii intai a unui numar — DOAR capul lui, pentru motto; nu se aduce tot textul. */
+/**
+ * Textul paginii intai a unui numar — DOAR capul lui, pentru motto; nu se aduce tot textul.
+ *
+ * ⚠️ SINGURA CITIRE FĂRĂ CERNERE, și dinadins: nu se cheamă niciodată de pe o pagină publică, ci
+ * numai din `mottoDinainte` — adică de pe `/nou` și din chestionarul bulei, amândouă ale adminului,
+ * și amândouă pe numărul pe care ADMINUL îl vede oricum ca fiind cel curent. Cu cernerea pusă,
+ * motto-ul precompletat ar fi sărit peste numărul tocmai programat și l-ar fi luat din cel de
+ * dinaintea lui. Nu întoarce nimic ce s-ar putea citi ca „numărul există": un șir de text, cerut
+ * după nr. și dată știute.
+ */
 export async function capulTextului(db: D1Database, nr: number, data: string): Promise<string | null> {
   const r = await db
     .prepare('SELECT substr(text, 1, 1500) AS cap FROM buletine WHERE nr = ?1 AND data = ?2')
@@ -205,6 +304,10 @@ export async function capulTextului(db: D1Database, nr: number, data: string): P
  * și ele.
  * ⚠️ `sursa: 'site'` — așa se deosebește, în arhivă, numărul făcut pe platformă de cele 619 aduse
  * din V1 (`arhiva`).
+ * ⚠️ `stare` + `publicat_la` — CE E RÂNDUL și DE CÂND (20.09.2026). Validat duminică după 12:00:
+ * `publicat`, cu clipa apăsării (publicare pe loc, ca până acum). Validat mai devreme: `programat`,
+ * cu duminica lui la 12:00 — rândul e în bază, dar nu-l vede nimeni în afară de admin până ce
+ * CEASUL îl trece. Socoteala nu se face aici: vine gata făcută de la `valideazaNumarul`.
  */
 export async function scrieBuletin(
   db: D1Database,
@@ -217,13 +320,16 @@ export async function scrieBuletin(
     marime_pdf: number
     pagini: number
     text: string
+    stare: StareaNumarului
+    /** ISO UTC; `null` doar la rândurile vechi, care n-au avut niciodată prag */
+    publicat_la: string | null
   },
 ): Promise<void> {
   await db
     .prepare(
       `INSERT OR REPLACE INTO buletine
-         (nr, data, an, luna, cheie_pdf, cheie_poza, cheie_poza_mica, marime_pdf, pagini, sursa, text, text_plat)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'site', ?10, ?11)`,
+         (nr, data, an, luna, cheie_pdf, cheie_poza, cheie_poza_mica, marime_pdf, pagini, sursa, text, text_plat, stare, publicat_la)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'site', ?10, ?11, ?12, ?13)`,
     )
     .bind(
       b.nr,
@@ -237,8 +343,74 @@ export async function scrieBuletin(
       b.pagini,
       b.text,
       plat(b.text),
+      b.stare,
+      b.publicat_la,
     )
     .run()
+}
+
+// ---------------------------------------------------------------------------
+// CEASUL: cine trece numerele programate pe „publicat"
+// ---------------------------------------------------------------------------
+
+/**
+ * CE ARE DE TRECUT CEASUL ACUM — rândurile programate cărora le-a venit clipa.
+ *
+ * Se cere ÎNAINTE de trecere, ca handlerul `scheduled` să poată spune în jurnal și în audit CARE
+ * numere au apărut. `UPDATE … RETURNING` ar fi făcut-o dintr-un drum, dar atunci o rulare fără
+ * nimic de făcut (marea majoritate: ceasul bate la 5 minute) ar fi tot o SCRIERE în D1.
+ */
+export async function programateleScadente(db: D1Database, acum: Date): Promise<BuletinScurt[]> {
+  const r = await db
+    .prepare(
+      `SELECT ${CAMPURI_SCURT} FROM buletine
+       WHERE stare = 'programat' AND publicat_la IS NOT NULL AND publicat_la <= ?1
+       ORDER BY data ASC, nr ASC`,
+    )
+    .bind(acum.toISOString())
+    .all<BuletinScurt>()
+  return r.results
+}
+
+/**
+ * TRECEREA — singurul loc din cod care scoate un număr din `programat`.
+ *
+ * ⚠️ IDEMPOTENTĂ prin chiar forma ei: condiția cere `stare = 'programat'`, deci a doua rulare (și a
+ * suta, ceasul bate din cinci în cinci minute) nu mai găsește nimic și nu schimbă nimic. De aceea
+ * nu-i trebuie nici zăvor, nici tabel de rulări.
+ * ⚠️ `publicat_la` NU SE REscrie: acolo stă clipa anunțată parohiei (duminică, 12:00), nu clipa în
+ * care s-a nimerit să bată cronul. Altfel „apare la 12:00" ar fi devenit, în bază, 12:03.
+ *
+ * Întoarce câte rânduri s-au schimbat cu adevărat.
+ */
+export async function treciLaPublicat(db: D1Database, acum: Date): Promise<number> {
+  const r = await db
+    .prepare(
+      `UPDATE buletine SET stare = 'publicat'
+       WHERE stare = 'programat' AND publicat_la IS NOT NULL AND publicat_la <= ?1`,
+    )
+    .bind(acum.toISOString())
+    .run()
+  return r.meta?.changes ?? 0
+}
+
+/**
+ * STAREA UNUI RÂND, fără să se aducă tot numărul — o căutare pe cheia primară (nr, data).
+ *
+ * O cere poarta fișierelor (`/fisier/`, `/tipar/`): acolo trebuie știut dacă rândul e încă
+ * `programat`, ca foaia să nu se dea pe o ușă pe care pagina o ține închisă. `null` = nu e niciun
+ * rând, adică numărul e doar o CIORNĂ.
+ */
+export async function stareaNumarului(
+  db: D1Database,
+  nr: number,
+  data: string,
+): Promise<StareaNumarului | null> {
+  const r = await db
+    .prepare('SELECT stare FROM buletine WHERE nr = ?1 AND data = ?2')
+    .bind(nr, data)
+    .first<{ stare: StareaNumarului }>()
+  return r?.stare ?? null
 }
 
 /**
@@ -259,9 +431,19 @@ export async function stergeBuletin(db: D1Database, nr: number, data: string): P
   await db.prepare("DELETE FROM buletine WHERE nr = ?1 AND data = ?2 AND sursa = 'site'").bind(nr, data).run()
 }
 
-export async function numaratoare(db: D1Database): Promise<{ buletine: number; ani: number; ultimul: string | null }> {
+/**
+ * Cifrele arhivei: câte numere, câți ani, care e ziua ultimului.
+ * ⚠️ Se cerne și ea: `MAX(data)` al unui rând programat ar fi spus, pe `/health` și în capul
+ * Arhivei, chiar ziua numărului pe care nimeni n-are voie să-l vadă încă.
+ */
+export async function numaratoare(
+  db: D1Database,
+  v: Vedere,
+): Promise<{ buletine: number; ani: number; ultimul: string | null }> {
   const r = await db
-    .prepare('SELECT COUNT(*) AS buletine, COUNT(DISTINCT an) AS ani, MAX(data) AS ultimul FROM buletine')
+    .prepare(
+      `SELECT COUNT(*) AS buletine, COUNT(DISTINCT an) AS ani, MAX(data) AS ultimul FROM buletine ${unde(cerne(v))}`,
+    )
     .first<{ buletine: number; ani: number; ultimul: string | null }>()
   return r ?? { buletine: 0, ani: 0, ultimul: null }
 }

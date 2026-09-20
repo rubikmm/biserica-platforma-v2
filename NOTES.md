@@ -316,6 +316,23 @@ propunerea automată, ca în V1.
 
 ## NEXT
 
+00h. **PROGRAMAREA numărului de buletin (validare înainte de duminică, ora 12:00) — scrisă pe 20.09.2026, după-amiaza (buletin 0.17.0).**
+    Cererea userului (13:56): „dacă este înainte de ziua pentru care este programat buletinul — adică înainte de ora 12.00,
+    duminica aceea — se poate doar «Validează și programează»; dacă este duminică după ora 12.00 — «Validează și publică»";
+    (14:11): „să fie o programare reală — adică din uneltele de cron din Cloudflare"; (13:58) iconița de anulare verde cât e
+    programat + „dacă s-a validat și publicat și a început lucrul la ciornă să nu se mai poată anula publicarea acelui număr —
+    dar să am posibilitatea să șterg ciorna — resetare complet la zero". Regulile durabile: „BULETINUL — foaia tipărită" →
+    „PROGRAMAREA, din 20.09.2026"; amănuntele zilei: jurnalul din 20.09.2026. **Publicat 20.09, 14:59** (migrația pe D1 de producție, apoi worker 0.17.0, versiunea `f8361da2`; cron înregistrat `*/5 9-10 * * SUN`).
+    **Deschise, în ordinea în care dor**:
+    1. ⚠️ **cronul căzut n-are alarmă**: dacă `scheduled` nu rulează duminică între 09 și 10 UTC, numărul rămâne `programat`
+       până duminica următoare — nu scapă public, dar NU apare, și nimeni nu află. De pus o santinelă (audit
+       `buletin.publica-programat` citit de dispecerat ori un al doilea cron care se plânge);
+    2. **de întrebat userul**: ce vrea să se întâmple cu un număr rămas neapărut — publicare de mână dintr-un buton, trecere
+       automată la prima intrare a adminului pe `/nou`, ori doar alarmă?
+    3. poarta fișierelor costă o căutare pe cheia primară la fiecare foaie cu ziua trecută (mic, dar e pe drumul cald);
+    4. migrația `0002_programare.sql` e ALTER **fără** `IF NOT EXISTS` — o singură rulare pe mediu; la orice refacere a bazei,
+       ordinea e migrația întâi, workerul pe urmă.
+
 00g. **RETRAGEREA unui număr publicat greșit + justify la piciorul coloanelor — scrise pe 20.09.2026, dimineața (buletin 0.16.0).**
     Cererea userului (08:07): „Trebuie să avem și buton de ne-publicare — dacă s-a publicat greșit — și să poată face asta
     și chat-ul"; (08:11): „col2, jos, nu mai este justify". Amănuntele în jurnalul zilei (20.09.2026).
@@ -2263,6 +2280,55 @@ verde „Numărul următor", numărul roșu = ultimul din arhivă + 1, duminica 
   probat pe randare: la 0, 1 și 2 secundari intră fix, 0 pe dinafară, gol 6 mm (`proba-foaie.mjs --gol
   [--secundari n]`, unealta are de acum și proba numărului gol). Probele: `tests/buletin-umplere.test.ts`.
 
+⚠️ **PROGRAMAREA, din 20.09.2026** (buletin 0.17.0; cerere user, 13:56 + 14:11). **Validarea nu mai e totuna
+cu publicarea**: pragul e **duminica numărului, ora 12:00 Europe/București** (`pragPublicarii`,
+`apps/buletin/src/ceas.ts` — decalajul se cere de la ICU prin `Intl.DateTimeFormat`, deci 09:00Z vara și
+10:00Z iarna; nu-l scrie cu mâna). Înainte de prag, `fapta=valideaza` (`valideazaNumarul`, `actiuni.ts`) scrie
+`stare='programat'` cu `publicat_la = pragul`; de la prag încolo `stare='publicat'` cu `publicat_la = acum`.
+Butonul de pe `/nou` își schimbă vorba singur: „Validează și **programează** nr. N" + nota „Numărul apare
+duminică, <data>, la ora 12:00." → „Validează și **publică** nr. N"; auditul `buletin.valideaza` spune
+`fel: programat|publicat`. Schița se pune deoparte (`schita/arhiva/`) în amândouă cazurile. ⚠️ Acțiunea de chat
+`buletin.valideaza` **nu există** (refuzată în hartă, hotărârea din 18.09) — programarea se face numai de la buton.
+
+- **Coloanele noi în D1 `buletine`** (migrația `infrastructure/migrations/buletin/0002_programare.sql`):
+  `stare` (`programat` | `publicat`, implicit `publicat`), `publicat_la` (ISO UTC — clipa apăsării la publicare
+  pe loc, duminica 12:00 adusă în UTC la programare, NULL la cele 619 vechi), index `(stare, publicat_la)`.
+  ALTER **fără** `IF NOT EXISTS` → se rulează **o singură dată** pe mediu. La deploy: **întâi migrația, apoi
+  workerul**. Producție: `node infrastructure/migrations/ruleaza.mjs --remote --env production
+  --chiar-productia --doar buletin`.
+- **Programarea e reală, din cronul Cloudflare** (cerut anume de user): `triggers.crons: ["*/5 9-10 * * SUN"]` în
+  `apps/buletin/wrangler.jsonc`, ⚠️ **în toate trei blocurile** (rădăcină, `staging`, `production`) — un mediu
+  **nu moștenește** `triggers`. Handlerul `scheduled` (`index.ts`): `programateleScadente` → `treciLaPublicat`
+  (`UPDATE … SET stare='publicat' WHERE stare='programat' AND publicat_la <= ?`), idempotent, audit
+  `buletin.publica-programat` per număr. `publicat_la` **nu se rescrie** la trecere (rămâne clipa anunțată,
+  12:00). Fără purge de cache: paginile publice au `max-age 300`, deci apariția poate întârzia până la 5 minute.
+- **Vizibilitatea trece printr-o SINGURĂ clauză**: `cerne()` (`depozit.ts`, `Vedere: VEDE_TOT | LUMEA`), pusă la
+  toate citirile (`/`, vecini, arhivă, căutare, „Altele", pagina numărului, `/v1/*` — ușa de mașini citește
+  **mereu** cu ochii lumii). Neadminul vede doar `stare='publicat'`; adminul vede numărul programat ca număr
+  curent și în arhivă, cu eticheta „Programat — apare duminică, <data>, la ora 12:00" (verdele `.cap-nou`).
+  ⚠️ `/fisier/` și `/tipar/`: poarta socotește **întâi ziua din cheie** (fără D1), apoi starea rândului; pe
+  număr neapărut → 404 la anonim și `private, no-store` la admin — altfel răspunsul `immutable` de un an cu
+  `?v=` putea intra în cache-ul de muchie. Pozele din `poze/…` rămân deschise **dinadins**: Browser Rendering
+  le cere fără cookie la compunere. `capulTextului` (motto-ul precompletat, admin) e singura citire necernută.
+  Înăsprire pe drum: foaia unui număr **nevalidat** nu mai e publică din clipa punerii în depozit.
+- **Cât e programat**, iconița „Retrage" e **verde** (`btn intreg verde`, `#0A6B41` zi / `#5FBF8D` noapte), doar
+  simbolul, cu `title`/`aria-label` „Anulează programarea nr. N".
+- ⚠️ **Ciorna următoare blochează retragerea** (cerere user): schița are semnul `atinsa`, aprins de `scrieSchita`
+  la orice scriere cu `fel='om'` (implicit); `'sistem'` doar la nașterea variantei zero și la
+  `buletin.chestionar`. „Retrage" (buton și `buletin.retrage`) merge numai dacă schița lui nr+1 nu există ori nu
+  e atinsă (`ciornaDeDupaEInceputa`, aceeași funcție la ecran și la ușă), altfel 409 „Ciorna nr. N+1 e începută —
+  șterge-o întâi din «buletin nou»". La retragere, o schiță neatinsă a lui nr+1 se șterge, iar schița întoarsă se
+  marchează `atinsa` (altfel a doua retragere ar șterge tocmai ce s-a recuperat).
+- **„Șterge ciorna" pe `/nou`** — resetare completă la zero, lângă butonul de validare, cu `<dialog>` de
+  confirmare: `POST /nou fapta=sterge-ciorna` (`stergeCiornaIntreaga`, `compune.ts`: JSON + foaie + copertă +
+  cerere + cele patru broșuri din `schita/`; **nu** `schita/arhiva/`, nu arhiva, nu pozele urcate), audit
+  `buletin.sterge-ciorna`, redirect la pagina numărului curent — ⚠️ **nu** la `/nou`, unde varianta zero renaște
+  pe loc. Fără acțiune de chat. Tot pe `/nou`: numărul următor se socotește din **toate** rândurile (și cele
+  programate), iar sus apare câte un rând „Nr. N e programat pentru duminică, … — vezi-l".
+- Probe: `tests/buletin-programare.test.ts` (69), `buletin-retrage` adaptat; suita 1189/1189, typecheck 36/36.
+  ⚠️ **Lecția mutanților** (6/6 prinse abia după înăsprirea falsului de D1): un D1 fals care „știe" ce ar trebui
+  să facă interogarea **nu probează interogarea** — falsul trebuie să urmeze WHERE/SET din SQL.
+
 ## Aplicațiile portate — amănunte
 
 - **`calendar`** (A1): D1 `xc-calendar-staging`, 730 de zile (2025+2026) + sinaxare, `/v1` în forma
@@ -2478,6 +2544,22 @@ forța antetul `Host`**.
 **Justify la piciorul coloanelor** (08:11; user: „La fiecare pagină ciornă — colțul dreapta jos — adică col2, jos, nu mai este justify — propoziția nu se duce până la capăt"). Cauza, dovedită cu `chromium --dump-dom` + `Range.getClientRects()` pe `proba-foaie.mjs --gol --secundari 2`: curgerea (`CURGE` din `foaie.ts`) taie paragraful la piciorul FIECĂREI coloane și lasă bucata ca `<p>` întreg, iar CSS-ul nu întinde niciodată ultimul rând al unui bloc. NU e regresie: marcajele din 19.09 n-au nicio vină, `text-align-last` n-a existat niciodată în repo. Era la TOATE coloanele — gol dreapta măsurat (coloana 321 px): 1b 91 px, 3b 91 px, 3a 15 px —, dar la col1 golul e ascuns de șanț, la col2 cade în colțul foii, lângă chenar. Leac: `p.t.continua { text-align-last: justify }` + `bucata.className += ' continua'` NUMAI pe ramura `if (coada)` din `curge()` — un paragraf care se încheie în coloană rămâne cu rândul scurt, cum se cuvine. După: 0.00 px la toate cele 6 hotare; raportul curgerii identic (`intrate` 7801, `peDinafara` 0, `coloaneFolosite` 7); `--verifica` verde pe toate 3 variantele; măsurile socotelii neatinse. Capturi în `dist/jos-inainte-1.png` / `dist/jos-dupa-1.png` (gitignorat). Probe: `buletin-foaie` +3 (server-side: regula CSS, atribuirea unică în `if (coada)`, `foaieHtml()` nu scrie clasa). Găsit pe drum, neatins: `<p class="t">` GOL lăsat de `taie()` cu `bun = 0` într-o coloană fără loc (NEXT 00g).
 
 **Publicarea** (08:49, user: „1" — tot, în ordine). 13 workeri, unul câte unul, fără nicio eroare, 08:54: authz → identity → cont → admin, calendar, program, buletin, curatenie, tipic, biblia, biblioteca, newsletter, home; bindingul nou `AUTORIZARE` al contului confirmat în ieșirea wrangler; toate 200 cu versiunea în subsol, `buletin/nou` 403 la anonim (corect), `b-retrage` nu apare ca element la anonim (doar în scriptul defensiv). **`live` și `radio` lăsate nepublicate dinadins** — Durable Objects în timpul slujbei; de făcut după (NEXT 00g). Commit `b9ed8e5`.
+
+**PROGRAMAREA numărului — validarea înainte de duminică nu mai publică, programează** (13:56–14:xx). Buletin **0.16.1 → 0.17.0**. Cererea userului, în trei mesaje: (13:56) „Dacă este înainte de ziua pentru care este programat buletinul — adică înainte de ora 12.00, duminica aceea — se poate doar «Validează și programează»; dacă este duminică după ora 12.00 — «Validează și publică»"; (13:58) „iconița de Anulare să fie verde — doar simbolul — până când trece 12.00 duminică" și „dacă s-a validat și publicat și a început lucrul la ciornă să nu se mai poată anula publicarea acelui număr — dar să am posibilitatea să șterg ciorna — resetare complet la zero — și atunci reapare posibilitatea de a invalida acel număr"; (14:11) „să fie o programare reală — adică din uneltele de cron din Cloudflare"; (14:19) „să faci și deploy la final". Regulile durabile au intrat în „BULETINUL — foaia tipărită" → „PROGRAMAREA, din 20.09.2026"; aici, drumul și ce s-a învățat.
+
+- **Pragul** (`apps/buletin/src/ceas.ts`, nou): `pragPublicarii(data)` = duminica numărului la 12:00 Europe/București, cu decalajul **cerut de la ICU** (`Intl.DateTimeFormat`), nu scris de mână — 09:00Z vara, 10:00Z iarna. `valideazaNumarul` (`actiuni.ts`, de la `POST /nou fapta=valideaza`): `acum >= prag` → `stare='publicat'`, `publicat_la=acum`; altfel `stare='programat'`, `publicat_la=prag`. Auditul spune `fel: programat|publicat`. Schița se pune deoparte (`schita/arhiva/`) și la programare, deci retragerea o aduce înapoi ca până acum.
+- **D1**: migrația `infrastructure/migrations/buletin/0002_programare.sql` — `stare TEXT NOT NULL DEFAULT 'publicat'`, `publicat_la TEXT` (NULL la cele 619 din Word), index `(stare, publicat_la)`. ALTER fără `IF NOT EXISTS`, deci **o singură rulare**; la deploy, migrația înaintea workerului.
+- **Cron adevărat, nu socoteală la citire** (asta a cerut userul explicit): `triggers.crons: ["*/5 9-10 * * SUN"]` în **toate trei blocurile** din `wrangler.jsonc` — ⚠️ un mediu **nu moștenește** `triggers`, ușor de scăpat. `scheduled` → `programateleScadente` → `treciLaPublicat` (un singur `UPDATE … WHERE stare='programat' AND publicat_la <= ?`), idempotent, audit per număr; `publicat_la` rămâne clipa **anunțată** (12:00), nu clipa trecerii. Cache-ul public (300 s) poate întârzia apariția cu până la 5 minute — lăsat așa, fără purge.
+- **O singură clauză de vizibilitate**: `cerne()` în `depozit.ts` (`Vedere: VEDE_TOT | LUMEA`), la toate citirile, inclusiv `/v1/*` care citește **mereu** cu ochii lumii (ușă de mașini). Adminul vede programatul ca număr curent și în arhivă, cu eticheta verde „Programat — apare duminică, <data>, la ora 12:00".
+- **Partea care era gata să scape**: `/fisier/` și `/tipar/`. Foaia și coperta au adresă ghicibilă, iar răspunsul cu `?v=` e `immutable` un an — dacă poarta se punea numai pe rândul din D1, o cerere anonimă nimerită înainte de 12:00 ar fi băgat foaia în cache-ul de muchie. Acum poarta socotește **întâi ziua din cheie** (fără D1), apoi starea rândului; număr neapărut → 404 la anonim, `private, no-store` la admin. Pozele din `poze/…` rămân deschise dinadins (Browser Rendering le cere fără cookie). Înăsprire pe drum: foaia unui număr **nevalidat** nu mai e publică deloc.
+- **Retragerea, cât e programat**: iconița verde (`#0A6B41` / `#5FBF8D`), doar simbolul, „Anulează programarea nr. N".
+- **Ciorna următoare blochează retragerea** (cererea a doua a userului): semnul `atinsa` pe schiță, aprins de `scrieSchita` la orice scriere `fel='om'` (implicit); `'sistem'` numai la nașterea variantei zero și la `buletin.chestionar` — altfel chiar deschiderea lui `/nou` ar fi „început" ciorna. „Retrage" (buton **și** `buletin.retrage`) trece prin aceeași funcție, `ciornaDeDupaEInceputa`; refuzul e 409 „Ciorna nr. N+1 e începută — șterge-o întâi din «buletin nou»". La retragere, o schiță neatinsă a lui nr+1 se șterge, iar schița întoarsă se marchează `atinsa` — altfel a doua retragere ar fi șters tocmai ce se recuperase.
+- **„Șterge ciorna" pe `/nou`**: buton lângă validare, `<dialog>` de confirmare („resetare completă la zero"), `POST /nou fapta=sterge-ciorna` → `stergeCiornaIntreaga` (`compune.ts`: JSON + foaie + copertă + cerere + cele patru broșuri din `schita/`; **nu** `schita/arhiva/`, nu arhiva, nu pozele urcate), audit, redirect la pagina numărului curent — **nu** la `/nou`, unde varianta zero renaște pe loc și ștergerea ar părea că n-a mers. Fără acțiune de chat.
+- `/nou`: numărul următor se socotește din toate rândurile (și programate), iar sus apare câte un rând „Nr. N e programat pentru duminică, … — vezi-l".
+- **Acțiunea de chat `buletin.valideaza` NU s-a inventat** — e refuzată în hartă din 18.09; programarea se face de la buton, ca validarea.
+- Probe: `tests/buletin-programare.test.ts` (69 noi), `buletin-retrage` adaptat; **1189/1189**, typecheck 36/36. Mutanți 6/6 — dar abia după ce **falsul de D1 a fost înăsprit să urmeze WHERE/SET din SQL**: lecția zilei, un fals care „știe" ce ar trebui să facă interogarea nu probează interogarea, ci propria lui părere.
+- **Publicat 20.09, 14:59** — întâi migrația pe D1 de producție (`ruleaza.mjs --remote --env production --chiar-productia --doar buletin`: 0002 ok, 619 rânduri toate `publicat`), apoi `wrangler deploy` (versiunea `f8361da2`, subsol 0.17.0, `/`, `/arhiva`, `/v1/curent` 200). ⚠️ Prima publicare a CĂZUT la triggere: Cloudflare respinge `0` ca zi a săptămânii („invalid cron string", cod 10100) — ziua e 1-7 / SUN-SAT; codul se urcase, dar fără ceas. Reparat cu `*/5 9-10 * * SUN`, confirmat în `/schedules`. Regulă pentru orice worker cu cron.
+- **Rămâne deschis** (NEXT 00h): dacă cronul cade, numărul rămâne `programat` până duminica următoare — nu scapă public, dar nu apare și nimeni nu află; poarta fișierelor costă o căutare pe cheia primară la fiecare foaie cu ziua trecută.
 
 ### 2026-09-19
 
@@ -2727,7 +2809,10 @@ forța antetul `Host`**.
     o singură sesiune de browser (pagina e deja încărcată; a doua ar fi costat încă o pornire).
     Cheia: `2026/buletin-616-2026-09-20.jpg`, ca la numerele din V1. ⚠️ Una singură, nu și `-mic.jpg`:
     tăierea la 460 nu se poate face în Worker, deci rândul o pune în amândouă coloanele;
-  - **validarea = publicarea**: `POST /nou` cu `fapta=valideaza` → `scrieBuletin` (`INSERT OR REPLACE`,
+  - **validarea = publicarea** (⚠️ **nu mai e adevărat din 20.09.2026**: înainte de duminica numărului, ora
+    12:00, validarea = **programare** — numărul se scrie cu `stare='programat'` și iese la lumină singur, din
+    cron; vezi „PROGRAMAREA, din 20.09.2026" în „BULETINUL — foaia tipărită"): `POST /nou` cu
+    `fapta=valideaza` → `scrieBuletin` (`INSERT OR REPLACE`,
     `sursa: 'site'`, textul pentru căutare din cererea păstrată sub `compus/`), audit
     `buletin.valideaza`, apoi 303 spre pagina numărului. Se validează numărul DE PE ECRAN (nr+data din
     formular, cântărite față de ce urmează acum): dacă între timp s-a validat altceva, nu scrie peste.

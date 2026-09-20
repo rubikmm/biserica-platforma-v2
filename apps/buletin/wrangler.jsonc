@@ -64,6 +64,26 @@
   // Chenarul, crucea si fonturile foii intra in worker ca octeti.
   "rules": [{ "type": "Data", "globs": ["**/*.png", "**/*.otf", "**/*.ttf"], "fallthrough": true }],
 
+  // CEASUL NUMERELOR PROGRAMATE — user, 20.09.2026, 14:11: „sa fie o programare reala, adica din
+  // uneltele de cron din Cloudflare". Handlerul e `scheduled` din `src/index.ts`: trece pe
+  // `stare='publicat'` randurile programate carora le-a venit clipa.
+  //
+  // Expresia de mai jos inseamna: duminica, din cinci in cinci minute, intre 09:00 si 10:55 UTC.
+  //   - Cron Triggers bat pe UTC, iar ora parohiei e 12:00 la Bucuresti: vara asta inseamna 09:00Z
+  //     (EEST, +3), iarna 10:00Z (EET, +2). Fereastra le cuprinde pe amandoua, deci expresia NU
+  //     trebuie schimbata de doua ori pe an;
+  //   - cele 24 de bataii sunt RELUARI, nu risipa: interogarea cere `stare='programat'`, deci a
+  //     doua gaseste zero randuri si nu scrie nimic. O bataie pierduta se indreapta singura la
+  //     urmatoarea, iar o rulare goala ramane o singura citire din D1.
+  // ⚠️ NUMAI DUMINICA: numerele parohiei sunt datate duminica, deci pragul cade mereu atunci.
+  //   Ziua se scrie `SUN`, nu `0`: la Cloudflare ziua saptamanii e 1-7 / SUN-SAT, iar `0` e respins
+  //   de API cu „invalid cron string" (code 10100) — patit la publicarea din 20.09.2026.
+  // ⚠️ SE SCRIE IN TOATE TREI BLOCURILE — cel de sus, `staging` si `production`. La wrangler, blocul
+  // unui mediu NU mosteneste `triggers` de la radacina: scris doar sus, ceasul ar fi ramas STINS
+  // tocmai pe productie, iar numerele programate n-ar fi aparut niciodata singure. (Asa stau si la
+  // curatenie, calendar si program.)
+  "triggers": { "crons": ["*/5 9-10 * * SUN"] },
+
   "env": {
     "staging": {
       "name": "xc-buletin-staging",
@@ -109,6 +129,7 @@
         { "binding": "CONFIG", "id": "4fb91926da484c4395160390d5348950" }
       ],
       "browser": { "binding": "BROWSER" },
+      "triggers": { "crons": ["*/5 9-10 * * SUN"] },
       "routes": [{ "pattern": "buletin.staging.sfantul-ilie.ro", "custom_domain": true }]
     },
     "production": {
@@ -154,7 +175,8 @@
       "kv_namespaces": [
         { "binding": "CONFIG", "id": "f63560361bd9489aa34e873732807696" }
       ],
-      "browser": { "binding": "BROWSER" }
+      "browser": { "binding": "BROWSER" },
+      "triggers": { "crons": ["*/5 9-10 * * SUN"] }
       // Ruta de productie (`buletin.sfantul-ilie.ro`) ramane a lui A3 pana la cutover-ul explicit.
     }
   }

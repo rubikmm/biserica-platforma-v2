@@ -26,16 +26,18 @@ import {
   NUMELE_TREPTEI,
   calendarulNumarului,
   cheiaNumarului,
+  ciornaDinDepozit,
   citesteCererea,
   compune,
   mottoDinainte,
   pastreazaNumarul,
   plangeriDeForma,
   programulFolosit,
+  textCurat,
 } from './compune.js'
 import type { Buletin } from './depozit.js'
 import { CUPRINS, type StareHarta, potriveste, traduFapta } from './harta.js'
-import { SECUNDARI_MAXIM, type NumarCerut, semne, socoteste, variante } from './masuri.js'
+import { PAGINI, SECUNDARI_MAXIM, type NumarCerut, semne, socoteste, variante } from './masuri.js'
 import {
   CHEIE_CHESTIONAR,
   type CheieIntrebare,
@@ -45,6 +47,7 @@ import {
   cautaPomenirile,
   citesteSchita,
   dezarhiveazaSchita,
+  eAtinsa,
   intrebarile,
   masuraArticolului,
   normalizeazaChestionar,
@@ -54,6 +57,7 @@ import {
   schitaImplicita,
   scrieRaspuns,
   scrieSchita,
+  stergeSchita,
   urmatoareaIntrebare,
 } from './schita.js'
 
@@ -146,9 +150,12 @@ const caCerut = (n: z.infer<typeof Numar>, urmator: { nr: number | null; data: s
  * duminică — ori după o RETRAGERE, unde numărul se întoarce cu ziua lui de dinainte.
  */
 async function urmatorul(env: EnvActiuniBuletin): Promise<{ nr: number | null; data: string }> {
-  const { ultimul } = await import('./depozit.js')
+  const { VEDE_TOT, ultimul } = await import('./depozit.js')
   const { urmatorulCuSchita } = await import('./pagini.js')
-  return await urmatorulCuSchita(env, await ultimul(env.DB), new Date().toISOString().slice(0, 10))
+  // ⚠️ `VEDE_TOT`: numărul următor se numără din TOATE rândurile, și cele PROGRAMATE (20.09.2026).
+  // Cernut ca pentru lume, ecranul ar fi cerut iar 617 după ce 617 tocmai s-a programat, iar a doua
+  // validare ar fi scris peste primul — fără nicio eroare nicăieri.
+  return await urmatorulCuSchita(env, await ultimul(env.DB, VEDE_TOT), new Date().toISOString().slice(0, 10))
 }
 
 // ---------------------------------------------------------------------------
@@ -184,9 +191,9 @@ export async function chestionarul(env: EnvActiuniBuletin): Promise<Record<Cheie
 export async function schitaNumarului(
   env: EnvActiuniBuletin,
 ): Promise<{ schita: Schita; noua: boolean }> {
-  const { ultimul } = await import('./depozit.js')
+  const { VEDE_TOT, ultimul } = await import('./depozit.js')
   const { urmatorulCuSchita } = await import('./pagini.js')
-  const b = await ultimul(env.DB)
+  const b = await ultimul(env.DB, VEDE_TOT)
   const urm = await urmatorulCuSchita(env, b, new Date().toISOString().slice(0, 10))
   const gasita = await citesteSchita(env, urm)
   if (gasita) return { schita: gasita, noua: false }
@@ -207,8 +214,11 @@ export async function schitaNumarului(
 export async function schitaPastrata(env: EnvActiuniBuletin): Promise<Schita> {
   const [{ schita, noua }, intrebari] = await Promise.all([schitaNumarului(env), chestionarul(env)])
   if (noua) {
+    // ⚠️ `sistem`: varianta zero se naste dintr-o PRIVIRE pe /nou, nu dintr-o fapta a omului.
+    // Aprins aici, semnul ar fi incuiat retragerea numarului dinainte inca de la prima incarcare
+    // a ecranului — adica fix cand omul intra sa vada ce a gresit.
     const i = urmatoareaIntrebare(schita, intrebari)
-    await scrieSchita(env, schita, { subiect: i.subiect, articol: i.articol })
+    await scrieSchita(env, schita, { subiect: i.subiect, articol: i.articol }, 'sistem')
   }
   return schita
 }
@@ -305,9 +315,15 @@ export async function compuneNumarul(
 export async function deRetras(
   env: EnvActiuniBuletin,
   cerut: { nr?: number; data?: string } = {},
-): Promise<{ numarul: Buletin } | { piedica: string }> {
-  const { ultimul } = await import('./depozit.js')
-  const b = await ultimul(env.DB)
+): Promise<
+  | { numarul: Buletin; urmatoarea: { nr: number; data: string; schita: Schita | null } }
+  | { piedica: string }
+> {
+  // ⚠️ `VEDE_TOT`: se retrage și numărul PROGRAMAT (20.09.2026). El e `sursa = 'site'` și e curentul
+  // adminului — iar tocmai el are cea mai mare nevoie de retragere: e singurul care se poate încă
+  // îndrepta înainte să-l vadă parohia.
+  const { VEDE_TOT, ultimul } = await import('./depozit.js')
+  const b = await ultimul(env.DB, VEDE_TOT)
   if (!b) return { piedica: 'arhiva e goală: nu e niciun număr de retras' }
   if (b.sursa !== 'site') {
     return {
@@ -323,7 +339,62 @@ export async function deRetras(
         `${cerut.nr ?? b.nr} / ${cerut.data ?? b.data} nu mai e el — un număr care are urmaș rămâne în arhivă`,
     }
   }
-  return { numarul: b }
+  /*
+   * A TREIA ÎNCUIETOARE (user, 20.09.2026: „dacă s-a validat și publicat și a început lucrul la
+   * ciornă să nu se mai poată anula publicarea acelui număr").
+   *
+   * ⚠️ DE CE E O ÎNCUIETOARE, nu o politețe: retragerea ADUCE ÎNAPOI schița numărului retras, sub
+   * cheia lui. Dacă între timp s-a început ciorna numărului următor, cele două s-ar bate pe aceeași
+   * masă de lucru — iar `urmatorulCuSchita` ar deschide `/nou` pe cea mai veche zi, adică pe numărul
+   * retras, lăsând ciorna începută uitată în depozit. Tot ce s-a strâns pentru ea ar fi părut
+   * pierdut, fără nicio eroare nicăieri. De aceea: ori ciorna nu s-a început, ori se șterge întâi.
+   * ⚠️ NAȘTEREA IMPLICITĂ NU ÎNCUIE NIMIC: `atinsa` se aprinde doar la scrierile omului (vezi
+   * `FelulScrierii` din `schita.ts`). Altfel o singură privire aruncată pe `/nou` — care scrie
+   * varianta zero — ar fi încuiat retragerea exact în clipa în care omul vede că a greșit.
+   */
+  const urmatoarea = await ciornaDeDupa(env, b)
+  if (eAtinsa(urmatoarea.schita)) {
+    return {
+      piedica:
+        `ciorna nr. ${urmatoarea.nr} e începută — șterge-o întâi din „buletin nou" ` +
+        '(„Șterge ciorna", resetare completă la zero), apoi se poate retrage ' +
+        `nr. ${b.nr}. Altfel s-ar pierde tot ce s-a strâns pentru ${urmatoarea.nr}`,
+    }
+  }
+  return { numarul: b, urmatoarea }
+}
+
+/**
+ * CIORNA NUMĂRULUI DE DUPĂ CEL CURENT — cea care hotărăște dacă se mai poate retrage.
+ *
+ * ⚠️ SE CAUTĂ CA PE `/nou`, prin `urmatorulCuSchita`: după NUMĂR, nu după duminica socotită din
+ * ziua de azi. O ciornă rămasă peste duminică poartă ziua ei veche, iar căutată după calendar n-ar
+ * fi găsită — și încuietoarea ar fi rămas deschisă tocmai peste ciorna cea mai în primejdie.
+ */
+/**
+ * A PATRA CONDIȚIE, PENTRU ECRAN: s-a început ciorna numărului de după?
+ *
+ * ⚠️ Aceeași socoteală ca în `deRetras`, chemată din același loc — nu una scrisă a doua oară pentru
+ * pagini. Altfel butonul ar fi putut să se arate acolo unde ușa refuză, ori invers: omul ar fi
+ * apăsat și ar fi primit un 409 de neînțeles.
+ * ⚠️ O cere ECRANUL doar când chiar are ce face cu răspunsul (admin, numărul curent, `sursa='site'`),
+ * ca o pagină publică să nu ajungă niciodată să caute prin depozit.
+ */
+export async function ciornaDeDupaEInceputa(
+  env: EnvActiuniBuletin,
+  curent: { nr: number; data: string },
+): Promise<boolean> {
+  return eAtinsa((await ciornaDeDupa(env, curent)).schita)
+}
+
+async function ciornaDeDupa(
+  env: EnvActiuniBuletin,
+  curent: { nr: number; data: string },
+): Promise<{ nr: number; data: string; schita: Schita | null }> {
+  const { urmatorulCuSchita } = await import('./pagini.js')
+  const urm = await urmatorulCuSchita(env, curent, new Date().toISOString().slice(0, 10))
+  const nr = urm.nr ?? curent.nr + 1
+  return { nr, data: urm.data, schita: await citesteSchita(env, { nr, data: urm.data }).catch(() => null) }
 }
 
 /**
@@ -400,7 +471,19 @@ export async function retrageNumarul(
   await stergeBuletin(env.DB, b.nr, b.data)
 
   /*
-   * 2. numărul se întoarce ca schiță, sub cheia lui de dinainte (`schita/<nr>-<data>.json`). De
+   * 2. MASA SE ELIBEREAZĂ. Ciorna numărului următor s-a NĂSCUT IMPLICIT (o privire pe `/nou` o
+   * scrie) și n-a atins-o nimeni — altfel `deRetras` ne-ar fi oprit mai sus. Se șterge, ca să nu se
+   * bată cu schița care se întoarce: cu amândouă în depozit, `urmatorulCuSchita` ar alege ziua cea
+   * mai VECHE, deci numărul retras, iar varianta zero a celui următor ar rămâne agățată acolo,
+   * arătându-se a doua oară după ce numărul se republică.
+   * ⚠️ Doar dacă e chiar a numărului de după, și doar neatinsă: atâta a cernut `deRetras`.
+   */
+  if (cernut.urmatoarea.schita && cernut.urmatoarea.nr !== b.nr) {
+    await stergeSchita(env, { nr: cernut.urmatoarea.nr, data: cernut.urmatoarea.data }).catch(() => undefined)
+  }
+
+  /*
+   * 3. numărul se întoarce ca schiță, sub cheia lui de dinainte (`schita/<nr>-<data>.json`). De
    * aceea `urmatorulCuSchita` o caută după NUMĂR, nu după duminica socotită din ziua de azi: retras
    * luni, numărul ar fi rămas altfel orfan.
    *
@@ -420,6 +503,22 @@ export async function retrageNumarul(
     await scrieSchita(env, schita, { subiect: i.subiect, articol: i.articol })
   }
 
+  /*
+   * 4. SCHIȚA ÎNTOARSĂ E „ATINSĂ", pe toate cele trei drumuri — și asta nu e un amănunt de
+   * contabilitate, ci încuietoarea următoare.
+   *
+   * Numărul retras devine ciorna lui `nr-1`, care e de acum cel curent. Dacă schița lui ar rămâne
+   * neatinsă, `deRetras` ar da voie să se retragă ȘI `nr-1` — iar retragerea aceea ar ȘTERGE, la
+   * pasul 2 de mai sus, tocmai schița pe care tocmai am adus-o înapoi întreagă. Două apăsări una
+   * după alta, și munca de pe numărul retras ar fi dispărut fără o vorbă.
+   *
+   * ⚠️ Pe drumul `arhiva` schița se mută LITERĂ CU LITERĂ, deci poate veni cu `atinsa` stins (număr
+   * compus și validat fără să se fi răspuns nimic în chat). De aceea semnul se pune AICI, o dată,
+   * pentru toate trei — nu pe fiecare ramură.
+   */
+  const intoarsa = await citesteSchita(env, { nr: b.nr, data: b.data }).catch(() => null)
+  if (intoarsa && !intoarsa.atinsa) await scrieSchita(env, intoarsa, intoarsa.pas, 'om')
+
   return {
     facut: true,
     nr: b.nr,
@@ -428,6 +527,87 @@ export async function retrageNumarul(
       `Numărul ${b.nr} din ${dataLunga(b.data)} a ieșit din arhivă și e înapoi ca schiță pe ` +
       '„Numărul următor"' + VORBA_IZVORULUI[izvor],
     izvor,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// VALIDAREA — publicare pe loc ori PROGRAMARE pentru duminică, ora 12:00
+// ---------------------------------------------------------------------------
+
+/**
+ * VALIDAREA, ÎNTR-UN SINGUR LOC — perechea exactă a lui `retrageNumarul`.
+ *
+ * Până pe 20.09.2026 „validarea = publicarea", pe loc (user, 18.09.2026). Tot userul a adăugat
+ * pragul: „dacă este înainte de ziua pentru care este programat buletinul — adică înainte de ora
+ * 12.00, duminica aceea — se poate doar «Validează și programează»; dacă este duminică după ora
+ * 12.00 — «Validează și publică»." Deci apăsarea face ACELAȘI lucru — scrie rândul în arhivă —, iar
+ * ce se schimbă e o singură coloană: `publicat_la`.
+ *
+ *   acum ≥ duminică 12:00  →  `publicat_la = acum`  → numărul e public din clipa asta (ca până acum)
+ *   acum <  duminică 12:00  →  `publicat_la = prag`  → rândul e scris, dar îl vede numai adminul
+ *
+ * ⚠️ HOTĂRÂREA E A CEASULUI, NU A OMULUI: nu există buton „publică oricum". Numărul poartă ziua lui
+ * pe hârtie; apărut miercuri, ar fi vestit o săptămână care încă n-a început.
+ * ⚠️ NU SE ȘTERGE NIMIC ȘI NU SE AMÂNĂ NIMIC AICI. Arhivarea schiței și auditul rămân la chemător
+ * (ele merg în `waitUntil`), fiindcă ele țin de CEREREA care a pornit validarea, nu de faptă.
+ * ⚠️ `nr`/`data` sunt o VERIFICARE, nu o țintă — ca la retragere: două ferestre deschise nu publică
+ * una peste alta, ci a doua află ce s-a schimbat.
+ */
+export async function valideazaNumarul(
+  env: EnvActiuniBuletin,
+  cerut: { nr: number; data: string },
+  acum: Date = new Date(),
+): Promise<
+  | { facut: true; nr: number; data: string; publicat_la: string; programat: boolean; text: string }
+  | { facut: false; text: string }
+> {
+  const { scrieBuletin } = await import('./depozit.js')
+  const { candApare, pragScris, seProgrameaza } = await import('./ceas.js')
+
+  const urm = await urmatorul(env)
+  if (!urm.nr || cerut.nr !== urm.nr || cerut.data !== urm.data) {
+    return {
+      facut: false,
+      text:
+        `numărul de pe ecran (${cerut.nr} / ${cerut.data}) nu mai e cel care urmează (${urm.nr} / ${urm.data}) — ` +
+        'între timp s-a validat altceva; recompune-l pe cel de acum',
+    }
+  }
+  const ciorna = await ciornaDinDepozit(env, urm.nr, urm.data, PAGINI)
+  if (!ciorna?.cheie_pdf) {
+    return { facut: false, text: 'numărul nu e compus — compune-l întâi din chat, apoi validează-l' }
+  }
+
+  // textul pentru căutare iese din cererea păstrată lângă PDF; dacă lipsește, rândul intră fără text
+  // (se caută după el, nu se tipărește din el)
+  const cerere = await citesteCererea(env, { nr: urm.nr, data: urm.data }).catch(() => null)
+  const programat = seProgrameaza(urm.data, acum)
+  const publicatLa = programat ? pragScris(urm.data) : acum.toISOString()
+
+  await scrieBuletin(env.DB, {
+    nr: urm.nr,
+    data: urm.data,
+    cheie_pdf: ciorna.cheie_pdf,
+    cheie_poza: ciorna.cheie_poza,
+    cheie_poza_mica: ciorna.cheie_poza_mica,
+    marime_pdf: ciorna.marime_pdf,
+    pagini: ciorna.pagini ?? PAGINI,
+    text: cerere ? textCurat(cerere) : '',
+    // ⚠️ STAREA SE SCRIE, nu se deduce (20.09.2026, 14:11): de aici înainte cine trece numărul pe
+    // `publicat` e CEASUL workerului, nu o comparație făcută la citire.
+    stare: programat ? 'programat' : 'publicat',
+    publicat_la: publicatLa,
+  })
+
+  return {
+    facut: true,
+    nr: urm.nr,
+    data: urm.data,
+    publicat_la: publicatLa,
+    programat,
+    text: programat
+      ? `Numărul ${urm.nr} e programat pentru ${candApare(urm.data)}. Până atunci îl vezi doar tu.`
+      : `Numărul ${urm.nr} din ${dataLunga(urm.data)} e publicat: e numărul curent al parohiei.`,
   }
 }
 
@@ -1085,7 +1265,9 @@ export const actiuniBuletin = registru<EnvActiuniBuletin>([
        * lucru a omului din chat, nu o dată a parohiei (vezi efectul `ciorna` din `@xc/actiuni`).
        * Fără asta, „buletin nou" n-ar lăsa nicio urmă și a doua întrebare ar porni de la zero.
        */
-      if (noua || cautat) await scrieSchita(c.env, schita, { subiect: intrebare.subiect, articol: intrebare.articol })
+      // ⚠️ `sistem`: „unde am ramas?" nu scrie nimic AL OMULUI — ori naste varianta zero, ori
+      // adauga pomenirea gasita in calendar. Niciuna nu e „am inceput lucrul".
+      if (noua || cautat) await scrieSchita(c.env, schita, { subiect: intrebare.subiect, articol: intrebare.articol }, 'sistem')
       const { stare } = await calendarulPentru(c.env, schita.data)
       return {
         nr: schita.nr,

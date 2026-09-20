@@ -167,6 +167,26 @@ export interface Schita {
    * depozit). Adevărul rămâne al mașinii de stări, nu al câmpului ăsta.
    */
   pas?: { subiect: CheieIntrebare | 'gata'; articol: Articol }
+  /**
+   * S-A ÎNCEPUT LUCRUL LA EA — user, 20.09.2026: „dacă s-a validat și publicat și a început lucrul
+   * la ciornă să nu se mai poată anula publicarea acelui număr."
+   *
+   * ⚠️ NAȘTEREA IMPLICITĂ NU E „LUCRU ÎNCEPUT". Schița se face singură la prima intrare pe `/nou`
+   * (varianta zero, cu locurile ocupate — `schitaImplicita`), iar numărul se compune tot singur
+   * după ea. Dacă simpla ei existență ar fi însemnat „am început", retragerea numărului dinainte
+   * s-ar fi încuiat de la prima privire aruncată pe ecran — adică exact atunci când omul își dă
+   * seama că a publicat greșit.
+   *
+   * Aprind semnul DOAR scrierile omului: un răspuns în chat, un text lipit, un fișier urcat, o
+   * poză, motto-ul. Nu-l aprind: nașterea implicită, îmbogățirea cu pomenirea găsită în calendar și
+   * compunerea automată. Vezi `FelulScrierii` la `scrieSchita` — acolo e singurul loc care-l scrie.
+   *
+   * ⚠️ Odată aprins nu se mai stinge: singurul fel de a-l întoarce e „Șterge ciorna" de pe `/nou`
+   * (`stergeCiornaIntreaga`), adică o resetare completă la zero. Asta a cerut userul: „dar să am
+   * posibilitatea să șterg ciorna — resetare complet la zero — și atunci reapare posibilitatea de a
+   * invalida acel număr."
+   */
+  atinsa?: boolean
   actualizat: string
 }
 
@@ -271,17 +291,47 @@ export async function citesteSchita(
     secundari: (Array.isArray(brut.secundari) ? brut.secundari : []).slice(0, SECUNDARI_MAXIM),
     gata: Array.isArray(brut.gata) ? (brut.gata as CheieIntrebare[]) : [],
     ...(brut.pas ? { pas: brut.pas } : {}),
+    ...(brut.atinsa ? { atinsa: true } : {}),
     actualizat: typeof brut.actualizat === 'string' ? brut.actualizat : new Date().toISOString(),
   }
 }
 
-export async function scrieSchita(env: EnvSchita, s: Schita, pas?: Schita['pas']): Promise<void> {
-  const deScris: Schita = { ...s, ...(pas ? { pas } : {}), actualizat: new Date().toISOString() }
+/**
+ * CINE SCRIE SCHIȚA, și de ce contează (20.09.2026, odată cu încuietoarea retragerii).
+ *
+ *   `om`     — a atins-o cineva: un răspuns în chat, un text lipit, un fișier urcat, o poză. Aprinde
+ *              `atinsa`, iar de atunci numărul dinainte nu se mai poate retrage;
+ *   `sistem` — nașterea variantei zero la prima intrare pe `/nou`, pomenirea adusă din calendar.
+ *              NU aprinde nimic: omul n-a scris încă nimic, doar s-a uitat la ecran.
+ *
+ * ⚠️ IMPLICIT E `om`, dinadins. O scriere nouă care uită parametrul va ÎNCUIA retragerea — supărător,
+ * dar reparabil dintr-o apăsare („Șterge ciorna"). Invers — dacă implicit ar fi `sistem` — o scriere
+ * uitată ar lăsa retragerea deschisă peste o ciornă începută, iar retragerea o ȘTERGE: munca omului
+ * s-ar pierde în tăcere. Dintre cele două greșeli, se alege cea care nu pierde nimic.
+ */
+export type FelulScrierii = 'om' | 'sistem'
+
+export async function scrieSchita(
+  env: EnvSchita,
+  s: Schita,
+  pas?: Schita['pas'],
+  fel: FelulScrierii = 'om',
+): Promise<void> {
+  const deScris: Schita = {
+    ...s,
+    ...(pas ? { pas } : {}),
+    // ⚠️ Odată aprins, rămâne aprins: o scriere „de sistem" de după una a omului nu-l stinge.
+    ...(fel === 'om' || s.atinsa ? { atinsa: true } : {}),
+    actualizat: new Date().toISOString(),
+  }
   await env.FISIERE.put(cheiaSchitei(s), JSON.stringify(deScris), {
     httpMetadata: { contentType: 'application/json; charset=utf-8' },
     customMetadata: { nr: String(s.nr ?? 0), data: s.data },
   })
 }
+
+/** S-a început lucrul la ea? `null`/lipsă = nu există nicio schiță, deci nu. */
+export const eAtinsa = (s: Schita | null | undefined): boolean => s?.atinsa === true
 
 /**
  * ⚠️ Schița se scoate de pe masa de lucru LA VALIDARE, nu la compunere: până se publică numărul,

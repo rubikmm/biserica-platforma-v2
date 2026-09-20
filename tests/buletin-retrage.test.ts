@@ -631,6 +631,16 @@ describe('validarea PUNE SCHIȚA DEOPARTE, nu o mai șterge', () => {
   })
 })
 
+/**
+ * Schița întoarsă, fără cele două câmpuri pe care retragerea le ATINGE DINADINS: `atinsa` (semnul
+ * care oprește o a doua retragere să o șteargă) și `actualizat` (ceasul scrierii). Restul trebuie
+ * să fie cuvânt cu cuvânt ce s-a pus deoparte la validare — acolo stau adresele pozelor.
+ */
+const caLaArhivare = (x: unknown): unknown => {
+  const { atinsa: _semn, ...restul } = (x ?? {}) as Schita
+  return { ...restul, actualizat: SCHITA_CU_POZA.actualizat }
+}
+
 describe('retragerea ia ÎNTÂI schița pusă deoparte', () => {
   /** Publicat cu schiță pusă deoparte — dar și cu cererea lângă el: arhiva are întâietate. */
   const dupaPublicare = () =>
@@ -642,9 +652,13 @@ describe('retragerea ia ÎNTÂI schița pusă deoparte', () => {
     await amanatele()
 
     expect(r.status).toBe(303)
-    // aceeași schiță, neatinsă — nu una refăcută din cerere
-    expect(depozit.get(cheiaSchitei(AL_NOSTRU))).toEqual(SCHITA_CU_POZA)
+    // ACEEAȘI schiță, mutată de la arhivă cuvânt cu cuvânt — nu una refăcută din cerere
+    expect(caLaArhivare(depozit.get(cheiaSchitei(AL_NOSTRU)))).toEqual(SCHITA_CU_POZA)
     expect((depozit.get(cheiaSchitei(AL_NOSTRU)) as Schita).principal.poza).toBe(POZA)
+    // ⚠️ …dar ÎNSEMNATĂ CA ATINSĂ (20.09.2026). Schița asta e de acum ciorna numărului de după 615,
+    // iar dacă ar rămâne neatinsă, o a doua retragere — a lui 615 — ar ȘTERGE-O ca pe o variantă
+    // zero. Două apăsări una după alta, și munca de pe 616 s-ar fi pierdut fără o vorbă.
+    expect((depozit.get(cheiaSchitei(AL_NOSTRU)) as Schita).atinsa).toBe(true)
     // …iar de la arhivă s-a MUTAT, nu s-a copiat: o a doua retragere n-are ce lua de acolo
     expect(depozit.has(cheiaSchiteiArhivate(AL_NOSTRU))).toBe(false)
 
@@ -686,7 +700,8 @@ describe('retragerea ia ÎNTÂI schița pusă deoparte', () => {
     expect((await retrage(env, 616, '2026-09-20')).status).toBe(303)
     await amanatele()
     expect(stare.randuri.map((x) => x.nr)).toEqual([615])
-    expect(depozit.get(cheiaSchitei(AL_NOSTRU))).toEqual(SCHITA_CU_POZA)
+    expect(caLaArhivare(depozit.get(cheiaSchitei(AL_NOSTRU)))).toEqual(SCHITA_CU_POZA)
+    expect((depozit.get(cheiaSchitei(AL_NOSTRU)) as Schita).atinsa).toBe(true)
     expect(depozit.has(cheiaSchiteiArhivate(AL_NOSTRU))).toBe(false)
   })
 })

@@ -14,9 +14,10 @@
  * urmă proba randării — e singura care nu minte nici pe repede, nici pe încet.
  */
 import { dataLunga, pdfCuRaportSiCoperta } from '@xc/ui'
-import { capulTextului, mottoDinText } from './depozit.js'
+import { type Buletin, capulTextului, mottoDinText } from './depozit.js'
 import { foaieHtml, textCurat } from './foaie.js'
 import { type NumarCerut, type Socoteala, SECUNDARI_MAXIM, SEMNE_PE_RAND, semne, socoteste } from './masuri.js'
+import { cheiaSchitei } from './schita.js'
 import { cheiaBrosurii } from './tipar.js'
 import { umpleCuProba } from './umplere.js'
 
@@ -448,6 +449,82 @@ export const cheiaCopertei = (cerut: Pick<NumarCerut, 'nr' | 'data'>): string =>
  */
 export const cheiaCererii = (cerut: Pick<NumarCerut, 'nr' | 'data'>): string =>
   `compus/${cerut.data.slice(0, 4)}/buletin-${cerut.nr}-${cerut.data}.json`
+
+/**
+ * ȘTERGE CIORNA — RESETARE COMPLET LA ZERO (user, 20.09.2026: „dar să am posibilitatea să șterg
+ * ciorna — resetare complet la zero — și atunci reapare posibilitatea de a invalida acel număr").
+ *
+ * Iese TOT ce ține de numărul în lucru: schița (răspunsurile din chat), foaia compusă, coperta,
+ * cererea păstrată de sub `compus/` și cele patru broșuri de tipar. După ea, `/nou` se deschide pe o
+ * masă goală — iar pe numărul curent reapare „Retrage", fiindcă nu mai e nicio ciornă începută care
+ * s-ar putea pierde.
+ *
+ * ⚠️ NU SE ATINGE NIMIC AL UNUI NUMĂR APĂRUT. Chemătorul dă `eInArhiva`, care întreabă BAZA dacă
+ * există un rând (nr, data). Dacă există, nu e ciornă — e un număr al parohiei — și nu se șterge
+ * nimic. Cheia se cântărește întreagă, nu doar numărul: arhiva parohiei are cifre filate de două
+ * ori, cu zile deosebite.
+ * ⚠️ `schita/arhiva/…` RĂMÂNE NEATINS: acolo stă schița numerelor DEJA publicate, singurul drum prin
+ * care retragerea le aduce înapoi întregi, cu adresele pozelor cu tot.
+ * ⚠️ POZELE URCATE (`poze/<nr>-<data>/…`) NU SE ȘTERG. Ele sunt fișierele OMULUI, urcate de el în
+ * bulă; dacă le-ar lua resetarea, „o iau de la capăt" ar fi însemnat și „urcă pozele din nou",
+ * ceea ce nu s-a cerut.
+ */
+export async function stergeCiornaIntreaga(
+  env: { FISIERE: R2Bucket },
+  n: { nr: number; data: string },
+  eInArhiva: boolean,
+): Promise<{ sters: boolean; motiv?: string }> {
+  if (eInArhiva) {
+    return { sters: false, motiv: 'numărul are deja rând în arhivă — nu e ciornă, deci nu se șterge de aici' }
+  }
+  const foaia = cheiaNumarului(n)
+  await env.FISIERE.delete([
+    cheiaSchitei(n),
+    foaia,
+    cheiaCopertei(n),
+    cheiaCererii(n),
+    cheiaBrosurii(foaia, 'a4', false),
+    cheiaBrosurii(foaia, 'a4', true),
+    cheiaBrosurii(foaia, 'a3', false),
+    cheiaBrosurii(foaia, 'a3', true),
+  ]).catch(() => undefined)
+  return { sters: true }
+}
+
+/**
+ * CIORNA din depozit — numărul compus, dar încă nevalidat: în bază nu e niciun rând, iar fișierele
+ * stau deja sub cheile lui știute. Se întoarce în forma unui rând de arhivă, ca paginile, broșura și
+ * validarea să nu aibă nevoie de trei drumuri deosebite. `null` dacă n-a fost compus.
+ *
+ * ⚠️ A stat în `index.ts` până pe 20.09.2026, când validarea a urcat în `actiuni.ts` (odată cu
+ * programarea). Locul ei e aici, lângă cheile din care se face: `cheiaNumarului`, `cheiaCopertei`.
+ * ⚠️ `sursa: 'ciorna'` nu e o sursă din bază — e semnul că rândul n-a ieșit din bază. Cine cerne
+ * după `sursa === 'site'` (retragerea) nu se încurcă în el.
+ */
+export async function ciornaDinDepozit(
+  env: { FISIERE: R2Bucket },
+  nr: number,
+  data: string,
+  pagini: number,
+): Promise<Buletin | null> {
+  const cheie = cheiaNumarului({ nr, data })
+  const foaia = await env.FISIERE.head(cheie)
+  if (!foaia) return null
+  const coperta = await env.FISIERE.head(cheiaCopertei({ nr, data }))
+  return {
+    nr,
+    data,
+    an: data.slice(0, 4),
+    luna: data.slice(5, 7),
+    cheie_pdf: cheie,
+    cheie_poza: coperta ? coperta.key : null,
+    cheie_poza_mica: coperta ? coperta.key : null,
+    marime_pdf: foaia.size,
+    pagini,
+    sursa: 'ciorna',
+    publicat_la: null,
+  }
+}
 
 /** Ce rămâne în depozit după o compunere, gata de pus în pagină. */
 export interface NumarulPus {

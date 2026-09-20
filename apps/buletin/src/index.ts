@@ -36,44 +36,53 @@ import { modulChat } from '@xc/chat'
 import {
   actiuniBuletin,
   chestionarul,
+  ciornaDeDupaEInceputa,
   compuneNumarul,
   retrageNumarul,
   rezumatAuditCompunere,
   rezumatAuditEroare,
   schitaNumarului,
   schitaPastrata,
+  valideazaNumarul,
   vorbaRefuzului,
 } from './actiuni.js'
 import { HARTA_BULETIN } from './harta.js'
 import { dataVersiunii, eroareApi, html, json, jsonCuEtag } from '@xc/ui'
 import pkg from '../package.json'
 import {
-  type Buletin,
   type BuletinScurt,
+  type Vedere,
+  LUMEA,
+  VEDE_TOT,
   anii,
   cauta,
   celMaiNouCuNumarul,
   dintrUnAn,
+  eProgramat,
   numaratoare,
-  scrieBuletin,
+  programateleScadente,
+  stareaNumarului,
+  treciLaPublicat,
   ultimele,
   ultimul,
   unul,
   vecini,
+  vedereaLui,
 } from './depozit.js'
+import { seProgrameaza } from './ceas.js'
 import { type Coala, brosura, cheiaBrosurii, numeBrosura } from './tipar.js'
 import {
   amprentaFoii,
   calendarulNumarului,
-  cheiaCererii,
   cheiaCopertei,
   cheiaNumarului,
+  ciornaDinDepozit,
   citesteCererea,
   mottoDinainte,
   programulSaSchimbat,
-  textCurat,
+  stergeCiornaIntreaga,
 } from './compune.js'
-import { PAGINI, type NumarCerut, semne, socoteste } from './masuri.js'
+import { PAGINI, semne, socoteste } from './masuri.js'
 import { eDeProba } from './umplere.js'
 import {
   CHEIE_CHESTIONAR,
@@ -446,7 +455,92 @@ async function comunicare<T = unknown>(env: Env, cale: string, corp: unknown): P
  *   - fara `v`, o ora, cu `etag`: numerele vechi din arhiva se tin oricum in cache, iar o foaie
  *     rescrisa se indreapta singura la prima revalidare, care costa un 304.
  */
-async function fisierul(req: Request, url: URL, env: Env, cheie: string): Promise<Response> {
+/**
+ * ZIUA UNUI NUMĂR, CITITĂ DIN CHEIA FOII — `2026/buletin-617-2026-09-27.pdf` → `2026-09-27`.
+ * `null` la orice altă formă.
+ *
+ * ⚠️ NUMAI FOAIA ȘI COPERTA (`<an>/buletin-<nr>-<zi>.pdf|jpg`), NU și pozele urcate în bulă
+ * (`poze/617-2026-09-27/…`). Pozele TREBUIE să rămână deschise: Browser Rendering le ia de pe
+ * internet, de la `ORIGINE_PUBLICA` (vezi `adresaPozei` din `actiuni.ts`), dintr-o sesiune fără
+ * cookie și fără drepturi — iar compunerea unui număr se face TOCMAI în săptămâna dinaintea zilei
+ * lui. Cernute, locul pozei ar fi rămas gol în PDF, la fiecare număr, fără nicio eroare nicăieri.
+ * Ele n-au fost niciodată drumul pe care s-ar scurge numărul: cheia lor poartă șase hexazecimale
+ * scrise la întâmplare, nu se leagă de nicăieri și nu spune nimic despre ce scrie în foaie.
+ */
+const NUMARUL_DIN_CHEIE = /^\d{4}\/buletin-(\d{3,4})-(\d{4}-\d{2}-\d{2})/
+
+/**
+ * SE DĂ FIȘIERUL CUIVA CARE NU ȚINE BULETINUL? Poarta foii și a broșurii, într-un singur loc.
+ *
+ * Două întrebări, în ordinea asta — și ordinea e tot socoteala:
+ *
+ *   1. **I-A VENIT ZIUA?** Dacă nu (duminica lui e în viitor, ori e chiar azi dar înainte de 12:00),
+ *      fișierul nu se dă. Răspunsul iese din CHEIE — ziua stă în numele fișierului —, deci nu costă
+ *      niciun drum la bază. Aici cad și ciornele: un număr compus miercuri nu se dă nimănui.
+ *   2. **CE SCRIE PE RÂND?** Ziua a venit, dar ceasul workerului poate să nu fi bătut încă (bate din
+ *      cinci în cinci minute) ori să fi căzut cu totul. Cât timp rândul zice `programat`, pagina lui
+ *      dă 404 — deci foaia trebuie să tacă la fel, altfel numărul ar ieși public pe ușa din dos
+ *      tocmai când mecanismul e în pană. `null` (niciun rând) = ciornă a unei zile trecute: liberă,
+ *      ca înainte de 20.09.2026.
+ *
+ * ⚠️ COSTĂ o căutare pe cheia primară (nr, data) la fiecare foaie a cărei zi a trecut — adică la
+ * toate cele 619 din arhivă. S-a ales anume: singurul fel de a scăpa de ea ar fi fost să ne bizuim
+ * pe „dacă ceasul merge, starea și ziua spun același lucru", adică exact presupunerea pe care poarta
+ * asta există ca s-o verifice. Interogarea e cea mai ieftină cu putință, iar răspunsurile stau în
+ * cache-ul de muchie o oră (un an cu `?v=`).
+ */
+async function foaiaELibera(env: Env, cheie: string, acum: Date): Promise<boolean> {
+  const m = NUMARUL_DIN_CHEIE.exec(cheie)
+  // pozele urcate în bulă, asseturile, orice altă formă: n-au fost niciodată cernute
+  if (!m) return true
+  if (seProgrameaza(m[2]!, acum)) return false
+  const stare = await stareaNumarului(env.DB, Number(m[1]), m[2]!).catch(() => null)
+  return stare !== 'programat'
+}
+
+/**
+ * FIȘIERELE UNUI NUMĂR CARE N-A APĂRUT ÎNCĂ NU SE DAU (20.09.2026, odată cu programarea).
+ *
+ * ⚠️ SE SOCOTEȘTE DIN CHEIE, nu din bază: ziua stă scrisă chiar în numele fișierului, iar pragul
+ * („duminica aceea, 12:00") e o funcție pură. Așa `/fisier/` rămâne ce a fost — o citire din R2,
+ * fără niciun drum la D1 — la toate cele 619 numere ale arhivei.
+ * ⚠️ E O ÎNĂSPRIRE, și e cea cerută. Până acum foaia unui număr NEVALIDAT era publică din clipa în
+ * care se punea în depozit („cheia se putea ghici oricum", 18.09.2026). De când numărul se poate
+ * PROGRAMA, asta ar fi însemnat că rândul e ascuns peste tot, dar PDF-ul lui — tocmai lucrul pe
+ * care-l caută omul — se dă la cerere. Acum amândouă tac până duminică la prânz. Adminul ia foaia
+ * ca până acum: el o vede pe `/nou`, o tipărește și o descarcă.
+ */
+/**
+ * SE MAI POATE RETRAGE numărul de pe ecran? A patra condiție (user, 20.09.2026: „dacă s-a validat
+ * și publicat și a început lucrul la ciornă să nu se mai poată anula publicarea acelui număr").
+ *
+ * ⚠️ SE ÎNTREABĂ DOAR CÂND RĂSPUNSUL SCHIMBĂ CEVA: adminul buletinului, pe numărul CURENT, publicat
+ * de aici. Celelalte trei condiții le știe pagina singură (`seRetrage` din `pagini.ts`) și le cerne
+ * ea; asta cere o citire din depozit, deci nu se face pentru un enoriaș care se uită la arhivă.
+ * ⚠️ Aceeași funcție ca ușa (`ciornaDeDupaEInceputa`, chemată și de `deRetras`): butonul nu are voie
+ * să se arate acolo unde apăsarea ar primi refuz.
+ */
+async function maiPoateFiRetras(
+  env: Env,
+  ctx: Ctx,
+  b: { nr: number; data: string; sursa: string } | null,
+  eCurent: boolean,
+): Promise<boolean | undefined> {
+  if (!b || !ctx.eAdmin || !eCurent || b.sursa !== 'site') return undefined
+  return !(await ciornaDeDupaEInceputa(env, b).catch(() => false))
+}
+
+async function adminulBuletinului(req: Request, env: Env, cid: string): Promise<boolean> {
+  try {
+    const s = await sesiuneCurenta(env.IDENTITATE, req)
+    return await eAdminulAplicatiei(env.AUTORIZARE, cid, principalDin(s), 'buletin')
+  } catch {
+    // identitatea ori autorizarea care tac nu deschid nimic: fișierul rămâne nedat
+    return false
+  }
+}
+
+async function fisierul(req: Request, url: URL, env: Env, cheie: string, alAdminului: boolean): Promise<Response> {
   const ePoza = CHEIE_POZA.test(cheie)
   if (!CHEIE_BUNA.test(cheie) && !ePoza) return new Response('Nu există fișierul.', { status: 404 })
   const obiect = await env.FISIERE.get(cheie, { onlyIf: req.headers })
@@ -456,13 +550,22 @@ async function fisierul(req: Request, url: URL, env: Env, cheie: string): Promis
   h.set('etag', obiect.httpEtag)
   // Poza urcată în bulă: cache SCURT. Cheia ei e unică, deci n-ar strica un an — dar ea trăiește
   // câteva ore, cât se face numărul, iar Browser Rendering o cere la fiecare recompunere.
+  /*
+   * ⚠️ FOAIA UNUI NUMĂR NEAPĂRUT NU SE PUNE ÎN NICIUN CACHE (20.09.2026). Ea se dă numai adminului,
+   * iar `public, max-age=31536000, immutable` (răspunsul de la `?v=`) ar fi lăsat-o să intre în
+   * cache-ul de muchie AL DOMENIULUI: de acolo ar fi ieșit mai departe, la oricine cere aceeași
+   * adresă, PE LÂNGĂ Worker — adică numărul programat ar fi devenit public prin ușa din dos, fără
+   * ca nimic din cod să greșească. `private, no-store` taie și muchia, și browserul altcuiva.
+   */
   h.set(
     'cache-control',
-    ePoza
-      ? 'public, max-age=300'
-      : url.searchParams.has('v')
-        ? 'public, max-age=31536000, immutable'
-        : 'public, max-age=3600',
+    alAdminului
+      ? 'private, no-store'
+      : ePoza
+        ? 'public, max-age=300'
+        : url.searchParams.has('v')
+          ? 'public, max-age=31536000, immutable'
+          : 'public, max-age=3600',
   )
   if (cheie.endsWith('.pdf')) {
     const nume = cheie.slice(cheie.lastIndexOf('/') + 1)
@@ -487,7 +590,14 @@ async function fisierul(req: Request, url: URL, env: Env, cheie: string): Promis
  * si `a4-revers` nu se calca una pe alta.
  * ⚠️ Cine n-are PDF (doua numere vechi, ramase doar ca poza) primeste 404, nu o brosura goala.
  */
-async function tiparul(req: Request, url: URL, env: Env, nr: number, data: string): Promise<Response> {
+async function tiparul(
+  req: Request,
+  url: URL,
+  env: Env,
+  nr: number,
+  data: string,
+  alAdminului: boolean,
+): Promise<Response> {
   /*
    * ⚠️ Și numărul NEVALIDAT se poate tipări (18.09.2026): ecranul compunerii arată foaia proaspăt
    * făcută cu toate butoanele ei, iar „Tipărește" e chiar butonul după care omul se uită pe hârtie
@@ -495,7 +605,10 @@ async function tiparul(req: Request, url: URL, env: Env, nr: number, data: strin
    * știută — de acolo se ia. Nu se deschide nimic în plus: cheia se putea ghici oricum, iar foaia
    * e publică din clipa în care e pusă (`/fisier/…`).
    */
-  const b = (await unul(env.DB, nr, data)) ?? (await ciornaDinDepozit(env, nr, data))
+  // ⚠️ `VEDE_TOT` aici nu e o poartă deschisă: cernerea numărului programat s-a făcut deja la rută,
+  // pe ziua din adresă. Cernut și a doua oară, adminul ar fi căzut pe ramura ciornei și ar fi
+  // tipărit foaia din depozit în locul celei din arhivă — aceeași, dar pe alt drum.
+  const b = (await unul(env.DB, nr, data, VEDE_TOT)) ?? (await ciornaDinDepozit(env, nr, data, PAGINI))
   if (!b?.cheie_pdf) return new Response('Numărul acesta n-are foaie de tipărit.', { status: 404 })
   const coala: Coala = url.searchParams.get('coala') === 'a3' ? 'a3' : 'a4'
   // `?revers=1` — versoul intors cu 180°, pentru imprimantele care intorc coala pe latura scurta
@@ -505,11 +618,17 @@ async function tiparul(req: Request, url: URL, env: Env, nr: number, data: strin
 
   // Cache-ul, ca la `/fisier/`: un an numai cu `?v=<amprenta>` pe adresă, altfel o oră cu etag —
   // altfel broșura unui număr recompus ar rămâne cea dinainte în browserul celui care tocmai a tipărit.
+  // ⚠️ Iar broșura unui număr NEAPĂRUT nu se ține nicăieri, din același motiv ca foaia: cache-ul de
+  // muchie ar fi dat-o mai departe, pe lângă Worker.
   const antete = (etag: string) =>
     new Headers({
       'content-type': 'application/pdf',
       etag,
-      'cache-control': url.searchParams.has('v') ? 'public, max-age=31536000, immutable' : 'public, max-age=3600',
+      'cache-control': alAdminului
+        ? 'private, no-store'
+        : url.searchParams.has('v')
+          ? 'public, max-age=31536000, immutable'
+          : 'public, max-age=3600',
       'content-disposition': `${url.searchParams.has('descarca') ? 'attachment' : 'inline'}; filename="${nume}"`,
     })
 
@@ -530,30 +649,6 @@ async function tiparul(req: Request, url: URL, env: Env, nr: number, data: strin
     httpMetadata: { contentType: 'application/pdf' },
   })
   return new Response(octeti, { headers: antete(pus?.httpEtag ?? `"${cheie}"`) })
-}
-
-/**
- * CIORNA din depozit — numărul compus, dar încă nevalidat: în bază nu e niciun rând, iar fișierele
- * stau deja sub cheile lui știute. Se întoarce în forma unui rând de arhivă, ca paginile și broșura
- * să nu aibă nevoie de două drumuri. `null` dacă n-a fost compus.
- */
-async function ciornaDinDepozit(env: Env, nr: number, data: string): Promise<Buletin | null> {
-  const cheie = cheiaNumarului({ nr, data })
-  const foaia = await env.FISIERE.head(cheie)
-  if (!foaia) return null
-  const coperta = await env.FISIERE.head(cheiaCopertei({ nr, data }))
-  return {
-    nr,
-    data,
-    an: data.slice(0, 4),
-    luna: data.slice(5, 7),
-    cheie_pdf: cheie,
-    cheie_poza: coperta ? coperta.key : null,
-    cheie_poza_mica: coperta ? coperta.key : null,
-    marime_pdf: foaia.size,
-    pagini: PAGINI,
-    sursa: 'ciorna',
-  }
 }
 
 /**
@@ -593,9 +688,18 @@ const dupaContract = (b: BuletinScurt, radacina: string) => ({
   poza: b.cheie_poza_mica ? `${radacina}/fisier/${b.cheie_poza_mica}` : null,
 })
 
+/**
+ * API-UL NU VEDE NUMERELE PROGRAMATE (20.09.2026).
+ *
+ * `/v1` e ușa MAȘINILOR — website-ul, newsletterul, orice automatizare —, și e deschisă, fără jeton
+ * și fără sesiune: n-are cum să fie „adminul" nimănui. Deci se citește MEREU cu ochii lumii. Un
+ * număr programat pus în `/v1/curent` ar fi apărut pe prima pagină a site-ului cu o săptămână
+ * înainte să iasă de sub tipar — exact lucrul pe care programarea a fost scrisă să-l oprească.
+ */
 async function api(req: Request, env: Env, cale: string, url: URL, radacina: string): Promise<Response> {
+  const lumea = LUMEA
   if (cale === '/health') {
-    const n = await numaratoare(env.DB).catch(() => null)
+    const n = await numaratoare(env.DB, lumea).catch(() => null)
     return json(
       {
         ok: true,
@@ -631,7 +735,7 @@ async function api(req: Request, env: Env, cale: string, url: URL, radacina: str
   }
 
   if (cale === '/v1/curent') {
-    const b = await ultimul(env.DB)
+    const b = await ultimul(env.DB, lumea)
     if (!b) return eroareApi(404, 'arhiva_goala', 'Arhiva e goală.')
     return jsonCuEtag(req, { buletin: dupaContract(b, radacina) }, { 'cache-control': 'public, max-age=300' })
   }
@@ -639,7 +743,7 @@ async function api(req: Request, env: Env, cale: string, url: URL, radacina: str
   if (cale === '/v1/arhiva') {
     const an = url.searchParams.get('an') ?? String(new Date().getFullYear())
     if (!/^\d{4}$/.test(an)) return eroareApi(400, 'an_invalid', 'Anul se scrie cu patru cifre.')
-    const lista = await dintrUnAn(env.DB, an)
+    const lista = await dintrUnAn(env.DB, an, lumea)
     return jsonCuEtag(
       req,
       { an, cate: lista.length, buletine: lista.map((b) => dupaContract(b, radacina)) },
@@ -651,7 +755,7 @@ async function api(req: Request, env: Env, cale: string, url: URL, radacina: str
   if (m) {
     const an = m[1]!
     const nr = Number(m[2])
-    const lista = await dintrUnAn(env.DB, an)
+    const lista = await dintrUnAn(env.DB, an, lumea)
     const b = lista.filter((x) => x.nr === nr).sort((a, c) => (a.data < c.data ? -1 : 1))[0]
     if (!b) return eroareApi(404, 'numar_inexistent', `Numărul ${nr} nu e în ${an}.`)
     if (m[3]) {
@@ -698,19 +802,39 @@ export default {
       }
     }
 
-    // Fisierele: deschise, fara sesiune — buletinul parohiei e hartie publica, se imparte in biserica.
+    const acum = new Date()
+
+    /*
+     * Fisierele: deschise, fara sesiune — buletinul parohiei e hartie publica, se imparte in biserica.
+     *
+     * ⚠️ O SINGURĂ ABATERE, de la 20.09.2026: fișierele unui număr care N-A APĂRUT ÎNCĂ (ziua lui e
+     * duminica ce vine, ori azi înainte de 12:00) se dau numai adminului. Sesiunea se cere DOAR
+     * atunci — ziua e în chiar numele fișierului, deci cele 619 numere ale arhivei trec mai departe
+     * fără niciun drum la identitate, ca până acum.
+     */
     if (cale.startsWith('/fisier/')) {
       if (req.method !== 'GET' && req.method !== 'HEAD') return new Response('Metoda nu e permisă.', { status: 405 })
-      return await fisierul(req, url, env, decodeURIComponent(cale.slice(8)))
+      const cheie = decodeURIComponent(cale.slice(8))
+      const neaparut = !(await foaiaELibera(env, cheie, acum))
+      if (neaparut && !(await adminulBuletinului(req, env, cid))) {
+        return new Response('Nu există fișierul.', { status: 404 })
+      }
+      return await fisierul(req, url, env, cheie, neaparut)
     }
 
-    // Broșura de tipar. Deschisă ca și foaia: buletinul se împarte în biserică, tipărirea lui la fel.
+    // Broșura de tipar. Deschisă ca și foaia: buletinul se împarte în biserică, tipărirea lui la fel
+    // — și, de la 20.09.2026, tace la fel până duminică la prânz.
     if (cale.startsWith('/tipar/')) {
       if (req.method !== 'GET' && req.method !== 'HEAD') return new Response('Metoda nu e permisă.', { status: 405 })
       const m = /^\/tipar\/(\d{1,4})-(\d{4}-\d{2}-\d{2})\.pdf$/.exec(cale)
       if (!m) return new Response('Adresa broșurii e /tipar/615-2026-09-06.pdf', { status: 404 })
+      // aceeași poartă ca la foaie, pe cheia numărului: broșura e tot foaia, doar altfel așezată
+      const neaparut = !(await foaiaELibera(env, cheiaNumarului({ nr: Number(m[1]), data: m[2]! }), acum))
+      if (neaparut && !(await adminulBuletinului(req, env, cid))) {
+        return new Response('Numărul acesta n-are foaie de tipărit.', { status: 404 })
+      }
       try {
-        return await tiparul(req, url, env, Number(m[1]), m[2]!)
+        return await tiparul(req, url, env, Number(m[1]), m[2]!, neaparut)
       } catch (e) {
         log.error('brosura n-a iesit', { eroare: e instanceof Error ? e.message : String(e) })
         return new Response('Foaia asta nu s-a putut așeza pentru tipar.', { status: 500 })
@@ -774,11 +898,25 @@ export default {
     const raspunsChat = await CHAT.ruteaza(req, env, ctxExec, cale, ctxChat)
     if (raspunsChat) return raspunsChat
 
-    // Sub masca „vezi ca" pagina e personala chiar cand n-are niciun nume pe ea; in dev nu se tine
-    // cache deloc (cei cinci minute faceau schimbarile sa para nefacute).
+    /*
+     * Sub masca „vezi ca" pagina e personala chiar cand n-are niciun nume pe ea; in dev nu se tine
+     * cache deloc (cei cinci minute faceau schimbarile sa para nefacute).
+     *
+     * ⚠️ ȘI ADMINUL BULETINULUI, pe față (20.09.2026): el vede numerele PROGRAMATE, pe care restul
+     * lumii nu le vede. Un răspuns al lui pus în cache-ul de muchie ar fi ieșit de acolo la oricine.
+     * Până acum ținea `ctx.utilizator` (un admin e mereu autentificat), dar regula trebuie să stea
+     * scrisă lângă motivul ei, nu să atârne de o potriveală.
+     * ⚠️ Cele 300 de secunde ale paginilor publice RĂMÂN: ele nu pot ține ascuns un număr programat
+     * (răspunsul cernut nu-l conținea niciodată), ci doar întârzie apariția lui cu cel mult cinci
+     * minute după ora 12:00 — ceea ce e în măsura lucrului.
+     */
     const cachePagina = {
       'cache-control':
-        ctx.utilizator || ctx.veziCa ? 'private, no-store' : env.MEDIU === 'dev' ? 'no-store' : CACHE_PAGINI,
+        ctx.utilizator || ctx.veziCa || ctx.eAdmin
+          ? 'private, no-store'
+          : env.MEDIU === 'dev'
+            ? 'no-store'
+            : CACHE_PAGINI,
     }
     const raspuns = url.searchParams.get('abonat')
     /**
@@ -792,8 +930,16 @@ export default {
       veste: raspuns === '1' ? 'inscris' : raspuns === '2' ? 'scos' : raspuns === '0' ? 'eroare' : null,
       ...rest,
     })
+    /**
+     * CU CE OCHI SE CITEȘTE ARHIVA PE PAGINILE DE OM (20.09.2026).
+     *
+     * ⚠️ `ctx.eAdmin` EFECTIV, deci și sub masca „vezi ca": masca doar coboară, iar super-adminul
+     * care se uită „ca un utilizator" trebuie să vadă exact ce vede enoriașul — altfel masca n-ar
+     * mai fi de niciun folos tocmai la lucrul ăsta.
+     */
+    const vedere: Vedere = vedereaLui(ctx.eAdmin)
     let ceruti: Promise<{ an: string; cate: number }[]> | null = null
-    const listaAnilor = () => (ceruti ??= anii(env.DB).catch(() => []))
+    const listaAnilor = () => (ceruti ??= anii(env.DB, vedere).catch(() => []))
     const cuAni = async (rest: Partial<Meniu> = {}): Promise<Meniu> =>
       meniu({ ani: (await listaAnilor()).map((a) => a.an), ...rest })
 
@@ -883,10 +1029,12 @@ export default {
 
       // ------------------------------------------------------- numarul curent
       if (cale === '/') {
-        const [b] = await Promise.all([ultimul(env.DB), listaAnilor()])
-        const dinainte = b ? (await ultimele(env.DB, 7)).filter((x) => !(x.nr === b.nr && x.data === b.data)) : []
+        const [b] = await Promise.all([ultimul(env.DB, vedere), listaAnilor()])
+        const dinainte = b
+          ? (await ultimele(env.DB, 7, vedere)).filter((x) => !(x.nr === b.nr && x.data === b.data))
+          : []
         // prima pagina E numarul curent: bulina ramane apasata, iar scrisul spune chiar numarul lui
-        const m = await cuAni({ peEcran: b, acum: !!b, gol: !b })
+        const m = await cuAni({ peEcran: b, acum: !!b, gol: !b, seRetrage: await maiPoateFiRetras(env, ctx, b, true) })
         return html(paginaAcasa(ctx, m, b, dinainte), 200, cachePagina)
       }
 
@@ -963,7 +1111,13 @@ export default {
             alLui,
           )
         }
-        const b = await ultimul(env.DB)
+        /*
+         * ⚠️ `VEDE_TOT`, nu `vedere`: aici se numără NUMĂRUL URMĂTOR, iar el se socotește din TOATE
+         * rândurile — și din cel programat (20.09.2026). Cernut, ecranul ar fi cerut iar 617 după
+         * ce 617 tocmai s-a programat. (Pe ecranul ăsta `vedere` e oricum `VEDE_TOT`: intră numai
+         * adminul. Se scrie pe față fiindcă socoteala nu ține de cine se uită, ci de ce e în bază.)
+         */
+        const b = await ultimul(env.DB, VEDE_TOT)
         const azi = new Date().toISOString().slice(0, 10)
         const m = await cuAni({ nou: true, gol: !b })
         /*
@@ -1065,12 +1219,35 @@ export default {
           const programSchimbat = foaia
             ? programulSaSchimbat(cerereaVeche?.program, 'eroare' in cal ? null : cal)
             : null
+          /*
+           * NUMERELE PROGRAMATE, SUS PE `/nou` (20.09.2026). Cât timp 617 e scris în bază dar n-a
+           * apărut, ecranul lucrează deja la 618 — iar fără rândurile astea nimic n-ar spune unde
+           * s-a dus 617: în arhivă nu-l vede nimeni, pe prima pagină e tot cel dinainte, pentru
+           * enoriaș nu există. Legătura duce la pagina lui, singurul loc în care se mai poate privi
+           * (și retrage).
+           *
+           * ⚠️ TOATE, nu doar cel mai nou (întrebarea rămasă din runda dintâi, hotărâtă de
+           * orchestrator): nimic nu oprește omul să programeze 617 marți și 618 miercuri. Arătat
+           * doar ultimul, 617 ar fi dispărut din ecran cu totul — scris în bază, nevăzut de nimeni,
+           * de negăsit de nicăieri.
+           * ⚠️ Se cer din ACELEAȘI rânduri pe care le vede adminul (`ultimele(VEDE_TOT)`), cernute
+           * apoi pe stare: o a doua interogare ar fi fost un al doilea adevăr despre aceleași rânduri.
+           */
+          const programate = (await ultimele(env.DB, 7, VEDE_TOT))
+            .filter((x) => eProgramat(x))
+            .map((x) => ({ nr: x.nr, data: x.data }))
+            .sort((x, y) => (x.data === y.data ? x.nr - y.nr : x.data < y.data ? -1 : 1))
           return html(
             paginaNou(ctx, m, nou, {
               calendar,
               motto,
               schita,
               compuneAcum,
+              acum: acum.toISOString(),
+              ...(programate.length ? { programate } : {}),
+              // „Șterge ciorna" se scrie numai când chiar e ceva de șters: o schiță atinsă ori o
+              // foaie compusă. Pe o masă goală, butonul ar fi fost o apăsare fără urmare.
+              ...(schita.atinsa || foaia ? { seStergeCiorna: true } : {}),
               ...(masura ? { masura } : {}),
               ...(programSchimbat ? { programSchimbat } : {}),
               ...(foaia
@@ -1130,6 +1307,51 @@ export default {
         }
 
         /*
+         * ȘTERGE CIORNA — RESETARE COMPLET LA ZERO (user, 20.09.2026: „dar să am posibilitatea să
+         * șterg ciorna — resetare complet la zero — și atunci reapare posibilitatea de a invalida
+         * acel număr").
+         *
+         * E perechea încuietorii de la retragere: cât timp ciorna lui nr+1 e începută, numărul
+         * curent nu se mai retrage, fiindcă retragerea i-ar lua locul pe masa de lucru. Apăsarea
+         * asta golește masa cu bună știință, și atunci „Retrage" se întoarce singur.
+         *
+         * ⚠️ UNDE SE DUCE OMUL: la PAGINA NUMĂRULUI CURENT, nu înapoi pe `/nou`. Pe `/nou` varianta
+         * zero se naște din nou la prima privire (`schitaPastrata`), deci ștergerea ar fi părut că
+         * n-a făcut nimic — iar omul caută oricum butonul „Retrage", care stă pe pagina numărului.
+         * ⚠️ NU E O ACȚIUNE DE CHAT: nu s-a cerut una, iar o resetare la zero pornită dintr-o frază
+         * prost înțeleasă ar fi fapta cea mai scumpă a aplicației.
+         */
+        if (scris.fapta === 'sterge-ciorna') {
+          if (!nou.nr) return redirect(`${prefix}/nou`)
+          // ⚠️ Se cântărește ce e PE ECRAN, ca la validare: două ferestre deschise nu se calcă.
+          if (cerNr !== nou.nr || cerData !== nou.data) {
+            return nuMerge(
+              `ciorna de pe ecran (${cerNr} / ${cerData}) nu mai e cea de acum (${nou.nr} / ${nou.data}) — ` +
+                'reîncarcă ecranul',
+              409,
+            )
+          }
+          // încuietoarea din `stergeCiornaIntreaga`: un număr care are rând în arhivă nu e ciornă
+          const [eInArhiva, deSters] = await Promise.all([
+            unul(env.DB, nou.nr, nou.data, VEDE_TOT).then((x) => !!x),
+            // citită ÎNAINTE de ștergere, numai pentru audit: a doua zi contează dacă s-a aruncat o
+            // variantă zero ori munca omului
+            citesteSchita(env, { nr: nou.nr, data: nou.data }).catch(() => null),
+          ])
+          const r = await stergeCiornaIntreaga(env, { nr: nou.nr, data: nou.data }, eInArhiva)
+          if (!r.sters) return nuMerge(r.motiv ?? 'ciorna nu s-a putut șterge', 409)
+          ctxExec.waitUntil(
+            scrieAudit(env, {
+              action: 'buletin.sterge-ciorna', target: `${nou.nr}-${nou.data}`, outcome: 'success',
+              correlationId: cid, actorId: principal?.userId,
+              summary: { atinsa: deSters?.atinsa === true, avea_foaie: !!deSters },
+            }),
+          )
+          const curent = await ultimul(env.DB, VEDE_TOT)
+          return redirect(curent ? `${prefix}/buletin/${curent.nr}-${curent.data}` : `${prefix}/nou`)
+        }
+
+        /*
          * ⚠️ `POST /nou` FACE DOUĂ LUCRURI, amândouă despre publicare: VALIDEAZĂ (18.09.2026) și
          * RETRAGE (20.09.2026). Ramura de compunere din formular a ieșit odată cu formularul —
          * numărul se compune prin `buletin.compune`, chemat de bulă din schiță, și tot acolo e
@@ -1139,42 +1361,20 @@ export default {
         if (scris.fapta !== 'valideaza') return redirect(`${prefix}/nou`)
 
         /*
-         * VALIDAREA = PUBLICAREA (user, 18.09.2026, limpede: „validarea = publicarea"). Până aici
-         * numărul compus era doar un PDF în depozit, pe care nu-l vedea nimeni din afara ecranului
-         * ăstuia; apăsarea îl scrie în arhivă, și din clipa aceea el e numărul curent al parohiei —
-         * pe prima pagină, în arhivă, în căutare și în API-ul celorlalte aplicații.
+         * VALIDAREA = PUBLICAREA (user, 18.09.2026, limpede: „validarea = publicarea"), DAR NU MAI
+         * DEVREME DE DUMINICA LUI, LA 12:00 (user, 20.09.2026). Până aici numărul compus era doar un
+         * PDF în depozit, pe care nu-l vedea nimeni din afara ecranului ăstuia; apăsarea îl scrie în
+         * arhivă — pe loc dacă a trecut de prag, ori PROGRAMAT, dacă mai e până duminică. Programat,
+         * rândul e în bază, dar pentru parohie numărul nu există nicăieri până la ora 12:00.
          *
-         * ⚠️ Se validează NUMĂRUL DE PE ECRAN, nu „ultimul compus": nr. și data vin din formular și
-         * se cântăresc față de ce ar urma acum (`nou`). Dacă între timp s-a validat altceva (două
-         * ferestre deschise), apăsarea NU scrie peste — spune ce s-a schimbat și arată ecranul din nou.
+         * ⚠️ NICIO LOGICĂ AICI: tot ce se întâmplă stă în `valideazaNumarul`, perechea lui
+         * `retrageNumarul`. Aici rămâne doar ce ține de CEREREA asta — arhivarea schiței, auditul,
+         * unde se duce omul după apăsare.
          * ⚠️ Poarta e tot rolul de admin, ca la compunere: o cheie nouă de permisiune ar fi cerut
          * republicarea lui `xc-authz` (aceeași socoteală ca la `/nou`).
          */
-        if (!nou.nr || cerNr !== nou.nr || cerData !== nou.data) {
-          return nuMerge(
-            `numărul de pe ecran (${cerNr} / ${cerData}) nu mai e cel care urmează (${nou.nr} / ${nou.data}) — ` +
-            'între timp s-a validat altceva; recompune-l pe cel de acum',
-            409,
-          )
-        }
-        const ciorna = await ciornaDinDepozit(env, nou.nr, nou.data)
-        if (!ciorna?.cheie_pdf) {
-          return nuMerge('numărul nu e compus — compune-l întâi din chat, apoi validează-l', 409)
-        }
-        // textul pentru căutare iese din cererea păstrată lângă PDF; dacă lipsește, rândul intră
-        // fără text (se caută după el, nu se tipărește din el)
-        const cerereaPastrata = await env.FISIERE.get(cheiaCererii({ nr: nou.nr, data: nou.data }))
-        const dateleNumarului = cerereaPastrata ? ((await cerereaPastrata.json()) as NumarCerut) : null
-        await scrieBuletin(env.DB, {
-          nr: nou.nr,
-          data: nou.data,
-          cheie_pdf: ciorna.cheie_pdf,
-          cheie_poza: ciorna.cheie_poza,
-          cheie_poza_mica: ciorna.cheie_poza_mica,
-          marime_pdf: ciorna.marime_pdf,
-          pagini: ciorna.pagini ?? PAGINI,
-          text: dateleNumarului ? textCurat(dateleNumarului) : '',
-        })
+        const validat = await valideazaNumarul(env, { nr: cerNr, data: cerData }, acum)
+        if (!validat.facut) return nuMerge(validat.text, 409)
         /*
          * ⚠️ SCHIȚA IESE DE PE MASĂ ABIA AICI, nu la compunere: până la validare omul mai recompune
          * de câteva ori, iar a doua compunere pornește tot din ce a răspuns. După publicare ea n-are
@@ -1183,16 +1383,23 @@ export default {
          * dovedește publicat greșit, RETRAGEREA îl aduce înapoi ÎNTREG de acolo — cu adresa pozei cu
          * tot, pe care cererea păstrată n-o are (ea ține doar `poza: true/false`). Vezi
          * `arhiveazaSchita` din `schita.ts`.
+         * ⚠️ ȘI LA PROGRAMARE, nu doar la publicare pe loc: schița a ieșit de pe masă în clipa
+         * apăsării, iar retragerea unui număr programat trebuie s-o găsească la fel ca pe a unuia
+         * apărut.
          */
-        ctxExec.waitUntil(arhiveazaSchita(env, { nr: nou.nr, data: nou.data }))
+        ctxExec.waitUntil(arhiveazaSchita(env, { nr: validat.nr, data: validat.data }))
         ctxExec.waitUntil(
           scrieAudit(env, {
-            action: 'buletin.valideaza', target: `${nou.nr}-${nou.data}`, outcome: 'success',
+            action: 'buletin.valideaza', target: `${validat.nr}-${validat.data}`, outcome: 'success',
             correlationId: cid, actorId: principal?.userId,
+            // ⚠️ CARE DIN DOUĂ a fost: a doua zi asta e întrebarea — dacă numărul e pe hârtia
+            // parohiei ori încă așteaptă duminica. `publicat_la` e chiar clipa de la care se vede.
+            summary: { fel: validat.programat ? 'programat' : 'publicat', publicat_la: validat.publicat_la },
           }),
         )
-        // Numărul are de acum pagina lui: acolo se duce omul, nu înapoi pe ecranul de lucru.
-        return redirect(`${prefix}/buletin/${nou.nr}-${nou.data}`)
+        // Numărul are de acum pagina lui: acolo se duce omul, nu înapoi pe ecranul de lucru. Și cel
+        // programat o are — pentru admin; acolo scrie când apare și de acolo se retrage.
+        return redirect(`${prefix}/buletin/${validat.nr}-${validat.data}`)
       }
 
       // --------------------------------------------------- un numar din arhiva
@@ -1200,19 +1407,25 @@ export default {
         const cerut = cale.slice(9)
         const m = /^(\d{1,4})-(\d{4}-\d{2}-\d{2})$/.exec(cerut)
         if (m) {
-          const b = await unul(env.DB, Number(m[1]), m[2]!)
+          // ⚠️ Cernut: pagina unui număr PROGRAMAT dă 404 pentru oricine nu ține buletinul — ca și
+          // cum n-ar fi în bază. Adminul o vede, cu eticheta „Programat" pe ea.
+          const b = await unul(env.DB, Number(m[1]), m[2]!, vedere)
           if (b) {
-            const v = await vecini(env.DB, b.nr, b.data)
+            const v = await vecini(env.DB, b.nr, b.data, vedere)
             // ⚠️ „esti pe numarul curent" se citeste din VECINI, nu dintr-o a doua cerere catre
             // depozit: numarul care n-are niciun urmator ESTE cel curent.
-            const meniul = await cuAni({ peEcran: b, acum: !v.dupa })
+            const meniul = await cuAni({
+              peEcran: b,
+              acum: !v.dupa,
+              seRetrage: await maiPoateFiRetras(env, ctx, b, !v.dupa),
+            })
             return html(paginaBuletin(ctx, meniul, b), 200, cachePagina)
           }
         }
         // numarul singur (`/buletin/615`) e o adresa la indemana, dar nu e cheie: duce la numarul
         // acela — cel mai nou, daca parohia l-a filat de doua ori
         if (/^\d{1,4}$/.test(cerut)) {
-          const r = await celMaiNouCuNumarul(env.DB, Number(cerut))
+          const r = await celMaiNouCuNumarul(env.DB, Number(cerut), vedere)
           if (r) return redirect(`${prefix}/buletin/${r.nr}-${r.data}`, 302)
         }
         return html(
@@ -1235,8 +1448,8 @@ export default {
         // un an cerut care nu exista cade pe cel mai NOU, nu pe cel mai vechi
         const ales = lista.find((a) => a.an === cerut)?.an ?? lista[0]?.an ?? ''
         const [buletine, n] = await Promise.all([
-          ales ? dintrUnAn(env.DB, ales) : Promise.resolve([]),
-          numaratoare(env.DB),
+          ales ? dintrUnAn(env.DB, ales, vedere) : Promise.resolve([]),
+          numaratoare(env.DB, vedere),
         ])
         const m = await cuAni({ arhiva: true, anDeschis: ales })
         return html(paginaArhiva(ctx, m, ales, buletine, n.buletine), 200, cachePagina)
@@ -1245,7 +1458,7 @@ export default {
       // ---------------------------------------------------------- cautarea
       if (cale === '/cauta') {
         const q = url.searchParams.get('q') ?? ''
-        const gasite = q.trim() ? await cauta(env.DB, q) : []
+        const gasite = q.trim() ? await cauta(env.DB, q, vedere) : []
         // un numar scris singur, care da fix un buletin: nu are rost o listă de unul — se deschide
         if (gasite.length === 1 && /^\d{1,4}$/.test(q.trim()) && gasite[0]!.nr === Number(q.trim())) {
           return redirect(`${prefix}/buletin/${gasite[0]!.nr}-${gasite[0]!.data}`, 302)
@@ -1271,4 +1484,54 @@ export default {
       )
     }
   },
-}
+
+  /**
+   * CEASUL CARE SCOATE NUMĂRUL LA LUMINĂ — user, 20.09.2026, 14:11: „să fie o programare reală,
+   * adică din uneltele de cron din Cloudflare."
+   *
+   * Duminică, din cinci în cinci minute, între 09:00 și 10:55 UTC (vezi `triggers.crons` din
+   * `wrangler.jsonc`): fereastra aceea cuprinde ora 12:00 a Bucureștiului și vara (09:00Z), și
+   * iarna (10:00Z), cu reluări de amândouă părțile. Ce face e un singur lucru: trece pe `publicat`
+   * rândurile programate cărora le-a venit clipa.
+   *
+   * ⚠️ IDEMPOTENT, prin chiar forma interogării (`WHERE stare = 'programat'`): a doua bătaie nu mai
+   * găsește nimic. De aceea fereastra poate fi largă și poate să se repete — o rulare pierdută se
+   * îndreaptă singură la următoarea, fără ca nimeni să știe.
+   * ⚠️ SE CITEȘTE ÎNAINTE DE SCRIERE, și numai dacă e ceva de scris: marea majoritate a bătăilor
+   * n-au ce face, iar o rulare goală rămâne o singură citire, fără nicio scriere în D1.
+   * ⚠️ FĂRĂ GOLIREA CACHE-ULUI: paginile publice se țin 300 de secunde la muchie, deci numărul poate
+   * să se arate cu până la cinci minute mai târziu în browserul cuiva care tocmai a trecut pe acolo.
+   * S-a ales așa dinadins — o golire cere jeton de zonă și un drum în plus la fiecare bătaie, pentru
+   * o întârziere pe care nimeni n-o simte duminică dimineața.
+   * ⚠️ CE NU FACE: nu rescrie `publicat_la`. Acolo stă clipa ANUNȚATĂ parohiei (duminică, 12:00), nu
+   * clipa în care s-a nimerit să bată cronul.
+   */
+  async scheduled(_ev: ScheduledController, env: Env, ctxExec: ExecutionContext): Promise<void> {
+    const log = new Logger({ service: SERVICIU, correlationId: 'ceas' })
+    const acum = new Date()
+    const scadente = await programateleScadente(env.DB, acum)
+    if (scadente.length === 0) return
+    const cate = await treciLaPublicat(env.DB, acum)
+    log.info('numere programate, trecute la publicat', {
+      cate,
+      numere: scadente.map((b) => `${b.nr}-${b.data}`),
+    })
+    /*
+     * Un rând de audit PE NUMĂR, nu unul pe rulare: în registrul parohiei „nr. 617 a apărut" e o
+     * întâmplare a numărului, și acolo se caută — lângă `buletin.valideaza` care l-a programat.
+     */
+    ctxExec.waitUntil(
+      Promise.all(
+        scadente.map((b) =>
+          scrieAudit(env, {
+            action: 'buletin.publica-programat',
+            target: `${b.nr}-${b.data}`,
+            outcome: 'success',
+            correlationId: 'ceas',
+            summary: { publicat_la: b.publicat_la, trecut_la: acum.toISOString() },
+          }),
+        ),
+      ),
+    )
+  },
+} satisfies ExportedHandler<Env>
