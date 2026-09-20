@@ -284,12 +284,16 @@ describe('panoul — același în amândouă aplicațiile', () => {
 })
 
 /*
- * ⚠️ „Administrare" din meniul contului duce la PANOUL EMISIEI, nu la administrarea platformei
- * (user, 14.09.2026: „să ducă în același admin de la Radio"). E o potriveală locală readusă
- * dinadins, după ce la trecerea pe V2 fusese ștearsă peste tot — deci merită păzită, altfel
- * următorul care „aliniază meniul cu restul platformei" o scoate fără să știe de ce era acolo.
+ * ⚠️ „Administrare" din meniul contului duce la ADMINISTRAREA PLATFORMEI și o vede numai
+ * super-adminul (user, 20.09.2026: „acel panou de administrare să fie văzut doar de admini și să se
+ * numească Setări").
+ *
+ * Până atunci rândul ăsta era o potriveală locală a emisiei: ducea la panou și se aprindea pentru
+ * oricine avea `broadcast.manage` (cerut pe 14.09.2026, când panoul era o pagină a lui). Acum
+ * panoul e o rubrică în `/setari`, iar meniul arată la fel ca în restul platformei. Proba păzește
+ * tocmai asta: cine ține emisia nu mai capătă rândul, oricâte chei ar avea.
  */
-describe('meniul contului duce la panoul emisiei', () => {
+describe('meniul contului duce la administrarea platformei', () => {
   const CTX = {
     prefix: '',
     nav: navigatieDin({
@@ -313,31 +317,34 @@ describe('meniul contului duce la panoul emisiei', () => {
     }),
     utilizator: 'Părintele',
     userId: 'u1',
-    eAdmin: true,
+    eAdminPlatforma: true,
     eSuperAdmin: false,
-    urlPanou: 'https://radio.staging.sfantul-ilie.ro/admin',
     modificata: '',
   }
 
-  it('din `live`, „Administrare" duce la panoul de pe radio', () => {
-    const html = paginaLive(CTX, { corp: '<p>x</p>' })
-    const meniu = html.slice(html.indexOf('</head>'))
+  const meniul = (html: string) => html.slice(html.indexOf('</head>'))
+
+  it('din `live`, „Administrare" duce la Administrarea platformei', () => {
+    const meniu = meniul(paginaLive(CTX, { corp: '<p>x</p>' }))
     expect(meniu).toContain('>Administrare</a>')
-    expect(meniu).toContain('https://radio.staging.sfantul-ilie.ro/admin')
-    // NU la administrarea platformei — aia e altă pagină, cu alt rost
-    expect(meniu).not.toContain('admin.staging.sfantul-ilie.ro')
+    expect(meniu).toContain('https://admin.staging.sfantul-ilie.ro')
+    // NU la panoul emisiei: el s-a mutat în Setări (20.09.2026)
+    expect(meniu).not.toContain('/admin"')
   })
 
-  it('din `radio`, tot la panoul lui — aceeași destinație, nu două panouri', () => {
-    const html = paginaRadio({ ...CTX, urlPanou: '/admin' }, { corp: '<p>x</p>' })
-    const meniu = html.slice(html.indexOf('</head>'))
+  it('din `radio`, aceeași destinație — meniul e al platformei, nu al emisiei', () => {
+    const meniu = meniul(paginaRadio(CTX, { corp: '<p>x</p>' }))
     expect(meniu).toContain('>Administrare</a>')
-    expect(meniu).not.toContain('admin.staging.sfantul-ilie.ro')
+    expect(meniu).toContain('https://admin.staging.sfantul-ilie.ro')
   })
 
-  it('cine n-are dreptul nu vede rândul', () => {
-    const html = paginaLive({ ...CTX, eAdmin: false }, { corp: '<p>x</p>' })
-    expect(html.slice(html.indexOf('</head>'))).not.toContain('>Administrare</a>')
+  /** Cine ține emisia are cheia ei, dar nu rolul platformei: rândul lui e „Setări". */
+  it('cine nu e super-admin nu vede rândul, la niciuna din cele două', () => {
+    for (const pagina of [paginaLive, paginaRadio]) {
+      const meniu = meniul(pagina({ ...CTX, eAdminPlatforma: false }, { corp: '<p>x</p>' }))
+      expect(meniu).not.toContain('>Administrare</a>')
+      expect(meniu).toContain('>Setări</a>')
+    }
   })
 })
 

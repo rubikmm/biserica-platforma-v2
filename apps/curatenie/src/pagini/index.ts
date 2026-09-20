@@ -282,12 +282,6 @@ async function renderVizitatorPage(ctx: Ctx, db: Baza, _request: Request, url: U
                     <h2 class="section-title">Cine ești?</h2>
                 </div>
 
-                <div class="note">
-                    Alege-ți numele ca să te poți înscrie la o duminică — rămâne ținut minte pe
-                    acest dispozitiv. Pentru orice altceva (vacanța, intrarea în echipă, setările
-                    tale) intră cu <strong>contul parohiei</strong>, din meniul de sus.
-                </div>
-
                 ${deAles.length === 0
                   ? `<div class="note">
                         Nu sunt voluntari înregistrați momentan.
@@ -351,20 +345,6 @@ async function renderVizitatorPage(ctx: Ctx, db: Baza, _request: Request, url: U
                 </div>` : ""}
             </div>
 
-            <dialog id="viewOnlyDialog" class="contact-dialog viewonly-dialog" aria-labelledby="viewOnlyTitle">
-                <h3 id="viewOnlyTitle">Ești în modul vizualizare</h3>
-                <p>Poți vedea programul, dar ca să te înscrii la o duminică sau să te retragi
-                   trebuie să-ți alegi numele din lista de sus — ori să intri cu contul parohiei,
-                   dacă vrei și restul aplicației.</p>
-                <div class="viewonly-actions">
-                    <button type="button" class="btn-secondary" id="viewOnlyClose">Închide</button>
-                    <!-- ⚠️ Legătură adevărată, nu buton: din 19.09.2026 nu mai există un panou de
-                         intrare în pagină pe care să-l deschidă. Duce unde duce și capul meniului
-                         de cont, cu întoarcere aici. -->
-                    <a class="btn-auth" href="${esc(ctx.nav.cont)}/intra?spre=${encodeURIComponent(ctx.spre ?? "")}">Intră</a>
-                </div>
-            </dialog>
-
             ${await infoJos(db, ctx.prefix)}`;
 
   const scripturi = `
@@ -389,22 +369,16 @@ async function renderVizitatorPage(ctx: Ctx, db: Baza, _request: Request, url: U
                         }
                     });
 
-                    // Sloturile sunt read-only în modul vizualizare (neautentificat).
-                    const viewDialog = document.getElementById('viewOnlyDialog');
+                    /*
+                     * Sloturile sunt read-only pentru vizitator. Apăsarea pe unul NU mai deschide o
+                     * fereastră cu explicații (20.09.2026): lista de nume e chiar sus în pagină, deci
+                     * îl ducem direct acolo — răspunsul la „cum mă înscriu?" e lucrul de făcut, nu un text.
+                     */
                     document.addEventListener('click', e => {
                         if (!e.target.closest('.slot.view-slot')) return;
-                        if (viewDialog && typeof viewDialog.showModal === 'function') viewDialog.showModal();
-                        // Browser fără <dialog>: lista de nume e chiar sus, acolo îl ducem.
-                        else {
-                            const picker = document.getElementById('pickerFantoma');
-                            if (picker) picker.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        }
+                        const picker = document.getElementById('pickerFantoma');
+                        if (picker) picker.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     });
-                    if (viewDialog) {
-                        const vClose = document.getElementById('viewOnlyClose');
-                        if (vClose) vClose.addEventListener('click', () => viewDialog.close());
-                        viewDialog.addEventListener('click', e => { if (e.target === viewDialog) viewDialog.close(); });
-                    }
 
                     // Toggle pentru bara de arhivă (delegated).
                     document.addEventListener('click', e => {

@@ -9,7 +9,8 @@
  * Rute:
  *   /health                      starea aplicației
  *   /                            PUBLIC: playerul (directul sau radioul, cu trecere lină)
- *   /admin                       panoul — ACELAȘI ca la `live`                  (broadcast.manage)
+ *   /setari                      Setările — și, în ele, PANOUL emisiei (rubrica „Emisia")
+ *   /admin                       303 spre `/setari`: panoul n-are pagina lui
  *   /admin/stare|inventar|comanda   datele și comenzile panoului                (broadcast.manage)
  *   /biblioteca                  muzica radioului: urcat, șters, foldere        (broadcast.manage)
  *   /mic                         microfoanele bisericii                         (super-admin)
@@ -150,10 +151,11 @@ export default {
         nav,
         utilizator: sesiune.user?.displayName ?? sesiune.user?.email ?? null,
         userId: sesiune.user?.id ?? null,
-        eAdmin,
+        // ⚠️ Rândul „Administrare" din meniul contului e NUMAI al super-adminului REAL (user,
+        // 20.09.2026): cine ține emisia își găsește panoul în Setări, nu într-o administrare a lui.
+        // Citit din rolul global, ca la calendar — masca doar coboară, deci sub ea rândul dispare.
+        eAdminPlatforma: sesiune.roles.some((r) => r.role === 'super-admin'),
         eSuperAdmin,
-        // Panoul emisiei e unul singur, și stă chiar aici — tot încoace duce și meniul lui `live`.
-        urlPanou: `${prefix}/admin`,
         modificata: dataVersiunii(env.VERSIUNE),
         veziCa: sesiune.veziCa,
         poateVedeaCa: sesiune.poateVedeaCa,
@@ -171,6 +173,13 @@ export default {
           const problema = verificaCsrf(req, [cfg.ORIGINE_PUBLICA], cfg.MEDIU === 'dev')
           if (problema) return html(paginaMesaj(ctx, 'Verificare de securitate', problema), 403, antete)
         }
+        /*
+         * ⚠️ PANOUL vine în pagină cu SCRIPTURILE lui (playerul + comenzile), dar numai dacă rubrica
+         * s-a randat: `jsPanou` caută elementele panoului la pornire și ar cădea pe o pagină fără
+         * ele (Setările unui enoriaș, pagina măștii, pagina de „Verificare de securitate").
+         * `rubrici` e chemată ÎNAINTEA carcasei, în `@xc/setari`, deci steagul e pus la timp.
+         */
+        let panouInPagina = false
         const raspunsSetari = await ruteazaSetari(req, cale, env, {
           cod: 'radio',
           nume: 'Radioul',
@@ -181,13 +190,44 @@ export default {
           veziCa: ctx.veziCa,
           urlCont: nav.cont,
           urlTermeni: `${nav.home || ''}/termeni`,
-          carcasa: (p) => pagina(ctx, { titluPagina: p.titluPagina, corp: p.corp, ...(p.scripturi ? { scripturi: p.scripturi } : {}) }),
+          carcasa: (p) => {
+            const scripturi = (p.scripturi ?? '') + (panouInPagina ? jsPlayer(prefix) + jsPanou(prefix) : '')
+            return pagina(ctx, { titluPagina: p.titluPagina, corp: p.corp, ...(scripturi ? { scripturi } : {}) })
+          },
+          /*
+           * PANOUL EMISIEI, ca rubrică a aplicației (user, 20.09.2026): după cele ale platformei,
+           * fiindcă acelea sunt ale oricui, iar el e al celui cu cheia.
+           *
+           * ⚠️ `eAdminApp` e chiar `broadcast.manage` (registrul `APLICATII_ADMINISTRABILE`), cerut
+           * o dată de `@xc/setari` prin aceeași autorizare centrală — deci masca `admin:radio` sau
+           * `admin:live` deschide rubrica fără nicio socoteală deosebită aici.
+           */
+          rubrici: ({ eAdminApp }) => {
+            if (!eAdminApp) return ''
+            panouInPagina = true
+            return rubricaEmisiei(ctx, env)
+          },
         })
         if (raspunsSetari) return raspunsSetari
       }
 
-      // ---------------------------------------------------- panoul
-      if (cale === '/admin' || cale.startsWith('/admin/')) {
+      /*
+       * ---------------------------------------------------- panoul: pagina lui a IEȘIT
+       *
+       * ⚠️ **Panoul nu mai are pagină a lui** (user, 20.09.2026: „acel panou de administrare să fie
+       * văzut doar de admini și să se numească Setări"). Se vede ca rubrica „Emisia" din `/setari`,
+       * ca panoul curățeniei de pe 19.09. Aici a rămas ce n-are pagină: DATELE și COMENZILE lui
+       * (`/admin/stare`, `/admin/inventar`, `/admin/comanda`, cerute de scriptul din pagină) plus un
+       * drum spre Setări, ca legăturile vechi și obiceiul degetelor să nu cadă în gol.
+       *
+       * Adresa n-are nicio filă și niciun alt parametru cu înțeles, deci query-ul nu se duce mai
+       * departe (la curățenie se păstra `?tab=`, fiindcă panoul ei are file).
+       */
+      if (cale === '/admin' || cale === '/admin/') {
+        return new Response(null, { status: 303, headers: { location: `${prefix}/setari` } })
+      }
+
+      if (cale.startsWith('/admin/')) {
         if (!eAdmin) {
           if (eDeTrimisLaCont(ctx)) return Response.redirect(spreCont(ctx, cfg.ORIGINE_PUBLICA, cale), 303)
           return html(
@@ -225,7 +265,6 @@ export default {
           return new Response(r.body, { status: r.status, headers: JSON_VIU })
         }
 
-        if (cale === '/admin' || cale === '/admin/') return html(paginaAdmin(ctx, env), 200, antete)
         return html(paginaMesaj(ctx, 'Pagina nu există', 'Adresa aceasta nu duce nicăieri în panou.'), 404, antete)
       }
 
@@ -284,14 +323,21 @@ export default {
   },
 } satisfies ExportedHandler<Env>
 
-/** Panoul — același în amândouă aplicațiile, de aceea vine întreg din `@xc/comanda`. */
-function paginaAdmin(ctx: Ctx, env: Env): string {
+/**
+ * PANOUL, ca rubrică a Setărilor (user, 20.09.2026). E același panou ca până acum — vine întreg din
+ * `@xc/comanda` și vorbește cu aceleași adrese (`/admin/stare`, `/admin/inventar`, `/admin/comanda`).
+ *
+ * ⚠️ Nu e o pagină: n-are carcasă și n-are titlu de pagină. Stilul îl are deja (`STIL_EMISIE` stă pe
+ * carcasa TUTUROR paginilor radioului), iar scripturile le pune blocul Setărilor, o dată, pentru
+ * cine vede rubrica. Cartela de antet e cea din curățenie: treapta + titlul, fără text nou.
+ */
+function rubricaEmisiei(ctx: Ctx, env: Env): string {
   const live = env.URL_LIVE || ctx.nav.live
-  return pagina(ctx, {
-    titluPagina: 'Panou',
-    corp: corpPanou({ live: `${live}/`, radio: `${ctx.prefix}/`, biblioteca: `${ctx.prefix}/biblioteca` }),
-    scripturi: jsPlayer(ctx.prefix) + jsPanou(ctx.prefix),
-  })
+  return `<section class="set-grup">
+  <span class="set-treapta">Administrator</span>
+  <h2>Emisia</h2>
+</section>
+${corpPanou({ live: `${live}/`, radio: `${ctx.prefix}/`, biblioteca: `${ctx.prefix}/biblioteca` })}`
 }
 
 /**

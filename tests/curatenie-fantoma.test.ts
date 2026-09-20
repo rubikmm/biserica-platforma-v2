@@ -439,13 +439,23 @@ describe('(c) fără sesiune și fără nume ales', () => {
     expect(html).not.toContain('data-sunday=')
     /*
      * ⚠️ Pagina n-are nici rând de unelte, nici panou de intrare al ei (user, 19.09.2026). Cele
-     * două uși ale vizitatorului sunt lista de nume și meniul contului din antet; „Intră" din
-     * fereastra „doar vizualizare" e o legătură spre intrarea platformei, nu un buton.
+     * două uși ale vizitatorului sunt lista de nume și meniul contului din antet.
      */
     expect(html).not.toContain('Contul meu')
     expect(html).not.toContain('btnAutentificare')
     expect(html).not.toContain('authPanel')
-    expect(html).toContain('<a class="btn-auth" href="https://cont.test/intra?spre=')
+    /*
+     * ⚠️ Nici fereastra „Ești în modul vizualizare" nu mai există (user, 20.09.2026): apăsarea pe
+     * un slot duce omul la lista de nume de sus, nu la un text care-i explică de ce nu poate.
+     * Tot atunci a ieșit și nota de sub „Cine ești?" — lista se explică singură.
+     */
+    expect(html).not.toContain('viewOnlyDialog')
+    expect(html).not.toContain('Ești în modul vizualizare')
+    expect(html).not.toContain('btn-auth')
+    expect(html).not.toContain('ținut minte pe')
+    // Ce rămâne: slotul e clicabil și trimite la picker.
+    expect(html).toContain('view-slot')
+    expect(html).toContain("picker.scrollIntoView({ behavior: 'smooth', block: 'start' })")
   })
 
   it('`POST /api` de rezervare cere contul — nimic nu se scrie', async () => {

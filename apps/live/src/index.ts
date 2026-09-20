@@ -8,7 +8,7 @@
  * Rute:
  *   /health                      starea aplicației
  *   /                            PUBLIC: ce se transmite acum + playerul
- *   /admin                       NU e panou aici: trimite la panoul de la `radio` (unul singur)
+ *   /admin                       NU e panou aici: trimite în Setările lui `radio`, unde stă panoul
  *   /api/…                       ce cere playerul din pagină (stare, semnalizare, bătăi, jurnal)
  *   /v1/stare                    PUBLIC, JSON: ce transmite parohia acum (contractul platformei)
  *   /v1/radio/biblioteca         PUBLIC, JSON: indicele muzicii, pe adresa veche a aparatului
@@ -31,7 +31,7 @@ import { corpPlayer, jsPlayer } from '@xc/comanda'
 import { adresaPaginii, citesteConfig, navigatieDin, prefixSiCale } from '@xc/config'
 import { CererePanou, SCOPE_GLOBAL, SESIUNE_ANONIMA, type Telemetrie } from '@xc/contracts'
 import { Logger, correlationId } from '@xc/observability'
-import { dataVersiunii, html, json } from '@xc/ui'
+import { dataVersiunii, esc, html, json } from '@xc/ui'
 import pkg from '../package.json' with { type: 'json' }
 import { type EnvAparat, aparatul } from './aparat.js'
 import { type EnvAscultatori, bataiePagina } from './ascultatori.js'
@@ -131,15 +131,19 @@ export default {
         nav,
         utilizator: sesiune.user?.displayName ?? sesiune.user?.email ?? null,
         userId: sesiune.user?.id ?? null,
-        eAdmin,
+        // ⚠️ Rândul „Administrare" din meniul contului e NUMAI al super-adminului REAL (user,
+        // 20.09.2026): cine ține emisia își găsește tot ce e al lui în Setări, nu într-o
+        // administrare a lui. Citit din rolul global, ca la calendar — masca doar coboară.
+        eAdminPlatforma: sesiune.roles.some((r) => r.role === 'super-admin'),
         eSuperAdmin,
-        // Panoul emisiei e unul singur, și stă pe `radio` — acolo duce „Administrare" din meniu.
-        urlPanou: `${env.URL_RADIO || nav.radio}/admin`,
         modificata: dataVersiunii(env.VERSIUNE),
         veziCa: sesiune.veziCa,
         poateVedeaCa: sesiune.poateVedeaCa,
         spre: adresaPaginii(cfg, url),
       }
+
+      /** Unde stă panoul emisiei: în Setările radioului (user, 20.09.2026). */
+      const setariRadio = `${env.URL_RADIO || nav.radio}/setari`
 
       /*
        * ---------------------------------------------------- panoul NU e aici
@@ -150,6 +154,10 @@ export default {
        * același buton LIVE și, mai devreme sau mai târziu, două comenzi care se bat. Aici a rămas
        * doar drumul într-acolo, ca legăturile vechi și obiceiul degetelor să nu cadă în gol.
        *
+       * ⚠️ Drumul duce de pe 20.09.2026 în **Setările** radioului, nu la `radio/admin`: acolo s-a
+       * mutat panoul, ca rubrica „Emisia". Adresa veche de dincolo tot încoace ar trimite, dar
+       * atunci omul ar face două salturi pentru o singură pagină.
+       *
        * Comenzile trec tot prin aplicația asta — ea ține starea — dar pe `/_intern`, cerute de
        * workerul radioului prin Service Binding, nu dintr-un browser. Ușa de pe internet
        * (`/admin/stare`, `/admin/comanda`) s-a închis: nu mai are cine s-o deschidă.
@@ -157,7 +165,7 @@ export default {
        * Nu pune panoul înapoi aici. Dacă `radio` e jos, panoul e jos — asta e alegerea făcută.
        */
       if (cale === '/admin' || cale.startsWith('/admin/')) {
-        const panou = new URL(ctx.urlPanou, url).toString()
+        const panou = new URL(setariRadio, url).toString()
         if (cale === '/admin' || cale === '/admin/') return Response.redirect(panou, 303)
         return json({ motiv: 'panoul emisiei stă la radio', panou }, 404)
       }
@@ -183,6 +191,22 @@ export default {
           urlCont: nav.cont,
           urlTermeni: `${nav.home || ''}/termeni`,
           carcasa: (p) => pagina(ctx, { titluPagina: p.titluPagina, corp: p.corp, ...(p.scripturi ? { scripturi: p.scripturi } : {}) }),
+          /*
+           * RUBRICA „Emisia" — o singură frază și drumul spre panou (user, 20.09.2026). Cine ține
+           * emisia își caută panoul în Setări, iar dacă a intrat în Setările transmisiunii trebuie
+           * să afle de aici unde e, nu să dea peste o pagină care tace.
+           *
+           * ⚠️ Panoul NU se randează și aici: e unul singur, la `radio` (regula din 14.09.2026).
+           * `eAdminApp` e chiar `broadcast.manage` — aceeași cheie la amândouă aplicațiile.
+           */
+          rubrici: ({ eAdminApp }) =>
+            eAdminApp
+              ? `<section class="set-grup">
+  <span class="set-treapta">Administrator</span>
+  <h2>Emisia</h2>
+  <p class="set-spune"><a href="${esc(setariRadio)}">Panoul emisiei stă în Setările radioului.</a></p>
+</section>`
+              : '',
         })
         if (raspunsSetari) return raspunsSetari
       }

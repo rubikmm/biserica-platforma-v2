@@ -19,14 +19,12 @@ export interface Ctx {
   nav: Navigatie
   utilizator: string | null
   userId: string | null
-  /** `broadcast.manage` — hotărât de autorizarea centrală, nu de rolul citit local. */
-  eAdmin: boolean
-  eSuperAdmin: boolean
   /**
-   * Unde duce „Administrare" din meniul contului: **panoul emisiei de pe `radio`**, același din
-   * amândouă aplicațiile (user, 14.09.2026). Vezi nota din `contDin`.
+   * SUPER-ADMINUL PLATFORMEI, citit din rolul global — de el atârnă rândul „Administrare" din
+   * meniul contului. NU e același lucru cu cheia emisiei (`broadcast.manage`): vezi `contDin`.
    */
-  urlPanou: string
+  eAdminPlatforma: boolean
+  eSuperAdmin: boolean
   modificata: string
   veziCa?: string | null
   poateVedeaCa?: boolean
@@ -34,27 +32,25 @@ export interface Ctx {
 }
 
 /**
- * ⚠️ **„Administrare" din meniul contului duce la PANOUL EMISIEI, nu la administrarea platformei**
- * (user, 14.09.2026: „în meniul de la Cont să fie la ambele administrare și să ducă în același
- * admin de la Radio — care e și acum la transmisiuni").
+ * ⚠️ **„Administrare" duce la ADMINISTRAREA PLATFORMEI și o vede numai super-adminul** (user,
+ * 20.09.2026: „Acel panou de administrare să fie văzut doar de admini și să se numească Setări").
  *
- * E o **potriveală locală readusă dinadins**: în V1 fiecare aplicație trimitea „Administrare" la
- * panoul ei, iar la trecerea pe V2 lucrul ăsta a fost șters peste tot, ca meniul contului să fie
- * cel al platformei. Aici se reface, cu un motiv: emisia are un singur panou, iar omul care intră
- * pe `live` sau pe `radio` îl caută pe ăla, nu auditul platformei. Amândouă duc la **aceeași
- * adresă** (panoul de pe `radio`), ca să nu existe două locuri care par două panouri.
+ * Până pe 20.09.2026 rândul ăsta pleca la panoul emisiei de pe `radio` și se aprindea pentru
+ * oricine avea `broadcast.manage` (potriveală locală cerută pe 14.09.2026, când panoul era o pagină
+ * a lui). Regula s-a schimbat: panoul e acum o rubrică în Setările radioului, iar „Administrare" a
+ * rămas ce e în toată platforma — rândul super-adminului spre Administrarea platformei.
  */
 function contDin(ctx: Ctx): Cont {
   return {
     nume: ctx.utilizator ?? 'Cont',
     intrat: !!ctx.userId,
-    admin: ctx.eAdmin,
+    admin: ctx.eAdminPlatforma,
     urlCont: ctx.nav.cont,
-    urlAdmin: ctx.urlPanou,
+    urlAdmin: ctx.nav.admin,
     /*
-     * Setarile APLICATIEI (user, 15.09.2026). ⚠️ Spre deosebire de „Administrare", care pleaca
-     * dinadins la `radio`, randul asta ramane ACASA: setarile sunt ale OMULUI in aplicatia in care
-     * se afla, nu o a doua administrare a emisiei.
+     * Setarile APLICATIEI (user, 15.09.2026): raman ACASA, ale OMULUI din aplicatia in care se
+     * afla. De pe 20.09.2026 tot aici se vede si rubrica „Emisia" — o singura fraza, care trimite
+     * la Setarile radioului, fiindca panoul emisiei e unul singur si sta dincolo.
      */
     urlSetari: `${ctx.prefix}/setari`,
     // Codul aplicației din registru — de el atârnă rândul „→ Administrator" din „Vezi ca".

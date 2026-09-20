@@ -577,44 +577,7 @@ main form { display: block; gap: 0; margin: 0 }
 }
 .contact-dialog .btn-close:hover { background: var(--accent-dark); }
 
-/* Dialog „doar vizualizare" (utilizator neautentificat care dă click pe un slot). */
-.viewonly-dialog p {
-    margin: 10px 0 18px;
-    line-height: 1.5;
-    font-size: 0.92rem;
-}
-.viewonly-actions {
-    display: flex;
-    gap: 10px;
-    justify-content: flex-end;
-    flex-wrap: wrap;
-}
-/* „Intră" din fereastra „doar vizualizare" e o LEGATURA spre intrarea platformei, nu un buton
-   (19.09.2026): pagina n-are ce deschide, usa e a contului. De aici display si text-decoration. */
-.viewonly-actions .btn-auth {
-    display: inline-block;
-    padding: 8px 16px;
-    background: var(--accent);
-    color: #fff;
-    border: none;
-    border-radius: 6px;
-    font-size: 0.9rem;
-    font-weight: 600;
-    text-decoration: none;
-    cursor: pointer;
-}
-.viewonly-actions .btn-auth:hover { background: var(--accent-dark); }
-.viewonly-actions .btn-secondary {
-    padding: 8px 14px;
-    background: var(--slot-free-bg);
-    color: var(--text);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    font-size: 0.9rem;
-    cursor: pointer;
-}
-.viewonly-actions .btn-secondary:hover { background: var(--border); }
-/* Slotul de vizualizare rămâne read-only, dar semnalăm că e clicabil. */
+/* Slotul de vizualizare rămâne read-only, dar e clicabil: duce la lista de nume de sus. */
 .slot.view-slot { cursor: pointer; }
 
 .toast {
