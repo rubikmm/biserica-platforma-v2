@@ -92,6 +92,15 @@ export default {
     const cid = correlationId(req)
     const log = new Logger({ service: SERVICIU, correlationId: cid })
     const url = new URL(req.url)
+    if (url.hostname === 'curatenie.sfantul-ilie.ro' || url.hostname === 'www.curatenie.sfantul-ilie.ro') {
+      return new Response(null, {
+        status: 301,
+        headers: {
+          'Location': `https://sfantul-ilie.ro/curatenie${url.pathname === '/' ? '' : url.pathname}${url.search}`,
+          'Cache-Control': 'public, max-age=3600',
+        },
+      });
+    }
     const nav = navigatieDin(cfg)
     /*
      * ⚠️ Montajul se ia din MEDIU, nu din cale (lecția buletinului, 13.09.2026): prin gateway-ul de
