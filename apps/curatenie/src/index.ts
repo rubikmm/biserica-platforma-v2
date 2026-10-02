@@ -92,7 +92,7 @@ export default {
     const cid = correlationId(req)
     const log = new Logger({ service: SERVICIU, correlationId: cid })
     const url = new URL(req.url)
-    if (url.hostname === 'curatenie.sfantul-ilie.ro' || url.hostname === 'www.curatenie.sfantul-ilie.ro') {
+    if ((url.hostname === 'curatenie.sfantul-ilie.ro' || url.hostname === 'www.curatenie.sfantul-ilie.ro') && url.pathname !== '/health' && url.pathname !== '/cron') {
       return new Response(null, {
         status: 301,
         headers: {

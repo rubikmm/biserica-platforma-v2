@@ -129,9 +129,9 @@
         { "binding": "CALENDAR", "service": "xc-calendar-production" }
       ],
       "triggers": { "crons": ["0 * * * *"] }
-      // ⚠️ Ruta de productie (`curatenie.sfantul-ilie.ro`) e A LUI A6 DIN V1, care e VIU si trimite
-      // singur rapoartele. Nimic rutat de aici pana la cutover-ul cerut anume de utilizator; altfel
-      // cei 29 de voluntari ar primi cate doua scrisori si ar avea doua calendare.
+      // ⚠️ Ruta de productie (`curatenie.sfantul-ilie.ro`) apartine lui `xc-curatenie-production` (V2)
+      // de la cutover-ul din 14.09.2026. Accesele la subdomeniu se redirecteaza cu 301 la
+      // sfantul-ilie.ro/curatenie (V3).
     }
   }
 }
