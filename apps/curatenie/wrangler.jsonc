@@ -128,7 +128,8 @@
         { "binding": "COMUNICARE", "service": "xc-communication-production" },
         { "binding": "CALENDAR", "service": "xc-calendar-production" }
       ],
-      "triggers": { "crons": ["0 * * * *"] }
+      // Ceasul V2 oprit 02.10.2026 — curatenia a trecut in V3 (sfantul-ilie.ro/curatenie); nu se reporneste.
+      "triggers": { "crons": [] }
       // ⚠️ Ruta de productie (`curatenie.sfantul-ilie.ro`) apartine lui `xc-curatenie-production` (V2)
       // de la cutover-ul din 14.09.2026. Accesele la subdomeniu se redirecteaza cu 301 la
       // sfantul-ilie.ro/curatenie (V3).
