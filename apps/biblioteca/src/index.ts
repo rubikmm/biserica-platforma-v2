@@ -89,6 +89,15 @@ export default {
     const cid = correlationId(req)
     const log = new Logger({ service: SERVICIU, correlationId: cid })
     const url = new URL(req.url)
+    if (url.hostname === 'biblioteca.sfantul-ilie.ro' || url.hostname === 'www.biblioteca.sfantul-ilie.ro') {
+      return new Response(null, {
+        status: 301,
+        headers: {
+          'Location': `https://sfantul-ilie.ro/biblioteca${url.pathname === '/' ? '' : url.pathname}${url.search}`,
+          'Cache-Control': 'public, max-age=3600',
+        },
+      });
+    }
     const nav = navigatieDin(cfg)
     const { prefix, cale } = prefixSiCale(url, "/biblioteca")
     const q = url.searchParams.get("q") ?? ""

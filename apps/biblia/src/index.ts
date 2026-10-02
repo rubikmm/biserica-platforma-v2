@@ -109,6 +109,15 @@ async function cautaInText(
 
 async function api(req: Request, env: Env, cale: string): Promise<Response> {
   const url = new URL(req.url)
+    if (url.hostname === 'biblia.sfantul-ilie.ro' || url.hostname === 'www.biblia.sfantul-ilie.ro') {
+      return new Response(null, {
+        status: 301,
+        headers: {
+          'Location': `https://sfantul-ilie.ro/biblia${url.pathname === '/' ? '' : url.pathname}${url.search}`,
+          'Cache-Control': 'public, max-age=3600',
+        },
+      });
+    }
   const cache = { "cache-control": CACHE_API }
 
   if (cale === "/health") {
@@ -279,6 +288,15 @@ export default {
     const cid = correlationId(req)
     const log = new Logger({ service: SERVICIU, correlationId: cid })
     const url = new URL(req.url)
+    if (url.hostname === 'biblia.sfantul-ilie.ro' || url.hostname === 'www.biblia.sfantul-ilie.ro') {
+      return new Response(null, {
+        status: 301,
+        headers: {
+          'Location': `https://sfantul-ilie.ro/biblia${url.pathname === '/' ? '' : url.pathname}${url.search}`,
+          'Cache-Control': 'public, max-age=3600',
+        },
+      });
+    }
     const { prefix, cale } = prefixSiCale(url, "/biblia")
     const nav = navigatieDin(cfg)
 
